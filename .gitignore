@@ -9,6 +9,7 @@
 
 # Binary
 bin/
+/local
 
 # Claude
 .claude/
