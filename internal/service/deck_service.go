@@ -1,0 +1,257 @@
+package service
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/kenyamaneko/overload-party-gateway/internal/cache"
+	"github.com/kenyamaneko/overload-party-common/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
+)
+
+type DeckService struct {
+	deckRepo  repository.DeckRepo
+	cardCache *cache.CardCache
+}
+
+func NewDeckService(deckRepo repository.DeckRepo, cardCache *cache.CardCache) *DeckService {
+	return &DeckService{deckRepo: deckRepo, cardCache: cardCache}
+}
+
+func (s *DeckService) GetDecks(ctx context.Context, playerID string) ([]*model.Deck, error) {
+	decks, err := s.deckRepo.FindByPlayerID(ctx, playerID)
+	if err != nil {
+		return nil, err
+	}
+	for _, d := range decks {
+		s.populateCardNos(ctx, d)
+	}
+	return decks, nil
+}
+
+func (s *DeckService) GetDeck(ctx context.Context, playerID string, deckID int64) (*model.Deck, []model.DeckCard, error) {
+	deck, err := s.deckRepo.FindByID(ctx, playerID, deckID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("find deck: %w", err)
+	}
+
+	cards, err := s.deckRepo.GetDeckCards(ctx, playerID, deckID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("get deck cards: %w", err)
+	}
+
+	return deck, cards, nil
+}
+
+// DeckCardEntry represents a card entry in a deck create/update request.
+type DeckCardEntry struct {
+	CardNo              int64 `json:"card_no"`
+	IllustrationVariant int64 `json:"illustration_variant"`
+	Count               int   `json:"count"`
+}
+
+type CreateDeckRequest struct {
+	DeckName  string          `json:"deck_name" binding:"required"`
+	Cards     []DeckCardEntry `json:"cards" binding:"required"`
+	PlaymatNo *int64          `json:"playmat_no,omitempty"`
+	SleeveNo  *int64          `json:"sleeve_no,omitempty"`
+}
+
+func (s *DeckService) CreateDeck(ctx context.Context, playerID string, req CreateDeckRequest) (*model.Deck, error) {
+	ownedCards, err := s.deckRepo.GetPlayerCards(ctx, playerID)
+	if err != nil {
+		return nil, fmt.Errorf("get owned cards: %w", err)
+	}
+
+	if err := s.validateDeckCards(req.Cards, ownedCards); err != nil {
+		return nil, err
+	}
+
+	totalCards := 0
+	for _, c := range req.Cards {
+		totalCards += c.Count
+	}
+
+	now := time.Now()
+	deck := &model.Deck{
+		PlayerID:  playerID,
+		DeckName:  req.DeckName,
+		IsValid:   totalCards == model.DeckSize,
+		PlaymatNo: req.PlaymatNo,
+		SleeveNo:  req.SleeveNo,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	// DeckID will be set by repo.Create (DB-generated BIGSERIAL)
+	var deckCards []model.DeckCard
+	for _, entry := range req.Cards {
+		deckCards = append(deckCards, model.DeckCard{
+			PlayerID:            playerID,
+			CardNo:              entry.CardNo,
+			IllustrationVariant: entry.IllustrationVariant,
+			Count:               entry.Count,
+		})
+	}
+
+	if err := s.deckRepo.Create(ctx, deck, deckCards); err != nil {
+		return nil, fmt.Errorf("create deck: %w", err)
+	}
+
+	s.populateCardNos(ctx, deck)
+	return deck, nil
+}
+
+type UpdateDeckRequest struct {
+	DeckName  string          `json:"deck_name" binding:"required"`
+	Cards     []DeckCardEntry `json:"cards" binding:"required"`
+	PlaymatNo *int64          `json:"playmat_no,omitempty"`
+	SleeveNo  *int64          `json:"sleeve_no,omitempty"`
+}
+
+func (s *DeckService) UpdateDeck(ctx context.Context, playerID string, deckID int64, req UpdateDeckRequest) (*model.Deck, error) {
+	ownedCards, err := s.deckRepo.GetPlayerCards(ctx, playerID)
+	if err != nil {
+		return nil, fmt.Errorf("get owned cards: %w", err)
+	}
+
+	if err := s.validateDeckCards(req.Cards, ownedCards); err != nil {
+		return nil, err
+	}
+
+	totalCards := 0
+	for _, c := range req.Cards {
+		totalCards += c.Count
+	}
+
+	deck := &model.Deck{
+		PlayerID:  playerID,
+		DeckID:    deckID,
+		DeckName:  req.DeckName,
+		IsValid:   totalCards == model.DeckSize,
+		PlaymatNo: req.PlaymatNo,
+		SleeveNo:  req.SleeveNo,
+		UpdatedAt: time.Now(),
+	}
+
+	var deckCards []model.DeckCard
+	for _, entry := range req.Cards {
+		deckCards = append(deckCards, model.DeckCard{
+			PlayerID:            playerID,
+			DeckID:              deckID,
+			CardNo:              entry.CardNo,
+			IllustrationVariant: entry.IllustrationVariant,
+			Count:               entry.Count,
+		})
+	}
+
+	if err := s.deckRepo.Update(ctx, deck, deckCards); err != nil {
+		return nil, fmt.Errorf("update deck: %w", err)
+	}
+
+	s.populateCardNos(ctx, deck)
+	return deck, nil
+}
+
+func (s *DeckService) DeleteDeck(ctx context.Context, playerID string, deckID int64) error {
+	return s.deckRepo.Delete(ctx, playerID, deckID)
+}
+
+// populateCardNos fills deck.CardNos by expanding DeckCards (card_no × count).
+func (s *DeckService) populateCardNos(ctx context.Context, deck *model.Deck) {
+	cards, err := s.deckRepo.GetDeckCards(ctx, deck.PlayerID, deck.DeckID)
+	if err != nil {
+		return
+	}
+	var nos []int64
+	for _, dc := range cards {
+		for i := 0; i < dc.Count; i++ {
+			nos = append(nos, dc.CardNo)
+		}
+	}
+	deck.CardNos = nos
+}
+
+func (s *DeckService) GetPlayerCards(ctx context.Context, playerID string) ([]*model.PlayerCardWithDef, error) {
+	pcs, err := s.deckRepo.GetPlayerCards(ctx, playerID)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*model.PlayerCardWithDef, 0, len(pcs))
+	for _, pc := range pcs {
+		cd := s.cardCache.Get(pc.CardNo)
+		if cd == nil {
+			continue // skip cards not in cache (deleted/inactive)
+		}
+		result = append(result, &model.PlayerCardWithDef{
+			CardNo:              pc.CardNo,
+			IllustrationVariant: pc.IllustrationVariant,
+			Count:               pc.Count,
+			CardName:            cd.CardName,
+			Faction:             cd.Faction,
+			CardType:            cd.CardType,
+			Resizable:           cd.Resizable,
+			Elastic:             cd.Elastic,
+			Stats:               cd.Stats,
+			EffectText:          cd.EffectText,
+			Restriction:         cd.Restriction,
+		})
+	}
+	return result, nil
+}
+
+// ownedKey returns a key for the (card_no, illustration_variant) pair.
+type ownedKey struct {
+	cardNo  int64
+	variant int64
+}
+
+func (s *DeckService) validateDeckCards(entries []DeckCardEntry, ownedCards []*model.PlayerCard) error {
+	// Total card count check.
+	totalCards := 0
+	for _, e := range entries {
+		if e.Count <= 0 {
+			return fmt.Errorf("card %d variant %d: count must be positive", e.CardNo, e.IllustrationVariant)
+		}
+		totalCards += e.Count
+	}
+	if totalCards > model.DeckSize {
+		return fmt.Errorf("deck cannot exceed %d cards", model.DeckSize)
+	}
+
+	// Build owned map: (card_no, illustration_variant) → count.
+	owned := make(map[ownedKey]int, len(ownedCards))
+	for _, c := range ownedCards {
+		owned[ownedKey{c.CardNo, c.IllustrationVariant}] = c.Count
+	}
+
+	// Ownership check: each (card_no, variant) count ≤ owned count.
+	for _, e := range entries {
+		key := ownedKey{e.CardNo, e.IllustrationVariant}
+		if owned[key] < e.Count {
+			return fmt.Errorf("card %d variant %d: not enough owned (need %d, have %d)",
+				e.CardNo, e.IllustrationVariant, e.Count, owned[key])
+		}
+	}
+
+	// Restriction check: total count per card_no ≤ restriction limit.
+	cardNoTotals := make(map[int64]int)
+	for _, e := range entries {
+		cardNoTotals[e.CardNo] += e.Count
+	}
+	for cardNo, total := range cardNoTotals {
+		card := s.cardCache.Get(cardNo)
+		if card == nil {
+			return fmt.Errorf("card %d not found in card definitions", cardNo)
+		}
+		limit := model.RestrictionCopyCount(card.Restriction)
+		if total > limit {
+			return fmt.Errorf("card %d (%s): exceeds restriction limit (%d/%d)",
+				cardNo, card.Restriction, total, limit)
+		}
+	}
+
+	return nil
+}

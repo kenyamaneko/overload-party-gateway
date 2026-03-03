@@ -1,0 +1,15 @@
+# Environment
+.env
+.env.*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Binary
+bin/
+
+# Claude
+.claude/
+CLAUDE.md
