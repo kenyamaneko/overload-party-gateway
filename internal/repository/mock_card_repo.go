@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/kenyamaneko/overload-party-common/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 )
 
 // MockCardRepository is an in-memory implementation of CardRepo backed by a card map.

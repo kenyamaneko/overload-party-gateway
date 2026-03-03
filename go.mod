@@ -8,7 +8,6 @@ require (
 	github.com/gin-gonic/gin v1.11.0
 	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/jackc/pgx/v5 v5.8.0
-	github.com/kenyamaneko/overload-party-common v0.0.0
 	google.golang.org/api v0.267.0
 )
 
@@ -92,5 +91,3 @@ require (
 	google.golang.org/grpc v1.78.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
-
-replace github.com/kenyamaneko/overload-party-common => ../overload-party-common

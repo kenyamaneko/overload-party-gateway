@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/kenyamaneko/overload-party-common/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 )
 
 // ShopRepository defines the data access contract for the shop system.

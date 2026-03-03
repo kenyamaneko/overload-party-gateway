@@ -52,7 +52,6 @@ func main() {
 	playerRepo := repository.NewPgPlayerRepository(pool)
 	cardRepo := repository.NewPgCardRepository(pool)
 	deckRepo := repository.NewPgDeckRepository(pool)
-	gameRepo := repository.NewPgGameRepository(pool)
 	shopRepo := repository.NewPgShopRepository(pool)
 	userSettingsRepo := repository.NewPgUserSettingsRepository(pool)
 	gameConfigRepo := repository.NewPgGameConfigRepository(pool)
@@ -101,8 +100,6 @@ func main() {
 	playerCardHandler := rest.NewPlayerCardHandler(deckService)
 	shopHandler := rest.NewShopHandler(shopService)
 	webhookHandler := rest.NewWebhookHandler(subscriptionService)
-	gameLogService := service.NewGameLogService(gameRepo, cardCache)
-	gameLogHandler := rest.NewGameLogHandler(gameLogService)
 	userSettingsHandler := rest.NewUserSettingsHandler(userSettingsRepo)
 
 	// Router
@@ -173,10 +170,6 @@ func main() {
 		api.PUT("/player/settings", userSettingsHandler.UpdateSettings)
 
 		api.GET("/cards", cardHandler.GetAllCards)
-
-		// Game Log
-		api.GET("/games/:gameId/log", gameLogHandler.GetGameLog)
-		api.GET("/games/:gameId/log/text", gameLogHandler.GetGameLogText)
 
 		// Shop
 		api.POST("/player/select-faction", shopHandler.SelectFaction)

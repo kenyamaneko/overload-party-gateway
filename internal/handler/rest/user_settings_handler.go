@@ -2,11 +2,12 @@ package rest
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
-	"github.com/kenyamaneko/overload-party-common/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
 )
 
@@ -27,7 +28,14 @@ func (h *UserSettingsHandler) GetSettings(c *gin.Context) {
 		return
 	}
 	if s == nil {
-		s = model.DefaultUserSettings(playerID)
+		s = &model.UserSettings{
+			PlayerID:    playerID,
+			Language:    "ja",
+			BgmVolume:   50,
+			SeVolume:    50,
+			PushEnabled: true,
+			UpdatedAt:   time.Now(),
+		}
 	}
 
 	c.JSON(http.StatusOK, s)

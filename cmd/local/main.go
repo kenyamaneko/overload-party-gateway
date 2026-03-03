@@ -10,8 +10,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/kenyamaneko/overload-party-common/model"
 	"github.com/kenyamaneko/overload-party-gateway/internal/cache"
+	"github.com/kenyamaneko/overload-party-gateway/internal/constants"
+	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 	"github.com/kenyamaneko/overload-party-gateway/internal/handler/rest"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
@@ -33,7 +34,6 @@ func main() {
 	deckRepo := repository.NewMockDeckRepository()
 	cardRepo := repository.NewMockCardRepository(cardCache.All())
 	shopRepo := repository.NewMockShopRepository()
-	gameRepo := repository.NewMockGameRepository()
 	userSettingsRepo := repository.NewMockUserSettingsRepository()
 	gameConfigRepo := repository.NewMockGameConfigRepository()
 
@@ -44,8 +44,6 @@ func main() {
 	deckService := service.NewDeckService(deckRepo, cardCache)
 	shopService := service.NewShopService(shopRepo, playerRepo, cardCache, nil, nil)
 	subscriptionService := service.NewSubscriptionService(shopRepo)
-	gameLogService := service.NewGameLogService(gameRepo, cardCache)
-
 	// 4. Handlers
 	authHandler := rest.NewAuthHandler(authService)
 	playerHandler := rest.NewPlayerHandler(playerService)
@@ -54,7 +52,6 @@ func main() {
 	playerCardHandler := rest.NewPlayerCardHandler(deckService)
 	shopHandler := rest.NewShopHandler(shopService)
 	webhookHandler := rest.NewWebhookHandler(subscriptionService)
-	gameLogHandler := rest.NewGameLogHandler(gameLogService)
 	userSettingsHandler := rest.NewUserSettingsHandler(userSettingsRepo)
 
 	// 5. Dev player setup: give all active cards + starter deck on first request
@@ -64,7 +61,12 @@ func main() {
 			if !card.IsActive {
 				continue
 			}
-			copies := model.RestrictionCopyCount(card.Restriction)
+				copies := 3 // default
+			if card.Restriction == "semi_limited" {
+				copies = 2
+			} else if card.Restriction == "limited" {
+				copies = 1
+			}
 			playerCards = append(playerCards, &model.PlayerCard{
 				PlayerID:            playerID,
 				CardNo:              card.CardNo,
@@ -76,7 +78,7 @@ func main() {
 
 		// Create a starter deck (first 30 cards by expanding counts)
 		var deckCards []model.DeckCard
-		remaining := model.DeckSize
+		remaining := constants.DeckSize
 		for _, pc := range playerCards {
 			if remaining <= 0 {
 				break
@@ -93,11 +95,11 @@ func main() {
 			})
 			remaining -= use
 		}
-		totalCards := model.DeckSize - remaining
+		totalCards := constants.DeckSize - remaining
 		deck := &model.Deck{
 			PlayerID:  playerID,
 			DeckName:  "Starter Deck",
-			IsValid:   totalCards == model.DeckSize,
+			IsValid:   totalCards == constants.DeckSize,
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 		}
@@ -176,10 +178,6 @@ func main() {
 		api.PUT("/player/settings", userSettingsHandler.UpdateSettings)
 
 		api.GET("/cards", cardHandler.GetAllCards)
-
-		// Game Log
-		api.GET("/games/:gameId/log", gameLogHandler.GetGameLog)
-		api.GET("/games/:gameId/log/text", gameLogHandler.GetGameLogText)
 
 		// Shop
 		api.POST("/player/select-faction", shopHandler.SelectFaction)

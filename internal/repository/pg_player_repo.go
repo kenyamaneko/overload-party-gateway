@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/kenyamaneko/overload-party-common/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 )
 
 // Compile-time interface check.

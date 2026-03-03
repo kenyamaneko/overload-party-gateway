@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kenyamaneko/overload-party-common/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 )
 
 // MockShopRepository is an in-memory implementation of ShopRepository for testing.

@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/cache"
-	"github.com/kenyamaneko/overload-party-common/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 )
 
 // ---------------------------------------------------------------------------

@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kenyamaneko/overload-party-common/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 )
 
 // MockUserSettingsRepository is an in-memory implementation of UserSettingsRepo for local mode.

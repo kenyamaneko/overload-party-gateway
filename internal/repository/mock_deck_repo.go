@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/kenyamaneko/overload-party-common/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 )
 
 func deckKey(playerID string, deckID int64) string {

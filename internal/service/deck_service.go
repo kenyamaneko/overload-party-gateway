@@ -6,7 +6,8 @@ import (
 	"time"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/cache"
-	"github.com/kenyamaneko/overload-party-common/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/constants"
+	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
 )
 
@@ -77,7 +78,7 @@ func (s *DeckService) CreateDeck(ctx context.Context, playerID string, req Creat
 	deck := &model.Deck{
 		PlayerID:  playerID,
 		DeckName:  req.DeckName,
-		IsValid:   totalCards == model.DeckSize,
+		IsValid:   totalCards == constants.DeckSize,
 		PlaymatNo: req.PlaymatNo,
 		SleeveNo:  req.SleeveNo,
 		CreatedAt: now,
@@ -129,7 +130,7 @@ func (s *DeckService) UpdateDeck(ctx context.Context, playerID string, deckID in
 		PlayerID:  playerID,
 		DeckID:    deckID,
 		DeckName:  req.DeckName,
-		IsValid:   totalCards == model.DeckSize,
+		IsValid:   totalCards == constants.DeckSize,
 		PlaymatNo: req.PlaymatNo,
 		SleeveNo:  req.SleeveNo,
 		UpdatedAt: time.Now(),
@@ -217,8 +218,8 @@ func (s *DeckService) validateDeckCards(entries []DeckCardEntry, ownedCards []*m
 		}
 		totalCards += e.Count
 	}
-	if totalCards > model.DeckSize {
-		return fmt.Errorf("deck cannot exceed %d cards", model.DeckSize)
+	if totalCards > constants.DeckSize {
+		return fmt.Errorf("deck cannot exceed %d cards", constants.DeckSize)
 	}
 
 	// Build owned map: (card_no, illustration_variant) → count.
@@ -246,7 +247,7 @@ func (s *DeckService) validateDeckCards(entries []DeckCardEntry, ownedCards []*m
 		if card == nil {
 			return fmt.Errorf("card %d not found in card definitions", cardNo)
 		}
-		limit := model.RestrictionCopyCount(card.Restriction)
+		limit := restrictionCopyCount(card.Restriction)
 		if total > limit {
 			return fmt.Errorf("card %d (%s): exceeds restriction limit (%d/%d)",
 				cardNo, card.Restriction, total, limit)

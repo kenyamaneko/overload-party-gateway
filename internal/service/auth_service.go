@@ -8,7 +8,7 @@ import (
 	"cloud.google.com/go/civil"
 	"github.com/google/uuid"
 
-	"github.com/kenyamaneko/overload-party-common/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
 )
 
@@ -58,7 +58,14 @@ func (s *AuthService) Register(ctx context.Context, firebaseUID, username string
 	}
 
 	// Create default user settings. Failure does not roll back player creation.
-	settings := model.DefaultUserSettings(player.PlayerID)
+	settings := &model.UserSettings{
+		PlayerID:    player.PlayerID,
+		Language:    "ja",
+		BgmVolume:   50,
+		SeVolume:    50,
+		PushEnabled: true,
+		UpdatedAt:   time.Now(),
+	}
 	if err := s.userSettingsRepo.Upsert(ctx, settings); err != nil {
 		fmt.Printf("warn: failed to create default user settings for player %s: %v\n", player.PlayerID, err)
 	}

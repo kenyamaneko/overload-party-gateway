@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/kenyamaneko/overload-party-common/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
 )
 

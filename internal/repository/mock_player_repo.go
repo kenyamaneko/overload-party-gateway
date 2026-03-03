@@ -7,7 +7,7 @@ import (
 
 	"cloud.google.com/go/civil"
 
-	"github.com/kenyamaneko/overload-party-common/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 )
 
 // MockPlayerRepository is an in-memory implementation of PlayerRepo for local mode and testing.

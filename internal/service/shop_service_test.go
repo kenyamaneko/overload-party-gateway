@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/cache"
-	"github.com/kenyamaneko/overload-party-common/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 	"github.com/kenyamaneko/overload-party-gateway/internal/platform"
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
 )
@@ -366,7 +366,7 @@ func TestRestrictionCopyCount(t *testing.T) {
 		{"", 3}, // default
 	}
 	for _, tt := range tests {
-		got := model.RestrictionCopyCount(tt.restriction)
+		got := restrictionCopyCount(tt.restriction)
 		if got != tt.expected {
 			t.Errorf("RestrictionCopyCount(%q) = %d, want %d", tt.restriction, got, tt.expected)
 		}

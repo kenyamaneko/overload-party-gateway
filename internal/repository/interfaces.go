@@ -5,7 +5,7 @@ import (
 
 	"cloud.google.com/go/civil"
 
-	"github.com/kenyamaneko/overload-party-common/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 )
 
 // PlayerRepo defines the data access contract for player operations.

@@ -4,13 +4,52 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/cache"
-	"github.com/kenyamaneko/overload-party-common/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/constants"
+	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 	"github.com/kenyamaneko/overload-party-gateway/internal/platform"
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
 )
+
+// validFactions is the set of selectable factions (excludes Neutral).
+var validFactions = map[string]bool{
+	constants.FactionSD:     true,
+	constants.FactionTenki:  true,
+	constants.FactionSugar:  true,
+	constants.FactionTuners: true,
+}
+
+// normalizeFactionMap maps lowercase faction names to canonical names.
+var normalizeFactionMap = map[string]string{
+	"sd":      constants.FactionSD,
+	"tenki":   constants.FactionTenki,
+	"sugar":   constants.FactionSugar,
+	"tuners":  constants.FactionTuners,
+	"neutral": constants.FactionNeutral,
+}
+
+// normalizeFaction converts a case-insensitive faction name to its canonical form.
+func normalizeFaction(s string) (string, bool) {
+	if v, ok := normalizeFactionMap[strings.ToLower(s)]; ok {
+		return v, true
+	}
+	return s, false
+}
+
+// restrictionCopyCount returns the number of copies allowed by a card's restriction.
+func restrictionCopyCount(restriction string) int {
+	switch restriction {
+	case "semi_limited":
+		return 2
+	case "limited":
+		return 1
+	default:
+		return 3
+	}
+}
 
 type ShopService struct {
 	shopRepo       repository.ShopRepository
@@ -39,8 +78,8 @@ func NewShopService(
 // SelectFaction handles the initial faction selection for a new player.
 // It grants all cards from the selected faction + Neutral to the player.
 func (s *ShopService) SelectFaction(ctx context.Context, playerID, faction string) (int, error) {
-	normalized, ok := model.NormalizeFaction(faction)
-	if !ok || !model.ValidFactions[normalized] {
+	normalized, ok := normalizeFaction(faction)
+	if !ok || !validFactions[normalized] {
 		return 0, fmt.Errorf("invalid faction: %s", faction)
 	}
 	faction = normalized
@@ -54,7 +93,7 @@ func (s *ShopService) SelectFaction(ctx context.Context, playerID, faction strin
 	}
 
 	factionCards := s.buildFactionCards(playerID, faction)
-	neutralCards := s.buildFactionCards(playerID, model.FactionNeutral)
+	neutralCards := s.buildFactionCards(playerID, constants.FactionNeutral)
 	allCards := append(factionCards, neutralCards...)
 
 	if err := s.shopRepo.InsertPlayerCards(ctx, allCards); err != nil {
@@ -241,7 +280,7 @@ func (s *ShopService) buildFactionCards(playerID string, faction string) []*mode
 		if card.Faction != faction || !card.IsActive {
 			continue
 		}
-		copies := model.RestrictionCopyCount(card.Restriction)
+		copies := restrictionCopyCount(card.Restriction)
 		cards = append(cards, &model.PlayerCard{
 			PlayerID:            playerID,
 			CardNo:              card.CardNo,

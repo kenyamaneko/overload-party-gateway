@@ -4,9 +4,16 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
-
-	"github.com/kenyamaneko/overload-party-common/model"
 )
+
+// isResourceType returns true if the card type is a deployable resource.
+func isResourceType(cardType string) bool {
+	switch cardType {
+	case "Compute", "Container", "Orchestrator", "Serverless", "AI/ML", "Database", "CacheDB", "ObjectStorage":
+		return true
+	}
+	return false
+}
 
 func testCardsGenPath() string {
 	_, file, _, _ := runtime.Caller(0)
@@ -32,7 +39,7 @@ func TestLoadFromJSON_CardCount(t *testing.T) {
 func TestResourceLabel_ResourceCardsHaveLabel(t *testing.T) {
 	cc := loadTestCache(t)
 	for cardNo, card := range cc.All() {
-		if model.IsResourceType(card.CardType) && card.ResourceLabel == "" {
+		if isResourceType(card.CardType) && card.ResourceLabel == "" {
 			t.Errorf("resource card #%d (%s, type=%s) has empty resource_label",
 				cardNo, card.CardName, card.CardType)
 		}
@@ -42,7 +49,7 @@ func TestResourceLabel_ResourceCardsHaveLabel(t *testing.T) {
 func TestResourceLabel_SupportCardsHaveNoLabel(t *testing.T) {
 	cc := loadTestCache(t)
 	for cardNo, card := range cc.All() {
-		if !model.IsResourceType(card.CardType) && card.ResourceLabel != "" {
+		if !isResourceType(card.CardType) && card.ResourceLabel != "" {
 			t.Errorf("support card #%d (%s, type=%s) should have empty resource_label, got %q",
 				cardNo, card.CardName, card.CardType, card.ResourceLabel)
 		}
