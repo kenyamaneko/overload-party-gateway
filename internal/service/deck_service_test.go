@@ -17,7 +17,7 @@ import (
 
 type mockDeckRepo struct {
 	playerCards map[string][]*model.PlayerCard // keyed by playerID
-	decks       map[string][]*model.Deck      // keyed by playerID
+	decks       map[string][]*model.Deck       // keyed by playerID
 	deckCards   map[int64][]model.DeckCard     // keyed by deckID
 	nextDeckID  int64
 }
@@ -58,16 +58,6 @@ func (m *mockDeckRepo) FindByID(_ context.Context, playerID string, deckID int64
 
 func (m *mockDeckRepo) GetDeckCards(_ context.Context, _ string, deckID int64) ([]model.DeckCard, error) {
 	return m.deckCards[deckID], nil
-}
-
-func (m *mockDeckRepo) GetDeckCardNos(_ context.Context, _ string, deckID int64) ([]int64, error) {
-	var nos []int64
-	for _, dc := range m.deckCards[deckID] {
-		for i := 0; i < dc.Count; i++ {
-			nos = append(nos, dc.CardNo)
-		}
-	}
-	return nos, nil
 }
 
 func (m *mockDeckRepo) GetPlayerCards(_ context.Context, playerID string) ([]*model.PlayerCard, error) {
@@ -230,8 +220,8 @@ func TestCreateDeck_Valid30Cards(t *testing.T) {
 	if deck.DeckName != "Full Deck" {
 		t.Errorf("expected deck name 'Full Deck', got %q", deck.DeckName)
 	}
-	if len(deck.CardNos) != 30 {
-		t.Errorf("expected 30 card_nos, got %d", len(deck.CardNos))
+	if len(deck.DeckCards) != 10 {
+		t.Errorf("expected 10 deck_cards entries, got %d", len(deck.DeckCards))
 	}
 }
 

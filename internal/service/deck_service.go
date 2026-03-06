@@ -26,7 +26,7 @@ func (s *DeckService) GetDecks(ctx context.Context, playerID string) ([]*model.D
 		return nil, err
 	}
 	for _, d := range decks {
-		s.populateCardNos(ctx, d)
+		s.populateDeckCards(ctx, d)
 	}
 	return decks, nil
 }
@@ -100,7 +100,7 @@ func (s *DeckService) CreateDeck(ctx context.Context, playerID string, req Creat
 		return nil, fmt.Errorf("create deck: %w", err)
 	}
 
-	s.populateCardNos(ctx, deck)
+	s.populateDeckCards(ctx, deck)
 	return deck, nil
 }
 
@@ -151,7 +151,7 @@ func (s *DeckService) UpdateDeck(ctx context.Context, playerID string, deckID in
 		return nil, fmt.Errorf("update deck: %w", err)
 	}
 
-	s.populateCardNos(ctx, deck)
+	s.populateDeckCards(ctx, deck)
 	return deck, nil
 }
 
@@ -159,19 +159,13 @@ func (s *DeckService) DeleteDeck(ctx context.Context, playerID string, deckID in
 	return s.deckRepo.Delete(ctx, playerID, deckID)
 }
 
-// populateCardNos fills deck.CardNos by expanding DeckCards (card_no × count).
-func (s *DeckService) populateCardNos(ctx context.Context, deck *model.Deck) {
+// populateDeckCards fills deck.DeckCards with the card composition (card_no + illustration_variant + count).
+func (s *DeckService) populateDeckCards(ctx context.Context, deck *model.Deck) {
 	cards, err := s.deckRepo.GetDeckCards(ctx, deck.PlayerID, deck.DeckID)
 	if err != nil {
 		return
 	}
-	var nos []int64
-	for _, dc := range cards {
-		for i := 0; i < dc.Count; i++ {
-			nos = append(nos, dc.CardNo)
-		}
-	}
-	deck.CardNos = nos
+	deck.DeckCards = cards
 }
 
 func (s *DeckService) GetPlayerCards(ctx context.Context, playerID string) ([]*model.PlayerCardWithDef, error) {

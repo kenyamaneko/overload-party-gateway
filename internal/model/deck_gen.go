@@ -31,15 +31,15 @@ type PlayerCardWithDef struct {
 }
 
 type Deck struct {
-	PlayerID  string    `json:"player_id"`
-	DeckID    int64     `json:"deck_id"`
-	DeckName  string    `json:"deck_name"`
-	IsValid   bool      `json:"is_valid"`
-	PlaymatNo *int64    `json:"playmat_no,omitempty"`
-	SleeveNo  *int64    `json:"sleeve_no,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	CardNos   []int64   `json:"card_nos,omitempty"` // Populated by the service layer for API responses.
+	PlayerID  string     `json:"player_id"`
+	DeckID    int64      `json:"deck_id"`
+	DeckName  string     `json:"deck_name"`
+	IsValid   bool       `json:"is_valid"`
+	PlaymatNo *int64     `json:"playmat_no,omitempty"`
+	SleeveNo  *int64     `json:"sleeve_no,omitempty"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+	DeckCards []DeckCard `json:"deck_cards,omitempty"` // Populated by the service layer for API responses.
 }
 
 type DeckCard struct {

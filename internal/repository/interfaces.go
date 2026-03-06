@@ -24,7 +24,6 @@ type DeckRepo interface {
 	FindByPlayerID(ctx context.Context, playerID string) ([]*model.Deck, error)
 	FindByID(ctx context.Context, playerID string, deckID int64) (*model.Deck, error)
 	GetDeckCards(ctx context.Context, playerID string, deckID int64) ([]model.DeckCard, error)
-	GetDeckCardNos(ctx context.Context, playerID string, deckID int64) ([]int64, error)
 	GetPlayerCards(ctx context.Context, playerID string) ([]*model.PlayerCard, error)
 	Update(ctx context.Context, deck *model.Deck, cards []model.DeckCard) error
 	Delete(ctx context.Context, playerID string, deckID int64) error

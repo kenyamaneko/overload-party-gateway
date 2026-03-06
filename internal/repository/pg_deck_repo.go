@@ -131,34 +131,6 @@ func (r *PgDeckRepository) GetDeckCards(ctx context.Context, playerID string, de
 	return cards, nil
 }
 
-// GetDeckCardNos returns the card_no list for a deck, expanding counts.
-func (r *PgDeckRepository) GetDeckCardNos(ctx context.Context, playerID string, deckID int64) ([]int64, error) {
-	rows, err := r.pool.Query(ctx,
-		`SELECT card_no, count FROM deck_cards WHERE player_id = $1 AND deck_id = $2`,
-		playerID, deckID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("query deck card nos: %w", err)
-	}
-	defer rows.Close()
-
-	var cardNos []int64
-	for rows.Next() {
-		var cardNo int64
-		var count int
-		if err := rows.Scan(&cardNo, &count); err != nil {
-			return nil, fmt.Errorf("scan card no: %w", err)
-		}
-		for i := 0; i < count; i++ {
-			cardNos = append(cardNos, cardNo)
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate card nos: %w", err)
-	}
-	return cardNos, nil
-}
-
 // GetPlayerCards returns all player_cards for a player ordered by card_no.
 func (r *PgDeckRepository) GetPlayerCards(ctx context.Context, playerID string) ([]*model.PlayerCard, error) {
 	rows, err := r.pool.Query(ctx,

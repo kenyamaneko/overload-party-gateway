@@ -84,24 +84,6 @@ func (r *MockDeckRepository) GetDeckCards(ctx context.Context, playerID string, 
 	return cards, nil
 }
 
-func (r *MockDeckRepository) GetDeckCardNos(ctx context.Context, playerID string, deckID int64) ([]int64, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	cards, ok := r.deckCards[deckKey(playerID, deckID)]
-	if !ok {
-		return nil, fmt.Errorf("deck %d not found for player %s", deckID, playerID)
-	}
-
-	var cardNos []int64
-	for _, dc := range cards {
-		for i := 0; i < dc.Count; i++ {
-			cardNos = append(cardNos, dc.CardNo)
-		}
-	}
-	return cardNos, nil
-}
-
 func (r *MockDeckRepository) GetPlayerCards(ctx context.Context, playerID string) ([]*model.PlayerCard, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
