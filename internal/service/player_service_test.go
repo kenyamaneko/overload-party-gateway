@@ -46,8 +46,7 @@ func setupPlayerService(t *testing.T, player *model.Player, dailyBattle *model.P
 
 	configRepo := &mockGameConfigRepo{
 		values: map[string]int64{
-			configKeyFreeDailyBattleLimit:    10,
-			configKeyPremiumDailyBattleLimit: 30,
+			configKeyFreeDailyBattleLimit: 10,
 		},
 	}
 
@@ -111,14 +110,14 @@ func TestGetBattleLimit_PremiumPlayer(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if resp.DailyBattleCount != 5 {
-		t.Errorf("DailyBattleCount = %d, want 5", resp.DailyBattleCount)
+	if resp.DailyBattleCount != 0 {
+		t.Errorf("DailyBattleCount = %d, want 0 (GetDailyBattle skipped for premium)", resp.DailyBattleCount)
 	}
-	if resp.DailyBattleLimit != 30 {
-		t.Errorf("DailyBattleLimit = %d, want 30", resp.DailyBattleLimit)
+	if resp.DailyBattleLimit != -1 {
+		t.Errorf("DailyBattleLimit = %d, want -1 (unlimited)", resp.DailyBattleLimit)
 	}
 	if !resp.CanBattle {
-		t.Errorf("CanBattle = false, want true")
+		t.Errorf("CanBattle = false, want true (unlimited)")
 	}
 }
 
@@ -144,15 +143,15 @@ func TestGetBattleLimit_DateReset(t *testing.T) {
 	}
 }
 
-// --- CheckAndIncrementBattleCount tests ---
+// --- IncrementBattleCount tests ---
 
-func TestCheckAndIncrementBattleCount_Success(t *testing.T) {
+func TestIncrementBattleCount_Success(t *testing.T) {
 	player := &model.Player{PlayerID: "p1", FirebaseUID: "uid1", IsPremium: false}
 	daily := &model.PlayerDailyBattle{PlayerID: "p1", DailyBattleCount: 5, LastResetDate: today()}
 
 	svc := setupPlayerService(t, player, daily)
 
-	err := svc.CheckAndIncrementBattleCount(context.Background(), "p1")
+	err := svc.IncrementBattleCount(context.Background(), "p1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -167,58 +166,27 @@ func TestCheckAndIncrementBattleCount_Success(t *testing.T) {
 	}
 }
 
-func TestCheckAndIncrementBattleCount_LimitReached(t *testing.T) {
-	player := &model.Player{PlayerID: "p1", FirebaseUID: "uid1", IsPremium: false}
-	daily := &model.PlayerDailyBattle{PlayerID: "p1", DailyBattleCount: 10, LastResetDate: today()}
-
-	svc := setupPlayerService(t, player, daily)
-
-	err := svc.CheckAndIncrementBattleCount(context.Background(), "p1")
-	if err == nil {
-		t.Fatal("expected error for limit reached, got nil")
-	}
-
-	expected := "daily battle limit reached"
-	if got := err.Error(); !contains(got, expected) {
-		t.Errorf("error = %q, want it to contain %q", got, expected)
-	}
-}
-
-func TestCheckAndIncrementBattleCount_PremiumPlayer(t *testing.T) {
+func TestIncrementBattleCount_PremiumPlayer(t *testing.T) {
 	player := &model.Player{PlayerID: "p1", FirebaseUID: "uid1", IsPremium: true}
 	daily := &model.PlayerDailyBattle{PlayerID: "p1", DailyBattleCount: 29, LastResetDate: today()}
 
 	svc := setupPlayerService(t, player, daily)
 
-	err := svc.CheckAndIncrementBattleCount(context.Background(), "p1")
+	err := svc.IncrementBattleCount(context.Background(), "p1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Verify count was incremented
+	// プレミアムは無制限なので DailyBattleLimit = -1
 	resp, err := svc.GetBattleLimit(context.Background(), "p1")
 	if err != nil {
 		t.Fatalf("unexpected error on GetBattleLimit: %v", err)
 	}
-	if resp.DailyBattleCount != 30 {
-		t.Errorf("DailyBattleCount = %d, want 30 (incremented from 29)", resp.DailyBattleCount)
+	if resp.DailyBattleLimit != -1 {
+		t.Errorf("DailyBattleLimit = %d, want -1 (unlimited)", resp.DailyBattleLimit)
 	}
-}
-
-func TestCheckAndIncrementBattleCount_PremiumLimitReached(t *testing.T) {
-	player := &model.Player{PlayerID: "p1", FirebaseUID: "uid1", IsPremium: true}
-	daily := &model.PlayerDailyBattle{PlayerID: "p1", DailyBattleCount: 30, LastResetDate: today()}
-
-	svc := setupPlayerService(t, player, daily)
-
-	err := svc.CheckAndIncrementBattleCount(context.Background(), "p1")
-	if err == nil {
-		t.Fatal("expected error for premium limit reached, got nil")
-	}
-
-	expected := "daily battle limit reached"
-	if got := err.Error(); !contains(got, expected) {
-		t.Errorf("error = %q, want it to contain %q", got, expected)
+	if resp.DailyBattleCount != 0 {
+		t.Errorf("DailyBattleCount = %d, want 0 (GetBattleLimit returns 0 for premium; actual count tracked separately)", resp.DailyBattleCount)
 	}
 }
 

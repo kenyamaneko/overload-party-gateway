@@ -12,10 +12,7 @@ import (
 )
 
 const (
-	configKeyFreeDailyBattleLimit    = "free_daily_battle_limit"
-	configKeyPremiumDailyBattleLimit = "premium_daily_battle_limit"
-	defaultFreeDailyBattleLimit      = int64(10)
-	defaultPremiumDailyBattleLimit   = int64(30)
+	configKeyFreeDailyBattleLimit = "free_daily_battle_limit"
 )
 
 type PlayerService struct {
@@ -51,6 +48,14 @@ func (s *PlayerService) GetBattleLimit(ctx context.Context, playerID string) (*B
 		return nil, fmt.Errorf("find player: %w", err)
 	}
 
+	if player.IsPremium {
+		return &BattleLimitResponse{
+			DailyBattleCount: 0,
+			DailyBattleLimit: -1,
+			CanBattle:        true,
+		}, nil
+	}
+
 	db, err := s.playerRepo.GetDailyBattle(ctx, playerID)
 	if err != nil {
 		return nil, fmt.Errorf("get daily battle: %w", err)
@@ -62,21 +67,12 @@ func (s *PlayerService) GetBattleLimit(ctx context.Context, playerID string) (*B
 		count = 0 // Will be reset on next increment
 	}
 
-	if player.IsPremium {
-		premiumLimit, err := s.gameConfigRepo.GetInt64(ctx, configKeyPremiumDailyBattleLimit, defaultPremiumDailyBattleLimit)
-		if err != nil {
-			return nil, fmt.Errorf("get premium battle limit: %w", err)
-		}
-		return &BattleLimitResponse{
-			DailyBattleCount: count,
-			DailyBattleLimit: premiumLimit,
-			CanBattle:        count < premiumLimit,
-		}, nil
-	}
-
-	freeLimit, err := s.gameConfigRepo.GetInt64(ctx, configKeyFreeDailyBattleLimit, defaultFreeDailyBattleLimit)
+	freeLimit, err := s.gameConfigRepo.GetInt64(ctx, configKeyFreeDailyBattleLimit, 0)
 	if err != nil {
 		return nil, fmt.Errorf("get free battle limit: %w", err)
+	}
+	if freeLimit == 0 {
+		return nil, fmt.Errorf("game config %q is not set", configKeyFreeDailyBattleLimit)
 	}
 
 	return &BattleLimitResponse{
@@ -86,37 +82,14 @@ func (s *PlayerService) GetBattleLimit(ctx context.Context, playerID string) (*B
 	}, nil
 }
 
-// CheckAndIncrementBattleCount verifies the player can battle and increments the count.
-// Returns an error if the daily limit has been reached.
-func (s *PlayerService) CheckAndIncrementBattleCount(ctx context.Context, playerID string) error {
-	player, err := s.playerRepo.FindByID(ctx, playerID)
-	if err != nil {
-		return fmt.Errorf("find player: %w", err)
-	}
-
+// IncrementBattleCount increments the daily battle count for a player.
+// It also records the increment even for premium players.
+func (s *PlayerService) IncrementBattleCount(ctx context.Context, playerID string) error {
 	today := gameDay()
-	newCount, err := s.playerRepo.IncrementDailyBattle(ctx, playerID, today)
+
+	_, err := s.playerRepo.IncrementDailyBattle(ctx, playerID, today)
 	if err != nil {
 		return fmt.Errorf("increment daily battle: %w", err)
-	}
-
-	if player.IsPremium {
-		premiumLimit, err := s.gameConfigRepo.GetInt64(ctx, configKeyPremiumDailyBattleLimit, defaultPremiumDailyBattleLimit)
-		if err != nil {
-			return fmt.Errorf("get premium battle limit: %w", err)
-		}
-		if newCount > premiumLimit {
-			return fmt.Errorf("daily battle limit reached (%d/%d)", newCount, premiumLimit)
-		}
-		return nil
-	}
-
-	freeLimit, err := s.gameConfigRepo.GetInt64(ctx, configKeyFreeDailyBattleLimit, defaultFreeDailyBattleLimit)
-	if err != nil {
-		return fmt.Errorf("get free battle limit: %w", err)
-	}
-	if newCount > freeLimit {
-		return fmt.Errorf("daily battle limit reached (%d/%d)", freeLimit, freeLimit)
 	}
 
 	return nil

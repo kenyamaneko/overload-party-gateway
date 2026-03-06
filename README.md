@@ -2,7 +2,7 @@
 
 **Overload Party** のクライアント向け REST API ゲートウェイサーバー。
 
-Overload Party は、AWS・Azure・GCP・OCI など実在するクラウドサービスを擬人化したキャラクターで戦う 1v1 リアルタイム対戦カードゲームです。本リポジトリはクライアントアプリとバトルサーバーの間に位置し、認証・プレイヤーデータ・デッキ管理・ショップ/課金処理などを担うゲートウェイ API を提供します。
+Overload Party は、AWS・Azure・GCP・OCI など実在するクラウドサービスを擬人化したキャラクターで戦う 1v1 リアルタイム対戦カードゲームです。本リポジトリはクライアントアプリとバトルサーバーの間に位置し、認証・プレイヤーデータ・デッキ管理・ショップ/課金処理、そして **WebSocket 経由での対戦通信・マッチメイキング** などを担うゲートウェイ API を提供します。
 
 ## 技術スタック
 
@@ -92,4 +92,4 @@ make build         # Docker イメージビルド
 |-----------|------|
 | `overload-party-common` | ゲーム仕様・カード YAML 定義・コード生成スクリプト (Single Source of Truth) |
 | `overload-party-client` | クライアント (React + Capacitor) |
-| `overload-party-battle` | バトルサーバー (WebSocket リアルタイム対戦) |
+| `overload-party-battle` | バトルサーバー (ゲームエンジン / REST API バックエンド) |

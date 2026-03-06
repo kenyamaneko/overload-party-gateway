@@ -1,0 +1,91 @@
+package ws
+
+import (
+	"log"
+	"net/http"
+
+	"firebase.google.com/go/v4/auth"
+	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
+
+	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
+)
+
+// Handler upgrades HTTP connections to WebSocket and hands off to Manager.
+type Handler struct {
+	manager    *Manager
+	authClient *auth.Client // nil in local/dev mode
+	playerRepo repository.PlayerRepo
+	upgrader   websocket.Upgrader
+}
+
+func NewHandler(manager *Manager, authClient *auth.Client, playerRepo repository.PlayerRepo, allowedOrigins []string) *Handler {
+	origins := make(map[string]struct{}, len(allowedOrigins))
+	for _, o := range allowedOrigins {
+		origins[o] = struct{}{}
+	}
+
+	return &Handler{
+		manager:    manager,
+		authClient: authClient,
+		playerRepo: playerRepo,
+		upgrader: websocket.Upgrader{
+			ReadBufferSize:  1024,
+			WriteBufferSize: 1024,
+			CheckOrigin: func(r *http.Request) bool {
+				if len(origins) == 0 {
+					return true // dev/local: no restriction
+				}
+				_, ok := origins[r.Header.Get("Origin")]
+				return ok
+			},
+		},
+	}
+}
+
+// HandleUpgrade handles GET /ws?token=<firebase_id_token>
+func (h *Handler) HandleUpgrade(c *gin.Context) {
+	token := c.Query("token")
+	if token == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing token"})
+		return
+	}
+
+	var playerID string
+
+	if h.authClient != nil {
+		// Production: verify Firebase token
+		decoded, err := h.authClient.VerifyIDToken(c.Request.Context(), token)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+			return
+		}
+		player, err := h.playerRepo.FindByFirebaseUID(c.Request.Context(), decoded.UID)
+		if err != nil || player == nil {
+			log.Printf("ws handler: find player by firebase uid %s: %v", decoded.UID, err)
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "player not registered"})
+			return
+		}
+		playerID = player.PlayerID
+	} else {
+		// Local/dev: token is used directly as playerID (set by DevAuth middleware)
+		pid, ok := c.Get("playerID")
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+		playerID = pid.(string)
+	}
+
+	wsConn, err := h.upgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		log.Printf("ws upgrade error: %v", err)
+		return
+	}
+
+	conn := NewConnection(wsConn, playerID)
+	h.manager.Register(conn)
+
+	go conn.WritePump()
+	go conn.ReadPump(h.manager)
+}

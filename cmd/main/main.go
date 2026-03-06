@@ -14,6 +14,7 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/cache"
 	"github.com/kenyamaneko/overload-party-gateway/internal/config"
 	"github.com/kenyamaneko/overload-party-gateway/internal/handler/rest"
+	ws "github.com/kenyamaneko/overload-party-gateway/internal/handler/ws"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
 	"github.com/kenyamaneko/overload-party-gateway/internal/platform"
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
@@ -92,7 +93,12 @@ func main() {
 	shopService := service.NewShopService(shopRepo, playerRepo, cardCache, appleVerifier, googleVerifier)
 	subscriptionService := service.NewSubscriptionService(shopRepo)
 
+	// Battle client (mock for now, replace when battle server REST API is ready)
+	battleClient := service.NewMockBattleClient()
+
 	// Handlers
+	wsManager := ws.NewManager(battleClient, playerService)
+	wsHandler := ws.NewHandler(wsManager, authClient, playerRepo, cfg.AllowedOrigins)
 	authHandler := rest.NewAuthHandler(authService)
 	playerHandler := rest.NewPlayerHandler(playerService)
 	cardHandler := rest.NewCardHandler(cardService)
@@ -109,6 +115,9 @@ func main() {
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
+
+	// WebSocket (no REST auth middleware; auth is handled inside HandleUpgrade)
+	r.GET("/ws", wsHandler.HandleUpgrade)
 
 	// Public API endpoints (no auth required, used by client splash screen)
 	pub := r.Group("/api/v1")

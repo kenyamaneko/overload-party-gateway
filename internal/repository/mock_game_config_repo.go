@@ -10,8 +10,7 @@ type MockGameConfigRepository struct {
 func NewMockGameConfigRepository() *MockGameConfigRepository {
 	return &MockGameConfigRepository{
 		values: map[string]int64{
-			"free_daily_battle_limit":    10,
-			"premium_daily_battle_limit": 30,
+			"free_daily_battle_limit": 10,
 		},
 	}
 }

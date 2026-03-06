@@ -12,9 +12,10 @@ import (
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/cache"
 	"github.com/kenyamaneko/overload-party-gateway/internal/constants"
-	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 	"github.com/kenyamaneko/overload-party-gateway/internal/handler/rest"
+	ws "github.com/kenyamaneko/overload-party-gateway/internal/handler/ws"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
+	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
@@ -44,7 +45,12 @@ func main() {
 	deckService := service.NewDeckService(deckRepo, cardCache)
 	shopService := service.NewShopService(shopRepo, playerRepo, cardCache, nil, nil)
 	subscriptionService := service.NewSubscriptionService(shopRepo)
-	// 4. Handlers
+	// 4. Battle client (mock for local)
+	battleClient := service.NewMockBattleClient()
+
+	// 5. Handlers
+	wsManager := ws.NewManager(battleClient, playerService)
+	wsHandler := ws.NewHandler(wsManager, nil, playerRepo, nil)
 	authHandler := rest.NewAuthHandler(authService)
 	playerHandler := rest.NewPlayerHandler(playerService)
 	cardHandler := rest.NewCardHandler(cardService)
@@ -54,59 +60,59 @@ func main() {
 	webhookHandler := rest.NewWebhookHandler(subscriptionService)
 	userSettingsHandler := rest.NewUserSettingsHandler(userSettingsRepo)
 
-	// 5. Dev player setup: give all active cards + starter deck on first request
+	// 5. Dev player setup: give all active cards + starter decks on first request
 	devPlayerSetup := func(ctx context.Context, playerID string) error {
 		var playerCards []*model.PlayerCard
 		for _, card := range cardCache.All() {
 			if !card.IsActive {
 				continue
 			}
-				copies := 3 // default
-			if card.Restriction == "semi_limited" {
-				copies = 2
-			} else if card.Restriction == "limited" {
-				copies = 1
-			}
 			playerCards = append(playerCards, &model.PlayerCard{
 				PlayerID:            playerID,
 				CardNo:              card.CardNo,
 				IllustrationVariant: 0,
-				Count:               copies,
+				Count:               3, // 保持できるカードは制限しない
 			})
 		}
 		deckRepo.SeedPlayerCards(playerID, playerCards)
 
-		// Create a starter deck (first 30 cards by expanding counts)
-		var deckCards []model.DeckCard
-		remaining := constants.DeckSize
-		for _, pc := range playerCards {
-			if remaining <= 0 {
-				break
+		// Create starter decks
+		starterDecks := map[string][]int64{
+			"SD Standard":     {1, 1, 1, 3, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 13, 13, 15, 17, 20, 20, 20, 98, 99, 100, 101, 101, 115, 118, 119, 121},
+			"Tenki Standard":  {23, 23, 26, 26, 26, 27, 27, 29, 29, 29, 31, 32, 32, 32, 35, 35, 37, 38, 38, 38, 41, 46, 46, 94, 98, 99, 100, 101, 101, 117},
+			"Sugar Standard":  {47, 47, 47, 48, 48, 48, 49, 49, 50, 50, 51, 51, 52, 55, 56, 58, 58, 60, 60, 61, 62, 62, 66, 98, 99, 100, 104, 104, 104, 106},
+			"Tuners Standard": {70, 70, 70, 72, 74, 74, 74, 76, 76, 77, 77, 77, 78, 79, 79, 81, 82, 84, 85, 86, 86, 86, 89, 89, 90, 90, 100, 101, 101, 101},
+		}
+
+		for deckName, cardNos := range starterDecks {
+			cardCounts := make(map[int64]int)
+			for _, cardNo := range cardNos {
+				cardCounts[cardNo]++
 			}
-			use := pc.Count
-			if use > remaining {
-				use = remaining
+
+			var deckCards []model.DeckCard
+			for cardNo, count := range cardCounts {
+				deckCards = append(deckCards, model.DeckCard{
+					PlayerID:            playerID,
+					CardNo:              cardNo,
+					IllustrationVariant: 0,
+					Count:               count,
+				})
 			}
-			deckCards = append(deckCards, model.DeckCard{
-				PlayerID:            playerID,
-				CardNo:              pc.CardNo,
-				IllustrationVariant: pc.IllustrationVariant,
-				Count:               use,
-			})
-			remaining -= use
+
+			deck := &model.Deck{
+				PlayerID:  playerID,
+				DeckName:  deckName,
+				IsValid:   len(cardNos) == constants.DeckSize,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			}
+			if err := deckRepo.Create(ctx, deck, deckCards); err != nil {
+				return err
+			}
+			log.Printf("auto-created starter deck %s for %s: %d cards, deckID=%d", deckName, playerID, len(cardNos), deck.DeckID)
 		}
-		totalCards := constants.DeckSize - remaining
-		deck := &model.Deck{
-			PlayerID:  playerID,
-			DeckName:  "Starter Deck",
-			IsValid:   totalCards == constants.DeckSize,
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
-		}
-		if err := deckRepo.Create(ctx, deck, deckCards); err != nil {
-			return err
-		}
-		log.Printf("auto-created starter deck for %s: %d cards, deckID=%d", playerID, totalCards, deck.DeckID)
+
 		return nil
 	}
 
@@ -124,6 +130,9 @@ func main() {
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "mode": "local"})
 	})
+
+	// WebSocket (no REST auth middleware; auth is handled inside HandleUpgrade)
+	r.GET("/ws", wsHandler.HandleUpgrade)
 
 	// Public API endpoints (no auth required, used by client splash screen)
 	pub := r.Group("/api/v1")
