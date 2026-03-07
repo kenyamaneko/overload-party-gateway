@@ -531,3 +531,131 @@ func TestHandleAppleNotification_AlreadyExpired(t *testing.T) {
 		t.Error("expected player to remain non-premium")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Negative / edge case tests
+// ---------------------------------------------------------------------------
+
+func TestHandleAppleNotification_UnknownType(t *testing.T) {
+	env := newTestSubscriptionService()
+	sub := createTestSubscription(env, "p1", "apple-token-unknown")
+
+	txnInfo := buildAppleJWS(map[string]interface{}{
+		"originalTransactionId": sub.PurchaseToken,
+		"expiresDate":           time.Now().UnixMilli(),
+	})
+
+	notifPayload := buildAppleJWS(map[string]interface{}{
+		"notificationType": "UNKNOWN_TYPE",
+		"data": map[string]interface{}{
+			"signedTransactionInfo": txnInfo,
+		},
+	})
+
+	err := env.svc.HandleAppleNotification(context.Background(), notifPayload)
+	if err != nil {
+		t.Fatalf("expected nil error for unknown type, got: %v", err)
+	}
+
+	// Subscription status should be unchanged (active)
+	updatedSub, _ := env.shopRepo.FindSubscriptionByToken(context.Background(), sub.PurchaseToken)
+	if updatedSub.Status != model.SubscriptionStatusActive {
+		t.Errorf("expected status active (unchanged), got %s", updatedSub.Status)
+	}
+}
+
+func TestHandleAppleNotification_AutoRenewEnabled(t *testing.T) {
+	env := newTestSubscriptionService()
+	sub := createTestSubscription(env, "p1", "apple-token-are")
+
+	txnInfo := buildAppleJWS(map[string]interface{}{
+		"originalTransactionId": sub.PurchaseToken,
+		"expiresDate":           sub.CurrentPeriodEnd.UnixMilli(),
+	})
+
+	notifPayload := buildAppleJWS(map[string]interface{}{
+		"notificationType": "DID_CHANGE_RENEWAL_STATUS",
+		"subtype":          "AUTO_RENEW_ENABLED",
+		"data": map[string]interface{}{
+			"signedTransactionInfo": txnInfo,
+		},
+	})
+
+	err := env.svc.HandleAppleNotification(context.Background(), notifPayload)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Status should remain active (no change for AUTO_RENEW_ENABLED)
+	updatedSub, _ := env.shopRepo.FindSubscriptionByToken(context.Background(), sub.PurchaseToken)
+	if updatedSub.Status != model.SubscriptionStatusActive {
+		t.Errorf("expected status active (unchanged), got %s", updatedSub.Status)
+	}
+
+	p, _ := env.playerRepo.FindByID(context.Background(), "p1")
+	if p == nil || !p.IsPremium {
+		t.Error("expected player to remain premium")
+	}
+}
+
+func TestHandleGoogleNotification_UnhandledType(t *testing.T) {
+	env := newTestSubscriptionService()
+	sub := createTestSubscription(env, "p1", "google-token-unhandled")
+
+	data, _ := json.Marshal(map[string]interface{}{
+		"subscriptionNotification": map[string]interface{}{
+			"notificationType": 99, // not in switch cases
+			"purchaseToken":    sub.PurchaseToken,
+			"subscriptionId":   "premium_monthly",
+		},
+	})
+
+	msg := GoogleRTDNMessage{}
+	msg.Message.Data = base64.StdEncoding.EncodeToString(data)
+
+	err := env.svc.HandleGoogleNotification(context.Background(), msg)
+	if err != nil {
+		t.Fatalf("expected nil error for unhandled type, got: %v", err)
+	}
+
+	updatedSub, _ := env.shopRepo.FindSubscriptionByToken(context.Background(), sub.PurchaseToken)
+	if updatedSub.Status != model.SubscriptionStatusActive {
+		t.Errorf("expected status active (unchanged), got %s", updatedSub.Status)
+	}
+}
+
+func TestHandleAppleNotification_InvalidTransactionInfoJWS(t *testing.T) {
+	env := newTestSubscriptionService()
+
+	// Valid outer JWS but invalid signedTransactionInfo (not 3-part JWS)
+	notifPayload := buildAppleJWS(map[string]interface{}{
+		"notificationType": "EXPIRED",
+		"data": map[string]interface{}{
+			"signedTransactionInfo": "not-a-valid-jws",
+		},
+	})
+
+	err := env.svc.HandleAppleNotification(context.Background(), notifPayload)
+	if err == nil {
+		t.Fatal("expected error for invalid transaction info JWS, got nil")
+	}
+	if !strings.Contains(err.Error(), "decode transaction info") {
+		t.Errorf("expected 'decode transaction info' error, got: %v", err)
+	}
+}
+
+func TestHandleGoogleNotification_InvalidJSON(t *testing.T) {
+	env := newTestSubscriptionService()
+
+	// Valid base64 encoding of invalid JSON
+	msg := GoogleRTDNMessage{}
+	msg.Message.Data = base64.StdEncoding.EncodeToString([]byte("not valid json {{{"))
+
+	err := env.svc.HandleGoogleNotification(context.Background(), msg)
+	if err == nil {
+		t.Fatal("expected error for invalid JSON, got nil")
+	}
+	if !strings.Contains(err.Error(), "unmarshal RTDN data") {
+		t.Errorf("expected 'unmarshal RTDN data' error, got: %v", err)
+	}
+}

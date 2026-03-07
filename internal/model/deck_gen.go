@@ -11,14 +11,14 @@ import (
 type PlayerCard struct {
 	PlayerID            string `json:"player_id"`
 	CardNo              int64  `json:"card_no"`
-	IllustrationVariant int64  `json:"illustration_variant"`
+	ArtNo int64  `json:"art_no"`
 	Count               int    `json:"count"`
 }
 
 // PlayerCardWithDef is a PlayerCard enriched with card definition fields for API responses.
 type PlayerCardWithDef struct {
 	CardNo              int64           `json:"card_no"`
-	IllustrationVariant int64           `json:"illustration_variant"`
+	ArtNo int64           `json:"art_no"`
 	Count               int             `json:"count"`
 	CardName            string          `json:"card_name"`
 	Faction             string          `json:"faction"`
@@ -46,6 +46,6 @@ type DeckCard struct {
 	PlayerID            string `json:"player_id"`
 	DeckID              int64  `json:"deck_id"`
 	CardNo              int64  `json:"card_no"`
-	IllustrationVariant int64  `json:"illustration_variant"`
+	ArtNo int64  `json:"art_no"`
 	Count               int    `json:"count"`
 }

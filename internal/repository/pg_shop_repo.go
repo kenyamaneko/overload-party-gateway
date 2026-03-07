@@ -122,12 +122,12 @@ func (r *PgShopRepository) CreatePurchaseWithCards(ctx context.Context, purchase
 
 	for _, card := range cards {
 		_, err = tx.Exec(ctx,
-			`INSERT INTO player_cards (player_id, card_no, illustration_variant, count)
+			`INSERT INTO player_cards (player_id, card_no, art_no, count)
 			 VALUES ($1,$2,$3,$4)
-			 ON CONFLICT (player_id, card_no, illustration_variant)
+			 ON CONFLICT (player_id, card_no, art_no)
 			 DO UPDATE SET count = player_cards.count + EXCLUDED.count`,
 			card.PlayerID, card.CardNo,
-			card.IllustrationVariant, card.Count,
+			card.ArtNo, card.Count,
 		)
 		if err != nil {
 			return fmt.Errorf("insert player card: %w", err)
@@ -196,12 +196,12 @@ func (r *PgShopRepository) InsertPlayerCards(ctx context.Context, cards []*model
 
 	for _, card := range cards {
 		_, err = tx.Exec(ctx,
-			`INSERT INTO player_cards (player_id, card_no, illustration_variant, count)
+			`INSERT INTO player_cards (player_id, card_no, art_no, count)
 			 VALUES ($1,$2,$3,$4)
-			 ON CONFLICT (player_id, card_no, illustration_variant)
+			 ON CONFLICT (player_id, card_no, art_no)
 			 DO UPDATE SET count = player_cards.count + EXCLUDED.count`,
 			card.PlayerID, card.CardNo,
-			card.IllustrationVariant, card.Count,
+			card.ArtNo, card.Count,
 		)
 		if err != nil {
 			return fmt.Errorf("insert player card: %w", err)

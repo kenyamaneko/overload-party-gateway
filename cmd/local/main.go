@@ -74,7 +74,7 @@ func main() {
 			playerCards = append(playerCards, &model.PlayerCard{
 				PlayerID:            playerID,
 				CardNo:              card.CardNo,
-				IllustrationVariant: 0,
+				ArtNo: 0,
 				Count:               3, // 保持できるカードは制限しない
 			})
 		}
@@ -99,7 +99,7 @@ func main() {
 				deckCards = append(deckCards, model.DeckCard{
 					PlayerID:            playerID,
 					CardNo:              cardNo,
-					IllustrationVariant: 0,
+					ArtNo: 0,
 					Count:               count,
 				})
 			}

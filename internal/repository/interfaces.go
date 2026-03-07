@@ -49,9 +49,15 @@ type GameConfigRepo interface {
 	GetInt64(ctx context.Context, key string, fallback int64) (int64, error)
 }
 
+// NewsRepo defines the data access contract for cloud news articles.
+type NewsRepo interface {
+	List(ctx context.Context, limit int, offset int) ([]*model.NewsArticle, error)
+}
+
 // Compile-time interface checks for PostgreSQL implementations.
 var _ PlayerRepo = (*PgPlayerRepository)(nil)
 var _ DeckRepo = (*PgDeckRepository)(nil)
 var _ CardRepo = (*PgCardRepository)(nil)
 var _ UserSettingsRepo = (*PgUserSettingsRepository)(nil)
 var _ GameConfigRepo = (*PgGameConfigRepository)(nil)
+var _ NewsRepo = (*PgNewsRepository)(nil)

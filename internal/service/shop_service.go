@@ -273,7 +273,7 @@ func (s *ShopService) buildFactionCards(playerID string, faction string) []*mode
 		cards = append(cards, &model.PlayerCard{
 			PlayerID:            playerID,
 			CardNo:              card.CardNo,
-			IllustrationVariant: 0,
+			ArtNo: 0,
 			Count:               copies,
 		})
 	}

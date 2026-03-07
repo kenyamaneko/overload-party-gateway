@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -236,16 +237,76 @@ func TestUpdateUsername_Success(t *testing.T) {
 	}
 }
 
-// contains checks if s contains substr.
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && searchSubstring(s, substr)
+// --- Boundary value tests ---
+
+func TestGetBattleLimit_FreePlayer_OverLimit(t *testing.T) {
+	player := &model.Player{PlayerID: "p1", FirebaseUID: "uid1", IsPremium: false}
+	daily := &model.PlayerDailyBattle{PlayerID: "p1", DailyBattleCount: 11, LastResetDate: today()}
+
+	svc := setupPlayerService(t, player, daily)
+
+	resp, err := svc.GetBattleLimit(context.Background(), "p1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if resp.CanBattle {
+		t.Errorf("CanBattle = true, want false (over limit)")
+	}
+	if resp.DailyBattleCount != 11 {
+		t.Errorf("DailyBattleCount = %d, want 11", resp.DailyBattleCount)
+	}
 }
 
-func searchSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
+func TestGetBattleLimit_FreeLimitZero_ReturnsError(t *testing.T) {
+	playerRepo := repository.NewMockPlayerRepository()
+	_ = playerRepo.Create(context.Background(), &model.Player{PlayerID: "p1", FirebaseUID: "uid1"}, &model.PlayerDailyBattle{PlayerID: "p1", DailyBattleCount: 0, LastResetDate: today()})
+	configRepo := &mockGameConfigRepo{values: map[string]int64{configKeyFreeDailyBattleLimit: 0}}
+	svc := NewPlayerService(playerRepo, configRepo)
+
+	_, err := svc.GetBattleLimit(context.Background(), "p1")
+	if err == nil {
+		t.Fatal("expected error, got nil")
 	}
-	return false
+	if !strings.Contains(err.Error(), "game config") {
+		t.Errorf("error = %q, want it to contain %q", err.Error(), "game config")
+	}
+}
+
+// --- Error path tests ---
+
+func TestGetPlayer_NotFound(t *testing.T) {
+	player := &model.Player{PlayerID: "p1", FirebaseUID: "uid1"}
+	daily := &model.PlayerDailyBattle{PlayerID: "p1", DailyBattleCount: 0, LastResetDate: today()}
+
+	svc := setupPlayerService(t, player, daily)
+
+	_, err := svc.GetPlayer(context.Background(), "nonexistent")
+	if err == nil {
+		t.Fatal("expected error for nonexistent player, got nil")
+	}
+}
+
+func TestUpdateUsername_NotFound(t *testing.T) {
+	player := &model.Player{PlayerID: "p1", FirebaseUID: "uid1", Username: "Alice"}
+	daily := &model.PlayerDailyBattle{PlayerID: "p1", DailyBattleCount: 0, LastResetDate: today()}
+
+	svc := setupPlayerService(t, player, daily)
+
+	_, err := svc.UpdateUsername(context.Background(), "nonexistent", "Bob")
+	if err == nil {
+		t.Fatal("expected error for nonexistent player, got nil")
+	}
+}
+
+func TestIncrementBattleCount_PlayerNotFound(t *testing.T) {
+	player := &model.Player{PlayerID: "p1", FirebaseUID: "uid1"}
+	daily := &model.PlayerDailyBattle{PlayerID: "p1", DailyBattleCount: 0, LastResetDate: today()}
+
+	svc := setupPlayerService(t, player, daily)
+
+	err := svc.IncrementBattleCount(context.Background(), "nonexistent")
+	if err == nil {
+		t.Fatal("expected error for nonexistent player, got nil")
+	}
 }

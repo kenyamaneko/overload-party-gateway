@@ -56,6 +56,7 @@ func main() {
 	shopRepo := repository.NewPgShopRepository(pool)
 	userSettingsRepo := repository.NewPgUserSettingsRepository(pool)
 	gameConfigRepo := repository.NewPgGameConfigRepository(pool)
+	newsRepo := repository.NewPgNewsRepository(pool)
 
 	// Card cache (load at startup)
 	cardCache := cache.NewCardCache()
@@ -106,6 +107,7 @@ func main() {
 	shopHandler := rest.NewShopHandler(shopService)
 	webhookHandler := rest.NewWebhookHandler(subscriptionService)
 	userSettingsHandler := rest.NewUserSettingsHandler(userSettingsRepo)
+	newsHandler := rest.NewNewsHandler(newsRepo)
 
 	// Router
 	r := gin.Default()
@@ -140,14 +142,7 @@ func main() {
 				"text": "FEリソースの可用性が0になると相手のDVが加算されます。サポートカードで守りを固めましょう！",
 			})
 		})
-		pub.GET("/cloud-news", func(c *gin.Context) {
-			c.JSON(http.StatusOK, []gin.H{
-				{"id": "1", "tag": "aws", "headline": "Lambda が ARM64 対応を拡大、コスト最大34%削減", "meta": "2時間前"},
-				{"id": "2", "tag": "gcp", "headline": "Cloud Run に GPU サポートが GA、ML推論ワークロードに対応", "meta": "5時間前"},
-				{"id": "3", "tag": "azure", "headline": "Cosmos DB の新プライシングモデルが発表", "meta": "8時間前"},
-				{"id": "4", "tag": "topic", "headline": "マルチクラウド戦略の落とし穴: 3つの失敗パターン", "meta": "1日前"},
-			})
-		})
+		pub.GET("/cloud-news", newsHandler.GetCloudNews)
 	}
 
 	v1 := r.Group("/api/v1")

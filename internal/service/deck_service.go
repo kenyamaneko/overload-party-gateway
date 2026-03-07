@@ -48,7 +48,7 @@ func (s *DeckService) GetDeck(ctx context.Context, playerID string, deckID int64
 // DeckCardEntry represents a card entry in a deck create/update request.
 type DeckCardEntry struct {
 	CardNo              int64 `json:"card_no"`
-	IllustrationVariant int64 `json:"illustration_variant"`
+	ArtNo int64 `json:"art_no"`
 	Count               int   `json:"count"`
 }
 
@@ -91,7 +91,7 @@ func (s *DeckService) CreateDeck(ctx context.Context, playerID string, req Creat
 		deckCards = append(deckCards, model.DeckCard{
 			PlayerID:            playerID,
 			CardNo:              entry.CardNo,
-			IllustrationVariant: entry.IllustrationVariant,
+			ArtNo: entry.ArtNo,
 			Count:               entry.Count,
 		})
 	}
@@ -142,7 +142,7 @@ func (s *DeckService) UpdateDeck(ctx context.Context, playerID string, deckID in
 			PlayerID:            playerID,
 			DeckID:              deckID,
 			CardNo:              entry.CardNo,
-			IllustrationVariant: entry.IllustrationVariant,
+			ArtNo: entry.ArtNo,
 			Count:               entry.Count,
 		})
 	}
@@ -159,7 +159,7 @@ func (s *DeckService) DeleteDeck(ctx context.Context, playerID string, deckID in
 	return s.deckRepo.Delete(ctx, playerID, deckID)
 }
 
-// populateDeckCards fills deck.DeckCards with the card composition (card_no + illustration_variant + count).
+// populateDeckCards fills deck.DeckCards with the card composition (card_no + art_no + count).
 func (s *DeckService) populateDeckCards(ctx context.Context, deck *model.Deck) {
 	cards, err := s.deckRepo.GetDeckCards(ctx, deck.PlayerID, deck.DeckID)
 	if err != nil {
@@ -182,7 +182,7 @@ func (s *DeckService) GetPlayerCards(ctx context.Context, playerID string) ([]*m
 		}
 		result = append(result, &model.PlayerCardWithDef{
 			CardNo:              pc.CardNo,
-			IllustrationVariant: pc.IllustrationVariant,
+			ArtNo: pc.ArtNo,
 			Count:               pc.Count,
 			CardName:            cd.CardName,
 			Faction:             cd.Faction,
@@ -197,7 +197,7 @@ func (s *DeckService) GetPlayerCards(ctx context.Context, playerID string) ([]*m
 	return result, nil
 }
 
-// ownedKey returns a key for the (card_no, illustration_variant) pair.
+// ownedKey returns a key for the (card_no, art_no) pair.
 type ownedKey struct {
 	cardNo  int64
 	variant int64
@@ -208,7 +208,7 @@ func (s *DeckService) validateDeckCards(entries []DeckCardEntry, ownedCards []*m
 	totalCards := 0
 	for _, e := range entries {
 		if e.Count <= 0 {
-			return fmt.Errorf("card %d variant %d: count must be positive", e.CardNo, e.IllustrationVariant)
+			return fmt.Errorf("card %d variant %d: count must be positive", e.CardNo, e.ArtNo)
 		}
 		totalCards += e.Count
 	}
@@ -216,18 +216,18 @@ func (s *DeckService) validateDeckCards(entries []DeckCardEntry, ownedCards []*m
 		return fmt.Errorf("deck cannot exceed %d cards", constants.DeckSize)
 	}
 
-	// Build owned map: (card_no, illustration_variant) → count.
+	// Build owned map: (card_no, art_no) → count.
 	owned := make(map[ownedKey]int, len(ownedCards))
 	for _, c := range ownedCards {
-		owned[ownedKey{c.CardNo, c.IllustrationVariant}] = c.Count
+		owned[ownedKey{c.CardNo, c.ArtNo}] = c.Count
 	}
 
 	// Ownership check: each (card_no, variant) count ≤ owned count.
 	for _, e := range entries {
-		key := ownedKey{e.CardNo, e.IllustrationVariant}
+		key := ownedKey{e.CardNo, e.ArtNo}
 		if owned[key] < e.Count {
 			return fmt.Errorf("card %d variant %d: not enough owned (need %d, have %d)",
-				e.CardNo, e.IllustrationVariant, e.Count, owned[key])
+				e.CardNo, e.ArtNo, e.Count, owned[key])
 		}
 	}
 
