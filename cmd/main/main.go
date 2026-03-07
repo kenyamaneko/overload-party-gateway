@@ -91,7 +91,7 @@ func main() {
 	cardService := service.NewCardService(cardRepo)
 	deckService := service.NewDeckService(deckRepo, cardCache)
 	shopService := service.NewShopService(shopRepo, playerRepo, cardCache, appleVerifier, googleVerifier)
-	subscriptionService := service.NewSubscriptionService(shopRepo)
+	subscriptionService := service.NewSubscriptionService(shopRepo, playerRepo)
 
 	// Battle client (HTTP → battle server)
 	battleClient := service.NewBattleClient(cfg.BattleServerURL)

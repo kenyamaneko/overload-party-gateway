@@ -12,26 +12,44 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
 )
 
-func newTestSubscriptionService() (*SubscriptionService, *repository.MockShopRepository) {
-	shopRepo := repository.NewMockShopRepository()
-	svc := NewSubscriptionService(shopRepo)
-	return svc, shopRepo
+type testSubEnv struct {
+	svc        *SubscriptionService
+	shopRepo   *repository.MockShopRepository
+	playerRepo *repository.MockPlayerRepository
 }
 
-func createTestSubscription(shopRepo *repository.MockShopRepository, playerID, purchaseToken string) *model.Subscription {
+func newTestSubscriptionService() *testSubEnv {
+	shopRepo := repository.NewMockShopRepository()
+	playerRepo := repository.NewMockPlayerRepository()
+	svc := NewSubscriptionService(shopRepo, playerRepo)
+	return &testSubEnv{svc: svc, shopRepo: shopRepo, playerRepo: playerRepo}
+}
+
+func createTestSubscription(env *testSubEnv, playerID, purchaseToken string) *model.Subscription {
+	now := time.Now()
+	periodEnd := now.Add(30 * 24 * time.Hour)
+
+	// Ensure the player exists in the mock player repo.
+	_ = env.playerRepo.Create(context.Background(), &model.Player{
+		PlayerID:         playerID,
+		IsPremium:        true,
+		PremiumExpiresAt: &periodEnd,
+		CreatedAt:        now,
+		UpdatedAt:        now,
+	}, &model.PlayerDailyBattle{PlayerID: playerID})
+
 	sub := &model.Subscription{
 		PlayerID:           playerID,
 		ProductID:          "premium_monthly",
 		Platform:           "ios",
 		PurchaseToken:      purchaseToken,
 		Status:             model.SubscriptionStatusActive,
-		CurrentPeriodStart: time.Now(),
-		CurrentPeriodEnd:   time.Now().Add(30 * 24 * time.Hour),
-		CreatedAt:          time.Now(),
-		UpdatedAt:          time.Now(),
+		CurrentPeriodStart: now,
+		CurrentPeriodEnd:   periodEnd,
+		CreatedAt:          now,
+		UpdatedAt:          now,
 	}
-	_ = shopRepo.CreateSubscription(context.Background(), sub)
-	_ = shopRepo.UpdatePlayerPremium(context.Background(), playerID, true, &sub.CurrentPeriodEnd)
+	_ = env.shopRepo.CreateSubscription(context.Background(), sub)
 	return sub
 }
 
@@ -45,8 +63,8 @@ func buildAppleJWS(payload interface{}) string {
 }
 
 func TestHandleAppleNotification_Renewal(t *testing.T) {
-	svc, shopRepo := newTestSubscriptionService()
-	sub := createTestSubscription(shopRepo, "p1", "apple-token-1")
+	env := newTestSubscriptionService()
+	sub := createTestSubscription(env, "p1", "apple-token-1")
 
 	newExpiry := time.Now().Add(60 * 24 * time.Hour).UnixMilli()
 
@@ -62,13 +80,12 @@ func TestHandleAppleNotification_Renewal(t *testing.T) {
 		},
 	})
 
-	err := svc.HandleAppleNotification(context.Background(), notifPayload)
+	err := env.svc.HandleAppleNotification(context.Background(), notifPayload)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Verify subscription is still active
-	updatedSub, _ := shopRepo.FindSubscriptionByToken(context.Background(), sub.PurchaseToken)
+	updatedSub, _ := env.shopRepo.FindSubscriptionByToken(context.Background(), sub.PurchaseToken)
 	if updatedSub == nil {
 		t.Fatal("subscription not found")
 	}
@@ -76,16 +93,15 @@ func TestHandleAppleNotification_Renewal(t *testing.T) {
 		t.Errorf("expected status active, got %s", updatedSub.Status)
 	}
 
-	// Verify player is still premium
-	pd := shopRepo.GetPlayerDataForTest("p1")
-	if pd == nil || !pd.IsPremium {
+	p, _ := env.playerRepo.FindByID(context.Background(), "p1")
+	if p == nil || !p.IsPremium {
 		t.Error("expected player to be premium")
 	}
 }
 
 func TestHandleAppleNotification_Expired(t *testing.T) {
-	svc, shopRepo := newTestSubscriptionService()
-	sub := createTestSubscription(shopRepo, "p1", "apple-token-2")
+	env := newTestSubscriptionService()
+	sub := createTestSubscription(env, "p1", "apple-token-2")
 
 	txnInfo := buildAppleJWS(map[string]interface{}{
 		"originalTransactionId": sub.PurchaseToken,
@@ -99,25 +115,25 @@ func TestHandleAppleNotification_Expired(t *testing.T) {
 		},
 	})
 
-	err := svc.HandleAppleNotification(context.Background(), notifPayload)
+	err := env.svc.HandleAppleNotification(context.Background(), notifPayload)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	updatedSub, _ := shopRepo.FindSubscriptionByToken(context.Background(), sub.PurchaseToken)
+	updatedSub, _ := env.shopRepo.FindSubscriptionByToken(context.Background(), sub.PurchaseToken)
 	if updatedSub.Status != model.SubscriptionStatusExpired {
 		t.Errorf("expected status expired, got %s", updatedSub.Status)
 	}
 
-	pd := shopRepo.GetPlayerDataForTest("p1")
-	if pd == nil || pd.IsPremium {
+	p, _ := env.playerRepo.FindByID(context.Background(), "p1")
+	if p == nil || p.IsPremium {
 		t.Error("expected player to not be premium")
 	}
 }
 
 func TestHandleGoogleNotification_Renewed(t *testing.T) {
-	svc, shopRepo := newTestSubscriptionService()
-	_ = createTestSubscription(shopRepo, "p1", "google-token-1")
+	env := newTestSubscriptionService()
+	_ = createTestSubscription(env, "p1", "google-token-1")
 
 	data, _ := json.Marshal(map[string]interface{}{
 		"subscriptionNotification": map[string]interface{}{
@@ -130,20 +146,20 @@ func TestHandleGoogleNotification_Renewed(t *testing.T) {
 	msg := GoogleRTDNMessage{}
 	msg.Message.Data = base64.StdEncoding.EncodeToString(data)
 
-	err := svc.HandleGoogleNotification(context.Background(), msg)
+	err := env.svc.HandleGoogleNotification(context.Background(), msg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	updatedSub, _ := shopRepo.FindSubscriptionByToken(context.Background(), "google-token-1")
+	updatedSub, _ := env.shopRepo.FindSubscriptionByToken(context.Background(), "google-token-1")
 	if updatedSub.Status != model.SubscriptionStatusActive {
 		t.Errorf("expected status active, got %s", updatedSub.Status)
 	}
 }
 
 func TestHandleGoogleNotification_Revoked(t *testing.T) {
-	svc, shopRepo := newTestSubscriptionService()
-	_ = createTestSubscription(shopRepo, "p1", "google-token-2")
+	env := newTestSubscriptionService()
+	_ = createTestSubscription(env, "p1", "google-token-2")
 
 	data, _ := json.Marshal(map[string]interface{}{
 		"subscriptionNotification": map[string]interface{}{
@@ -156,27 +172,25 @@ func TestHandleGoogleNotification_Revoked(t *testing.T) {
 	msg := GoogleRTDNMessage{}
 	msg.Message.Data = base64.StdEncoding.EncodeToString(data)
 
-	err := svc.HandleGoogleNotification(context.Background(), msg)
+	err := env.svc.HandleGoogleNotification(context.Background(), msg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	updatedSub, _ := shopRepo.FindSubscriptionByToken(context.Background(), "google-token-2")
+	updatedSub, _ := env.shopRepo.FindSubscriptionByToken(context.Background(), "google-token-2")
 	if updatedSub.Status != model.SubscriptionStatusRevoked {
 		t.Errorf("expected status revoked, got %s", updatedSub.Status)
 	}
 
-	pd := shopRepo.GetPlayerDataForTest("p1")
-	if pd == nil || pd.IsPremium {
+	p, _ := env.playerRepo.FindByID(context.Background(), "p1")
+	if p == nil || p.IsPremium {
 		t.Error("expected player to not be premium")
 	}
 }
 
-// --- Apple GRACE_PERIOD_EXPIRED ---
-
 func TestHandleAppleNotification_GracePeriodExpired(t *testing.T) {
-	svc, shopRepo := newTestSubscriptionService()
-	sub := createTestSubscription(shopRepo, "p1", "apple-token-gpe")
+	env := newTestSubscriptionService()
+	sub := createTestSubscription(env, "p1", "apple-token-gpe")
 
 	txnInfo := buildAppleJWS(map[string]interface{}{
 		"originalTransactionId": sub.PurchaseToken,
@@ -190,12 +204,12 @@ func TestHandleAppleNotification_GracePeriodExpired(t *testing.T) {
 		},
 	})
 
-	err := svc.HandleAppleNotification(context.Background(), notifPayload)
+	err := env.svc.HandleAppleNotification(context.Background(), notifPayload)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	updatedSub, _ := shopRepo.FindSubscriptionByToken(context.Background(), sub.PurchaseToken)
+	updatedSub, _ := env.shopRepo.FindSubscriptionByToken(context.Background(), sub.PurchaseToken)
 	if updatedSub == nil {
 		t.Fatal("subscription not found")
 	}
@@ -203,17 +217,15 @@ func TestHandleAppleNotification_GracePeriodExpired(t *testing.T) {
 		t.Errorf("expected status expired, got %s", updatedSub.Status)
 	}
 
-	pd := shopRepo.GetPlayerDataForTest("p1")
-	if pd == nil || pd.IsPremium {
+	p, _ := env.playerRepo.FindByID(context.Background(), "p1")
+	if p == nil || p.IsPremium {
 		t.Error("expected player to not be premium after grace period expired")
 	}
 }
 
-// --- Apple REVOKE ---
-
 func TestHandleAppleNotification_Revoke(t *testing.T) {
-	svc, shopRepo := newTestSubscriptionService()
-	sub := createTestSubscription(shopRepo, "p1", "apple-token-revoke")
+	env := newTestSubscriptionService()
+	sub := createTestSubscription(env, "p1", "apple-token-revoke")
 
 	txnInfo := buildAppleJWS(map[string]interface{}{
 		"originalTransactionId": sub.PurchaseToken,
@@ -227,12 +239,12 @@ func TestHandleAppleNotification_Revoke(t *testing.T) {
 		},
 	})
 
-	err := svc.HandleAppleNotification(context.Background(), notifPayload)
+	err := env.svc.HandleAppleNotification(context.Background(), notifPayload)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	updatedSub, _ := shopRepo.FindSubscriptionByToken(context.Background(), sub.PurchaseToken)
+	updatedSub, _ := env.shopRepo.FindSubscriptionByToken(context.Background(), sub.PurchaseToken)
 	if updatedSub == nil {
 		t.Fatal("subscription not found")
 	}
@@ -240,17 +252,15 @@ func TestHandleAppleNotification_Revoke(t *testing.T) {
 		t.Errorf("expected status revoked, got %s", updatedSub.Status)
 	}
 
-	pd := shopRepo.GetPlayerDataForTest("p1")
-	if pd == nil || pd.IsPremium {
+	p, _ := env.playerRepo.FindByID(context.Background(), "p1")
+	if p == nil || p.IsPremium {
 		t.Error("expected player to not be premium after revoke")
 	}
 }
 
-// --- Apple DID_CHANGE_RENEWAL_STATUS (AUTO_RENEW_DISABLED) ---
-
 func TestHandleAppleNotification_AutoRenewDisabled(t *testing.T) {
-	svc, shopRepo := newTestSubscriptionService()
-	sub := createTestSubscription(shopRepo, "p1", "apple-token-ard")
+	env := newTestSubscriptionService()
+	sub := createTestSubscription(env, "p1", "apple-token-ard")
 
 	txnInfo := buildAppleJWS(map[string]interface{}{
 		"originalTransactionId": sub.PurchaseToken,
@@ -265,12 +275,12 @@ func TestHandleAppleNotification_AutoRenewDisabled(t *testing.T) {
 		},
 	})
 
-	err := svc.HandleAppleNotification(context.Background(), notifPayload)
+	err := env.svc.HandleAppleNotification(context.Background(), notifPayload)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	updatedSub, _ := shopRepo.FindSubscriptionByToken(context.Background(), sub.PurchaseToken)
+	updatedSub, _ := env.shopRepo.FindSubscriptionByToken(context.Background(), sub.PurchaseToken)
 	if updatedSub == nil {
 		t.Fatal("subscription not found")
 	}
@@ -279,17 +289,15 @@ func TestHandleAppleNotification_AutoRenewDisabled(t *testing.T) {
 	}
 
 	// Premium should remain active until current_period_end
-	pd := shopRepo.GetPlayerDataForTest("p1")
-	if pd == nil || !pd.IsPremium {
+	p, _ := env.playerRepo.FindByID(context.Background(), "p1")
+	if p == nil || !p.IsPremium {
 		t.Error("expected player to remain premium until period end")
 	}
 }
 
-// --- Google canceled ---
-
 func TestHandleGoogleNotification_Canceled(t *testing.T) {
-	svc, shopRepo := newTestSubscriptionService()
-	_ = createTestSubscription(shopRepo, "p1", "google-token-cancel")
+	env := newTestSubscriptionService()
+	_ = createTestSubscription(env, "p1", "google-token-cancel")
 
 	data, _ := json.Marshal(map[string]interface{}{
 		"subscriptionNotification": map[string]interface{}{
@@ -302,12 +310,12 @@ func TestHandleGoogleNotification_Canceled(t *testing.T) {
 	msg := GoogleRTDNMessage{}
 	msg.Message.Data = base64.StdEncoding.EncodeToString(data)
 
-	err := svc.HandleGoogleNotification(context.Background(), msg)
+	err := env.svc.HandleGoogleNotification(context.Background(), msg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	updatedSub, _ := shopRepo.FindSubscriptionByToken(context.Background(), "google-token-cancel")
+	updatedSub, _ := env.shopRepo.FindSubscriptionByToken(context.Background(), "google-token-cancel")
 	if updatedSub == nil {
 		t.Fatal("subscription not found")
 	}
@@ -316,17 +324,15 @@ func TestHandleGoogleNotification_Canceled(t *testing.T) {
 	}
 
 	// Premium should remain active until current_period_end (not revoked immediately)
-	pd := shopRepo.GetPlayerDataForTest("p1")
-	if pd == nil || !pd.IsPremium {
+	p, _ := env.playerRepo.FindByID(context.Background(), "p1")
+	if p == nil || !p.IsPremium {
 		t.Error("expected player to remain premium until period end after cancel")
 	}
 }
 
-// --- Google expired ---
-
 func TestHandleGoogleNotification_Expired(t *testing.T) {
-	svc, shopRepo := newTestSubscriptionService()
-	_ = createTestSubscription(shopRepo, "p1", "google-token-expire")
+	env := newTestSubscriptionService()
+	_ = createTestSubscription(env, "p1", "google-token-expire")
 
 	data, _ := json.Marshal(map[string]interface{}{
 		"subscriptionNotification": map[string]interface{}{
@@ -339,12 +345,12 @@ func TestHandleGoogleNotification_Expired(t *testing.T) {
 	msg := GoogleRTDNMessage{}
 	msg.Message.Data = base64.StdEncoding.EncodeToString(data)
 
-	err := svc.HandleGoogleNotification(context.Background(), msg)
+	err := env.svc.HandleGoogleNotification(context.Background(), msg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	updatedSub, _ := shopRepo.FindSubscriptionByToken(context.Background(), "google-token-expire")
+	updatedSub, _ := env.shopRepo.FindSubscriptionByToken(context.Background(), "google-token-expire")
 	if updatedSub == nil {
 		t.Fatal("subscription not found")
 	}
@@ -352,22 +358,20 @@ func TestHandleGoogleNotification_Expired(t *testing.T) {
 		t.Errorf("expected status expired, got %s", updatedSub.Status)
 	}
 
-	pd := shopRepo.GetPlayerDataForTest("p1")
-	if pd == nil || pd.IsPremium {
+	p, _ := env.playerRepo.FindByID(context.Background(), "p1")
+	if p == nil || p.IsPremium {
 		t.Error("expected player to not be premium after expiration")
 	}
 }
 
-// --- Google recovered ---
-
 func TestHandleGoogleNotification_Recovered(t *testing.T) {
-	svc, shopRepo := newTestSubscriptionService()
-	sub := createTestSubscription(shopRepo, "p1", "google-token-recover")
+	env := newTestSubscriptionService()
+	sub := createTestSubscription(env, "p1", "google-token-recover")
 
 	// Simulate a previously expired subscription
 	sub.Status = model.SubscriptionStatusExpired
-	_ = shopRepo.UpdateSubscription(context.Background(), sub)
-	_ = shopRepo.UpdatePlayerPremium(context.Background(), "p1", false, nil)
+	_ = env.shopRepo.UpdateSubscription(context.Background(), sub)
+	_ = env.playerRepo.UpdatePremium(context.Background(), "p1", false, nil)
 
 	data, _ := json.Marshal(map[string]interface{}{
 		"subscriptionNotification": map[string]interface{}{
@@ -380,12 +384,12 @@ func TestHandleGoogleNotification_Recovered(t *testing.T) {
 	msg := GoogleRTDNMessage{}
 	msg.Message.Data = base64.StdEncoding.EncodeToString(data)
 
-	err := svc.HandleGoogleNotification(context.Background(), msg)
+	err := env.svc.HandleGoogleNotification(context.Background(), msg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	updatedSub, _ := shopRepo.FindSubscriptionByToken(context.Background(), "google-token-recover")
+	updatedSub, _ := env.shopRepo.FindSubscriptionByToken(context.Background(), "google-token-recover")
 	if updatedSub == nil {
 		t.Fatal("subscription not found")
 	}
@@ -393,16 +397,14 @@ func TestHandleGoogleNotification_Recovered(t *testing.T) {
 		t.Errorf("expected status active, got %s", updatedSub.Status)
 	}
 
-	pd := shopRepo.GetPlayerDataForTest("p1")
-	if pd == nil || !pd.IsPremium {
+	p, _ := env.playerRepo.FindByID(context.Background(), "p1")
+	if p == nil || !p.IsPremium {
 		t.Error("expected player to be premium after recovery")
 	}
 }
 
-// --- Edge case: subscription not found ---
-
 func TestHandleAppleNotification_SubscriptionNotFound(t *testing.T) {
-	svc, _ := newTestSubscriptionService()
+	env := newTestSubscriptionService()
 
 	txnInfo := buildAppleJWS(map[string]interface{}{
 		"originalTransactionId": "nonexistent-token",
@@ -416,7 +418,7 @@ func TestHandleAppleNotification_SubscriptionNotFound(t *testing.T) {
 		},
 	})
 
-	err := svc.HandleAppleNotification(context.Background(), notifPayload)
+	err := env.svc.HandleAppleNotification(context.Background(), notifPayload)
 	if err == nil {
 		t.Fatal("expected error for nonexistent subscription, got nil")
 	}
@@ -426,7 +428,7 @@ func TestHandleAppleNotification_SubscriptionNotFound(t *testing.T) {
 }
 
 func TestHandleGoogleNotification_SubscriptionNotFound(t *testing.T) {
-	svc, _ := newTestSubscriptionService()
+	env := newTestSubscriptionService()
 
 	data, _ := json.Marshal(map[string]interface{}{
 		"subscriptionNotification": map[string]interface{}{
@@ -439,7 +441,7 @@ func TestHandleGoogleNotification_SubscriptionNotFound(t *testing.T) {
 	msg := GoogleRTDNMessage{}
 	msg.Message.Data = base64.StdEncoding.EncodeToString(data)
 
-	err := svc.HandleGoogleNotification(context.Background(), msg)
+	err := env.svc.HandleGoogleNotification(context.Background(), msg)
 	if err == nil {
 		t.Fatal("expected error for nonexistent subscription, got nil")
 	}
@@ -448,10 +450,8 @@ func TestHandleGoogleNotification_SubscriptionNotFound(t *testing.T) {
 	}
 }
 
-// --- Edge case: Google non-subscription notification (should be silently ignored) ---
-
 func TestHandleGoogleNotification_NonSubscription(t *testing.T) {
-	svc, _ := newTestSubscriptionService()
+	env := newTestSubscriptionService()
 
 	data, _ := json.Marshal(map[string]interface{}{
 		"voidedPurchaseNotification": map[string]interface{}{
@@ -462,18 +462,16 @@ func TestHandleGoogleNotification_NonSubscription(t *testing.T) {
 	msg := GoogleRTDNMessage{}
 	msg.Message.Data = base64.StdEncoding.EncodeToString(data)
 
-	err := svc.HandleGoogleNotification(context.Background(), msg)
+	err := env.svc.HandleGoogleNotification(context.Background(), msg)
 	if err != nil {
 		t.Fatalf("expected nil error for non-subscription notification, got: %v", err)
 	}
 }
 
-// --- Edge case: invalid Apple JWS format ---
-
 func TestHandleAppleNotification_InvalidJWS(t *testing.T) {
-	svc, _ := newTestSubscriptionService()
+	env := newTestSubscriptionService()
 
-	err := svc.HandleAppleNotification(context.Background(), "not-a-valid-jws")
+	err := env.svc.HandleAppleNotification(context.Background(), "not-a-valid-jws")
 	if err == nil {
 		t.Fatal("expected error for invalid JWS, got nil")
 	}
@@ -482,15 +480,13 @@ func TestHandleAppleNotification_InvalidJWS(t *testing.T) {
 	}
 }
 
-// --- Edge case: invalid Google base64 data ---
-
 func TestHandleGoogleNotification_InvalidBase64(t *testing.T) {
-	svc, _ := newTestSubscriptionService()
+	env := newTestSubscriptionService()
 
 	msg := GoogleRTDNMessage{}
 	msg.Message.Data = "!!! not base64 !!!"
 
-	err := svc.HandleGoogleNotification(context.Background(), msg)
+	err := env.svc.HandleGoogleNotification(context.Background(), msg)
 	if err == nil {
 		t.Fatal("expected error for invalid base64, got nil")
 	}
@@ -499,16 +495,14 @@ func TestHandleGoogleNotification_InvalidBase64(t *testing.T) {
 	}
 }
 
-// --- Edge case: already expired subscription receiving EXPIRED again ---
-
 func TestHandleAppleNotification_AlreadyExpired(t *testing.T) {
-	svc, shopRepo := newTestSubscriptionService()
-	sub := createTestSubscription(shopRepo, "p1", "apple-token-already-exp")
+	env := newTestSubscriptionService()
+	sub := createTestSubscription(env, "p1", "apple-token-already-exp")
 
 	// Pre-expire the subscription
 	sub.Status = model.SubscriptionStatusExpired
-	_ = shopRepo.UpdateSubscription(context.Background(), sub)
-	_ = shopRepo.UpdatePlayerPremium(context.Background(), "p1", false, nil)
+	_ = env.shopRepo.UpdateSubscription(context.Background(), sub)
+	_ = env.playerRepo.UpdatePremium(context.Background(), "p1", false, nil)
 
 	txnInfo := buildAppleJWS(map[string]interface{}{
 		"originalTransactionId": sub.PurchaseToken,
@@ -522,18 +516,18 @@ func TestHandleAppleNotification_AlreadyExpired(t *testing.T) {
 		},
 	})
 
-	err := svc.HandleAppleNotification(context.Background(), notifPayload)
+	err := env.svc.HandleAppleNotification(context.Background(), notifPayload)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	updatedSub, _ := shopRepo.FindSubscriptionByToken(context.Background(), sub.PurchaseToken)
+	updatedSub, _ := env.shopRepo.FindSubscriptionByToken(context.Background(), sub.PurchaseToken)
 	if updatedSub.Status != model.SubscriptionStatusExpired {
 		t.Errorf("expected status to remain expired, got %s", updatedSub.Status)
 	}
 
-	pd := shopRepo.GetPlayerDataForTest("p1")
-	if pd == nil || pd.IsPremium {
+	p, _ := env.playerRepo.FindByID(context.Background(), "p1")
+	if p == nil || p.IsPremium {
 		t.Error("expected player to remain non-premium")
 	}
 }

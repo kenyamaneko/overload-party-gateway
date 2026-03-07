@@ -296,21 +296,12 @@ func (m *Manager) handleMatchmakingStart(ctx context.Context, conn *Connection, 
 		return
 	}
 
-	// Check and increment daily battle count before joining queue
-	if m.playerService != nil {
-		limitResp, err := m.playerService.GetBattleLimit(ctx, conn.playerID)
-		if err != nil {
-			m.sendError(conn, "matchmaking_error", err.Error(), false)
-			return
-		}
-		if !limitResp.CanBattle {
-			m.sendError(conn, "matchmaking_error", "daily battle limit reached", false)
-			return
-		}
-		if err := m.playerService.IncrementBattleCount(ctx, conn.playerID); err != nil {
-			m.sendError(conn, "matchmaking_error", err.Error(), false)
-			return
-		}
+	if msg, err := m.checkAndIncrementBattleLimit(ctx, conn.playerID); err != nil {
+		m.sendError(conn, "matchmaking_error", err.Error(), false)
+		return
+	} else if msg != "" {
+		m.sendError(conn, "matchmaking_error", msg, false)
+		return
 	}
 
 	if err := m.queue.Join(conn.playerID, req.DeckID); err != nil {
@@ -327,21 +318,12 @@ func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, da
 		return
 	}
 
-	// Check and increment daily battle count before starting NPC battle
-	if m.playerService != nil {
-		limitResp, err := m.playerService.GetBattleLimit(ctx, conn.playerID)
-		if err != nil {
-			m.sendError(conn, "npc_battle_error", err.Error(), false)
-			return
-		}
-		if !limitResp.CanBattle {
-			m.sendError(conn, "npc_battle_error", "daily battle limit reached", false)
-			return
-		}
-		if err := m.playerService.IncrementBattleCount(ctx, conn.playerID); err != nil {
-			m.sendError(conn, "npc_battle_error", err.Error(), false)
-			return
-		}
+	if msg, err := m.checkAndIncrementBattleLimit(ctx, conn.playerID); err != nil {
+		m.sendError(conn, "npc_battle_error", err.Error(), false)
+		return
+	} else if msg != "" {
+		m.sendError(conn, "npc_battle_error", msg, false)
+		return
 	}
 
 	game, err := m.battleClient.StartNPCBattle(ctx, conn.playerID, req.DeckID, req.NPCFaction)
@@ -414,6 +396,26 @@ func (m *Manager) sendError(conn *Connection, code, message string, retryable bo
 		Type: constants.WSMsgError,
 		Data: mustMarshal(ErrorMessage{Code: code, Message: message, Retryable: retryable}),
 	})
+}
+
+// checkAndIncrementBattleLimit checks the daily battle limit and increments
+// the count. Returns an error message string if the player cannot battle,
+// or "" on success.
+func (m *Manager) checkAndIncrementBattleLimit(ctx context.Context, playerID string) (string, error) {
+	if m.playerService == nil {
+		return "", nil
+	}
+	limitResp, err := m.playerService.GetBattleLimit(ctx, playerID)
+	if err != nil {
+		return "", err
+	}
+	if !limitResp.CanBattle {
+		return "daily battle limit reached", nil
+	}
+	if err := m.playerService.IncrementBattleCount(ctx, playerID); err != nil {
+		return "", err
+	}
+	return "", nil
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────

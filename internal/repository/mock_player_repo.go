@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"cloud.google.com/go/civil"
 
@@ -103,4 +104,29 @@ func (r *MockPlayerRepository) UpdateUsername(ctx context.Context, playerID stri
 	}
 	p.Username = username
 	return p, nil
+}
+
+func (r *MockPlayerRepository) UpdatePremium(ctx context.Context, playerID string, isPremium bool, expiresAt *time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	p, ok := r.players[playerID]
+	if !ok {
+		return fmt.Errorf("player %s not found", playerID)
+	}
+	p.IsPremium = isPremium
+	p.PremiumExpiresAt = expiresAt
+	return nil
+}
+
+func (r *MockPlayerRepository) UpdateFaction(ctx context.Context, playerID, faction string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	p, ok := r.players[playerID]
+	if !ok {
+		return fmt.Errorf("player %s not found", playerID)
+	}
+	p.SelectedFaction = &faction
+	return nil
 }

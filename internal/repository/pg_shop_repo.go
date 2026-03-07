@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -111,7 +110,6 @@ func (r *PgShopRepository) CreatePurchaseWithCards(ctx context.Context, purchase
 		return fmt.Errorf("check existing purchase: %w", err)
 	}
 
-	// Insert purchase (purchase_id is DB-generated).
 	err = tx.QueryRow(ctx,
 		`INSERT INTO one_time_purchases (player_id, product_id, platform, purchase_token, purchased_at)
 		 VALUES ($1,$2,$3,$4,$5) RETURNING purchase_id`,
@@ -122,7 +120,6 @@ func (r *PgShopRepository) CreatePurchaseWithCards(ctx context.Context, purchase
 		return fmt.Errorf("insert purchase: %w", err)
 	}
 
-	// Bulk upsert player cards.
 	for _, card := range cards {
 		_, err = tx.Exec(ctx,
 			`INSERT INTO player_cards (player_id, card_no, illustration_variant, count)
@@ -165,7 +162,6 @@ func (r *PgShopRepository) CreatePurchaseWithItem(ctx context.Context, purchase 
 		return fmt.Errorf("check existing purchase: %w", err)
 	}
 
-	// Insert purchase (purchase_id is DB-generated).
 	err = tx.QueryRow(ctx,
 		`INSERT INTO one_time_purchases (player_id, product_id, platform, purchase_token, purchased_at)
 		 VALUES ($1,$2,$3,$4,$5) RETURNING purchase_id`,
@@ -176,7 +172,6 @@ func (r *PgShopRepository) CreatePurchaseWithItem(ctx context.Context, purchase 
 		return fmt.Errorf("insert purchase: %w", err)
 	}
 
-	// Insert player item.
 	_, err = tx.Exec(ctx,
 		`INSERT INTO player_items (player_id, item_type, item_no, acquired_at)
 		 VALUES ($1,$2,$3,$4)`,
@@ -340,33 +335,6 @@ func (r *PgShopRepository) UpdateSubscription(ctx context.Context, sub *model.Su
 	return nil
 }
 
-func (r *PgShopRepository) UpdatePlayerPremium(ctx context.Context, playerID string, isPremium bool, expiresAt *time.Time) error {
-	_, err := r.pool.Exec(ctx,
-		`UPDATE players SET is_premium = $1, premium_expires_at = $2, updated_at = $3
-		 WHERE player_id = $4`,
-		isPremium, expiresAt, time.Now(), playerID,
-	)
-	if err != nil {
-		return fmt.Errorf("update player premium: %w", err)
-	}
-	return nil
-}
-
-func (r *PgShopRepository) UpdatePlayerFaction(ctx context.Context, playerID, faction string) error {
-	_, err := r.pool.Exec(ctx,
-		`UPDATE players SET selected_faction = $1, updated_at = $2
-		 WHERE player_id = $3`,
-		faction, time.Now(), playerID,
-	)
-	if err != nil {
-		return fmt.Errorf("update player faction: %w", err)
-	}
-	return nil
-}
-
-// ---------------------------------------------------------------------------
-// helpers
-// ---------------------------------------------------------------------------
 
 // scanSubscription scans a single row into a model.Subscription.
 func scanSubscription(row pgx.Row) (*model.Subscription, error) {

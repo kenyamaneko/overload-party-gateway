@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -49,7 +50,6 @@ func (r *PgDeckRepository) Create(ctx context.Context, deck *model.Deck, cards [
 		return fmt.Errorf("insert deck: %w", err)
 	}
 
-	// Set DeckID on cards now that we have the DB-generated value
 	for i := range cards {
 		cards[i].DeckID = deck.DeckID
 	}
@@ -100,6 +100,9 @@ func (r *PgDeckRepository) FindByID(ctx context.Context, playerID string, deckID
 
 	d, err := scanDeck(row)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("find deck by id: %w", err)
 	}
 	return d, nil
@@ -165,7 +168,6 @@ func (r *PgDeckRepository) Update(ctx context.Context, deck *model.Deck, cards [
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// Delete existing deck cards.
 	_, err = tx.Exec(ctx,
 		`DELETE FROM deck_cards WHERE player_id = $1 AND deck_id = $2`,
 		deck.PlayerID, deck.DeckID,
@@ -174,7 +176,6 @@ func (r *PgDeckRepository) Update(ctx context.Context, deck *model.Deck, cards [
 		return fmt.Errorf("delete old deck cards: %w", err)
 	}
 
-	// Update the deck row.
 	now := time.Now()
 	deck.UpdatedAt = now
 	_, err = tx.Exec(ctx,
@@ -192,7 +193,6 @@ func (r *PgDeckRepository) Update(ctx context.Context, deck *model.Deck, cards [
 		return fmt.Errorf("update deck: %w", err)
 	}
 
-	// Re-insert deck cards.
 	if err := bulkInsertDeckCards(ctx, tx, cards); err != nil {
 		return err
 	}

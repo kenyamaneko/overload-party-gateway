@@ -45,19 +45,17 @@ type TurnControls struct {
 	DiscardRequired int  `json:"discard_required"`
 }
 
-// battleClient implements BattleClient by calling the battle server REST API.
+const battleClientTimeout = 30 * time.Second
+
 type battleClient struct {
 	baseURL string
 	client  *http.Client
 }
 
-// NewBattleClient creates a BattleClient that connects to the battle server at baseURL.
 func NewBattleClient(baseURL string) BattleClient {
 	return &battleClient{
 		baseURL: baseURL,
-		client: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+		client:  &http.Client{Timeout: battleClientTimeout},
 	}
 }
 

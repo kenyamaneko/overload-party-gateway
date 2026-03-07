@@ -13,19 +13,18 @@ import (
 )
 
 type SubscriptionService struct {
-	shopRepo repository.ShopRepository
+	shopRepo   repository.ShopRepository
+	playerRepo repository.PlayerRepo
 }
 
-func NewSubscriptionService(shopRepo repository.ShopRepository) *SubscriptionService {
-	return &SubscriptionService{shopRepo: shopRepo}
+func NewSubscriptionService(shopRepo repository.ShopRepository, playerRepo repository.PlayerRepo) *SubscriptionService {
+	return &SubscriptionService{shopRepo: shopRepo, playerRepo: playerRepo}
 }
 
-// AppleNotificationPayload is the outer structure of an Apple webhook.
 type AppleNotificationPayload struct {
 	SignedPayload string `json:"signedPayload"`
 }
 
-// appleNotification is the decoded JWS payload from Apple.
 type appleNotification struct {
 	NotificationType string `json:"notificationType"`
 	Subtype          string `json:"subtype"`
@@ -34,27 +33,22 @@ type appleNotification struct {
 	} `json:"data"`
 }
 
-// appleNotificationTxn is the decoded transaction info from the notification.
 type appleNotificationTxn struct {
 	OriginalTransactionID string `json:"originalTransactionId"`
 	ExpiresDate           int64  `json:"expiresDate"`
 }
 
-// HandleAppleNotification processes an Apple App Store Server Notification V2.
 func (s *SubscriptionService) HandleAppleNotification(ctx context.Context, signedPayload string) error {
-	// Decode the JWS payload (without full signature verification for now)
 	notif, err := decodeAppleNotification(signedPayload)
 	if err != nil {
 		return fmt.Errorf("decode notification: %w", err)
 	}
 
-	// Decode the transaction info from the notification
 	txnInfo, err := decodeAppleNotificationTxn(notif.Data.SignedTransactionInfo)
 	if err != nil {
 		return fmt.Errorf("decode transaction info: %w", err)
 	}
 
-	// Find the subscription by the original transaction ID (stored as purchase_token)
 	sub, err := s.shopRepo.FindSubscriptionByToken(ctx, txnInfo.OriginalTransactionID)
 	if err != nil {
 		return fmt.Errorf("find subscription: %w", err)
@@ -72,7 +66,7 @@ func (s *SubscriptionService) HandleAppleNotification(ctx context.Context, signe
 		if err := s.shopRepo.UpdateSubscription(ctx, sub); err != nil {
 			return fmt.Errorf("update subscription: %w", err)
 		}
-		if err := s.shopRepo.UpdatePlayerPremium(ctx, sub.PlayerID, true, &expiresAt); err != nil {
+		if err := s.playerRepo.UpdatePremium(ctx, sub.PlayerID, true, &expiresAt); err != nil {
 			return fmt.Errorf("update player premium: %w", err)
 		}
 
@@ -82,7 +76,7 @@ func (s *SubscriptionService) HandleAppleNotification(ctx context.Context, signe
 		if err := s.shopRepo.UpdateSubscription(ctx, sub); err != nil {
 			return fmt.Errorf("update subscription: %w", err)
 		}
-		if err := s.shopRepo.UpdatePlayerPremium(ctx, sub.PlayerID, false, nil); err != nil {
+		if err := s.playerRepo.UpdatePremium(ctx, sub.PlayerID, false, nil); err != nil {
 			return fmt.Errorf("update player premium: %w", err)
 		}
 
@@ -92,7 +86,7 @@ func (s *SubscriptionService) HandleAppleNotification(ctx context.Context, signe
 		if err := s.shopRepo.UpdateSubscription(ctx, sub); err != nil {
 			return fmt.Errorf("update subscription: %w", err)
 		}
-		if err := s.shopRepo.UpdatePlayerPremium(ctx, sub.PlayerID, false, nil); err != nil {
+		if err := s.playerRepo.UpdatePremium(ctx, sub.PlayerID, false, nil); err != nil {
 			return fmt.Errorf("update player premium: %w", err)
 		}
 
@@ -110,14 +104,12 @@ func (s *SubscriptionService) HandleAppleNotification(ctx context.Context, signe
 	return nil
 }
 
-// GoogleRTDNMessage represents a Google Play Real-time Developer Notification push message.
 type GoogleRTDNMessage struct {
 	Message struct {
 		Data string `json:"data"`
 	} `json:"message"`
 }
 
-// googleRTDNData is the decoded data from a Google RTDN message.
 type googleRTDNData struct {
 	SubscriptionNotification *struct {
 		NotificationType int    `json:"notificationType"`
@@ -135,7 +127,6 @@ const (
 	googleSubRevoked   = 13
 )
 
-// HandleGoogleNotification processes a Google Play RTDN message.
 func (s *SubscriptionService) HandleGoogleNotification(ctx context.Context, msg GoogleRTDNMessage) error {
 	data, err := base64.StdEncoding.DecodeString(msg.Message.Data)
 	if err != nil {
@@ -170,7 +161,7 @@ func (s *SubscriptionService) HandleGoogleNotification(ctx context.Context, msg 
 		// For renewal, we should verify with Google API to get the new expiry.
 		// For now, extend by 30 days as a reasonable default.
 		newExpiry := time.Now().Add(30 * 24 * time.Hour)
-		if err := s.shopRepo.UpdatePlayerPremium(ctx, sub.PlayerID, true, &newExpiry); err != nil {
+		if err := s.playerRepo.UpdatePremium(ctx, sub.PlayerID, true, &newExpiry); err != nil {
 			return fmt.Errorf("update player premium: %w", err)
 		}
 
@@ -180,7 +171,7 @@ func (s *SubscriptionService) HandleGoogleNotification(ctx context.Context, msg 
 		if err := s.shopRepo.UpdateSubscription(ctx, sub); err != nil {
 			return fmt.Errorf("update subscription: %w", err)
 		}
-		if err := s.shopRepo.UpdatePlayerPremium(ctx, sub.PlayerID, false, nil); err != nil {
+		if err := s.playerRepo.UpdatePremium(ctx, sub.PlayerID, false, nil); err != nil {
 			return fmt.Errorf("update player premium: %w", err)
 		}
 
@@ -190,7 +181,7 @@ func (s *SubscriptionService) HandleGoogleNotification(ctx context.Context, msg 
 		if err := s.shopRepo.UpdateSubscription(ctx, sub); err != nil {
 			return fmt.Errorf("update subscription: %w", err)
 		}
-		if err := s.shopRepo.UpdatePlayerPremium(ctx, sub.PlayerID, false, nil); err != nil {
+		if err := s.playerRepo.UpdatePremium(ctx, sub.PlayerID, false, nil); err != nil {
 			return fmt.Errorf("update player premium: %w", err)
 		}
 

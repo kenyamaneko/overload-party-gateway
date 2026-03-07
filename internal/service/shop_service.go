@@ -14,7 +14,6 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
 )
 
-// validFactions is the set of selectable factions (excludes Neutral).
 var validFactions = map[string]bool{
 	constants.FactionSD:     true,
 	constants.FactionTenki:  true,
@@ -22,7 +21,6 @@ var validFactions = map[string]bool{
 	constants.FactionTuners: true,
 }
 
-// normalizeFactionMap maps lowercase faction names to canonical names.
 var normalizeFactionMap = map[string]string{
 	"sd":      constants.FactionSD,
 	"tenki":   constants.FactionTenki,
@@ -31,7 +29,6 @@ var normalizeFactionMap = map[string]string{
 	"neutral": constants.FactionNeutral,
 }
 
-// normalizeFaction converts a case-insensitive faction name to its canonical form.
 func normalizeFaction(s string) (string, bool) {
 	if v, ok := normalizeFactionMap[strings.ToLower(s)]; ok {
 		return v, true
@@ -39,7 +36,6 @@ func normalizeFaction(s string) (string, bool) {
 	return s, false
 }
 
-// restrictionCopyCount returns the number of copies allowed by a card's restriction.
 func restrictionCopyCount(restriction string) int {
 	switch restriction {
 	case "semi_limited":
@@ -80,7 +76,7 @@ func NewShopService(
 func (s *ShopService) SelectFaction(ctx context.Context, playerID, faction string) (int, error) {
 	normalized, ok := normalizeFaction(faction)
 	if !ok || !validFactions[normalized] {
-		return 0, fmt.Errorf("invalid faction: %s", faction)
+		return 0, fmt.Errorf("%w: %s", ErrInvalidFaction, faction)
 	}
 	faction = normalized
 
@@ -89,7 +85,7 @@ func (s *ShopService) SelectFaction(ctx context.Context, playerID, faction strin
 		return 0, fmt.Errorf("find player: %w", err)
 	}
 	if player.SelectedFaction != nil {
-		return 0, fmt.Errorf("faction already selected")
+		return 0, ErrFactionAlreadySelected
 	}
 
 	factionCards := s.buildFactionCards(playerID, faction)
@@ -99,20 +95,18 @@ func (s *ShopService) SelectFaction(ctx context.Context, playerID, faction strin
 	if err := s.shopRepo.InsertPlayerCards(ctx, allCards); err != nil {
 		return 0, fmt.Errorf("insert player cards: %w", err)
 	}
-	if err := s.shopRepo.UpdatePlayerFaction(ctx, playerID, faction); err != nil {
+	if err := s.playerRepo.UpdateFaction(ctx, playerID, faction); err != nil {
 		return 0, fmt.Errorf("update player faction: %w", err)
 	}
 
 	return len(allCards), nil
 }
 
-// ProductWithOwnership is a product with ownership info for a specific player.
 type ProductWithOwnership struct {
 	model.Product
 	IsOwned bool `json:"is_owned"`
 }
 
-// GetProducts returns all active products with ownership info for the player.
 func (s *ShopService) GetProducts(ctx context.Context, playerID string) ([]ProductWithOwnership, error) {
 	products, err := s.shopRepo.GetActiveProducts(ctx)
 	if err != nil {
@@ -153,7 +147,6 @@ func (s *ShopService) GetProducts(ctx context.Context, playerID string) ([]Produ
 	return result, nil
 }
 
-// Purchase processes a one-time purchase (faction set or cosmetic).
 func (s *ShopService) Purchase(ctx context.Context, playerID, productID, pf, purchaseToken string) error {
 	// Idempotency check
 	existing, err := s.shopRepo.FindPurchaseByToken(ctx, playerID, purchaseToken)
@@ -169,20 +162,19 @@ func (s *ShopService) Purchase(ctx context.Context, playerID, productID, pf, pur
 		return fmt.Errorf("get product: %w", err)
 	}
 	if !product.IsActive {
-		return fmt.Errorf("product is not active")
+		return ErrProductNotActive
 	}
 
-	// Verify receipt
 	verifier := s.getVerifier(pf)
 	if verifier == nil {
-		return fmt.Errorf("unsupported platform: %s", pf)
+		return fmt.Errorf("%w: %s", ErrUnsupportedPlatform, pf)
 	}
 	result, err := verifier.VerifyPurchase(ctx, purchaseToken)
 	if err != nil {
 		return fmt.Errorf("verify receipt: %w", err)
 	}
 	if !result.IsValid {
-		return fmt.Errorf("receipt verification failed")
+		return ErrReceiptVerificationFailed
 	}
 
 	purchase := &model.OneTimePurchase{
@@ -226,26 +218,25 @@ func (s *ShopService) Purchase(ctx context.Context, playerID, productID, pf, pur
 	return nil
 }
 
-// Subscribe starts a premium subscription.
 func (s *ShopService) Subscribe(ctx context.Context, playerID, productID, pf, purchaseToken string) (*time.Time, error) {
 	product, err := s.shopRepo.GetProductByID(ctx, productID)
 	if err != nil {
 		return nil, fmt.Errorf("get product: %w", err)
 	}
 	if product.Type != model.ProductTypeSubscription {
-		return nil, fmt.Errorf("product is not a subscription")
+		return nil, ErrProductNotSubscription
 	}
 
 	verifier := s.getVerifier(pf)
 	if verifier == nil {
-		return nil, fmt.Errorf("unsupported platform: %s", pf)
+		return nil, fmt.Errorf("%w: %s", ErrUnsupportedPlatform, pf)
 	}
 	info, err := verifier.VerifySubscription(ctx, purchaseToken)
 	if err != nil {
 		return nil, fmt.Errorf("verify subscription: %w", err)
 	}
 	if !info.IsValid {
-		return nil, fmt.Errorf("subscription verification failed")
+		return nil, ErrSubVerificationFailed
 	}
 
 	now := time.Now()
@@ -265,15 +256,13 @@ func (s *ShopService) Subscribe(ctx context.Context, playerID, productID, pf, pu
 		return nil, fmt.Errorf("create subscription: %w", err)
 	}
 
-	if err := s.shopRepo.UpdatePlayerPremium(ctx, playerID, true, &info.ExpiresAt); err != nil {
+	if err := s.playerRepo.UpdatePremium(ctx, playerID, true, &info.ExpiresAt); err != nil {
 		return nil, fmt.Errorf("update player premium: %w", err)
 	}
 
 	return &info.ExpiresAt, nil
 }
 
-// buildFactionCards generates PlayerCard records for all cards in the given faction,
-// respecting restriction-based copy limits.
 func (s *ShopService) buildFactionCards(playerID string, faction string) []*model.PlayerCard {
 	var cards []*model.PlayerCard
 	for _, card := range s.cardCache.All() {

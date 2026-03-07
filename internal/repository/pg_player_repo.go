@@ -83,6 +83,9 @@ func (r *PgPlayerRepository) FindByID(ctx context.Context, playerID string) (*mo
 
 	p, err := scanPlayer(row)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("find player by id: %w", err)
 	}
 	return p, nil
@@ -171,7 +174,6 @@ func (r *PgPlayerRepository) IncrementDailyBattle(ctx context.Context, playerID 
 	return count, nil
 }
 
-// UpdateUsername updates the player's username and returns the updated player.
 func (r *PgPlayerRepository) UpdateUsername(ctx context.Context, playerID string, username string) (*model.Player, error) {
 	row := r.pool.QueryRow(ctx,
 		`UPDATE players SET username = $1, updated_at = NOW()
@@ -187,9 +189,29 @@ func (r *PgPlayerRepository) UpdateUsername(ctx context.Context, playerID string
 	return p, nil
 }
 
-// ---------------------------------------------------------------------------
-// helpers
-// ---------------------------------------------------------------------------
+func (r *PgPlayerRepository) UpdatePremium(ctx context.Context, playerID string, isPremium bool, expiresAt *time.Time) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE players SET is_premium = $1, premium_expires_at = $2, updated_at = $3
+		 WHERE player_id = $4`,
+		isPremium, expiresAt, time.Now(), playerID,
+	)
+	if err != nil {
+		return fmt.Errorf("update player premium: %w", err)
+	}
+	return nil
+}
+
+func (r *PgPlayerRepository) UpdateFaction(ctx context.Context, playerID, faction string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE players SET selected_faction = $1, updated_at = $2
+		 WHERE player_id = $3`,
+		faction, time.Now(), playerID,
+	)
+	if err != nil {
+		return fmt.Errorf("update player faction: %w", err)
+	}
+	return nil
+}
 
 // scanPlayer scans a single row into a model.Player.
 func scanPlayer(row pgx.Row) (*model.Player, error) {

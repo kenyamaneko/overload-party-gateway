@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/cache"
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
@@ -327,8 +328,23 @@ func TestGetProducts_WithOwnership(t *testing.T) {
 		IsActive:  true,
 	})
 
-	// Simulate player owning SD faction
-	_ = shopRepo.UpdatePlayerFaction(context.Background(), "p1", "SD")
+	// Simulate player owning SD faction by purchasing the faction set product
+	sdProduct := &model.Product{
+		ProductID: "faction_sd",
+		Name:      "SDカードセット",
+		Type:      model.ProductTypeFactionSet,
+		Price:     980,
+		Content:   json.RawMessage(`{"faction":"SD"}`),
+		IsActive:  true,
+	}
+	shopRepo.AddProduct(sdProduct)
+	_ = shopRepo.CreatePurchaseWithCards(context.Background(), &model.OneTimePurchase{
+		PlayerID:      "p1",
+		ProductID:     "faction_sd",
+		Platform:      "ios",
+		PurchaseToken: "test-token-sd",
+		PurchasedAt:   time.Now(),
+	}, nil)
 
 	svc := NewShopService(shopRepo, nil, cc, nil, nil)
 

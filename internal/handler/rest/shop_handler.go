@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -32,15 +33,14 @@ func (h *ShopHandler) SelectFaction(c *gin.Context) {
 
 	count, err := h.shopService.SelectFaction(c.Request.Context(), playerID, req.Faction)
 	if err != nil {
-		if err.Error() == "faction already selected" {
+		switch {
+		case errors.Is(err, service.ErrFactionAlreadySelected):
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
-			return
-		}
-		if err.Error() == "invalid faction: "+req.Faction {
+		case errors.Is(err, service.ErrInvalidFaction):
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -79,11 +79,11 @@ func (h *ShopHandler) Purchase(c *gin.Context) {
 	playerID := middleware.GetPlayerID(c)
 
 	if err := h.shopService.Purchase(c.Request.Context(), playerID, req.ProductID, req.Platform, req.PurchaseToken); err != nil {
-		if err.Error() == "receipt verification failed" {
+		if errors.Is(err, service.ErrReceiptVerificationFailed) {
 			c.JSON(http.StatusPaymentRequired, gin.H{"error": err.Error()})
-			return
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -110,11 +110,11 @@ func (h *ShopHandler) Subscribe(c *gin.Context) {
 
 	expiresAt, err := h.shopService.Subscribe(c.Request.Context(), playerID, req.ProductID, req.Platform, req.PurchaseToken)
 	if err != nil {
-		if err.Error() == "subscription verification failed" {
+		if errors.Is(err, service.ErrSubVerificationFailed) {
 			c.JSON(http.StatusPaymentRequired, gin.H{"error": err.Error()})
-			return
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 

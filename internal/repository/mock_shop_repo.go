@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 )
@@ -20,16 +19,9 @@ type MockShopRepository struct {
 	playerCards        map[string][]*model.PlayerCard      // keyed by playerID
 	playerItems        map[string][]*model.PlayerItem      // keyed by playerID
 	subscriptions      map[string][]*model.Subscription    // keyed by playerID
-	players            map[string]*mockShopPlayerData
 
 	// onCardsInserted is called after cards are inserted, allowing cross-repo sync.
 	onCardsInserted func(playerID string, cards []*model.PlayerCard)
-}
-
-type mockShopPlayerData struct {
-	IsPremium        bool
-	PremiumExpiresAt *time.Time
-	SelectedFaction  *string
 }
 
 // Compile-time interface check.
@@ -42,7 +34,6 @@ func NewMockShopRepository() *MockShopRepository {
 		playerCards:   make(map[string][]*model.PlayerCard),
 		playerItems:   make(map[string][]*model.PlayerItem),
 		subscriptions: make(map[string][]*model.Subscription),
-		players:       make(map[string]*mockShopPlayerData),
 	}
 }
 
@@ -68,13 +59,6 @@ func (r *MockShopRepository) GetPlayerCardsForTest(playerID string) []*model.Pla
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.playerCards[playerID]
-}
-
-// GetPlayerDataForTest returns player data (test helper).
-func (r *MockShopRepository) GetPlayerDataForTest(playerID string) *mockShopPlayerData {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.players[playerID]
 }
 
 // --- ShopRepository implementation ---
@@ -194,18 +178,6 @@ func (r *MockShopRepository) GetPlayerOwnedFactions(ctx context.Context, playerI
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	factionSet := make(map[string]bool)
-	for _, card := range r.playerCards[playerID] {
-		// In mock, we store faction info via the cards themselves.
-		// The real implementation joins with CardDefinitions.
-		// For the mock, the service layer will handle faction resolution.
-		_ = card
-	}
-	// Return the faction from player data if available
-	pd := r.players[playerID]
-	if pd != nil && pd.SelectedFaction != nil {
-		factionSet[*pd.SelectedFaction] = true
-	}
-	// Also check purchases for faction_set products
 	for _, purchase := range r.purchases[playerID] {
 		product, ok := r.products[purchase.ProductID]
 		if ok && product.Type == model.ProductTypeFactionSet {
@@ -269,30 +241,6 @@ func (r *MockShopRepository) UpdateSubscription(ctx context.Context, sub *model.
 	return fmt.Errorf("subscription %d not found", sub.SubscriptionID)
 }
 
-func (r *MockShopRepository) UpdatePlayerPremium(ctx context.Context, playerID string, isPremium bool, expiresAt *time.Time) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	pd, ok := r.players[playerID]
-	if !ok {
-		pd = &mockShopPlayerData{}
-		r.players[playerID] = pd
-	}
-	pd.IsPremium = isPremium
-	pd.PremiumExpiresAt = expiresAt
-	return nil
-}
-
-func (r *MockShopRepository) UpdatePlayerFaction(ctx context.Context, playerID, faction string) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	pd, ok := r.players[playerID]
-	if !ok {
-		pd = &mockShopPlayerData{}
-		r.players[playerID] = pd
-	}
-	pd.SelectedFaction = &faction
-	return nil
-}
 
 func parseJSON(data []byte, v interface{}) error {
 	return json.Unmarshal(data, v)

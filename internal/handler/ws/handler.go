@@ -69,12 +69,17 @@ func (h *Handler) HandleUpgrade(c *gin.Context) {
 		playerID = player.PlayerID
 	} else {
 		// Local/dev: token is used directly as playerID (set by DevAuth middleware)
-		pid, ok := c.Get("playerID")
+		pid, exists := c.Get("playerID")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+		pidStr, ok := pid.(string)
 		if !ok {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			return
 		}
-		playerID = pid.(string)
+		playerID = pidStr
 	}
 
 	wsConn, err := h.upgrader.Upgrade(c.Writer, c.Request, nil)

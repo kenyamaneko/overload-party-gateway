@@ -12,10 +12,11 @@ import (
 )
 
 const (
-	pingInterval = 15 * time.Second
-	pongTimeout  = 5 * time.Second
-	writeTimeout = 10 * time.Second
-	maxMsgSize   = 4096
+	pingInterval   = 15 * time.Second
+	pongTimeout    = 5 * time.Second
+	writeTimeout   = 10 * time.Second
+	maxMsgSize     = 4096
+	sendBufferSize = 64
 )
 
 type Connection struct {
@@ -30,7 +31,7 @@ func NewConnection(conn *websocket.Conn, playerID string) *Connection {
 	return &Connection{
 		conn:     conn,
 		playerID: playerID,
-		send:     make(chan []byte, 64),
+		send:     make(chan []byte, sendBufferSize),
 	}
 }
 

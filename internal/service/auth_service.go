@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"cloud.google.com/go/civil"
@@ -30,7 +31,7 @@ func (s *AuthService) Register(ctx context.Context, firebaseUID, username string
 		return nil, fmt.Errorf("check existing player: %w", err)
 	}
 	if existing != nil {
-		return nil, fmt.Errorf("player already registered")
+		return nil, ErrPlayerAlreadyRegistered
 	}
 
 	now := time.Now()
@@ -67,7 +68,7 @@ func (s *AuthService) Register(ctx context.Context, firebaseUID, username string
 		UpdatedAt:   time.Now(),
 	}
 	if err := s.userSettingsRepo.Upsert(ctx, settings); err != nil {
-		fmt.Printf("warn: failed to create default user settings for player %s: %v\n", player.PlayerID, err)
+		log.Printf("warn: failed to create default user settings for player %s: %v", player.PlayerID, err)
 	}
 
 	// Grant starter stamps (1–7). Failure does not roll back player creation.
@@ -81,8 +82,7 @@ func (s *AuthService) Register(ctx context.Context, firebaseUID, username string
 		})
 	}
 	if err := s.shopRepo.InsertPlayerItems(ctx, items); err != nil {
-		// Log-worthy but not fatal — player is already created.
-		fmt.Printf("warn: failed to grant starter stamps for player %s: %v\n", player.PlayerID, err)
+		log.Printf("warn: failed to grant starter stamps for player %s: %v", player.PlayerID, err)
 	}
 
 	return player, nil
@@ -94,7 +94,7 @@ func (s *AuthService) Login(ctx context.Context, firebaseUID string) (*model.Pla
 		return nil, fmt.Errorf("find player: %w", err)
 	}
 	if player == nil {
-		return nil, fmt.Errorf("player not found")
+		return nil, ErrPlayerNotFound
 	}
 	return player, nil
 }

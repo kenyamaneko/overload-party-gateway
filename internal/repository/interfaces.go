@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"cloud.google.com/go/civil"
 
@@ -16,6 +17,8 @@ type PlayerRepo interface {
 	GetDailyBattle(ctx context.Context, playerID string) (*model.PlayerDailyBattle, error)
 	IncrementDailyBattle(ctx context.Context, playerID string, today civil.Date) (int64, error)
 	UpdateUsername(ctx context.Context, playerID string, username string) (*model.Player, error)
+	UpdatePremium(ctx context.Context, playerID string, isPremium bool, expiresAt *time.Time) error
+	UpdateFaction(ctx context.Context, playerID, faction string) error
 }
 
 // DeckRepo defines the data access contract for deck and player card operations.

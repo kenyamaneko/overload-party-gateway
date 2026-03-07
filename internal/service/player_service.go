@@ -13,6 +13,11 @@ import (
 
 const (
 	configKeyFreeDailyBattleLimit = "free_daily_battle_limit"
+
+	// gameDayOffset is the UTC offset used to calculate the "game day".
+	// The game day resets at JST 05:00 (= UTC 20:00).
+	// JST+9 minus 5h reset offset = +4h from UTC.
+	gameDayOffset = 4 * time.Hour
 )
 
 type PlayerService struct {
@@ -95,10 +100,6 @@ func (s *PlayerService) IncrementBattleCount(ctx context.Context, playerID strin
 	return nil
 }
 
-// gameDay returns the current "game day" date.
-// The game day resets at JST 05:00 (= UTC 20:00).
-// Adding 4 hours (JST+9 minus 5h offset) to UTC and taking the date achieves this.
 func gameDay() civil.Date {
-	now := time.Now().UTC().Add(4 * time.Hour)
-	return civil.DateOf(now)
+	return civil.DateOf(time.Now().UTC().Add(gameDayOffset))
 }

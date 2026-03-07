@@ -47,7 +47,7 @@ func main() {
 	cardService := service.NewCardService(cardRepo)
 	deckService := service.NewDeckService(deckRepo, cardCache)
 	shopService := service.NewShopService(shopRepo, playerRepo, cardCache, nil, nil)
-	subscriptionService := service.NewSubscriptionService(shopRepo)
+	subscriptionService := service.NewSubscriptionService(shopRepo, playerRepo)
 	// 4. Battle client (mock for local)
 	battleClient := service.NewMockBattleClient()
 

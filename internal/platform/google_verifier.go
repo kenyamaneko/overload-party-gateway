@@ -3,6 +3,7 @@ package platform
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"google.golang.org/api/androidpublisher/v3"
@@ -82,12 +83,10 @@ func (v *GoogleReceiptVerifier) VerifySubscription(ctx context.Context, purchase
 	}, nil
 }
 
-// splitGoogleToken splits a composite "productId:token" string.
 func splitGoogleToken(composite string) (string, string, error) {
-	for i := 0; i < len(composite); i++ {
-		if composite[i] == ':' {
-			return composite[:i], composite[i+1:], nil
-		}
+	productID, token, ok := strings.Cut(composite, ":")
+	if !ok {
+		return "", "", fmt.Errorf("invalid Google purchase token format: expected 'productId:token'")
 	}
-	return "", "", fmt.Errorf("invalid Google purchase token format: expected 'productId:token'")
+	return productID, token, nil
 }
