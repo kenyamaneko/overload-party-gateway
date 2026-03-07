@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/constants"
+	"github.com/kenyamaneko/overload-party-gateway/internal/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
@@ -30,17 +32,38 @@ type Manager struct {
 
 	battleClient  service.BattleClient
 	playerService *service.PlayerService
+	queue         *repository.MatchmakingQueue
 }
 
 func NewManager(battleClient service.BattleClient, playerService *service.PlayerService) *Manager {
-	return &Manager{
+	queue := repository.NewMatchmakingQueue()
+	m := &Manager{
 		connections:   make(map[string]*Connection),
 		gameMembers:   make(map[string][]string),
 		playerGames:   make(map[string]string),
 		disconnects:   make(map[string]*disconnectInfo),
 		battleClient:  battleClient,
 		playerService: playerService,
+		queue:         queue,
 	}
+	return m
+}
+
+// StartMatchmaking starts the matchmaking loop. Should be called in a goroutine.
+func (m *Manager) StartMatchmaking(ctx context.Context) {
+	matcher := service.NewMatchmakingService(m.queue, func(ctx context.Context, result model.MatchResult) {
+		game, err := m.battleClient.CreatePvPGame(
+			ctx,
+			result.Player1ID, result.Player1Deck,
+			result.Player2ID, result.Player2Deck,
+		)
+		if err != nil {
+			log.Printf("matchmaking: create pvp game failed: %v", err)
+			return
+		}
+		m.NotifyMatchFound(game.GameID, game.Player1ID, game.Player2ID)
+	})
+	matcher.Run(ctx)
 }
 
 // ─── Connection lifecycle ───────────────────────────────────────────
@@ -228,7 +251,7 @@ func (m *Manager) HandleMessage(conn *Connection, msg *WSMessage) {
 		m.handleMatchmakingStart(ctx, conn, msg.Data)
 
 	case constants.WSMsgMatchmakingCancel:
-		m.battleClient.LeaveQueue(ctx, conn.playerID)
+		m.queue.Leave(conn.playerID)
 		conn.SendMessage(&WSMessage{Type: constants.WSMsgMatchmakingCancelled})
 
 	case constants.WSMsgNpcBattleStart:
@@ -290,7 +313,7 @@ func (m *Manager) handleMatchmakingStart(ctx context.Context, conn *Connection, 
 		}
 	}
 
-	if err := m.battleClient.JoinQueue(ctx, conn.playerID, req.DeckID); err != nil {
+	if err := m.queue.Join(conn.playerID, req.DeckID); err != nil {
 		m.sendError(conn, "matchmaking_error", err.Error(), true)
 		return
 	}

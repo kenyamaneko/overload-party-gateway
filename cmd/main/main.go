@@ -93,11 +93,10 @@ func main() {
 	shopService := service.NewShopService(shopRepo, playerRepo, cardCache, appleVerifier, googleVerifier)
 	subscriptionService := service.NewSubscriptionService(shopRepo)
 
-	// Battle client (mock for now, replace when battle server REST API is ready)
-	battleClient := service.NewMockBattleClient()
-
-	// Handlers
+	// Battle client (HTTP → battle server)
+	battleClient := service.NewBattleClient(cfg.BattleServerURL)
 	wsManager := ws.NewManager(battleClient, playerService)
+	go wsManager.StartMatchmaking(ctx)
 	wsHandler := ws.NewHandler(wsManager, authClient, playerRepo, cfg.AllowedOrigins)
 	authHandler := rest.NewAuthHandler(authService)
 	playerHandler := rest.NewPlayerHandler(playerService)

@@ -23,6 +23,9 @@ type Config struct {
 
 	// CORS
 	AllowedOrigins []string
+
+	// Battle server
+	BattleServerURL string // env: BATTLE_SERVER_URL
 }
 
 func Load() *Config {
@@ -41,6 +44,8 @@ func Load() *Config {
 		GooglePackageName: getEnv("GOOGLE_PACKAGE_NAME", ""),
 
 		AllowedOrigins: splitCSV(getEnv("ALLOWED_ORIGINS", "")),
+
+		BattleServerURL: getEnv("BATTLE_SERVER_URL", "http://localhost:9002"),
 	}
 }
 

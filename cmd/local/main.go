@@ -23,6 +23,9 @@ import (
 func main() {
 	log.Println("=== Overload Party Gateway (LOCAL MODE) ===")
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// 1. Card cache from JSON
 	cardCache := cache.NewCardCache()
 	if err := cardCache.LoadFromJSON("internal/cache/cards_gen.json"); err != nil {
@@ -50,6 +53,7 @@ func main() {
 
 	// 5. Handlers
 	wsManager := ws.NewManager(battleClient, playerService)
+	go wsManager.StartMatchmaking(ctx)
 	wsHandler := ws.NewHandler(wsManager, nil, playerRepo, nil)
 	authHandler := rest.NewAuthHandler(authService)
 	playerHandler := rest.NewPlayerHandler(playerService)
@@ -207,7 +211,7 @@ func main() {
 		Handler: r,
 	}
 
-	srvCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	srvCtx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
 	go func() {
