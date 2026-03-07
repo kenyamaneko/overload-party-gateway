@@ -6,13 +6,9 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"time"
 
-	"cloud.google.com/go/civil"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 
-	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
 )
 
@@ -47,11 +43,17 @@ func DevAuth() gin.HandlerFunc {
 // It receives the context and the new player's ID for additional setup (e.g. starter deck).
 type DevPlayerSetup func(ctx context.Context, playerID string) error
 
+// DevRegisterFunc abstracts player registration so the middleware doesn't
+// depend on model/service details. It should register the player and return
+// the resulting player ID. It may return ErrPlayerAlreadyRegistered if the
+// player already exists, which is not an error in this context.
+type DevRegisterFunc func(ctx context.Context, firebaseUID, username string) (playerID string, err error)
+
 // DevAuthWithPlayerResolve returns a DevAuth middleware that also resolves
 // firebase_uid → playerID, auto-creating the player if needed.
 // Sets both "firebase_uid" and "player_id" context keys.
 // Optional onCreated callbacks run once after a new player is created.
-func DevAuthWithPlayerResolve(playerRepo repository.PlayerRepo, onCreated ...DevPlayerSetup) gin.HandlerFunc {
+func DevAuthWithPlayerResolve(playerRepo repository.PlayerRepo, registerFn DevRegisterFunc, onCreated ...DevPlayerSetup) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -73,7 +75,7 @@ func DevAuthWithPlayerResolve(playerRepo repository.PlayerRepo, onCreated ...Dev
 		uid := strings.TrimPrefix(idToken, "dev-token-")
 		c.Set(string(firebaseUIDKey), uid)
 
-		playerID, created, err := resolveOrCreateDevPlayer(c, playerRepo, uid)
+		playerID, created, err := resolveOrCreateDevPlayer(c, playerRepo, registerFn, uid)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("resolve player: %v", err)})
 			return
@@ -92,8 +94,10 @@ func DevAuthWithPlayerResolve(playerRepo repository.PlayerRepo, onCreated ...Dev
 	}
 }
 
-func resolveOrCreateDevPlayer(c *gin.Context, playerRepo repository.PlayerRepo, firebaseUID string) (string, bool, error) {
-	player, err := playerRepo.FindByFirebaseUID(c.Request.Context(), firebaseUID)
+func resolveOrCreateDevPlayer(c *gin.Context, playerRepo repository.PlayerRepo, registerFn DevRegisterFunc, firebaseUID string) (string, bool, error) {
+	ctx := c.Request.Context()
+
+	player, err := playerRepo.FindByFirebaseUID(ctx, firebaseUID)
 	if err != nil {
 		return "", false, fmt.Errorf("find by firebase uid: %w", err)
 	}
@@ -101,26 +105,12 @@ func resolveOrCreateDevPlayer(c *gin.Context, playerRepo repository.PlayerRepo, 
 		return player.PlayerID, false, nil
 	}
 
-	now := time.Now()
-	newPlayer := &model.Player{
-		PlayerID:    uuid.New().String(),
-		FirebaseUID: firebaseUID,
-		Username:    "Dev_" + firebaseUID,
-		Level:       1,
-		Exp:         0,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+	username := "Dev_" + firebaseUID
+	playerID, err := registerFn(ctx, firebaseUID, username)
+	if err != nil {
+		return "", false, fmt.Errorf("register dev player: %w", err)
 	}
-	dailyBattle := &model.PlayerDailyBattle{
-		PlayerID:         newPlayer.PlayerID,
-		DailyBattleCount: 0,
-		LastResetDate:    civil.DateOf(now.UTC()),
-	}
+	log.Printf("auto-created dev player: uid=%s playerID=%s username=%s", firebaseUID, playerID, username)
 
-	if err := playerRepo.Create(c.Request.Context(), newPlayer, dailyBattle); err != nil {
-		return "", false, fmt.Errorf("auto-create player: %w", err)
-	}
-	log.Printf("auto-created dev player: uid=%s playerID=%s username=%s", firebaseUID, newPlayer.PlayerID, newPlayer.Username)
-
-	return newPlayer.PlayerID, true, nil
+	return playerID, true, nil
 }

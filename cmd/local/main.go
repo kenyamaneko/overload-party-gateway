@@ -170,8 +170,16 @@ func main() {
 		})
 	}
 
+	devRegister := func(ctx context.Context, firebaseUID, username string) (string, error) {
+		p, err := authService.Register(ctx, firebaseUID, username)
+		if err != nil {
+			return "", err
+		}
+		return p.PlayerID, nil
+	}
+
 	api := r.Group("/api/v1")
-	api.Use(middleware.DevAuthWithPlayerResolve(playerRepo, middleware.DevPlayerSetup(devPlayerSetup)))
+	api.Use(middleware.DevAuthWithPlayerResolve(playerRepo, devRegister, middleware.DevPlayerSetup(devPlayerSetup)))
 	{
 		api.POST("/auth/register", authHandler.Register)
 		api.POST("/auth/login", authHandler.Login)
