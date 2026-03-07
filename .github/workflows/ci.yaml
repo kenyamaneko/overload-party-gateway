@@ -28,7 +28,7 @@ jobs:
       # golangci-lint-action のビルド済みバイナリは Go 1.25 未対応のため
       # go install でソースからビルドして使う
       - run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-      - run: golangci-lint run ./...
+      - run: golangci-lint run --timeout 5m ./...
 
   test:
     runs-on: ubuntu-latest
