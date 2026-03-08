@@ -23,6 +23,10 @@ type BattleClient interface {
 	GetGameStateForPlayer(ctx context.Context, gameID, playerID string) (json.RawMessage, error)
 	// GetTurnControlsForPlayer returns the turn controls for a specific player, or nil if not their turn.
 	GetTurnControlsForPlayer(ctx context.Context, gameID, playerID string) (*TurnControls, error)
+	// GetGameLog returns the game log (replay) as JSON.
+	GetGameLog(ctx context.Context, gameID string) (json.RawMessage, error)
+	// GetGameLogText returns the game log (replay) as plain text.
+	GetGameLogText(ctx context.Context, gameID string) ([]byte, error)
 }
 
 // GameCreatedResult is returned when a new game is created.
@@ -118,6 +122,35 @@ func (c *battleClient) GetTurnControlsForPlayer(ctx context.Context, gameID, pla
 		return nil, fmt.Errorf("unmarshal turn controls: %w", err)
 	}
 	return &tc, nil
+}
+
+func (c *battleClient) GetGameLog(ctx context.Context, gameID string) (json.RawMessage, error) {
+	return c.getRaw(ctx, fmt.Sprintf("/api/v1/games/%s/log", gameID))
+}
+
+func (c *battleClient) GetGameLogText(ctx context.Context, gameID string) ([]byte, error) {
+	path := fmt.Sprintf("/api/v1/games/%s/log/text", gameID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("battle server request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("battle server returned %d: %s", resp.StatusCode, string(body))
+	}
+
+	return body, nil
 }
 
 // --- HTTP helpers ---

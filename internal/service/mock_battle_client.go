@@ -39,3 +39,11 @@ func (m *MockBattleClient) GetGameStateForPlayer(_ context.Context, _, _ string)
 func (m *MockBattleClient) GetTurnControlsForPlayer(_ context.Context, _, _ string) (*TurnControls, error) {
 	return nil, nil
 }
+
+func (m *MockBattleClient) GetGameLog(_ context.Context, _ string) (json.RawMessage, error) {
+	return json.RawMessage(`{"entries":[]}`), nil
+}
+
+func (m *MockBattleClient) GetGameLogText(_ context.Context, _ string) ([]byte, error) {
+	return []byte("(no game log)"), nil
+}

@@ -60,6 +60,7 @@ func main() {
 	cardHandler := rest.NewCardHandler(cardService)
 	deckHandler := rest.NewDeckHandler(deckService)
 	playerCardHandler := rest.NewPlayerCardHandler(deckService)
+	gameLogHandler := rest.NewGameLogHandler(battleClient)
 	shopHandler := rest.NewShopHandler(shopService)
 	webhookHandler := rest.NewWebhookHandler(subscriptionService)
 	userSettingsHandler := rest.NewUserSettingsHandler(userSettingsRepo)
@@ -199,6 +200,10 @@ func main() {
 		api.PUT("/player/settings", userSettingsHandler.UpdateSettings)
 
 		api.GET("/cards", cardHandler.GetAllCards)
+
+		// Game log (proxied to battle server)
+		api.GET("/games/:gameId/log", gameLogHandler.GetGameLog)
+		api.GET("/games/:gameId/log/text", gameLogHandler.GetGameLogText)
 
 		// Shop
 		api.POST("/player/select-faction", shopHandler.SelectFaction)
