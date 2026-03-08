@@ -20,15 +20,17 @@ type Manager struct {
 
 	battleClient  service.BattleClient
 	playerService *service.PlayerService
+	deckRepo      repository.DeckRepo
 	queue         *repository.MatchmakingQueue
 }
 
-func NewManager(battleClient service.BattleClient, playerService *service.PlayerService) *Manager {
+func NewManager(battleClient service.BattleClient, playerService *service.PlayerService, deckRepo repository.DeckRepo) *Manager {
 	queue := repository.NewMatchmakingQueue()
 
 	m := &Manager{
 		battleClient:  battleClient,
 		playerService: playerService,
+		deckRepo:      deckRepo,
 		queue:         queue,
 	}
 
@@ -48,10 +50,20 @@ func NewManager(battleClient service.BattleClient, playerService *service.Player
 // StartMatchmaking starts the matchmaking loop. Should be called in a goroutine.
 func (m *Manager) StartMatchmaking(ctx context.Context) {
 	matcher := service.NewMatchmakingService(m.queue, func(ctx context.Context, result model.MatchResult) {
+		p1Cards, err := m.resolveDeckCards(ctx, result.Player1ID, result.Player1Deck)
+		if err != nil {
+			log.Printf("matchmaking: resolve p1 deck failed: %v", err)
+			return
+		}
+		p2Cards, err := m.resolveDeckCards(ctx, result.Player2ID, result.Player2Deck)
+		if err != nil {
+			log.Printf("matchmaking: resolve p2 deck failed: %v", err)
+			return
+		}
 		game, err := m.battleClient.CreatePvPGame(
 			ctx,
-			result.Player1ID, result.Player1Deck,
-			result.Player2ID, result.Player2Deck,
+			result.Player1ID, result.Player1Deck, p1Cards,
+			result.Player2ID, result.Player2Deck, p2Cards,
 		)
 		if err != nil {
 			log.Printf("matchmaking: create pvp game failed: %v", err)
@@ -132,7 +144,13 @@ func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, da
 		return
 	}
 
-	game, err := m.battleClient.StartNPCBattle(ctx, conn.playerID, req.DeckID, req.NPCFaction)
+	cards, err := m.resolveDeckCards(ctx, conn.playerID, req.DeckID)
+	if err != nil {
+		m.sendError(conn, "npc_battle_error", "failed to resolve deck", true)
+		return
+	}
+
+	game, err := m.battleClient.StartNPCBattle(ctx, conn.playerID, req.DeckID, cards, req.NPCFaction)
 	if err != nil {
 		m.sendError(conn, "npc_battle_error", err.Error(), true)
 		return
@@ -152,6 +170,20 @@ func (m *Manager) sendError(conn *Connection, code, message string, retryable bo
 		Type: constants.WSMsgError,
 		Data: mustMarshal(ErrorMessage{Code: code, Message: message, Retryable: retryable}),
 	})
+}
+
+func (m *Manager) resolveDeckCards(ctx context.Context, playerID string, deckID int64) ([]service.BattleDeckCard, error) {
+	deckCards, err := m.deckRepo.GetDeckCards(ctx, playerID, deckID)
+	if err != nil {
+		return nil, err
+	}
+	var cards []service.BattleDeckCard
+	for _, dc := range deckCards {
+		for i := 0; i < dc.Count; i++ {
+			cards = append(cards, service.BattleDeckCard{CardNo: dc.CardNo, ArtNo: dc.ArtNo})
+		}
+	}
+	return cards, nil
 }
 
 func (m *Manager) checkAndIncrementBattleLimit(ctx context.Context, playerID string) (string, error) {

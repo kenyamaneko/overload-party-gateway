@@ -60,7 +60,7 @@ func main() {
 	}
 
 	// 5. Handlers
-	wsManager := ws.NewManager(battleClient, playerService)
+	wsManager := ws.NewManager(battleClient, playerService, deckRepo)
 	go wsManager.StartMatchmaking(ctx)
 	wsHandler := ws.NewHandler(wsManager, nil, playerRepo, nil)
 	authHandler := rest.NewAuthHandler(authService)

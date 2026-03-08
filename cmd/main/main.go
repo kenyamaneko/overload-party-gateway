@@ -96,7 +96,7 @@ func main() {
 
 	// Battle client (HTTP → battle server)
 	battleClient := service.NewBattleClient(cfg.BattleServerURL)
-	wsManager := ws.NewManager(battleClient, playerService)
+	wsManager := ws.NewManager(battleClient, playerService, deckRepo)
 	go wsManager.StartMatchmaking(ctx)
 	wsHandler := ws.NewHandler(wsManager, authClient, playerRepo, cfg.AllowedOrigins)
 	authHandler := rest.NewAuthHandler(authService)

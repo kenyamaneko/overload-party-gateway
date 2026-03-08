@@ -12,7 +12,7 @@ func NewMockBattleClient() *MockBattleClient {
 	return &MockBattleClient{}
 }
 
-func (m *MockBattleClient) StartNPCBattle(_ context.Context, playerID string, _ int64, _ string) (*GameCreatedResult, error) {
+func (m *MockBattleClient) StartNPCBattle(_ context.Context, playerID string, _ int64, _ []BattleDeckCard, _ string) (*GameCreatedResult, error) {
 	return &GameCreatedResult{
 		GameID:    "mock-game-id",
 		Player1ID: playerID,
@@ -20,7 +20,7 @@ func (m *MockBattleClient) StartNPCBattle(_ context.Context, playerID string, _ 
 	}, nil
 }
 
-func (m *MockBattleClient) CreatePvPGame(_ context.Context, player1ID string, _ int64, player2ID string, _ int64) (*GameCreatedResult, error) {
+func (m *MockBattleClient) CreatePvPGame(_ context.Context, player1ID string, _ int64, _ []BattleDeckCard, player2ID string, _ int64, _ []BattleDeckCard) (*GameCreatedResult, error) {
 	return &GameCreatedResult{
 		GameID:    "mock-pvp-game-id",
 		Player1ID: player1ID,

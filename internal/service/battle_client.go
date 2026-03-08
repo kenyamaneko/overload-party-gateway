@@ -10,13 +10,19 @@ import (
 	"time"
 )
 
+// BattleDeckCard represents a card in a deck snapshot sent to the battle server.
+type BattleDeckCard struct {
+	CardNo int64 `json:"CardNo"`
+	ArtNo  int64 `json:"ArtNo"`
+}
+
 // BattleClient is the interface for communicating with the battle server REST API.
 // Gateway uses this to delegate game creation, action processing, and state retrieval.
 type BattleClient interface {
 	// StartNPCBattle creates a new NPC game for the player.
-	StartNPCBattle(ctx context.Context, playerID string, deckID int64, npcFaction string) (*GameCreatedResult, error)
+	StartNPCBattle(ctx context.Context, playerID string, deckID int64, cards []BattleDeckCard, npcFaction string) (*GameCreatedResult, error)
 	// CreatePvPGame creates a new PvP game (called after matchmaking completes).
-	CreatePvPGame(ctx context.Context, player1ID string, player1DeckID int64, player2ID string, player2DeckID int64) (*GameCreatedResult, error)
+	CreatePvPGame(ctx context.Context, player1ID string, player1DeckID int64, player1Cards []BattleDeckCard, player2ID string, player2DeckID int64, player2Cards []BattleDeckCard) (*GameCreatedResult, error)
 	// ProcessAction processes a game action and returns the result.
 	ProcessAction(ctx context.Context, gameID, playerID, actionType string, data json.RawMessage) (*ActionResult, error)
 	// GetGameStateForPlayer returns the info-hidden game state for a specific player.
@@ -63,10 +69,11 @@ func NewBattleClient(baseURL string) BattleClient {
 	}
 }
 
-func (c *battleClient) StartNPCBattle(ctx context.Context, playerID string, deckID int64, npcFaction string) (*GameCreatedResult, error) {
+func (c *battleClient) StartNPCBattle(ctx context.Context, playerID string, deckID int64, cards []BattleDeckCard, npcFaction string) (*GameCreatedResult, error) {
 	body := map[string]any{
 		"PlayerID":   playerID,
 		"DeckID":     deckID,
+		"Cards":      cards,
 		"NpcFaction": npcFaction,
 	}
 	var result GameCreatedResult
@@ -76,12 +83,14 @@ func (c *battleClient) StartNPCBattle(ctx context.Context, playerID string, deck
 	return &result, nil
 }
 
-func (c *battleClient) CreatePvPGame(ctx context.Context, player1ID string, player1DeckID int64, player2ID string, player2DeckID int64) (*GameCreatedResult, error) {
+func (c *battleClient) CreatePvPGame(ctx context.Context, player1ID string, player1DeckID int64, player1Cards []BattleDeckCard, player2ID string, player2DeckID int64, player2Cards []BattleDeckCard) (*GameCreatedResult, error) {
 	body := map[string]any{
 		"Player1ID":     player1ID,
 		"Player1DeckID": player1DeckID,
+		"Player1Cards":  player1Cards,
 		"Player2ID":     player2ID,
 		"Player2DeckID": player2DeckID,
+		"Player2Cards":  player2Cards,
 	}
 	var result GameCreatedResult
 	if err := c.post(ctx, "/api/v1/games/pvp", body, &result); err != nil {
