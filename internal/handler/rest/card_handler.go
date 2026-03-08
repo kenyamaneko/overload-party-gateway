@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
@@ -17,7 +18,8 @@ func NewCardHandler(cardService *service.CardService) *CardHandler {
 }
 
 func (h *CardHandler) GetAllCards(c *gin.Context) {
-	cards, err := h.cardService.GetAllCards(c.Request.Context())
+	playerID := middleware.GetPlayerID(c)
+	cards, err := h.cardService.GetAllCards(c.Request.Context(), playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

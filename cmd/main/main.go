@@ -89,7 +89,7 @@ func main() {
 	// Services
 	authService := service.NewAuthService(playerRepo, shopRepo, userSettingsRepo)
 	playerService := service.NewPlayerService(playerRepo, gameConfigRepo)
-	cardService := service.NewCardService(cardRepo)
+	cardService := service.NewCardService(cardRepo, deckRepo)
 	deckService := service.NewDeckService(deckRepo, cardCache)
 	shopService := service.NewShopService(shopRepo, playerRepo, cardCache, appleVerifier, googleVerifier)
 	subscriptionService := service.NewSubscriptionService(shopRepo, playerRepo)
