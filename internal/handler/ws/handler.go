@@ -3,6 +3,7 @@ package ws
 import (
 	"log"
 	"net/http"
+	"strings"
 
 	"firebase.google.com/go/v4/auth"
 	"github.com/gin-gonic/gin"
@@ -68,18 +69,19 @@ func (h *Handler) HandleUpgrade(c *gin.Context) {
 		}
 		playerID = player.PlayerID
 	} else {
-		// Local/dev: token is used directly as playerID (set by DevAuth middleware)
-		pid, exists := c.Get("playerID")
-		if !exists {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		// Local/dev: extract UID from dev token and resolve player
+		if !strings.HasPrefix(token, "dev-token-") {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid dev token format"})
 			return
 		}
-		pidStr, ok := pid.(string)
-		if !ok {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		uid := strings.TrimPrefix(token, "dev-token-")
+		player, err := h.playerRepo.FindByFirebaseUID(c.Request.Context(), uid)
+		if err != nil || player == nil {
+			log.Printf("ws handler (dev): player not found for uid=%s: %v", uid, err)
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "player not registered"})
 			return
 		}
-		playerID = pidStr
+		playerID = player.PlayerID
 	}
 
 	wsConn, err := h.upgrader.Upgrade(c.Writer, c.Request, nil)
