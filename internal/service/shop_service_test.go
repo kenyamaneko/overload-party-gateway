@@ -176,11 +176,11 @@ func TestBuildFactionCards_Copies(t *testing.T) {
 	if counts[1] != 3 {
 		t.Errorf("card 1 (unlimited): expected count=3, got %d", counts[1])
 	}
-	if counts[3] != 1 {
-		t.Errorf("card 3 (limited): expected count=1, got %d", counts[3])
+	if counts[3] != 3 {
+		t.Errorf("card 3 (limited): expected count=3, got %d", counts[3])
 	}
-	if counts[4] != 2 {
-		t.Errorf("card 4 (semi_limited): expected count=2, got %d", counts[4])
+	if counts[4] != 3 {
+		t.Errorf("card 4 (semi_limited): expected count=3, got %d", counts[4])
 	}
 	if counts[5] != 0 {
 		t.Errorf("card 5 (inactive): expected count=0, got %d", counts[5])
@@ -199,8 +199,8 @@ func TestBuildFactionCards_Neutral(t *testing.T) {
 	for _, c := range cards {
 		total += c.Count
 	}
-	if total != 4 {
-		t.Errorf("expected 4 total Neutral copies, got %d", total)
+	if total != 6 {
+		t.Errorf("expected 6 total Neutral copies, got %d", total)
 	}
 }
 
@@ -611,27 +611,6 @@ func TestGetProducts_SubscriptionOwnership(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// RestrictionCopyCount tests
-// ---------------------------------------------------------------------------
-
-func TestRestrictionCopyCount(t *testing.T) {
-	tests := []struct {
-		restriction string
-		expected    int
-	}{
-		{"unlimited", 3},
-		{"semi_limited", 2},
-		{"limited", 1},
-		{"", 3},
-	}
-	for _, tt := range tests {
-		got := restrictionCopyCount(tt.restriction)
-		if got != tt.expected {
-			t.Errorf("restrictionCopyCount(%q) = %d, want %d", tt.restriction, got, tt.expected)
-		}
-	}
-}
 
 // ---------------------------------------------------------------------------
 // NormalizeFaction tests
@@ -764,15 +743,15 @@ func TestSelectFaction_CardCopiesVerified(t *testing.T) {
 		counts[c.CardNo] = c.Count
 	}
 
-	// SD cards: 1(unlimited=3), 2(unlimited=3), 3(limited=1), 4(semi_limited=2)
-	// Neutral cards: 100(unlimited=3), 101(limited=1)
+	// All cards get 3 copies regardless of restriction.
+	// SD cards: 1, 2, 3, 4; Neutral cards: 100, 101
 	expected := map[int64]int{
-		1:   3, // unlimited
-		2:   3, // unlimited
-		3:   1, // limited
-		4:   2, // semi_limited
-		100: 3, // unlimited
-		101: 1, // limited
+		1:   3,
+		2:   3,
+		3:   3,
+		4:   3,
+		100: 3,
+		101: 3,
 	}
 
 	for cardNo, wantCount := range expected {

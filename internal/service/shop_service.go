@@ -36,17 +36,6 @@ func normalizeFaction(s string) (string, bool) {
 	return s, false
 }
 
-func restrictionCopyCount(restriction string) int {
-	switch restriction {
-	case "semi_limited":
-		return 2
-	case "limited":
-		return 1
-	default:
-		return 3
-	}
-}
-
 type ShopService struct {
 	shopRepo       repository.ShopRepository
 	playerRepo     repository.PlayerRepo
@@ -269,12 +258,11 @@ func (s *ShopService) buildFactionCards(playerID string, faction string) []*mode
 		if card.Faction != faction || !card.IsActive {
 			continue
 		}
-		copies := restrictionCopyCount(card.Restriction)
 		cards = append(cards, &model.PlayerCard{
 			PlayerID:            playerID,
 			CardNo:              card.CardNo,
 			ArtNo: 0,
-			Count:               copies,
+			Count:               3,
 		})
 	}
 	return cards

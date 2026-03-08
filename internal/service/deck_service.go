@@ -250,3 +250,14 @@ func (s *DeckService) validateDeckCards(entries []DeckCardEntry, ownedCards []*m
 
 	return nil
 }
+
+func restrictionCopyCount(restriction string) int {
+	switch restriction {
+	case "semi_limited":
+		return 2
+	case "limited":
+		return 1
+	default:
+		return 3
+	}
+}

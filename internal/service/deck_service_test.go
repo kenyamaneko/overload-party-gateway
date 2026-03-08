@@ -961,3 +961,25 @@ func TestUpdateDeck_VerifyPersistence(t *testing.T) {
 		t.Errorf("expected 2 card entries after update, got %d", len(cards))
 	}
 }
+
+// ---------------------------------------------------------------------------
+// RestrictionCopyCount tests
+// ---------------------------------------------------------------------------
+
+func TestRestrictionCopyCount(t *testing.T) {
+	tests := []struct {
+		restriction string
+		expected    int
+	}{
+		{"unlimited", 3},
+		{"semi_limited", 2},
+		{"limited", 1},
+		{"", 3},
+	}
+	for _, tt := range tests {
+		got := restrictionCopyCount(tt.restriction)
+		if got != tt.expected {
+			t.Errorf("restrictionCopyCount(%q) = %d, want %d", tt.restriction, got, tt.expected)
+		}
+	}
+}
