@@ -2,6 +2,7 @@ package rest
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -151,7 +152,7 @@ func TestAuthHandler_Login_NotRegistered(t *testing.T) {
 func setupPlayerRouter() *gin.Engine {
 	playerRepo := repository.NewMockPlayerRepository()
 	now := time.Now()
-	_ = playerRepo.Create(nil, &model.Player{
+	_ = playerRepo.Create(context.TODO(), &model.Player{
 		PlayerID:    "p1",
 		FirebaseUID: "uid-p1",
 		Username:    "Alice",

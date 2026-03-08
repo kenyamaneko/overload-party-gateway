@@ -110,7 +110,7 @@ func TestDevAuthWithPlayerResolve_AutoCreate(t *testing.T) {
 			CreatedAt:   time.Now(),
 			UpdatedAt:   time.Now(),
 		}
-		_ = playerRepo.Create(nil, p, &model.PlayerDailyBattle{PlayerID: p.PlayerID})
+		_ = playerRepo.Create(context.TODO(), p, &model.PlayerDailyBattle{PlayerID: p.PlayerID})
 		return p.PlayerID, nil
 	}
 
@@ -145,7 +145,7 @@ func TestDevAuthWithPlayerResolve_AutoCreate(t *testing.T) {
 
 func TestDevAuthWithPlayerResolve_ExistingPlayer(t *testing.T) {
 	playerRepo := repository.NewMockPlayerRepository()
-	_ = playerRepo.Create(nil, &model.Player{
+	_ = playerRepo.Create(context.TODO(), &model.Player{
 		PlayerID:    "existing-id",
 		FirebaseUID: "existinguser",
 		Username:    "Existing",
@@ -184,7 +184,7 @@ func TestDevAuthWithPlayerResolve_ExistingPlayer(t *testing.T) {
 
 func TestPlayerResolve_Success(t *testing.T) {
 	playerRepo := repository.NewMockPlayerRepository()
-	_ = playerRepo.Create(nil, &model.Player{
+	_ = playerRepo.Create(context.TODO(), &model.Player{
 		PlayerID:    "p1",
 		FirebaseUID: "uid1",
 		CreatedAt:   time.Now(),
