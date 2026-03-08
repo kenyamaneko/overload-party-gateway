@@ -89,8 +89,8 @@ func (h *Handler) HandleUpgrade(c *gin.Context) {
 	}
 
 	conn := NewConnection(wsConn, playerID)
-	h.manager.Register(conn)
+	h.manager.Hub.Register(conn)
 
 	go conn.WritePump()
-	go conn.ReadPump(h.manager)
+	go conn.ReadPump(h.manager.Hub, h.manager)
 }

@@ -59,9 +59,20 @@ func (c *Connection) SendMessage(msg *WSMessage) {
 	}
 }
 
-func (c *Connection) ReadPump(manager *Manager) {
+// MessageHandler is the interface for processing incoming WebSocket messages.
+type MessageHandler interface {
+	HandleMessage(conn *Connection, msg *WSMessage)
+}
+
+// ConnectionLifecycle is the interface for connection registration/unregistration.
+type ConnectionLifecycle interface {
+	Register(conn *Connection)
+	Unregister(conn *Connection)
+}
+
+func (c *Connection) ReadPump(lifecycle ConnectionLifecycle, handler MessageHandler) {
 	defer func() {
-		manager.Unregister(c)
+		lifecycle.Unregister(c)
 		c.Close()
 	}()
 
@@ -90,7 +101,7 @@ func (c *Connection) ReadPump(manager *Manager) {
 			continue
 		}
 
-		manager.HandleMessage(c, &msg)
+		handler.HandleMessage(c, &msg)
 	}
 }
 
