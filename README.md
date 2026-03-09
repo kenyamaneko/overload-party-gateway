@@ -76,15 +76,36 @@ make run-gateway
 ## 開発コマンド
 
 ```bash
-make help          # コマンド一覧
-make run-local     # ローカルサーバー起動
-make run-gateway   # 本番モードサーバー起動
-make test          # テスト実行
-make lint          # Lint 実行
-make fmt           # コードフォーマット
-make generate      # コード生成 (YAML → Go/JSON)
-make build         # Docker イメージビルド
+make help              # コマンド一覧
+make run-local         # ローカルサーバー起動
+make run-gateway       # 本番モードサーバー起動
+make test              # ユニットテスト実行
+make test-all          # ユニット + 統合テスト実行
+make test-integration  # 統合テストのみ実行 (Docker 必須)
+make test-db-up        # テスト用 PostgreSQL 起動
+make test-db-down      # テスト用 PostgreSQL 停止
+make lint              # Lint 実行
+make fmt               # コードフォーマット
+make generate          # コード生成 (YAML → Go/JSON)
+make build             # Docker イメージビルド
 ```
+
+## 統合テスト
+
+PostgreSQL に対する統合テスト (`internal/repository/pg_*`) は Docker が必要です。
+テスト用 DB は `overload-party-common/db/docker-compose.test.yml` で起動します (battle リポと共用)。
+
+```bash
+# 一括実行 (DB 起動 → テスト)
+make test-integration
+
+# 手動で DB を起動しておく場合
+make test-db-up
+TEST_DB_URL="postgres://testuser:testpass@localhost:5433/testdb?sslmode=disable" go test ./internal/repository/ -run TestPg -v
+make test-db-down
+```
+
+`TEST_DB_URL` が未設定の場合、統合テストは自動的にスキップされます。
 
 ## 関連リポジトリ
 

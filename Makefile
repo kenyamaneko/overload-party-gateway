@@ -1,4 +1,4 @@
-.PHONY: build test test-unit lint vet fmt \
+.PHONY: build test test-unit test-integration test-db-up test-db-down lint vet fmt \
        run run-local run-gateway \
        generate clean help
 
@@ -29,10 +29,23 @@ build:  ## Build Docker image
 	docker build -t $(APP) .
 
 # ─── Test & Lint ─────────────────────────────────────────
-test: test-unit  ## Run all tests
+TEST_DB_URL ?= postgres://testuser:testpass@localhost:5433/testdb?sslmode=disable
+
+test: test-unit  ## Run unit tests only (no Docker required)
+
+test-all: test-unit test-integration  ## Run unit + integration tests
 
 test-unit:  ## Run unit tests
 	go test ./internal/... -count=1 -race
+
+test-integration: test-db-up  ## Run integration tests (requires Docker)
+	TEST_DB_URL="$(TEST_DB_URL)" go test ./internal/repository/ -run TestPg -count=1 -race -v
+
+test-db-up:  ## Start test PostgreSQL container
+	docker compose -f $(COMMON_DIR)/db/docker-compose.test.yml up -d --wait
+
+test-db-down:  ## Stop test PostgreSQL container
+	docker compose -f $(COMMON_DIR)/db/docker-compose.test.yml down
 
 lint:  ## Run golangci-lint
 	golangci-lint run ./...
