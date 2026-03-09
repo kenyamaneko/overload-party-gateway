@@ -76,7 +76,7 @@ func (r *PgDeckRepository) FindByPlayerID(ctx context.Context, playerID string) 
 	}
 	defer rows.Close()
 
-	var decks []*model.Deck
+	decks := make([]*model.Deck, 0, 8)
 	for rows.Next() {
 		d, err := scanDeck(rows)
 		if err != nil {
@@ -120,7 +120,7 @@ func (r *PgDeckRepository) GetDeckCards(ctx context.Context, playerID string, de
 	}
 	defer rows.Close()
 
-	var cards []model.DeckCard
+	cards := make([]model.DeckCard, 0, 16)
 	for rows.Next() {
 		var dc model.DeckCard
 		if err := rows.Scan(&dc.PlayerID, &dc.DeckID, &dc.CardNo, &dc.ArtNo, &dc.Count); err != nil {
@@ -146,7 +146,7 @@ func (r *PgDeckRepository) GetPlayerCards(ctx context.Context, playerID string) 
 	}
 	defer rows.Close()
 
-	var cards []*model.PlayerCard
+	cards := make([]*model.PlayerCard, 0, 32)
 	for rows.Next() {
 		var pc model.PlayerCard
 		if err := rows.Scan(&pc.PlayerID, &pc.CardNo, &pc.ArtNo, &pc.Count); err != nil {

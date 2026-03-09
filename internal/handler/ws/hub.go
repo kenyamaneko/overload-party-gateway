@@ -93,3 +93,13 @@ func (h *ConnectionHub) SendToPlayer(playerID string, msg *WSMessage) {
 		conn.SendMessage(msg)
 	}
 }
+
+// SendRawToPlayer sends pre-marshaled bytes to a player without additional marshaling.
+func (h *ConnectionHub) SendRawToPlayer(playerID string, data []byte) {
+	h.mu.RLock()
+	conn, ok := h.connections[playerID]
+	h.mu.RUnlock()
+	if ok {
+		conn.SendRaw(data)
+	}
+}

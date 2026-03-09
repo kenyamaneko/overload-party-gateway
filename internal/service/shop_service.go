@@ -116,7 +116,7 @@ func (s *ShopService) GetProducts(ctx context.Context, playerID string) ([]Produ
 		return nil, fmt.Errorf("get subscription: %w", err)
 	}
 
-	var result []ProductWithOwnership
+	result := make([]ProductWithOwnership, 0, len(products))
 	for _, p := range products {
 		owned := false
 		switch p.Type {

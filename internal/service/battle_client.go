@@ -182,12 +182,11 @@ func (c *battleClient) post(ctx context.Context, path string, body any, result a
 	}
 	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("read response: %w", err)
-	}
-
 	if resp.StatusCode != http.StatusOK {
+		respBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("read error response: %w", err)
+		}
 		var errResp struct {
 			Error string `json:"error"`
 		}
@@ -197,9 +196,10 @@ func (c *battleClient) post(ctx context.Context, path string, body any, result a
 		return fmt.Errorf("battle server returned %d: %s", resp.StatusCode, string(respBody))
 	}
 
+	// 成功時はストリームから直接デコードし、中間[]byteバッファの確保を省く。
 	if result != nil {
-		if err := json.Unmarshal(respBody, result); err != nil {
-			return fmt.Errorf("unmarshal response: %w", err)
+		if err := json.NewDecoder(resp.Body).Decode(result); err != nil {
+			return fmt.Errorf("decode response: %w", err)
 		}
 	}
 	return nil

@@ -59,13 +59,21 @@ func (r *GameRelay) LeaveGame(playerID string) {
 	}
 }
 
+// BroadcastToGame sends the same message to all players in a game.
+// 全員に同一メッセージを送るため、一度だけ Marshal して使い回す。
 func (r *GameRelay) BroadcastToGame(gameID string, msg *WSMessage) {
+	data, err := json.Marshal(msg)
+	if err != nil {
+		log.Printf("marshal broadcast message: %v", err)
+		return
+	}
+
 	r.mu.RLock()
 	players := r.gameMembers[gameID]
 	r.mu.RUnlock()
 
 	for _, pid := range players {
-		r.hub.SendToPlayer(pid, msg)
+		r.hub.SendRawToPlayer(pid, data)
 	}
 }
 
@@ -81,9 +89,14 @@ func (r *GameRelay) SendGameStateToPlayers(gameID string) {
 			log.Printf("get game state for player %s: %v", pid, err)
 			continue
 		}
+		transformed, err := transformGameState(state)
+		if err != nil {
+			log.Printf("transform game state for player %s: %v", pid, err)
+			continue
+		}
 		r.hub.SendToPlayer(pid, &WSMessage{
 			Type: constants.WSMsgGameState,
-			Data: state,
+			Data: transformed,
 		})
 	}
 }

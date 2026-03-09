@@ -177,7 +177,13 @@ func (m *Manager) resolveDeckCards(ctx context.Context, playerID string, deckID 
 	if err != nil {
 		return nil, err
 	}
-	var cards []service.BattleDeckCard
+	// DeckCardはカード種別ごとの行(Count>=1)なので、展開後の総枚数を先に求めて
+	// スライスを事前確保し、ループ中の再割当てを防ぐ。
+	totalCount := 0
+	for _, dc := range deckCards {
+		totalCount += dc.Count
+	}
+	cards := make([]service.BattleDeckCard, 0, totalCount)
 	for _, dc := range deckCards {
 		for i := 0; i < dc.Count; i++ {
 			cards = append(cards, service.BattleDeckCard{CardNo: dc.CardNo, ArtNo: dc.ArtNo})

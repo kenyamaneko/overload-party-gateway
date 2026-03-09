@@ -45,7 +45,13 @@ func (c *Connection) SendMessage(msg *WSMessage) {
 		log.Printf("marshal ws message: %v", err)
 		return
 	}
+	c.SendRaw(data)
+}
 
+// SendRaw sends pre-marshaled bytes to the client without additional marshaling.
+// Use this when the same message is broadcast to multiple connections to avoid
+// redundant json.Marshal calls.
+func (c *Connection) SendRaw(data []byte) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.closed {
