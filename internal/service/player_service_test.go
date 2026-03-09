@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"cloud.google.com/go/civil"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
@@ -41,9 +43,7 @@ func setupPlayerService(t *testing.T, player *model.Player, dailyBattle *model.P
 	t.Helper()
 
 	playerRepo := repository.NewMockPlayerRepository()
-	if err := playerRepo.Create(context.Background(), player, dailyBattle); err != nil {
-		t.Fatalf("failed to create player: %v", err)
-	}
+	require.NoError(t, playerRepo.Create(context.Background(), player, dailyBattle))
 
 	configRepo := &mockGameConfigRepo{
 		values: map[string]int64{
@@ -56,91 +56,77 @@ func setupPlayerService(t *testing.T, player *model.Player, dailyBattle *model.P
 
 // --- GetBattleLimit tests ---
 
-func TestGetBattleLimit_FreePlayer_UnderLimit(t *testing.T) {
-	player := &model.Player{PlayerID: "p1", FirebaseUID: "uid1", IsPremium: false}
-	daily := &model.PlayerDailyBattle{PlayerID: "p1", DailyBattleCount: 3, LastResetDate: today()}
-
-	svc := setupPlayerService(t, player, daily)
-
-	resp, err := svc.GetBattleLimit(context.Background(), "p1")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+func TestGetBattleLimit(t *testing.T) {
+	tests := []struct {
+		name             string
+		isPremium        bool
+		dailyBattleCount int64
+		lastResetDate    civil.Date
+		wantCount        int64
+		wantLimit        int64
+		wantCanBattle    bool
+	}{
+		{
+			name:             "FreePlayer_UnderLimit",
+			isPremium:        false,
+			dailyBattleCount: 3,
+			lastResetDate:    today(),
+			wantCount:        3,
+			wantLimit:        10,
+			wantCanBattle:    true,
+		},
+		{
+			name:             "FreePlayer_AtLimit",
+			isPremium:        false,
+			dailyBattleCount: 10,
+			lastResetDate:    today(),
+			wantCount:        10,
+			wantLimit:        10,
+			wantCanBattle:    false,
+		},
+		{
+			name:             "PremiumPlayer",
+			isPremium:        true,
+			dailyBattleCount: 5,
+			lastResetDate:    today(),
+			wantCount:        0,
+			wantLimit:        -1,
+			wantCanBattle:    true,
+		},
+		{
+			name:             "DateReset",
+			isPremium:        false,
+			dailyBattleCount: 7,
+			lastResetDate:    yesterday(),
+			wantCount:        0,
+			wantLimit:        10,
+			wantCanBattle:    true,
+		},
+		{
+			name:             "FreePlayer_OverLimit",
+			isPremium:        false,
+			dailyBattleCount: 11,
+			lastResetDate:    today(),
+			wantCount:        11,
+			wantLimit:        10,
+			wantCanBattle:    false,
+		},
 	}
 
-	if resp.DailyBattleCount != 3 {
-		t.Errorf("DailyBattleCount = %d, want 3", resp.DailyBattleCount)
-	}
-	if resp.DailyBattleLimit != 10 {
-		t.Errorf("DailyBattleLimit = %d, want 10", resp.DailyBattleLimit)
-	}
-	if !resp.CanBattle {
-		t.Errorf("CanBattle = false, want true")
-	}
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			player := &model.Player{PlayerID: "p1", FirebaseUID: "uid1", IsPremium: tt.isPremium}
+			daily := &model.PlayerDailyBattle{PlayerID: "p1", DailyBattleCount: tt.dailyBattleCount, LastResetDate: tt.lastResetDate}
 
-func TestGetBattleLimit_FreePlayer_AtLimit(t *testing.T) {
-	player := &model.Player{PlayerID: "p1", FirebaseUID: "uid1", IsPremium: false}
-	daily := &model.PlayerDailyBattle{PlayerID: "p1", DailyBattleCount: 10, LastResetDate: today()}
+			svc := setupPlayerService(t, player, daily)
 
-	svc := setupPlayerService(t, player, daily)
+			resp, err := svc.GetBattleLimit(context.Background(), "p1")
+			require.NoError(t, err)
 
-	resp, err := svc.GetBattleLimit(context.Background(), "p1")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if resp.DailyBattleCount != 10 {
-		t.Errorf("DailyBattleCount = %d, want 10", resp.DailyBattleCount)
-	}
-	if resp.DailyBattleLimit != 10 {
-		t.Errorf("DailyBattleLimit = %d, want 10", resp.DailyBattleLimit)
-	}
-	if resp.CanBattle {
-		t.Errorf("CanBattle = true, want false")
-	}
-}
-
-func TestGetBattleLimit_PremiumPlayer(t *testing.T) {
-	player := &model.Player{PlayerID: "p1", FirebaseUID: "uid1", IsPremium: true}
-	daily := &model.PlayerDailyBattle{PlayerID: "p1", DailyBattleCount: 5, LastResetDate: today()}
-
-	svc := setupPlayerService(t, player, daily)
-
-	resp, err := svc.GetBattleLimit(context.Background(), "p1")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if resp.DailyBattleCount != 0 {
-		t.Errorf("DailyBattleCount = %d, want 0 (GetDailyBattle skipped for premium)", resp.DailyBattleCount)
-	}
-	if resp.DailyBattleLimit != -1 {
-		t.Errorf("DailyBattleLimit = %d, want -1 (unlimited)", resp.DailyBattleLimit)
-	}
-	if !resp.CanBattle {
-		t.Errorf("CanBattle = false, want true (unlimited)")
-	}
-}
-
-func TestGetBattleLimit_DateReset(t *testing.T) {
-	player := &model.Player{PlayerID: "p1", FirebaseUID: "uid1", IsPremium: false}
-	daily := &model.PlayerDailyBattle{PlayerID: "p1", DailyBattleCount: 7, LastResetDate: yesterday()}
-
-	svc := setupPlayerService(t, player, daily)
-
-	resp, err := svc.GetBattleLimit(context.Background(), "p1")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if resp.DailyBattleCount != 0 {
-		t.Errorf("DailyBattleCount = %d, want 0 (date reset)", resp.DailyBattleCount)
-	}
-	if resp.DailyBattleLimit != 10 {
-		t.Errorf("DailyBattleLimit = %d, want 10", resp.DailyBattleLimit)
-	}
-	if !resp.CanBattle {
-		t.Errorf("CanBattle = false, want true (count reset to 0)")
+			assert.Equal(t, tt.wantCount, resp.DailyBattleCount)
+			assert.Equal(t, tt.wantLimit, resp.DailyBattleLimit)
+			assert.Equal(t, tt.wantCanBattle, resp.CanBattle)
+		})
 	}
 }
 
@@ -152,19 +138,11 @@ func TestIncrementBattleCount_Success(t *testing.T) {
 
 	svc := setupPlayerService(t, player, daily)
 
-	err := svc.IncrementBattleCount(context.Background(), "p1")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, svc.IncrementBattleCount(context.Background(), "p1"))
 
-	// Verify count was incremented by checking via GetBattleLimit
 	resp, err := svc.GetBattleLimit(context.Background(), "p1")
-	if err != nil {
-		t.Fatalf("unexpected error on GetBattleLimit: %v", err)
-	}
-	if resp.DailyBattleCount != 6 {
-		t.Errorf("DailyBattleCount = %d, want 6 (incremented from 5)", resp.DailyBattleCount)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, int64(6), resp.DailyBattleCount)
 }
 
 func TestIncrementBattleCount_PremiumPlayer(t *testing.T) {
@@ -173,22 +151,13 @@ func TestIncrementBattleCount_PremiumPlayer(t *testing.T) {
 
 	svc := setupPlayerService(t, player, daily)
 
-	err := svc.IncrementBattleCount(context.Background(), "p1")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, svc.IncrementBattleCount(context.Background(), "p1"))
 
 	// プレミアムは無制限なので DailyBattleLimit = -1
 	resp, err := svc.GetBattleLimit(context.Background(), "p1")
-	if err != nil {
-		t.Fatalf("unexpected error on GetBattleLimit: %v", err)
-	}
-	if resp.DailyBattleLimit != -1 {
-		t.Errorf("DailyBattleLimit = %d, want -1 (unlimited)", resp.DailyBattleLimit)
-	}
-	if resp.DailyBattleCount != 0 {
-		t.Errorf("DailyBattleCount = %d, want 0 (GetBattleLimit returns 0 for premium; actual count tracked separately)", resp.DailyBattleCount)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, int64(-1), resp.DailyBattleLimit)
+	assert.Equal(t, int64(0), resp.DailyBattleCount)
 }
 
 // --- GetPlayer / UpdateUsername tests ---
@@ -200,16 +169,9 @@ func TestGetPlayer_Success(t *testing.T) {
 	svc := setupPlayerService(t, player, daily)
 
 	got, err := svc.GetPlayer(context.Background(), "p1")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if got.PlayerID != "p1" {
-		t.Errorf("PlayerID = %q, want %q", got.PlayerID, "p1")
-	}
-	if got.Username != "Alice" {
-		t.Errorf("Username = %q, want %q", got.Username, "Alice")
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "p1", got.PlayerID)
+	assert.Equal(t, "Alice", got.Username)
 }
 
 func TestUpdateUsername_Success(t *testing.T) {
@@ -219,44 +181,15 @@ func TestUpdateUsername_Success(t *testing.T) {
 	svc := setupPlayerService(t, player, daily)
 
 	updated, err := svc.UpdateUsername(context.Background(), "p1", "Bob")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "Bob", updated.Username)
 
-	if updated.Username != "Bob" {
-		t.Errorf("Username = %q, want %q", updated.Username, "Bob")
-	}
-
-	// Verify the name persists
 	got, err := svc.GetPlayer(context.Background(), "p1")
-	if err != nil {
-		t.Fatalf("unexpected error on GetPlayer: %v", err)
-	}
-	if got.Username != "Bob" {
-		t.Errorf("Username after re-fetch = %q, want %q", got.Username, "Bob")
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "Bob", got.Username)
 }
 
 // --- Boundary value tests ---
-
-func TestGetBattleLimit_FreePlayer_OverLimit(t *testing.T) {
-	player := &model.Player{PlayerID: "p1", FirebaseUID: "uid1", IsPremium: false}
-	daily := &model.PlayerDailyBattle{PlayerID: "p1", DailyBattleCount: 11, LastResetDate: today()}
-
-	svc := setupPlayerService(t, player, daily)
-
-	resp, err := svc.GetBattleLimit(context.Background(), "p1")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if resp.CanBattle {
-		t.Errorf("CanBattle = true, want false (over limit)")
-	}
-	if resp.DailyBattleCount != 11 {
-		t.Errorf("DailyBattleCount = %d, want 11", resp.DailyBattleCount)
-	}
-}
 
 func TestGetBattleLimit_FreeLimitZero_ReturnsError(t *testing.T) {
 	playerRepo := repository.NewMockPlayerRepository()
@@ -265,48 +198,48 @@ func TestGetBattleLimit_FreeLimitZero_ReturnsError(t *testing.T) {
 	svc := NewPlayerService(playerRepo, configRepo)
 
 	_, err := svc.GetBattleLimit(context.Background(), "p1")
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "game config") {
-		t.Errorf("error = %q, want it to contain %q", err.Error(), "game config")
-	}
+	require.Error(t, err)
+	assert.True(t, strings.Contains(err.Error(), "game config"))
 }
 
 // --- Error path tests ---
 
-func TestGetPlayer_NotFound(t *testing.T) {
-	player := &model.Player{PlayerID: "p1", FirebaseUID: "uid1"}
-	daily := &model.PlayerDailyBattle{PlayerID: "p1", DailyBattleCount: 0, LastResetDate: today()}
-
-	svc := setupPlayerService(t, player, daily)
-
-	_, err := svc.GetPlayer(context.Background(), "nonexistent")
-	if err == nil {
-		t.Fatal("expected error for nonexistent player, got nil")
+func TestNotFound(t *testing.T) {
+	tests := []struct {
+		name string
+		fn   func(svc *PlayerService) error
+	}{
+		{
+			name: "GetPlayer_NotFound",
+			fn: func(svc *PlayerService) error {
+				_, err := svc.GetPlayer(context.Background(), "nonexistent")
+				return err
+			},
+		},
+		{
+			name: "UpdateUsername_NotFound",
+			fn: func(svc *PlayerService) error {
+				_, err := svc.UpdateUsername(context.Background(), "nonexistent", "Bob")
+				return err
+			},
+		},
+		{
+			name: "IncrementBattleCount_PlayerNotFound",
+			fn: func(svc *PlayerService) error {
+				return svc.IncrementBattleCount(context.Background(), "nonexistent")
+			},
+		},
 	}
-}
 
-func TestUpdateUsername_NotFound(t *testing.T) {
-	player := &model.Player{PlayerID: "p1", FirebaseUID: "uid1", Username: "Alice"}
-	daily := &model.PlayerDailyBattle{PlayerID: "p1", DailyBattleCount: 0, LastResetDate: today()}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			player := &model.Player{PlayerID: "p1", FirebaseUID: "uid1"}
+			daily := &model.PlayerDailyBattle{PlayerID: "p1", DailyBattleCount: 0, LastResetDate: today()}
 
-	svc := setupPlayerService(t, player, daily)
+			svc := setupPlayerService(t, player, daily)
 
-	_, err := svc.UpdateUsername(context.Background(), "nonexistent", "Bob")
-	if err == nil {
-		t.Fatal("expected error for nonexistent player, got nil")
-	}
-}
-
-func TestIncrementBattleCount_PlayerNotFound(t *testing.T) {
-	player := &model.Player{PlayerID: "p1", FirebaseUID: "uid1"}
-	daily := &model.PlayerDailyBattle{PlayerID: "p1", DailyBattleCount: 0, LastResetDate: today()}
-
-	svc := setupPlayerService(t, player, daily)
-
-	err := svc.IncrementBattleCount(context.Background(), "nonexistent")
-	if err == nil {
-		t.Fatal("expected error for nonexistent player, got nil")
+			err := tt.fn(svc)
+			require.Error(t, err)
+		})
 	}
 }

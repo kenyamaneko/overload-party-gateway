@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
@@ -21,74 +23,40 @@ func init() {
 // DevAuth tests
 // ---------------------------------------------------------------------------
 
-func TestDevAuth_Success(t *testing.T) {
-	r := gin.New()
-	r.Use(DevAuth())
-	r.GET("/test", func(c *gin.Context) {
-		uid := GetFirebaseUID(c)
-		c.JSON(http.StatusOK, gin.H{"uid": uid})
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("Authorization", "Bearer dev-token-user1")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+func TestDevAuth(t *testing.T) {
+	tests := []struct {
+		name       string
+		authHeader string
+		wantCode   int
+	}{
+		{"Success", "Bearer dev-token-user1", http.StatusOK},
+		{"MissingHeader", "", http.StatusUnauthorized},
+		{"NoBearerPrefix", "dev-token-user1", http.StatusUnauthorized},
+		{"InvalidTokenFormat", "Bearer some-other-token", http.StatusUnauthorized},
 	}
-	if body := w.Body.String(); body != `{"uid":"user1"}` {
-		t.Errorf("unexpected body: %s", body)
-	}
-}
 
-func TestDevAuth_MissingHeader(t *testing.T) {
-	r := gin.New()
-	r.Use(DevAuth())
-	r.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{})
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := gin.New()
+			r.Use(DevAuth())
+			r.GET("/test", func(c *gin.Context) {
+				uid := GetFirebaseUID(c)
+				c.JSON(http.StatusOK, gin.H{"uid": uid})
+			})
 
-	req := httptest.NewRequest("GET", "/test", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+			req := httptest.NewRequest("GET", "/test", nil)
+			if tt.authHeader != "" {
+				req.Header.Set("Authorization", tt.authHeader)
+			}
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
 
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401, got %d", w.Code)
-	}
-}
+			require.Equal(t, tt.wantCode, w.Code)
 
-func TestDevAuth_NoBearerPrefix(t *testing.T) {
-	r := gin.New()
-	r.Use(DevAuth())
-	r.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{})
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("Authorization", "dev-token-user1")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401, got %d", w.Code)
-	}
-}
-
-func TestDevAuth_InvalidTokenFormat(t *testing.T) {
-	r := gin.New()
-	r.Use(DevAuth())
-	r.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{})
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("Authorization", "Bearer some-other-token")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401, got %d", w.Code)
+			if tt.wantCode == http.StatusOK {
+				assert.Equal(t, `{"uid":"user1"}`, w.Body.String())
+			}
+		})
 	}
 }
 
@@ -132,15 +100,9 @@ func TestDevAuthWithPlayerResolve_AutoCreate(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
-	if !registerCalled {
-		t.Error("expected registerFn to be called")
-	}
-	if !setupCalled {
-		t.Error("expected onCreated callback to be called")
-	}
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.True(t, registerCalled, "expected registerFn to be called")
+	assert.True(t, setupCalled, "expected onCreated callback to be called")
 }
 
 func TestDevAuthWithPlayerResolve_ExistingPlayer(t *testing.T) {
@@ -170,12 +132,8 @@ func TestDevAuthWithPlayerResolve_ExistingPlayer(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
-	if body := w.Body.String(); body != `{"player_id":"existing-id"}` {
-		t.Errorf("unexpected body: %s", body)
-	}
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Equal(t, `{"player_id":"existing-id"}`, w.Body.String())
 }
 
 // ---------------------------------------------------------------------------
@@ -207,9 +165,7 @@ func TestPlayerResolve_Success(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 }
 
 func TestPlayerResolve_MissingUID(t *testing.T) {
@@ -226,9 +182,7 @@ func TestPlayerResolve_MissingUID(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401, got %d", w.Code)
-	}
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestPlayerResolve_PlayerNotRegistered(t *testing.T) {
@@ -248,43 +202,41 @@ func TestPlayerResolve_PlayerNotRegistered(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401, got %d", w.Code)
-	}
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 // ---------------------------------------------------------------------------
 // GetFirebaseUID / GetPlayerID edge cases
 // ---------------------------------------------------------------------------
 
-func TestGetFirebaseUID_NotSet(t *testing.T) {
-	r := gin.New()
-	r.GET("/test", func(c *gin.Context) {
-		uid := GetFirebaseUID(c)
-		c.JSON(http.StatusOK, gin.H{"uid": uid})
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	if body := w.Body.String(); body != `{"uid":""}` {
-		t.Errorf("expected empty uid, got: %s", body)
+func TestGetNotSet(t *testing.T) {
+	tests := []struct {
+		name     string
+		key      string
+		wantBody string
+	}{
+		{"GetFirebaseUID_NotSet", "uid", `{"uid":""}`},
+		{"GetPlayerID_NotSet", "pid", `{"pid":""}`},
 	}
-}
 
-func TestGetPlayerID_NotSet(t *testing.T) {
-	r := gin.New()
-	r.GET("/test", func(c *gin.Context) {
-		pid := GetPlayerID(c)
-		c.JSON(http.StatusOK, gin.H{"pid": pid})
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := gin.New()
+			r.GET("/test", func(c *gin.Context) {
+				var val string
+				if tt.key == "uid" {
+					val = GetFirebaseUID(c)
+				} else {
+					val = GetPlayerID(c)
+				}
+				c.JSON(http.StatusOK, gin.H{tt.key: val})
+			})
 
-	req := httptest.NewRequest("GET", "/test", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+			req := httptest.NewRequest("GET", "/test", nil)
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
 
-	if body := w.Body.String(); body != `{"pid":""}` {
-		t.Errorf("expected empty pid, got: %s", body)
+			assert.Equal(t, tt.wantBody, w.Body.String())
+		})
 	}
 }

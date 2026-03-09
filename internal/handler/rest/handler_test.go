@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,8 +12,12 @@ import (
 
 	"cloud.google.com/go/civil"
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"github.com/kenyamaneko/overload-party-gateway/internal/cache"
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/platform"
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
@@ -58,17 +63,11 @@ func TestAuthHandler_Register_Success(t *testing.T) {
 
 	r.ServeHTTP(w, req)
 
-	if w.Code != http.StatusCreated {
-		t.Errorf("expected 201, got %d: %s", w.Code, w.Body.String())
-	}
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 
 	var resp model.Player
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	if resp.Username != "TestUser" {
-		t.Errorf("expected username TestUser, got %s", resp.Username)
-	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "TestUser", resp.Username)
 }
 
 func TestAuthHandler_Register_MissingUsername(t *testing.T) {
@@ -81,9 +80,7 @@ func TestAuthHandler_Register_MissingUsername(t *testing.T) {
 
 	r.ServeHTTP(w, req)
 
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", w.Code)
-	}
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestAuthHandler_Register_Duplicate(t *testing.T) {
@@ -97,9 +94,7 @@ func TestAuthHandler_Register_Duplicate(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	if w.Code != http.StatusCreated {
-		t.Fatalf("first register: expected 201, got %d", w.Code)
-	}
+	require.Equal(t, http.StatusCreated, w.Code)
 
 	// Second registration
 	body, _ = json.Marshal(map[string]string{"username": "AnotherUser"})
@@ -108,9 +103,7 @@ func TestAuthHandler_Register_Duplicate(t *testing.T) {
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	if w.Code != http.StatusConflict {
-		t.Errorf("second register: expected 409, got %d", w.Code)
-	}
+	assert.Equal(t, http.StatusConflict, w.Code)
 }
 
 func TestAuthHandler_Login_Success(t *testing.T) {
@@ -128,9 +121,7 @@ func TestAuthHandler_Login_Success(t *testing.T) {
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
 }
 
 func TestAuthHandler_Login_NotRegistered(t *testing.T) {
@@ -140,9 +131,7 @@ func TestAuthHandler_Login_NotRegistered(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected 404, got %d", w.Code)
-	}
+	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
 // ---------------------------------------------------------------------------
@@ -185,15 +174,11 @@ func TestPlayerHandler_GetPlayer(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
 	var resp model.Player
 	_ = json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp.Username != "Alice" {
-		t.Errorf("expected username Alice, got %s", resp.Username)
-	}
+	assert.Equal(t, "Alice", resp.Username)
 }
 
 func TestPlayerHandler_UpdateName(t *testing.T) {
@@ -205,15 +190,11 @@ func TestPlayerHandler_UpdateName(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
 	var resp model.Player
 	_ = json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp.Username != "Bob" {
-		t.Errorf("expected username Bob, got %s", resp.Username)
-	}
+	assert.Equal(t, "Bob", resp.Username)
 }
 
 func TestPlayerHandler_UpdateName_MissingBody(t *testing.T) {
@@ -225,9 +206,7 @@ func TestPlayerHandler_UpdateName_MissingBody(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", w.Code)
-	}
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestPlayerHandler_GetBattleLimit(t *testing.T) {
@@ -237,21 +216,13 @@ func TestPlayerHandler_GetBattleLimit(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
 	var resp service.BattleLimitResponse
 	_ = json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp.DailyBattleLimit != 10 {
-		t.Errorf("expected limit 10, got %d", resp.DailyBattleLimit)
-	}
-	if resp.DailyBattleCount != 3 {
-		t.Errorf("expected count 3, got %d", resp.DailyBattleCount)
-	}
-	if !resp.CanBattle {
-		t.Error("expected CanBattle=true")
-	}
+	assert.Equal(t, int64(10), resp.DailyBattleLimit)
+	assert.Equal(t, int64(3), resp.DailyBattleCount)
+	assert.True(t, resp.CanBattle)
 }
 
 // ---------------------------------------------------------------------------
@@ -276,18 +247,12 @@ func TestUserSettingsHandler_GetSettings_Default(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
+	require.Equal(t, http.StatusOK, w.Code)
 
 	var resp model.UserSettings
 	_ = json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp.Language != "ja" {
-		t.Errorf("expected default language ja, got %s", resp.Language)
-	}
-	if resp.BgmVolume != 50 {
-		t.Errorf("expected default BgmVolume 50, got %d", resp.BgmVolume)
-	}
+	assert.Equal(t, "ja", resp.Language)
+	assert.Equal(t, int64(50), resp.BgmVolume)
 }
 
 func TestUserSettingsHandler_UpdateSettings(t *testing.T) {
@@ -304,18 +269,12 @@ func TestUserSettingsHandler_UpdateSettings(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
 	var resp model.UserSettings
 	_ = json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp.Language != "en" {
-		t.Errorf("expected language en, got %s", resp.Language)
-	}
-	if resp.BgmVolume != 80 {
-		t.Errorf("expected BgmVolume 80, got %d", resp.BgmVolume)
-	}
+	assert.Equal(t, "en", resp.Language)
+	assert.Equal(t, int64(80), resp.BgmVolume)
 
 	// Verify persistence via GET
 	req = httptest.NewRequest("GET", "/player/settings", nil)
@@ -323,9 +282,7 @@ func TestUserSettingsHandler_UpdateSettings(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	_ = json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp.Language != "en" {
-		t.Errorf("expected persisted language en, got %s", resp.Language)
-	}
+	assert.Equal(t, "en", resp.Language)
 }
 
 func TestUserSettingsHandler_UpdateSettings_MissingLanguage(t *testing.T) {
@@ -339,7 +296,428 @@ func TestUserSettingsHandler_UpdateSettings_MissingLanguage(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", w.Code)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// ---------------------------------------------------------------------------
+// DeckHandler tests
+// ---------------------------------------------------------------------------
+
+func setupDeckRouter() *gin.Engine {
+	deckRepo := repository.NewMockDeckRepository()
+	cardCache := cache.NewCardCache()
+
+	// Seed 10 card definitions and player cards (3 copies each = 30 total).
+	playerCards := make([]*model.PlayerCard, 10)
+	for i := int64(1); i <= 10; i++ {
+		cardCache.InjectForTest(i, &model.CardDefinition{
+			CardNo:      i,
+			CardName:    fmt.Sprintf("Card%d", i),
+			Restriction: "none",
+		})
+		playerCards[i-1] = &model.PlayerCard{CardNo: i, ArtNo: 1, Count: 3}
 	}
+	deckRepo.SeedPlayerCards("p1", playerCards)
+
+	deckService := service.NewDeckService(deckRepo, cardCache)
+	handler := NewDeckHandler(deckService)
+
+	r := gin.New()
+	r.Use(setPlayerID("p1"))
+	r.GET("/decks", handler.GetDecks)
+	r.GET("/decks/:deckId", handler.GetDeck)
+	r.POST("/decks", handler.CreateDeck)
+	r.PUT("/decks/:deckId", handler.UpdateDeck)
+	r.DELETE("/decks/:deckId", handler.DeleteDeck)
+	return r
+}
+
+func TestDeckHandler_GetDecks_Empty(t *testing.T) {
+	r := setupDeckRouter()
+
+	req := httptest.NewRequest("GET", "/decks", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var resp []*model.Deck
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Empty(t, resp)
+}
+
+func TestDeckHandler_CreateDeck_Success(t *testing.T) {
+	r := setupDeckRouter()
+
+	entries := make([]service.DeckCardEntry, 10)
+	for i := int64(1); i <= 10; i++ {
+		entries[i-1] = service.DeckCardEntry{CardNo: i, ArtNo: 1, Count: 3}
+	}
+	body, _ := json.Marshal(service.CreateDeckRequest{
+		DeckName: "MyDeck",
+		Cards:    entries,
+	})
+	req := httptest.NewRequest("POST", "/decks", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+
+	var resp model.Deck
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "MyDeck", resp.DeckName)
+	assert.True(t, resp.DeckID > 0)
+}
+
+func TestDeckHandler_CreateDeck_MissingBody(t *testing.T) {
+	r := setupDeckRouter()
+
+	req := httptest.NewRequest("POST", "/decks", nil)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestDeckHandler_GetDeck_InvalidID(t *testing.T) {
+	r := setupDeckRouter()
+
+	req := httptest.NewRequest("GET", "/decks/abc", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestDeckHandler_DeleteDeck_InvalidID(t *testing.T) {
+	r := setupDeckRouter()
+
+	req := httptest.NewRequest("DELETE", "/decks/abc", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// ---------------------------------------------------------------------------
+// NewsHandler tests
+// ---------------------------------------------------------------------------
+
+type mockNewsRepo struct {
+	articles []*model.NewsArticle
+}
+
+func (m *mockNewsRepo) List(_ context.Context, limit, offset int) ([]*model.NewsArticle, error) {
+	if offset >= len(m.articles) {
+		return nil, nil
+	}
+	end := offset + limit
+	if end > len(m.articles) {
+		end = len(m.articles)
+	}
+	return m.articles[offset:end], nil
+}
+
+func TestNewsHandler_GetCloudNews_Empty(t *testing.T) {
+	repo := &mockNewsRepo{}
+	handler := NewNewsHandler(repo)
+
+	r := gin.New()
+	r.GET("/news", handler.GetCloudNews)
+
+	req := httptest.NewRequest("GET", "/news", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.JSONEq(t, `[]`, w.Body.String())
+}
+
+func TestNewsHandler_GetCloudNews_WithArticles(t *testing.T) {
+	now := time.Now()
+	repo := &mockNewsRepo{
+		articles: []*model.NewsArticle{
+			{
+				ArticleID: "a1",
+				Source:    "test",
+				Title:     "First Article",
+				Tags:      []string{"update"},
+				FetchedAt: now,
+			},
+			{
+				ArticleID: "a2",
+				Source:    "test",
+				Title:     "Second Article",
+				Tags:      []string{"event"},
+				FetchedAt: now,
+			},
+		},
+	}
+	handler := NewNewsHandler(repo)
+
+	r := gin.New()
+	r.GET("/news", handler.GetCloudNews)
+
+	req := httptest.NewRequest("GET", "/news", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var resp []model.NewsArticle
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Len(t, resp, 2)
+	assert.Equal(t, "First Article", resp[0].Title)
+	assert.Equal(t, "Second Article", resp[1].Title)
+}
+
+// ---------------------------------------------------------------------------
+// GameLogHandler tests
+// ---------------------------------------------------------------------------
+
+type mockBattleClient struct {
+	service.BattleClient // embed to satisfy interface
+	gameLogs     map[string]json.RawMessage
+	gameLogTexts map[string][]byte
+}
+
+func (m *mockBattleClient) GetGameLog(_ context.Context, gameID string) (json.RawMessage, error) {
+	if v, ok := m.gameLogs[gameID]; ok {
+		return v, nil
+	}
+	return nil, nil
+}
+
+func (m *mockBattleClient) GetGameLogText(_ context.Context, gameID string) ([]byte, error) {
+	if v, ok := m.gameLogTexts[gameID]; ok {
+		return v, nil
+	}
+	return nil, nil
+}
+
+func setupGameLogRouter(bc service.BattleClient) *gin.Engine {
+	handler := NewGameLogHandler(bc)
+
+	r := gin.New()
+	r.GET("/games/:gameId/log", handler.GetGameLog)
+	r.GET("/games/:gameId/log/text", handler.GetGameLogText)
+	return r
+}
+
+func TestGameLogHandler_GetGameLog_NotFound(t *testing.T) {
+	bc := &mockBattleClient{
+		gameLogs:     map[string]json.RawMessage{},
+		gameLogTexts: map[string][]byte{},
+	}
+	r := setupGameLogRouter(bc)
+
+	req := httptest.NewRequest("GET", "/games/nonexistent/log", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestGameLogHandler_GetGameLog_Success(t *testing.T) {
+	logData := json.RawMessage(`{"turns":[{"action":"draw"}]}`)
+	bc := &mockBattleClient{
+		gameLogs:     map[string]json.RawMessage{"game-123": logData},
+		gameLogTexts: map[string][]byte{},
+	}
+	r := setupGameLogRouter(bc)
+
+	req := httptest.NewRequest("GET", "/games/game-123/log", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.JSONEq(t, `{"turns":[{"action":"draw"}]}`, w.Body.String())
+}
+
+func TestGameLogHandler_GetGameLogText_NotFound(t *testing.T) {
+	bc := &mockBattleClient{
+		gameLogs:     map[string]json.RawMessage{},
+		gameLogTexts: map[string][]byte{},
+	}
+	r := setupGameLogRouter(bc)
+
+	req := httptest.NewRequest("GET", "/games/nonexistent/log/text", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// ---------------------------------------------------------------------------
+// ShopHandler tests
+// ---------------------------------------------------------------------------
+
+type mockReceiptVerifier struct{}
+
+func (m *mockReceiptVerifier) VerifyPurchase(_ context.Context, _ string) (*platform.VerifyResult, error) {
+	return &platform.VerifyResult{IsValid: true}, nil
+}
+
+func (m *mockReceiptVerifier) VerifySubscription(_ context.Context, _ string) (*platform.SubscriptionInfo, error) {
+	return &platform.SubscriptionInfo{IsValid: true, ExpiresAt: time.Now().Add(30 * 24 * time.Hour)}, nil
+}
+
+func setupShopRouter() *gin.Engine {
+	shopRepo := repository.NewMockShopRepository()
+	playerRepo := repository.NewMockPlayerRepository()
+	cardCache := cache.NewCardCache()
+	verifier := &mockReceiptVerifier{}
+	shopService := service.NewShopService(shopRepo, playerRepo, cardCache, verifier, verifier)
+	handler := NewShopHandler(shopService)
+
+	r := gin.New()
+	r.Use(setPlayerID("p1"))
+	r.PUT("/shop/faction", handler.SelectFaction)
+	r.GET("/shop/products", handler.GetProducts)
+	r.POST("/shop/purchase", handler.Purchase)
+	r.POST("/shop/subscribe", handler.Subscribe)
+	return r
+}
+
+func TestShopHandler_SelectFaction_MissingBody(t *testing.T) {
+	r := setupShopRouter()
+
+	req := httptest.NewRequest("PUT", "/shop/faction", nil)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestShopHandler_GetProducts_Success(t *testing.T) {
+	r := setupShopRouter()
+
+	req := httptest.NewRequest("GET", "/shop/products", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Contains(t, resp, "products")
+}
+
+func TestShopHandler_Purchase_MissingBody(t *testing.T) {
+	r := setupShopRouter()
+
+	req := httptest.NewRequest("POST", "/shop/purchase", nil)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestShopHandler_Subscribe_MissingBody(t *testing.T) {
+	r := setupShopRouter()
+
+	req := httptest.NewRequest("POST", "/shop/subscribe", nil)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// ---------------------------------------------------------------------------
+// WebhookHandler tests
+// ---------------------------------------------------------------------------
+
+func setupWebhookRouter() *gin.Engine {
+	shopRepo := repository.NewMockShopRepository()
+	playerRepo := repository.NewMockPlayerRepository()
+	subService := service.NewSubscriptionService(shopRepo, playerRepo)
+	handler := NewWebhookHandler(subService)
+
+	r := gin.New()
+	r.POST("/webhooks/apple", handler.HandleAppleWebhook)
+	r.POST("/webhooks/google", handler.HandleGoogleWebhook)
+	return r
+}
+
+func TestWebhookHandler_HandleAppleWebhook_MissingBody(t *testing.T) {
+	r := setupWebhookRouter()
+
+	req := httptest.NewRequest("POST", "/webhooks/apple", nil)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestWebhookHandler_HandleGoogleWebhook_MissingBody(t *testing.T) {
+	r := setupWebhookRouter()
+
+	req := httptest.NewRequest("POST", "/webhooks/google", nil)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// ---------------------------------------------------------------------------
+// CardHandler tests
+// ---------------------------------------------------------------------------
+
+func setupCardRouter() *gin.Engine {
+	cardRepo := repository.NewMockCardRepository(map[int64]*model.CardDefinition{})
+	deckRepo := repository.NewMockDeckRepository()
+	cardService := service.NewCardService(cardRepo, deckRepo)
+	handler := NewCardHandler(cardService)
+
+	r := gin.New()
+	r.Use(setPlayerID("p1"))
+	r.GET("/cards", handler.GetAllCards)
+	return r
+}
+
+func TestCardHandler_GetAllCards_Empty(t *testing.T) {
+	r := setupCardRouter()
+
+	req := httptest.NewRequest("GET", "/cards", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var resp []*service.CardWithOwnership
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Empty(t, resp)
+}
+
+// ---------------------------------------------------------------------------
+// PlayerCardHandler tests
+// ---------------------------------------------------------------------------
+
+func setupPlayerCardRouter() *gin.Engine {
+	deckRepo := repository.NewMockDeckRepository()
+	cardCache := cache.NewCardCache()
+	deckService := service.NewDeckService(deckRepo, cardCache)
+	handler := NewPlayerCardHandler(deckService)
+
+	r := gin.New()
+	r.Use(setPlayerID("p1"))
+	r.GET("/player/cards", handler.GetPlayerCards)
+	return r
+}
+
+func TestPlayerCardHandler_GetPlayerCards(t *testing.T) {
+	r := setupPlayerCardRouter()
+
+	req := httptest.NewRequest("GET", "/player/cards", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 }

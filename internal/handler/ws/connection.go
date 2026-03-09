@@ -17,6 +17,10 @@ const (
 	writeTimeout   = 10 * time.Second
 	maxMsgSize     = 4096
 	sendBufferSize = 64
+
+	// WebSocket接続ごとの読み書きバッファサイズ（gorilla/websocket Upgrader用）。
+	wsReadBufferSize  = 1024
+	wsWriteBufferSize = 1024
 )
 
 type Connection struct {

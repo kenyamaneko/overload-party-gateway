@@ -31,8 +31,8 @@ func NewHandler(manager *Manager, authClient *auth.Client, playerRepo repository
 		authClient: authClient,
 		playerRepo: playerRepo,
 		upgrader: websocket.Upgrader{
-			ReadBufferSize:  1024,
-			WriteBufferSize: 1024,
+			ReadBufferSize:  wsReadBufferSize,
+			WriteBufferSize: wsWriteBufferSize,
 			CheckOrigin: func(r *http.Request) bool {
 				if len(origins) == 0 {
 					return true // dev/local: no restriction

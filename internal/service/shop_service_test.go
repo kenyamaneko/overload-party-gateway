@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -13,6 +12,8 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 	"github.com/kenyamaneko/overload-party-gateway/internal/platform"
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // ---------------------------------------------------------------------------
@@ -70,53 +71,40 @@ func TestSelectFaction_Success(t *testing.T) {
 	createTestPlayer(env, "p1")
 
 	count, err := env.svc.SelectFaction(context.Background(), "p1", "sd")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, err)
 
 	// SD active cards: 1(3) + 2(3) + 3(1) + 4(2) = 4 entries, 9 copies
 	// Neutral cards: 100(3) + 101(1) = 2 entries, 4 copies
 	// Total entries = 6
-	if count != 6 {
-		t.Errorf("expected 6 card entries, got %d", count)
-	}
+	assert.Equal(t, 6, count)
 
 	// Verify faction was set on player
 	p, _ := env.playerRepo.FindByID(context.Background(), "p1")
-	if p.SelectedFaction == nil || *p.SelectedFaction != "SD" {
-		t.Errorf("expected SelectedFaction=SD, got %v", p.SelectedFaction)
-	}
+	require.NotNil(t, p.SelectedFaction)
+	assert.Equal(t, "SD", *p.SelectedFaction)
 
 	// Verify cards were inserted
 	cards := env.shopRepo.GetPlayerCardsForTest("p1")
-	if len(cards) != 6 {
-		t.Errorf("expected 6 card entries in shop repo, got %d", len(cards))
-	}
+	assert.Len(t, cards, 6)
 }
 
-func TestSelectFaction_InvalidFaction(t *testing.T) {
-	env := newTestShopEnv()
-	createTestPlayer(env, "p1")
-
-	_, err := env.svc.SelectFaction(context.Background(), "p1", "InvalidFaction")
-	if err == nil {
-		t.Fatal("expected error for invalid faction")
+func TestSelectFaction_InvalidFactions(t *testing.T) {
+	tests := []struct {
+		name    string
+		faction string
+	}{
+		{"InvalidFaction", "InvalidFaction"},
+		{"NeutralIsInvalid", "neutral"},
 	}
-	if !errors.Is(err, ErrInvalidFaction) {
-		t.Errorf("expected ErrInvalidFaction, got: %v", err)
-	}
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env := newTestShopEnv()
+			createTestPlayer(env, "p1")
 
-func TestSelectFaction_NeutralIsInvalid(t *testing.T) {
-	env := newTestShopEnv()
-	createTestPlayer(env, "p1")
-
-	_, err := env.svc.SelectFaction(context.Background(), "p1", "neutral")
-	if err == nil {
-		t.Fatal("expected error for neutral faction selection")
-	}
-	if !errors.Is(err, ErrInvalidFaction) {
-		t.Errorf("expected ErrInvalidFaction, got: %v", err)
+			_, err := env.svc.SelectFaction(context.Background(), "p1", tt.faction)
+			require.Error(t, err)
+			assert.ErrorIs(t, err, ErrInvalidFaction)
+		})
 	}
 }
 
@@ -126,18 +114,12 @@ func TestSelectFaction_AlreadySelected(t *testing.T) {
 
 	// First selection succeeds
 	_, err := env.svc.SelectFaction(context.Background(), "p1", "sd")
-	if err != nil {
-		t.Fatalf("first selection failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	// Second selection fails
 	_, err = env.svc.SelectFaction(context.Background(), "p1", "tenki")
-	if err == nil {
-		t.Fatal("expected error for already selected faction")
-	}
-	if !errors.Is(err, ErrFactionAlreadySelected) {
-		t.Errorf("expected ErrFactionAlreadySelected, got: %v", err)
-	}
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrFactionAlreadySelected)
 }
 
 func TestSelectFaction_CaseInsensitive(t *testing.T) {
@@ -145,14 +127,11 @@ func TestSelectFaction_CaseInsensitive(t *testing.T) {
 	createTestPlayer(env, "p1")
 
 	_, err := env.svc.SelectFaction(context.Background(), "p1", "SD")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, err)
 
 	p, _ := env.playerRepo.FindByID(context.Background(), "p1")
-	if p.SelectedFaction == nil || *p.SelectedFaction != "SD" {
-		t.Errorf("expected SelectedFaction=SD, got %v", p.SelectedFaction)
-	}
+	require.NotNil(t, p.SelectedFaction)
+	assert.Equal(t, "SD", *p.SelectedFaction)
 }
 
 // ---------------------------------------------------------------------------
@@ -165,52 +144,36 @@ func TestBuildFactionCards_Copies(t *testing.T) {
 	cards := env.svc.buildFactionCards("p1", "SD")
 
 	// Expected: card 1, 2, 3, 4 (card 5 inactive → excluded)
-	if len(cards) != 4 {
-		t.Fatalf("expected 4 SD card entries, got %d", len(cards))
-	}
+	require.Len(t, cards, 4)
 
 	counts := make(map[int64]int)
 	for _, c := range cards {
 		counts[c.CardNo] = c.Count
 	}
-	if counts[1] != 3 {
-		t.Errorf("card 1 (unlimited): expected count=3, got %d", counts[1])
-	}
-	if counts[3] != 3 {
-		t.Errorf("card 3 (limited): expected count=3, got %d", counts[3])
-	}
-	if counts[4] != 3 {
-		t.Errorf("card 4 (semi_limited): expected count=3, got %d", counts[4])
-	}
-	if counts[5] != 0 {
-		t.Errorf("card 5 (inactive): expected count=0, got %d", counts[5])
-	}
+	assert.Equal(t, 3, counts[1], "card 1 (unlimited)")
+	assert.Equal(t, 3, counts[3], "card 3 (limited)")
+	assert.Equal(t, 3, counts[4], "card 4 (semi_limited)")
+	assert.Equal(t, 0, counts[5], "card 5 (inactive)")
 }
 
 func TestBuildFactionCards_Neutral(t *testing.T) {
 	env := newTestShopEnv()
 
 	cards := env.svc.buildFactionCards("p1", "Neutral")
-	if len(cards) != 2 {
-		t.Fatalf("expected 2 Neutral card entries, got %d", len(cards))
-	}
+	require.Len(t, cards, 2)
 
 	total := 0
 	for _, c := range cards {
 		total += c.Count
 	}
-	if total != 6 {
-		t.Errorf("expected 6 total Neutral copies, got %d", total)
-	}
+	assert.Equal(t, 6, total)
 }
 
 func TestBuildFactionCards_UnknownFaction(t *testing.T) {
 	env := newTestShopEnv()
 
 	cards := env.svc.buildFactionCards("p1", "Unknown")
-	if len(cards) != 0 {
-		t.Errorf("expected 0 cards for unknown faction, got %d", len(cards))
-	}
+	assert.Len(t, cards, 0)
 }
 
 // ---------------------------------------------------------------------------
@@ -236,16 +199,12 @@ func TestPurchase_FactionSet_Success(t *testing.T) {
 	})
 
 	err := env.svc.Purchase(context.Background(), "p1", "faction_tenki", "ios", "receipt-token-1")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, err)
 
 	cards := env.shopRepo.GetPlayerCardsForTest("p1")
-	if len(cards) != 1 {
-		t.Errorf("expected 1 card entry, got %d", len(cards))
-	}
-	if len(cards) > 0 && cards[0].Count != 3 {
-		t.Errorf("expected count=3, got %d", cards[0].Count)
+	assert.Len(t, cards, 1)
+	if len(cards) > 0 {
+		assert.Equal(t, 3, cards[0].Count)
 	}
 }
 
@@ -272,14 +231,10 @@ func TestPurchase_Idempotent(t *testing.T) {
 
 	// Second purchase with same token — idempotent
 	err := env.svc.Purchase(ctx, "p1", "faction_tenki", "ios", "receipt-token-1")
-	if err != nil {
-		t.Fatalf("idempotent purchase failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	cards := env.shopRepo.GetPlayerCardsForTest("p1")
-	if len(cards) != 1 {
-		t.Errorf("expected 1 card entry (no duplication), got %d", len(cards))
-	}
+	assert.Len(t, cards, 1)
 }
 
 func TestPurchase_ReceiptFailed(t *testing.T) {
@@ -301,14 +256,10 @@ func TestPurchase_ReceiptFailed(t *testing.T) {
 	})
 
 	err := env.svc.Purchase(context.Background(), "p1", "faction_tenki", "ios", "bad-receipt")
-	if !errors.Is(err, ErrReceiptVerificationFailed) {
-		t.Errorf("expected ErrReceiptVerificationFailed, got: %v", err)
-	}
+	assert.ErrorIs(t, err, ErrReceiptVerificationFailed)
 
 	cards := env.shopRepo.GetPlayerCardsForTest("p1")
-	if len(cards) != 0 {
-		t.Errorf("expected 0 cards, got %d", len(cards))
-	}
+	assert.Len(t, cards, 0)
 }
 
 func TestPurchase_CosmeticItem(t *testing.T) {
@@ -330,9 +281,7 @@ func TestPurchase_CosmeticItem(t *testing.T) {
 	})
 
 	err := env.svc.Purchase(context.Background(), "p1", "playmat_01", "android", "cosmetic-receipt")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, err)
 }
 
 func TestPurchase_InactiveProduct(t *testing.T) {
@@ -348,9 +297,7 @@ func TestPurchase_InactiveProduct(t *testing.T) {
 	})
 
 	err := env.svc.Purchase(context.Background(), "p1", "old_product", "ios", "receipt-1")
-	if !errors.Is(err, ErrProductNotActive) {
-		t.Errorf("expected ErrProductNotActive, got: %v", err)
-	}
+	assert.ErrorIs(t, err, ErrProductNotActive)
 }
 
 func TestPurchase_UnsupportedPlatform(t *testing.T) {
@@ -366,9 +313,7 @@ func TestPurchase_UnsupportedPlatform(t *testing.T) {
 	})
 
 	err := env.svc.Purchase(context.Background(), "p1", "faction_sd", "windows", "receipt-1")
-	if !errors.Is(err, ErrUnsupportedPlatform) {
-		t.Errorf("expected ErrUnsupportedPlatform, got: %v", err)
-	}
+	assert.ErrorIs(t, err, ErrUnsupportedPlatform)
 }
 
 // ---------------------------------------------------------------------------
@@ -400,89 +345,94 @@ func TestSubscribe_Success(t *testing.T) {
 	})
 
 	result, err := env.svc.Subscribe(context.Background(), "p1", "premium_monthly", "ios", "sub-token-1")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil expiry time")
-	}
+	require.NoError(t, err)
+	require.NotNil(t, result)
 
 	// Verify player is now premium
 	p, _ := env.playerRepo.FindByID(context.Background(), "p1")
-	if !p.IsPremium {
-		t.Error("expected player to be premium")
-	}
-	if p.PremiumExpiresAt == nil {
-		t.Error("expected PremiumExpiresAt to be set")
-	}
+	assert.True(t, p.IsPremium)
+	assert.NotNil(t, p.PremiumExpiresAt)
 
 	// Verify subscription was created
 	sub, _ := env.shopRepo.GetActiveSubscription(context.Background(), "p1")
-	if sub == nil {
-		t.Fatal("expected active subscription to be created")
-	}
-	if sub.Status != model.SubscriptionStatusActive {
-		t.Errorf("expected status active, got %s", sub.Status)
-	}
+	require.NotNil(t, sub)
+	assert.Equal(t, model.SubscriptionStatusActive, sub.Status)
 }
 
-func TestSubscribe_NotSubscriptionProduct(t *testing.T) {
-	env := newTestShopEnv()
-
-	env.shopRepo.AddProduct(&model.Product{
-		ProductID: "faction_sd",
-		Name:      "SDカードセット",
-		Type:      model.ProductTypeFactionSet,
-		Price:     980,
-		Content:   json.RawMessage(`{"faction":"SD"}`),
-		IsActive:  true,
-	})
-
-	_, err := env.svc.Subscribe(context.Background(), "p1", "faction_sd", "ios", "sub-token-1")
-	if !errors.Is(err, ErrProductNotSubscription) {
-		t.Errorf("expected ErrProductNotSubscription, got: %v", err)
-	}
-}
-
-func TestSubscribe_VerificationFailed(t *testing.T) {
-	env := newTestShopEnv()
-
-	env.svc.appleVerifier = &platform.MockReceiptVerifier{
-		VerifySubscriptionFn: func(ctx context.Context, token string) (*platform.SubscriptionInfo, error) {
-			return &platform.SubscriptionInfo{IsValid: false}, nil
+func TestSubscribe_Errors(t *testing.T) {
+	tests := []struct {
+		name      string
+		setup     func(env *testShopEnv)
+		productID string
+		platform  string
+		token     string
+		wantErr   error
+	}{
+		{
+			name: "NotSubscriptionProduct",
+			setup: func(env *testShopEnv) {
+				env.shopRepo.AddProduct(&model.Product{
+					ProductID: "faction_sd",
+					Name:      "SDカードセット",
+					Type:      model.ProductTypeFactionSet,
+					Price:     980,
+					Content:   json.RawMessage(`{"faction":"SD"}`),
+					IsActive:  true,
+				})
+			},
+			productID: "faction_sd",
+			platform:  "ios",
+			token:     "sub-token-1",
+			wantErr:   ErrProductNotSubscription,
+		},
+		{
+			name: "VerificationFailed",
+			setup: func(env *testShopEnv) {
+				env.svc.appleVerifier = &platform.MockReceiptVerifier{
+					VerifySubscriptionFn: func(ctx context.Context, token string) (*platform.SubscriptionInfo, error) {
+						return &platform.SubscriptionInfo{IsValid: false}, nil
+					},
+				}
+				env.shopRepo.AddProduct(&model.Product{
+					ProductID: "premium_monthly",
+					Name:      "プレミアム月額",
+					Type:      model.ProductTypeSubscription,
+					Price:     480,
+					Content:   json.RawMessage(`{}`),
+					IsActive:  true,
+				})
+			},
+			productID: "premium_monthly",
+			platform:  "ios",
+			token:     "bad-sub-token",
+			wantErr:   ErrSubVerificationFailed,
+		},
+		{
+			name: "UnsupportedPlatform",
+			setup: func(env *testShopEnv) {
+				env.shopRepo.AddProduct(&model.Product{
+					ProductID: "premium_monthly",
+					Name:      "プレミアム月額",
+					Type:      model.ProductTypeSubscription,
+					Price:     480,
+					Content:   json.RawMessage(`{}`),
+					IsActive:  true,
+				})
+			},
+			productID: "premium_monthly",
+			platform:  "windows",
+			token:     "sub-token-1",
+			wantErr:   ErrUnsupportedPlatform,
 		},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env := newTestShopEnv()
+			tt.setup(env)
 
-	env.shopRepo.AddProduct(&model.Product{
-		ProductID: "premium_monthly",
-		Name:      "プレミアム月額",
-		Type:      model.ProductTypeSubscription,
-		Price:     480,
-		Content:   json.RawMessage(`{}`),
-		IsActive:  true,
-	})
-
-	_, err := env.svc.Subscribe(context.Background(), "p1", "premium_monthly", "ios", "bad-sub-token")
-	if !errors.Is(err, ErrSubVerificationFailed) {
-		t.Errorf("expected ErrSubVerificationFailed, got: %v", err)
-	}
-}
-
-func TestSubscribe_UnsupportedPlatform(t *testing.T) {
-	env := newTestShopEnv()
-
-	env.shopRepo.AddProduct(&model.Product{
-		ProductID: "premium_monthly",
-		Name:      "プレミアム月額",
-		Type:      model.ProductTypeSubscription,
-		Price:     480,
-		Content:   json.RawMessage(`{}`),
-		IsActive:  true,
-	})
-
-	_, err := env.svc.Subscribe(context.Background(), "p1", "premium_monthly", "windows", "sub-token-1")
-	if !errors.Is(err, ErrUnsupportedPlatform) {
-		t.Errorf("expected ErrUnsupportedPlatform, got: %v", err)
+			_, err := env.svc.Subscribe(context.Background(), "p1", tt.productID, tt.platform, tt.token)
+			assert.ErrorIs(t, err, tt.wantErr)
+		})
 	}
 }
 
@@ -511,12 +461,8 @@ func TestSubscribe_AndroidPlatform(t *testing.T) {
 	})
 
 	result, err := env.svc.Subscribe(context.Background(), "p1", "premium_monthly", "android", "sub-token-android")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil expiry time")
-	}
+	require.NoError(t, err)
+	require.NotNil(t, result)
 }
 
 // ---------------------------------------------------------------------------
@@ -553,13 +499,8 @@ func TestGetProducts_WithOwnership(t *testing.T) {
 	}, nil)
 
 	products, err := env.svc.GetProducts(context.Background(), "p1")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if len(products) != 2 {
-		t.Fatalf("expected 2 products, got %d", len(products))
-	}
+	require.NoError(t, err)
+	require.Len(t, products, 2)
 
 	owned := 0
 	for _, p := range products {
@@ -567,9 +508,7 @@ func TestGetProducts_WithOwnership(t *testing.T) {
 			owned++
 		}
 	}
-	if owned != 1 {
-		t.Errorf("expected 1 owned product, got %d", owned)
-	}
+	assert.Equal(t, 1, owned)
 }
 
 func TestGetProducts_SubscriptionOwnership(t *testing.T) {
@@ -599,16 +538,9 @@ func TestGetProducts_SubscriptionOwnership(t *testing.T) {
 	})
 
 	products, err := env.svc.GetProducts(context.Background(), "p1")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if len(products) != 1 {
-		t.Fatalf("expected 1 product, got %d", len(products))
-	}
-	if !products[0].IsOwned {
-		t.Error("expected subscription product to be owned")
-	}
+	require.NoError(t, err)
+	require.Len(t, products, 1)
+	assert.True(t, products[0].IsOwned)
 }
 
 
@@ -633,10 +565,11 @@ func TestNormalizeFaction(t *testing.T) {
 		{"", "", false},
 	}
 	for _, tt := range tests {
-		got, ok := normalizeFaction(tt.input)
-		if got != tt.expected || ok != tt.ok {
-			t.Errorf("normalizeFaction(%q) = (%q, %v), want (%q, %v)", tt.input, got, ok, tt.expected, tt.ok)
-		}
+		t.Run(tt.input, func(t *testing.T) {
+			got, ok := normalizeFaction(tt.input)
+			assert.Equal(t, tt.expected, got)
+			assert.Equal(t, tt.ok, ok)
+		})
 	}
 }
 
@@ -647,14 +580,23 @@ func TestNormalizeFaction(t *testing.T) {
 func TestGetVerifier(t *testing.T) {
 	env := newTestShopEnv()
 
-	if v := env.svc.getVerifier("ios"); v == nil {
-		t.Error("expected non-nil verifier for ios")
+	tests := []struct {
+		platform string
+		wantNil  bool
+	}{
+		{"ios", false},
+		{"android", false},
+		{"windows", true},
 	}
-	if v := env.svc.getVerifier("android"); v == nil {
-		t.Error("expected non-nil verifier for android")
-	}
-	if v := env.svc.getVerifier("windows"); v != nil {
-		t.Error("expected nil verifier for unsupported platform")
+	for _, tt := range tests {
+		t.Run(tt.platform, func(t *testing.T) {
+			v := env.svc.getVerifier(tt.platform)
+			if tt.wantNil {
+				assert.Nil(t, v)
+			} else {
+				assert.NotNil(t, v)
+			}
+		})
 	}
 }
 
@@ -667,9 +609,7 @@ func TestSelectFaction_PlayerNotFound(t *testing.T) {
 	// Do NOT create the player — "nonexistent" has no record in playerRepo.
 
 	_, err := env.svc.SelectFaction(context.Background(), "nonexistent", "sd")
-	if err == nil {
-		t.Fatal("expected error for nonexistent player, got nil")
-	}
+	require.Error(t, err)
 }
 
 func TestPurchase_VerifierReturnsError(t *testing.T) {
@@ -691,12 +631,8 @@ func TestPurchase_VerifierReturnsError(t *testing.T) {
 	})
 
 	err := env.svc.Purchase(context.Background(), "p1", "faction_sd", "ios", "receipt-err")
-	if err == nil {
-		t.Fatal("expected error when verifier returns error, got nil")
-	}
-	if !strings.Contains(err.Error(), "verify receipt:") {
-		t.Errorf("expected error to contain 'verify receipt:', got: %v", err)
-	}
+	require.Error(t, err)
+	assert.True(t, strings.Contains(err.Error(), "verify receipt:"))
 }
 
 func TestPurchase_SubscriptionTypeViaPurchase(t *testing.T) {
@@ -718,12 +654,8 @@ func TestPurchase_SubscriptionTypeViaPurchase(t *testing.T) {
 	})
 
 	err := env.svc.Purchase(context.Background(), "p1", "premium_monthly", "ios", "receipt-sub")
-	if err == nil {
-		t.Fatal("expected error for subscription product via Purchase, got nil")
-	}
-	if !strings.Contains(err.Error(), "unsupported product type") {
-		t.Errorf("expected error to contain 'unsupported product type', got: %v", err)
-	}
+	require.Error(t, err)
+	assert.True(t, strings.Contains(err.Error(), "unsupported product type"))
 }
 
 func TestSelectFaction_CardCopiesVerified(t *testing.T) {
@@ -731,9 +663,7 @@ func TestSelectFaction_CardCopiesVerified(t *testing.T) {
 	createTestPlayer(env, "p1")
 
 	_, err := env.svc.SelectFaction(context.Background(), "p1", "sd")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, err)
 
 	cards := env.shopRepo.GetPlayerCardsForTest("p1")
 
@@ -755,10 +685,8 @@ func TestSelectFaction_CardCopiesVerified(t *testing.T) {
 	}
 
 	for cardNo, wantCount := range expected {
-		if gotCount, ok := counts[cardNo]; !ok {
-			t.Errorf("card %d not found in player cards", cardNo)
-		} else if gotCount != wantCount {
-			t.Errorf("card %d: expected count=%d, got %d", cardNo, wantCount, gotCount)
-		}
+		gotCount, ok := counts[cardNo]
+		require.True(t, ok, "card %d not found in player cards", cardNo)
+		assert.Equal(t, wantCount, gotCount, "card %d", cardNo)
 	}
 }

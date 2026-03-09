@@ -4,6 +4,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // isResourceType returns true if the card type is a deployable resource.
@@ -31,16 +34,15 @@ func loadTestCache(t *testing.T) *CardCache {
 
 func TestLoadFromJSON_CardCount(t *testing.T) {
 	cc := loadTestCache(t)
-	if cc.Count() == 0 {
-		t.Fatal("no cards loaded")
-	}
+	require.NotZero(t, cc.Count(), "no cards loaded")
 }
 
 func TestResourceLabel_ResourceCardsHaveLabel(t *testing.T) {
 	cc := loadTestCache(t)
 	for cardNo, card := range cc.All() {
-		if isResourceType(card.CardType) && card.ResourceLabel == "" {
-			t.Errorf("resource card #%d (%s, type=%s) has empty resource_label",
+		if isResourceType(card.CardType) {
+			assert.NotEmptyf(t, card.ResourceLabel,
+				"resource card #%d (%s, type=%s) has empty resource_label",
 				cardNo, card.CardName, card.CardType)
 		}
 	}
@@ -49,8 +51,9 @@ func TestResourceLabel_ResourceCardsHaveLabel(t *testing.T) {
 func TestResourceLabel_SupportCardsHaveNoLabel(t *testing.T) {
 	cc := loadTestCache(t)
 	for cardNo, card := range cc.All() {
-		if !isResourceType(card.CardType) && card.ResourceLabel != "" {
-			t.Errorf("support card #%d (%s, type=%s) should have empty resource_label, got %q",
+		if !isResourceType(card.CardType) {
+			assert.Emptyf(t, card.ResourceLabel,
+				"support card #%d (%s, type=%s) should have empty resource_label, got %q",
 				cardNo, card.CardName, card.CardType, card.ResourceLabel)
 		}
 	}
@@ -73,19 +76,12 @@ func TestResourceLabel_SpecificCards(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		card := cc.Get(tt.cardNo)
-		if card == nil {
-			t.Errorf("card #%d not found", tt.cardNo)
-			continue
-		}
-		if card.CardName != tt.wantName {
-			t.Errorf("card #%d: card_name = %q, want %q", tt.cardNo, card.CardName, tt.wantName)
-		}
-		if card.ResourceLabel != tt.wantLabel {
-			t.Errorf("card #%d: resource_label = %q, want %q", tt.cardNo, card.ResourceLabel, tt.wantLabel)
-		}
-		if card.CardType != tt.wantCardType {
-			t.Errorf("card #%d: card_type = %q, want %q", tt.cardNo, card.CardType, tt.wantCardType)
-		}
+		t.Run(tt.wantName, func(t *testing.T) {
+			card := cc.Get(tt.cardNo)
+			require.NotNilf(t, card, "card #%d not found", tt.cardNo)
+			assert.Equal(t, tt.wantName, card.CardName, "card #%d: card_name", tt.cardNo)
+			assert.Equal(t, tt.wantLabel, card.ResourceLabel, "card #%d: resource_label", tt.cardNo)
+			assert.Equal(t, tt.wantCardType, card.CardType, "card #%d: card_type", tt.cardNo)
+		})
 	}
 }
