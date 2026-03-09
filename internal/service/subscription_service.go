@@ -12,6 +12,20 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
 )
 
+// Apple App Store Server Notification V2 types.
+const (
+	appleNotifDIDRenew              = "DID_RENEW"
+	appleNotifExpired               = "EXPIRED"
+	appleNotifGracePeriodExpired    = "GRACE_PERIOD_EXPIRED"
+	appleNotifRevoke                = "REVOKE"
+	appleNotifDIDChangeRenewStatus  = "DID_CHANGE_RENEWAL_STATUS"
+	appleSubtypeAutoRenewDisabled   = "AUTO_RENEW_DISABLED"
+)
+
+// Google サブスク更新時のデフォルト延長期間。
+// TODO: Google Play Developer API で実際の有効期限を取得して置き換える。
+const googleSubRenewalExtension = 30 * 24 * time.Hour
+
 type SubscriptionService struct {
 	shopRepo   repository.ShopRepository
 	playerRepo repository.PlayerRepo
@@ -58,7 +72,7 @@ func (s *SubscriptionService) HandleAppleNotification(ctx context.Context, signe
 	}
 
 	switch notif.NotificationType {
-	case "DID_RENEW":
+	case appleNotifDIDRenew:
 		expiresAt := time.UnixMilli(txnInfo.ExpiresDate)
 		sub.CurrentPeriodEnd = expiresAt
 		sub.Status = model.SubscriptionStatusActive
@@ -70,7 +84,7 @@ func (s *SubscriptionService) HandleAppleNotification(ctx context.Context, signe
 			return fmt.Errorf("update player premium: %w", err)
 		}
 
-	case "EXPIRED", "GRACE_PERIOD_EXPIRED":
+	case appleNotifExpired, appleNotifGracePeriodExpired:
 		sub.Status = model.SubscriptionStatusExpired
 		sub.UpdatedAt = time.Now()
 		if err := s.shopRepo.UpdateSubscription(ctx, sub); err != nil {
@@ -80,7 +94,7 @@ func (s *SubscriptionService) HandleAppleNotification(ctx context.Context, signe
 			return fmt.Errorf("update player premium: %w", err)
 		}
 
-	case "REVOKE":
+	case appleNotifRevoke:
 		sub.Status = model.SubscriptionStatusRevoked
 		sub.UpdatedAt = time.Now()
 		if err := s.shopRepo.UpdateSubscription(ctx, sub); err != nil {
@@ -90,8 +104,8 @@ func (s *SubscriptionService) HandleAppleNotification(ctx context.Context, signe
 			return fmt.Errorf("update player premium: %w", err)
 		}
 
-	case "DID_CHANGE_RENEWAL_STATUS":
-		if notif.Subtype == "AUTO_RENEW_DISABLED" {
+	case appleNotifDIDChangeRenewStatus:
+		if notif.Subtype == appleSubtypeAutoRenewDisabled {
 			sub.Status = model.SubscriptionStatusCancelled
 			sub.UpdatedAt = time.Now()
 			if err := s.shopRepo.UpdateSubscription(ctx, sub); err != nil {
@@ -160,7 +174,7 @@ func (s *SubscriptionService) HandleGoogleNotification(ctx context.Context, msg 
 		}
 		// For renewal, we should verify with Google API to get the new expiry.
 		// For now, extend by 30 days as a reasonable default.
-		newExpiry := time.Now().Add(30 * 24 * time.Hour)
+		newExpiry := time.Now().Add(googleSubRenewalExtension)
 		if err := s.playerRepo.UpdatePremium(ctx, sub.PlayerID, true, &newExpiry); err != nil {
 			return fmt.Errorf("update player premium: %w", err)
 		}

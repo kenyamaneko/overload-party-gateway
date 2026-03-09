@@ -15,6 +15,15 @@ import (
 
 const starterStampCount = int64(7)
 
+
+// ユーザー設定の初期値。登録時および設定未取得時のフォールバックに使用。
+const (
+	DefaultLanguage    = "ja"
+	DefaultBgmVolume   = int64(50)
+	DefaultSeVolume    = int64(50)
+	DefaultPushEnabled = true
+)
+
 type AuthService struct {
 	playerRepo       repository.PlayerRepo
 	shopRepo         repository.ShopRepository
@@ -61,10 +70,10 @@ func (s *AuthService) Register(ctx context.Context, firebaseUID, username string
 	// Create default user settings. Failure does not roll back player creation.
 	settings := &model.UserSettings{
 		PlayerID:    player.PlayerID,
-		Language:    "ja",
-		BgmVolume:   50,
-		SeVolume:    50,
-		PushEnabled: true,
+		Language:    DefaultLanguage,
+		BgmVolume:   DefaultBgmVolume,
+		SeVolume:    DefaultSeVolume,
+		PushEnabled: DefaultPushEnabled,
 		UpdatedAt:   time.Now(),
 	}
 	if err := s.userSettingsRepo.Upsert(ctx, settings); err != nil {
@@ -76,7 +85,7 @@ func (s *AuthService) Register(ctx context.Context, firebaseUID, username string
 	for i := int64(1); i <= starterStampCount; i++ {
 		items = append(items, &model.PlayerItem{
 			PlayerID:   player.PlayerID,
-			ItemType:   "stamp",
+			ItemType:   model.ItemTypeStamp,
 			ItemNo:     i,
 			AcquiredAt: now,
 		})

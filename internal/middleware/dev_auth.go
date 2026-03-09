@@ -28,12 +28,12 @@ func DevAuth() gin.HandlerFunc {
 			return
 		}
 
-		if !strings.HasPrefix(idToken, "dev-token-") {
+		if !strings.HasPrefix(idToken, DevTokenPrefix) {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid dev token format"})
 			return
 		}
 
-		uid := strings.TrimPrefix(idToken, "dev-token-")
+		uid := strings.TrimPrefix(idToken, DevTokenPrefix)
 		c.Set(string(firebaseUIDKey), uid)
 		c.Next()
 	}
@@ -67,12 +67,12 @@ func DevAuthWithPlayerResolve(playerRepo repository.PlayerRepo, registerFn DevRe
 			return
 		}
 
-		if !strings.HasPrefix(idToken, "dev-token-") {
+		if !strings.HasPrefix(idToken, DevTokenPrefix) {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid dev token format"})
 			return
 		}
 
-		uid := strings.TrimPrefix(idToken, "dev-token-")
+		uid := strings.TrimPrefix(idToken, DevTokenPrefix)
 		c.Set(string(firebaseUIDKey), uid)
 
 		playerID, created, err := resolveOrCreateDevPlayer(c, playerRepo, registerFn, uid)

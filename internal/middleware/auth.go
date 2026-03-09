@@ -17,6 +17,10 @@ type contextKey string
 const firebaseUIDKey contextKey = "firebase_uid"
 const playerIDKey contextKey = "player_id"
 
+// DevTokenPrefix is the prefix for dev/local mode authentication tokens.
+// Token format: "dev-token-{uid}".
+const DevTokenPrefix = "dev-token-"
+
 // FirebaseAuth returns a Gin middleware that verifies Firebase ID tokens.
 // Every REST request must include a valid Bearer token.
 func FirebaseAuth(authClient *auth.Client) gin.HandlerFunc {

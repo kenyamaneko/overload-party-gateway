@@ -6,6 +6,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// CORSプリフライトのキャッシュ有効期間（秒）。24時間。
+const corsMaxAge = "86400"
+
 // CORS returns a Gin middleware that sets CORS headers.
 // In production the allowed origins should be restricted.
 func CORS(allowedOrigins ...string) gin.HandlerFunc {
@@ -34,7 +37,7 @@ func CORS(allowedOrigins ...string) gin.HandlerFunc {
 		c.Header("Access-Control-Allow-Origin", origin)
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type")
-		c.Header("Access-Control-Max-Age", "86400")
+		c.Header("Access-Control-Max-Age", corsMaxAge)
 
 		if c.Request.Method == http.MethodOptions {
 			c.AbortWithStatus(http.StatusNoContent)

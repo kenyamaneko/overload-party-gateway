@@ -21,6 +21,11 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
+const (
+	serverShutdownTimeout    = 10 * time.Second
+	cardCacheRefreshInterval = 5 * time.Minute
+)
+
 func main() {
 	ctx := context.Background()
 	cfg := config.Load()
@@ -214,7 +219,7 @@ func main() {
 	<-srvCtx.Done()
 	log.Println("shutting down gracefully...")
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), serverShutdownTimeout)
 	defer cancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
@@ -226,7 +231,7 @@ func main() {
 
 // refreshCardCache periodically refreshes the card definition cache.
 func refreshCardCache(ctx context.Context, cc *cache.CardCache, repo repository.CardRepo) {
-	ticker := time.NewTicker(5 * time.Minute)
+	ticker := time.NewTicker(cardCacheRefreshInterval)
 	defer ticker.Stop()
 
 	for {

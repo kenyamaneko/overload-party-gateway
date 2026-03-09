@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 
+	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
 )
 
@@ -70,11 +71,11 @@ func (h *Handler) HandleUpgrade(c *gin.Context) {
 		playerID = player.PlayerID
 	} else {
 		// Local/dev: extract UID from dev token and resolve player
-		if !strings.HasPrefix(token, "dev-token-") {
+		if !strings.HasPrefix(token, middleware.DevTokenPrefix) {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid dev token format"})
 			return
 		}
-		uid := strings.TrimPrefix(token, "dev-token-")
+		uid := strings.TrimPrefix(token, middleware.DevTokenPrefix)
 		player, err := h.playerRepo.FindByFirebaseUID(c.Request.Context(), uid)
 		if err != nil || player == nil {
 			log.Printf("ws handler (dev): player not found for uid=%s: %v", uid, err)

@@ -20,6 +20,7 @@ import (
 const (
 	appleProductionURL = "https://api.storekit.itunes.apple.com"
 	appleSandboxURL    = "https://api.storekit-sandbox.itunes.apple.com"
+	appleAPITimeout    = 10 * time.Second
 )
 
 // AppleReceiptVerifier implements ReceiptVerifier using App Store Server API v2.
@@ -67,7 +68,7 @@ func NewAppleReceiptVerifier(keyID, issuerID, bundleID, privateKeyPath, environm
 		bundleID:   bundleID,
 		privateKey: ecKey,
 		baseURL:    baseURL,
-		httpClient: &http.Client{Timeout: 10 * time.Second},
+		httpClient: &http.Client{Timeout: appleAPITimeout},
 	}, nil
 }
 

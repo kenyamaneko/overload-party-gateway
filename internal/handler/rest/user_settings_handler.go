@@ -9,6 +9,7 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
+	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
 type UserSettingsHandler struct {
@@ -30,10 +31,10 @@ func (h *UserSettingsHandler) GetSettings(c *gin.Context) {
 	if s == nil {
 		s = &model.UserSettings{
 			PlayerID:    playerID,
-			Language:    "ja",
-			BgmVolume:   50,
-			SeVolume:    50,
-			PushEnabled: true,
+			Language:    service.DefaultLanguage,
+			BgmVolume:   service.DefaultBgmVolume,
+			SeVolume:    service.DefaultSeVolume,
+			PushEnabled: service.DefaultPushEnabled,
 			UpdatedAt:   time.Now(),
 		}
 	}

@@ -18,6 +18,14 @@ const (
 	PlatformAndroid = "android"
 )
 
+// Cosmetic item types. DB seed (stamps.sql 等) と一致する必要がある。
+const (
+	ItemTypeStamp   = "stamp"
+	ItemTypePlaymat = "playmat"
+	ItemTypeSleeve  = "sleeve"
+	ItemTypeIcon    = "icon"
+)
+
 // Subscription status constants
 const (
 	SubscriptionStatusActive    = "active"
