@@ -32,12 +32,12 @@ func newTestShopEnv() *testShopEnv {
 	playerRepo := repository.NewMockPlayerRepository()
 	cc := cache.NewCardCache()
 
-	// SD: unlimited=2, limited=1, semi_limited=1, inactive=1
-	cc.InjectForTest(1, &model.CardDefinition{CardNo: 1, CardName: "SD Compute", Faction: "SD", CardType: "Compute", Restriction: "unlimited", IsActive: true})
-	cc.InjectForTest(2, &model.CardDefinition{CardNo: 2, CardName: "SD RDB", Faction: "SD", CardType: "Database", Restriction: "unlimited", IsActive: true})
-	cc.InjectForTest(3, &model.CardDefinition{CardNo: 3, CardName: "SD Limited", Faction: "SD", CardType: "Strategy", Restriction: "limited", IsActive: true})
-	cc.InjectForTest(4, &model.CardDefinition{CardNo: 4, CardName: "SD SemiLimited", Faction: "SD", CardType: "Strategy", Restriction: "semi_limited", IsActive: true})
-	cc.InjectForTest(5, &model.CardDefinition{CardNo: 5, CardName: "SD Inactive", Faction: "SD", CardType: "Compute", Restriction: "unlimited", IsActive: false})
+	// SHE: unlimited=2, limited=1, semi_limited=1, inactive=1
+	cc.InjectForTest(1, &model.CardDefinition{CardNo: 1, CardName: "SHE Compute", Faction: "SHE", CardType: "Compute", Restriction: "unlimited", IsActive: true})
+	cc.InjectForTest(2, &model.CardDefinition{CardNo: 2, CardName: "SHE RDB", Faction: "SHE", CardType: "Database", Restriction: "unlimited", IsActive: true})
+	cc.InjectForTest(3, &model.CardDefinition{CardNo: 3, CardName: "SHE Limited", Faction: "SHE", CardType: "Strategy", Restriction: "limited", IsActive: true})
+	cc.InjectForTest(4, &model.CardDefinition{CardNo: 4, CardName: "SHE SemiLimited", Faction: "SHE", CardType: "Strategy", Restriction: "semi_limited", IsActive: true})
+	cc.InjectForTest(5, &model.CardDefinition{CardNo: 5, CardName: "SHE Inactive", Faction: "SHE", CardType: "Compute", Restriction: "unlimited", IsActive: false})
 
 	// Neutral: unlimited=1, limited=1
 	cc.InjectForTest(100, &model.CardDefinition{CardNo: 100, CardName: "Neutral Card 1", Faction: "Neutral", CardType: "Strategy", Restriction: "unlimited", IsActive: true})
@@ -73,19 +73,23 @@ func TestSelectFaction_Success(t *testing.T) {
 	count, err := env.svc.SelectFaction(context.Background(), "p1", "sd")
 	require.NoError(t, err)
 
-	// SD active cards: 1(3) + 2(3) + 3(1) + 4(2) = 4 entries, 9 copies
-	// Neutral cards: 100(3) + 101(1) = 2 entries, 4 copies
-	// Total entries = 6
-	assert.Equal(t, 6, count)
+	t.Run("returns correct card count", func(t *testing.T) {
+		// SHE active cards: 1(3) + 2(3) + 3(1) + 4(2) = 4 entries, 9 copies
+		// Neutral cards: 100(3) + 101(1) = 2 entries, 4 copies
+		// Total entries = 6
+		assert.Equal(t, 6, count)
+	})
 
-	// Verify faction was set on player
-	p, _ := env.playerRepo.FindByID(context.Background(), "p1")
-	require.NotNil(t, p.SelectedFaction)
-	assert.Equal(t, "SD", *p.SelectedFaction)
+	t.Run("sets faction on player", func(t *testing.T) {
+		p, _ := env.playerRepo.FindByID(context.Background(), "p1")
+		require.NotNil(t, p.SelectedFaction)
+		assert.Equal(t, "SHE", *p.SelectedFaction)
+	})
 
-	// Verify cards were inserted
-	cards := env.shopRepo.GetPlayerCardsForTest("p1")
-	assert.Len(t, cards, 6)
+	t.Run("inserts faction cards", func(t *testing.T) {
+		cards := env.shopRepo.GetPlayerCardsForTest("p1")
+		assert.Len(t, cards, 6)
+	})
 }
 
 func TestSelectFaction_InvalidFactions(t *testing.T) {
@@ -126,12 +130,12 @@ func TestSelectFaction_CaseInsensitive(t *testing.T) {
 	env := newTestShopEnv()
 	createTestPlayer(env, "p1")
 
-	_, err := env.svc.SelectFaction(context.Background(), "p1", "SD")
+	_, err := env.svc.SelectFaction(context.Background(), "p1", "SHE")
 	require.NoError(t, err)
 
 	p, _ := env.playerRepo.FindByID(context.Background(), "p1")
 	require.NotNil(t, p.SelectedFaction)
-	assert.Equal(t, "SD", *p.SelectedFaction)
+	assert.Equal(t, "SHE", *p.SelectedFaction)
 }
 
 // ---------------------------------------------------------------------------
@@ -141,7 +145,7 @@ func TestSelectFaction_CaseInsensitive(t *testing.T) {
 func TestBuildFactionCards_Copies(t *testing.T) {
 	env := newTestShopEnv()
 
-	cards := env.svc.buildFactionCards("p1", "SD")
+	cards := env.svc.buildFactionCards("p1", "SHE")
 
 	// Expected: card 1, 2, 3, 4 (card 5 inactive → excluded)
 	require.Len(t, cards, 4)
@@ -292,7 +296,7 @@ func TestPurchase_InactiveProduct(t *testing.T) {
 		Name:      "旧商品",
 		Type:      model.ProductTypeFactionSet,
 		Price:     100,
-		Content:   json.RawMessage(`{"faction":"SD"}`),
+		Content:   json.RawMessage(`{"faction":"SHE"}`),
 		IsActive:  false,
 	})
 
@@ -304,15 +308,15 @@ func TestPurchase_UnsupportedPlatform(t *testing.T) {
 	env := newTestShopEnv()
 
 	env.shopRepo.AddProduct(&model.Product{
-		ProductID: "faction_sd",
-		Name:      "SDカードセット",
+		ProductID: "faction_she",
+		Name:      "SHEカードセット",
 		Type:      model.ProductTypeFactionSet,
 		Price:     980,
-		Content:   json.RawMessage(`{"faction":"SD"}`),
+		Content:   json.RawMessage(`{"faction":"SHE"}`),
 		IsActive:  true,
 	})
 
-	err := env.svc.Purchase(context.Background(), "p1", "faction_sd", "windows", "receipt-1")
+	err := env.svc.Purchase(context.Background(), "p1", "faction_she", "windows", "receipt-1")
 	assert.ErrorIs(t, err, ErrUnsupportedPlatform)
 }
 
@@ -348,15 +352,17 @@ func TestSubscribe_Success(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
-	// Verify player is now premium
-	p, _ := env.playerRepo.FindByID(context.Background(), "p1")
-	assert.True(t, p.IsPremium)
-	assert.NotNil(t, p.PremiumExpiresAt)
+	t.Run("updates player to premium", func(t *testing.T) {
+		p, _ := env.playerRepo.FindByID(context.Background(), "p1")
+		assert.True(t, p.IsPremium)
+		assert.NotNil(t, p.PremiumExpiresAt)
+	})
 
-	// Verify subscription was created
-	sub, _ := env.shopRepo.GetActiveSubscription(context.Background(), "p1")
-	require.NotNil(t, sub)
-	assert.Equal(t, model.SubscriptionStatusActive, sub.Status)
+	t.Run("creates active subscription record", func(t *testing.T) {
+		sub, _ := env.shopRepo.GetActiveSubscription(context.Background(), "p1")
+		require.NotNil(t, sub)
+		assert.Equal(t, model.SubscriptionStatusActive, sub.Status)
+	})
 }
 
 func TestSubscribe_Errors(t *testing.T) {
@@ -372,15 +378,15 @@ func TestSubscribe_Errors(t *testing.T) {
 			name: "NotSubscriptionProduct",
 			setup: func(env *testShopEnv) {
 				env.shopRepo.AddProduct(&model.Product{
-					ProductID: "faction_sd",
-					Name:      "SDカードセット",
+					ProductID: "faction_she",
+					Name:      "SHEカードセット",
 					Type:      model.ProductTypeFactionSet,
 					Price:     980,
-					Content:   json.RawMessage(`{"faction":"SD"}`),
+					Content:   json.RawMessage(`{"faction":"SHE"}`),
 					IsActive:  true,
 				})
 			},
-			productID: "faction_sd",
+			productID: "faction_she",
 			platform:  "ios",
 			token:     "sub-token-1",
 			wantErr:   ErrProductNotSubscription,
@@ -473,11 +479,11 @@ func TestGetProducts_WithOwnership(t *testing.T) {
 	env := newTestShopEnv()
 
 	env.shopRepo.AddProduct(&model.Product{
-		ProductID: "faction_sd",
-		Name:      "SDカードセット",
+		ProductID: "faction_she",
+		Name:      "SHEカードセット",
 		Type:      model.ProductTypeFactionSet,
 		Price:     980,
-		Content:   json.RawMessage(`{"faction":"SD"}`),
+		Content:   json.RawMessage(`{"faction":"SHE"}`),
 		IsActive:  true,
 	})
 	env.shopRepo.AddProduct(&model.Product{
@@ -492,7 +498,7 @@ func TestGetProducts_WithOwnership(t *testing.T) {
 	// Simulate player owning SD faction via purchase
 	_ = env.shopRepo.CreatePurchaseWithCards(context.Background(), &model.OneTimePurchase{
 		PlayerID:      "p1",
-		ProductID:     "faction_sd",
+		ProductID:     "faction_she",
 		Platform:      "ios",
 		PurchaseToken: "test-token-sd",
 		PurchasedAt:   time.Now(),
@@ -554,8 +560,8 @@ func TestNormalizeFaction(t *testing.T) {
 		expected string
 		ok       bool
 	}{
-		{"sd", "SD", true},
-		{"SD", "SD", true},
+		{"she", "SHE", true},
+		{"SHE", "SHE", true},
 		{"tenki", "Tenki", true},
 		{"TENKI", "Tenki", true},
 		{"sugar", "Sugar", true},
@@ -622,15 +628,15 @@ func TestPurchase_VerifierReturnsError(t *testing.T) {
 	}
 
 	env.shopRepo.AddProduct(&model.Product{
-		ProductID: "faction_sd",
-		Name:      "SDカードセット",
+		ProductID: "faction_she",
+		Name:      "SHEカードセット",
 		Type:      model.ProductTypeFactionSet,
 		Price:     980,
-		Content:   json.RawMessage(`{"faction":"SD"}`),
+		Content:   json.RawMessage(`{"faction":"SHE"}`),
 		IsActive:  true,
 	})
 
-	err := env.svc.Purchase(context.Background(), "p1", "faction_sd", "ios", "receipt-err")
+	err := env.svc.Purchase(context.Background(), "p1", "faction_she", "ios", "receipt-err")
 	require.Error(t, err)
 	assert.True(t, strings.Contains(err.Error(), "verify receipt:"))
 }
@@ -674,7 +680,7 @@ func TestSelectFaction_CardCopiesVerified(t *testing.T) {
 	}
 
 	// All cards get 3 copies regardless of restriction.
-	// SD cards: 1, 2, 3, 4; Neutral cards: 100, 101
+	// SHE cards: 1, 2, 3, 4; Neutral cards: 100, 101
 	expected := map[int64]int{
 		1:   3,
 		2:   3,

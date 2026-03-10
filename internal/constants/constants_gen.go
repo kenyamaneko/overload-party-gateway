@@ -9,7 +9,7 @@ const (
 
 // Faction constants.
 const (
-	FactionSD = "SD"
+	FactionSHE = "SHE"
 	FactionTenki = "Tenki"
 	FactionSugar = "Sugar"
 	FactionTuners = "Tuners"

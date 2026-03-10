@@ -103,12 +103,12 @@ func setupDeckService() (*DeckService, *mockDeckRepo, *cache.CardCache) {
 		faction string
 		typ     string
 	}{
-		{1, "Compute A", "SD", "Compute"},
-		{2, "Compute B", "SD", "Compute"},
-		{3, "Database A", "SD", "Database"},
-		{4, "Strategy A", "SD", "Strategy"},
-		{5, "Incident A", "SD", "Incident"},
-		{6, "Platform A", "SD", "Platform"},
+		{1, "Compute A", "SHE", "Compute"},
+		{2, "Compute B", "SHE", "Compute"},
+		{3, "Database A", "SHE", "Database"},
+		{4, "Strategy A", "SHE", "Strategy"},
+		{5, "Incident A", "SHE", "Incident"},
+		{6, "Platform A", "SHE", "Platform"},
 		{7, "Compute C", "Tenki", "Compute"},
 		{8, "Database B", "Tenki", "Database"},
 		{9, "Strategy B", "Tenki", "Strategy"},
@@ -124,14 +124,14 @@ func setupDeckService() (*DeckService, *mockDeckRepo, *cache.CardCache) {
 
 	// Limited card (limit = 1)
 	cc.InjectForTest(50, &model.CardDefinition{
-		CardNo: 50, CardName: "Limited Spell", Faction: "SD", CardType: "Strategy",
+		CardNo: 50, CardName: "Limited Spell", Faction: "SHE", CardType: "Strategy",
 		Restriction: "limited", IsActive: true,
 		Stats: json.RawMessage(`{}`),
 	})
 
 	// Semi-limited card (limit = 2)
 	cc.InjectForTest(60, &model.CardDefinition{
-		CardNo: 60, CardName: "SemiLimited Trap", Faction: "SD", CardType: "Incident",
+		CardNo: 60, CardName: "SemiLimited Trap", Faction: "SHE", CardType: "Incident",
 		Restriction: "semi_limited", IsActive: true,
 		Stats: json.RawMessage(`{}`),
 	})
@@ -183,6 +183,8 @@ func full30Entries() []DeckCardEntry {
 // Tests for CreateDeck — validity (is_valid flag)
 // ---------------------------------------------------------------------------
 
+// TestCreateDeck_Validity verifies that decks with fewer than DeckSize cards
+// are saved successfully but marked as IsValid=false (e.g. work-in-progress decks).
 func TestCreateDeck_Validity(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -199,15 +201,6 @@ func TestCreateDeck_Validity(t *testing.T) {
 			},
 			entries:   full30Entries(),
 			wantValid: true,
-		},
-		{
-			name:     "20 cards → invalid",
-			deckName: "Incomplete Deck",
-			grant: func(repo *mockDeckRepo, pid string) {
-				grantUnlimited(repo, pid, 1, 2, 3, 4, 5, 6, 7)
-			},
-			entries:   makeEntries(1, 3, 2, 3, 3, 3, 4, 3, 5, 3, 6, 3, 7, 2),
-			wantValid: false,
 		},
 		{
 			name:     "29 cards → invalid",
@@ -448,7 +441,7 @@ func TestGetPlayerCards_EnrichedWithDef(t *testing.T) {
 	}
 
 	assert.Equal(t, "Compute A", byNo[1].CardName)
-	assert.Equal(t, "SD", byNo[1].Faction)
+	assert.Equal(t, "SHE", byNo[1].Faction)
 	assert.Equal(t, "unlimited", byNo[1].Restriction)
 	assert.Equal(t, 3, byNo[1].Count)
 

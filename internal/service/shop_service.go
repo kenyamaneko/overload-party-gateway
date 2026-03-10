@@ -15,14 +15,14 @@ import (
 )
 
 var validFactions = map[string]bool{
-	constants.FactionSD:     true,
+	constants.FactionSHE:    true,
 	constants.FactionTenki:  true,
 	constants.FactionSugar:  true,
 	constants.FactionTuners: true,
 }
 
 var normalizeFactionMap = map[string]string{
-	"sd":      constants.FactionSD,
+	"she":     constants.FactionSHE,
 	"tenki":   constants.FactionTenki,
 	"sugar":   constants.FactionSugar,
 	"tuners":  constants.FactionTuners,
