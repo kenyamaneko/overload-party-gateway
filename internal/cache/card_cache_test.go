@@ -70,7 +70,7 @@ func TestResourceLabel_SpecificCards(t *testing.T) {
 	}{
 		{1, "えくぼ", "Compute", "Compute"},             // SHE Compute
 		{23, "ソラ", "VM", "Compute"},                   // Tenki VM (resource_label differs from card_type)
-		{11, "メリー", "Cache", "CacheDB"},               // SHE CacheDB → label "Cache"
+		{11, "メリーモ", "Cache", "CacheDB"},               // SHE CacheDB → label "Cache"
 		{15, "SHE Firewall", "", "Platform"},              // Platform — no label
 		{104, "DDoS 攻撃", "", "Incident"},               // Incident — no label
 	}

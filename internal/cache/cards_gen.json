@@ -22,7 +22,7 @@
   },
   {
     "card_no": 3,
-    "card_name": "アリゲーター",
+    "card_name": "アリゲーテナ",
     "resource_label": "Container",
     "faction": "SHE",
     "card_type": "Container",
@@ -85,7 +85,7 @@
   },
   {
     "card_no": 6,
-    "card_name": "ラムネ",
+    "card_name": "むらた",
     "resource_label": "Serverless",
     "faction": "SHE",
     "card_type": "Serverless",
@@ -103,7 +103,7 @@
     },
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "**エリス Trigger:** 自分のフィールドに「SHE Storage - エリス」がいる場合、このカードのスループットを +200 する",
+    "effect_text": "**えりり Trigger:** 自分のフィールドに「SHE Storage - えりり」がいる場合、このカードのスループットを +200 する",
     "passive_effects": [
       {
         "type": "tp_if_card_type_on_field",
@@ -173,7 +173,7 @@
   },
   {
     "card_no": 9,
-    "card_name": "エリス",
+    "card_name": "えりり",
     "resource_label": "Storage",
     "faction": "SHE",
     "card_type": "ObjectStorage",
@@ -195,7 +195,7 @@
   },
   {
     "card_no": 10,
-    "card_name": "ダイナソー",
+    "card_name": "ダイノ",
     "resource_label": "NoSQL",
     "faction": "SHE",
     "card_type": "Database",
@@ -228,7 +228,7 @@
   },
   {
     "card_no": 11,
-    "card_name": "メリー",
+    "card_name": "メリーモ",
     "resource_label": "Cache",
     "faction": "SHE",
     "card_type": "CacheDB",
@@ -1455,7 +1455,7 @@
   },
   {
     "card_no": 70,
-    "card_name": "カンタータ",
+    "card_name": "コンタータ",
     "resource_label": "Compute",
     "faction": "Tuners",
     "card_type": "Compute",
@@ -1603,7 +1603,7 @@
   },
   {
     "card_no": 77,
-    "card_name": "音の魔術師",
+    "card_name": "音の魔術師〈マジシャン・オブ・ミュージック〉",
     "resource_label": "DB",
     "faction": "Tuners",
     "card_type": "Database",
@@ -2361,11 +2361,11 @@
     },
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "**キャッシュブースト:** 自分のフィールドの全ての SHE NoSQL - ダイナソーの Yield を +200 する。"
+    "effect_text": "**キャッシュブースト:** 自分のフィールドの全ての SHE NoSQL - ダイノの Yield を +200 する。"
   },
   {
     "card_no": 125,
-    "card_name": "メレンゲもりもりストア",
+    "card_name": "メレンゲの森",
     "resource_label": "Cache",
     "faction": "Sugar",
     "card_type": "CacheDB",
@@ -2556,7 +2556,7 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "自分の「調律部 Compute - カンタータ」または「調律部 Bare Metal - ベア・ベル太」にのみ装備できる。装備先の可用性を +800 する。装備先へのインシデントカードによるダメージを -100 する。"
+    "effect_text": "自分の「調律部 Compute - コンタータ」または「調律部 Bare Metal - ベア・ベル太」にのみ装備できる。装備先の可用性を +800 する。装備先へのインシデントカードによるダメージを -100 する。"
   },
   {
     "card_no": 135,
