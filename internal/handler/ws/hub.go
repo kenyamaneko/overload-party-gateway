@@ -28,17 +28,21 @@ type ConnectionHub struct {
 	getGameID func(playerID string) (string, bool)
 	// onDisconnectTimeout is called when a disconnect timer fires.
 	onDisconnectTimeout DisconnectCallback
+	// onSpectatorDisconnect cleans up spectator state when a connection closes.
+	onSpectatorDisconnect func(playerID string)
 }
 
 func NewConnectionHub(
 	getGameID func(playerID string) (string, bool),
 	onDisconnectTimeout DisconnectCallback,
+	onSpectatorDisconnect func(playerID string),
 ) *ConnectionHub {
 	return &ConnectionHub{
-		connections:         make(map[string]*Connection),
-		disconnects:         make(map[string]*disconnectInfo),
-		getGameID:           getGameID,
-		onDisconnectTimeout: onDisconnectTimeout,
+		connections:           make(map[string]*Connection),
+		disconnects:           make(map[string]*disconnectInfo),
+		getGameID:             getGameID,
+		onDisconnectTimeout:   onDisconnectTimeout,
+		onSpectatorDisconnect: onSpectatorDisconnect,
 	}
 }
 
@@ -66,6 +70,11 @@ func (h *ConnectionHub) Unregister(conn *Connection) {
 		return
 	}
 	delete(h.connections, conn.playerID)
+
+	// Clean up any spectator registrations for this connection.
+	if h.onSpectatorDisconnect != nil {
+		h.onSpectatorDisconnect(conn.playerID)
+	}
 
 	if gameID, inGame := h.getGameID(conn.playerID); inGame {
 		timer := time.AfterFunc(disconnectTimeout, func() {

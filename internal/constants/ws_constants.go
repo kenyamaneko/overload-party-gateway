@@ -19,6 +19,13 @@ const (
 	WSMsgTurnControls         = "turn_controls"
 	WSMsgNpcBattleCreated     = "npc_battle_created"
 
+	// Spectate: Server → Client
+	WSMsgSpectateJoined         = "spectate_joined"
+	WSMsgSpectateError          = "spectate_error"
+	WSMsgSpectateUpdate         = "spectate_update"
+	WSMsgSpectateEnded          = "spectate_ended"
+	WSMsgSpectateStampBroadcast = "spectate_stamp_broadcast"
+
 	// Client → Server
 	WSMsgGameEnter         = "game_enter"
 	WSMsgMatchmakingStart  = "matchmaking_start"
@@ -27,6 +34,11 @@ const (
 	WSMsgUseStamp          = "use_stamp"
 	WSMsgPing              = "ping"
 	WSMsgNpcBattleStart    = "npc_battle_start"
+
+	// Spectate: Client → Server
+	WSMsgSpectateJoin  = "spectate_join"
+	WSMsgSpectateLeave = "spectate_leave"
+	WSMsgSpectateStamp = "spectate_stamp"
 
 	// Win reasons
 	WinReasonDisconnect = "disconnect"

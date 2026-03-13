@@ -12,11 +12,12 @@ import (
 )
 
 // Manager routes incoming WebSocket messages and coordinates the Hub,
-// GameRelay, and matchmaking queue. It contains no game or connection
-// state itself.
+// GameRelay, SpectateRelay, and matchmaking queue. It contains no game or
+// connection state itself.
 type Manager struct {
-	Hub   *ConnectionHub
-	Relay *GameRelay
+	Hub      *ConnectionHub
+	Relay    *GameRelay
+	Spectate *SpectateRelay
 
 	battleClient  service.BattleClient
 	playerService *service.PlayerService
@@ -39,11 +40,18 @@ func NewManager(battleClient service.BattleClient, playerService *service.Player
 	hub := NewConnectionHub(
 		func(playerID string) (string, bool) { return m.Relay.GameIDForPlayer(playerID) },
 		func(playerID, gameID string) { m.Relay.HandleDisconnectTimeout(playerID, gameID) },
+		func(playerID string) { m.Spectate.RemoveSpectator(playerID) },
 	)
 	relay := NewGameRelay(hub, battleClient)
+	spectate := NewSpectateRelay(hub, battleClient)
 
 	m.Hub = hub
 	m.Relay = relay
+	m.Spectate = spectate
+
+	// Cross-wire: GameRelay notifies SpectateRelay on state updates and game over.
+	relay.spectateRelay = spectate
+
 	return m
 }
 
@@ -69,6 +77,7 @@ func (m *Manager) StartMatchmaking(ctx context.Context) {
 			log.Printf("matchmaking: create pvp game failed: %v", err)
 			return
 		}
+		m.Spectate.RegisterGame(game.GameID, game.Player1ID, game.Player2ID)
 		m.Relay.NotifyMatchFound(game.GameID, game.Player1ID, game.Player2ID)
 	})
 	matcher.Run(ctx)
@@ -93,10 +102,24 @@ func (m *Manager) HandleMessage(conn *Connection, msg *WSMessage) {
 		m.handleNpcBattleStart(ctx, conn, msg.Data)
 
 	case constants.WSMsgGameAction:
+		// Spectators must not be able to send game actions.
+		if m.Spectate.IsSpectator(conn.playerID) {
+			log.Printf("spectator %s tried to send game_action — ignored", conn.playerID)
+			return
+		}
 		m.Relay.HandleGameAction(ctx, conn, msg.Data)
 
 	case constants.WSMsgUseStamp:
 		m.Relay.HandleUseStamp(conn, msg.Data)
+
+	case constants.WSMsgSpectateJoin:
+		m.Spectate.HandleSpectateJoin(conn, msg.Data)
+
+	case constants.WSMsgSpectateLeave:
+		m.Spectate.HandleSpectateLeave(conn, msg.Data)
+
+	case constants.WSMsgSpectateStamp:
+		m.Spectate.HandleSpectateStamp(conn, msg.Data)
 
 	case constants.WSMsgPing:
 		conn.SendMessage(&WSMessage{Type: constants.WSMsgPong})
@@ -155,6 +178,7 @@ func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, da
 		m.sendError(conn, "npc_battle_error", err.Error(), true)
 		return
 	}
+	m.Spectate.RegisterGame(game.GameID, game.Player1ID, game.Player2ID)
 	conn.SendMessage(&WSMessage{
 		Type: constants.WSMsgNpcBattleCreated,
 		Data: mustMarshal(NPCBattleCreatedMessage{
@@ -190,6 +214,11 @@ func (m *Manager) resolveDeckCards(ctx context.Context, playerID string, deckID 
 		}
 	}
 	return cards, nil
+}
+
+// ActiveSpectateGames returns the list of currently active games available for spectating.
+func (m *Manager) ActiveSpectateGames() []ActiveGameInfo {
+	return m.Spectate.ActiveGames()
 }
 
 func (m *Manager) checkAndIncrementBattleLimit(ctx context.Context, playerID string) (string, error) {

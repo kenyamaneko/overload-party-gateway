@@ -128,21 +128,24 @@ func buildMinimalBattleState() battleGameState {
 }
 
 // --------------------------------------------------------------------------
-// 1. Full round-trip
+// 1. Full round-trip — split by concern
 // --------------------------------------------------------------------------
 
-func TestTransformGameState_FullRoundTrip(t *testing.T) {
-	b := buildMinimalBattleState()
-	raw, err := json.Marshal(b)
+// transformTestState is a shared helper that builds, transforms, and parses the battle state.
+func transformTestState(t *testing.T) map[string]interface{} {
+	t.Helper()
+	raw, err := json.Marshal(buildMinimalBattleState())
 	require.NoError(t, err)
-
 	out, err := transformGameState(raw)
 	require.NoError(t, err)
-
 	var m map[string]interface{}
 	require.NoError(t, json.Unmarshal(out, &m))
+	return m
+}
 
-	// Top-level field renames
+func TestTransformGameState_TopLevelKeys(t *testing.T) {
+	m := transformTestState(t)
+
 	assert.Equal(t, "game-abc-123", m["gameId"])
 	assert.Nil(t, m["gameID"], "old key gameID should not appear")
 	assert.Equal(t, float64(3), m["currentTurn"])
@@ -150,84 +153,93 @@ func TestTransformGameState_FullRoundTrip(t *testing.T) {
 	assert.Equal(t, float64(1), m["activePlayer"])
 	assert.Equal(t, true, m["isMyTurn"])
 
-	// myView → my, oppView → opponent
 	assert.NotNil(t, m["my"], "my field must exist")
 	assert.Nil(t, m["myView"], "myView should not appear")
 	assert.NotNil(t, m["opponent"], "opponent field must exist")
 	assert.Nil(t, m["oppView"], "oppView should not appear")
 
-	// Verify my.playerNum
 	my := m["my"].(map[string]interface{})
 	assert.Equal(t, float64(1), my["playerNum"])
 	assert.Equal(t, float64(5), my["budget"])
+}
 
-	// Verify hand cards drop artNo
-	hand := my["hand"].([]interface{})
-	require.Len(t, hand, 2)
-	h0 := hand[0].(map[string]interface{})
-	assert.Equal(t, "hand-1", h0["instanceId"])
-	assert.Equal(t, float64(400), h0["cardId"])
-	assert.Nil(t, h0["artNo"], "artNo should be dropped from hand cards")
-
-	// Verify field frontend resource instance
+func TestTransformGameState_MyField(t *testing.T) {
+	m := transformTestState(t)
+	my := m["my"].(map[string]interface{})
 	field := my["field"].(map[string]interface{})
-	frontend := field["frontend"].([]interface{})
-	require.Len(t, frontend, 1)
-	res := frontend[0].(map[string]interface{})
-	assert.Equal(t, "inst-f1", res["instanceId"])
-	assert.Nil(t, res["instanceID"], "old key instanceID should not appear")
-	assert.Equal(t, float64(100), res["cardId"])
-	assert.Nil(t, res["cardID"], "old key cardID should not appear")
-	assert.Nil(t, res["artNo"], "artNo should be dropped from resource instances")
-	// faceUp=true → faceDown=false
-	assert.Equal(t, false, res["faceDown"])
-	assert.Nil(t, res["faceUp"], "faceUp should not appear in client output")
 
-	// Verify attachment drops artNo
-	attachments := res["attachments"].([]interface{})
-	require.Len(t, attachments, 1)
-	att := attachments[0].(map[string]interface{})
-	assert.Equal(t, "att-1", att["instanceId"])
-	assert.Equal(t, float64(200), att["cardId"])
-	assert.Nil(t, att["artNo"], "artNo should be dropped from attachments")
+	t.Run("hand cards drop artNo", func(t *testing.T) {
+		hand := my["hand"].([]interface{})
+		require.Len(t, hand, 2)
+		h0 := hand[0].(map[string]interface{})
+		assert.Equal(t, "hand-1", h0["instanceId"])
+		assert.Equal(t, float64(400), h0["cardId"])
+		assert.Nil(t, h0["artNo"], "artNo should be dropped from hand cards")
+	})
 
-	// Verify temporary effect sourceID → sourceId
-	effects := res["temporaryEffects"].([]interface{})
-	require.Len(t, effects, 1)
-	eff := effects[0].(map[string]interface{})
-	assert.Equal(t, "src-1", eff["sourceId"])
-	assert.Nil(t, eff["sourceID"], "old key sourceID should not appear")
+	t.Run("resource instance", func(t *testing.T) {
+		frontend := field["frontend"].([]interface{})
+		require.Len(t, frontend, 1)
+		res := frontend[0].(map[string]interface{})
+		assert.Equal(t, "inst-f1", res["instanceId"])
+		assert.Nil(t, res["instanceID"], "old key instanceID should not appear")
+		assert.Equal(t, float64(100), res["cardId"])
+		assert.Nil(t, res["cardID"], "old key cardID should not appear")
+		assert.Nil(t, res["artNo"], "artNo should be dropped from resource instances")
+		assert.Equal(t, false, res["faceDown"])
+		assert.Nil(t, res["faceUp"], "faceUp should not appear in client output")
 
-	// Verify support instance
-	support := field["support"].([]interface{})
-	require.Len(t, support, 1)
-	sup := support[0].(map[string]interface{})
-	assert.Equal(t, "inst-s1", sup["instanceId"])
-	assert.Equal(t, float64(300), sup["cardId"])
-	// faceUp=false → faceDown=true
-	assert.Equal(t, true, sup["faceDown"])
-	assert.Nil(t, sup["artNo"], "artNo should be dropped from support instances")
+		attachments := res["attachments"].([]interface{})
+		require.Len(t, attachments, 1)
+		att := attachments[0].(map[string]interface{})
+		assert.Equal(t, "att-1", att["instanceId"])
+		assert.Equal(t, float64(200), att["cardId"])
+		assert.Nil(t, att["artNo"], "artNo should be dropped from attachments")
 
-	// Verify opponent view
+		effects := res["temporaryEffects"].([]interface{})
+		require.Len(t, effects, 1)
+		eff := effects[0].(map[string]interface{})
+		assert.Equal(t, "src-1", eff["sourceId"])
+		assert.Nil(t, eff["sourceID"], "old key sourceID should not appear")
+	})
+
+	t.Run("support instance", func(t *testing.T) {
+		support := field["support"].([]interface{})
+		require.Len(t, support, 1)
+		sup := support[0].(map[string]interface{})
+		assert.Equal(t, "inst-s1", sup["instanceId"])
+		assert.Equal(t, float64(300), sup["cardId"])
+		assert.Equal(t, true, sup["faceDown"])
+		assert.Nil(t, sup["artNo"], "artNo should be dropped from support instances")
+	})
+}
+
+func TestTransformGameState_OpponentView(t *testing.T) {
+	m := transformTestState(t)
 	opp := m["opponent"].(map[string]interface{})
+
 	assert.Equal(t, float64(2), opp["playerNum"])
 	assert.Equal(t, float64(4), opp["handCount"])
 
-	// Verify opponent hidden support
 	oppField := opp["field"].(map[string]interface{})
 	oppSupport := oppField["support"].([]interface{})
 	require.Len(t, oppSupport, 2)
+
 	os0 := oppSupport[0].(map[string]interface{})
 	assert.Equal(t, "opp-s1", os0["instanceId"])
 	assert.Equal(t, float64(350), os0["cardId"])
-	assert.Equal(t, false, os0["faceDown"]) // faceUp=true → faceDown=false
+	assert.Equal(t, false, os0["faceDown"])
 
 	os1 := oppSupport[1].(map[string]interface{})
 	assert.Equal(t, "opp-s2", os1["instanceId"])
-	assert.Equal(t, float64(0), os1["cardId"]) // nil cardID → 0
-	assert.Equal(t, true, os1["faceDown"])      // faceUp=false → faceDown=true
+	assert.Equal(t, float64(0), os1["cardId"])
+	assert.Equal(t, true, os1["faceDown"])
+}
 
-	// Verify available_actions in client output
+func TestTransformGameState_AvailableActions(t *testing.T) {
+	m := transformTestState(t)
+	my := m["my"].(map[string]interface{})
+
 	actions := my["available_actions"].([]interface{})
 	require.Len(t, actions, 1)
 	act := actions[0].(map[string]interface{})

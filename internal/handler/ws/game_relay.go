@@ -5,10 +5,17 @@ import (
 	"encoding/json"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/constants"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
+
+// turnTimerInfo holds the state for an active turn timer.
+type turnTimerInfo struct {
+	timer          *time.Timer
+	activePlayerID string
+}
 
 // GameRelay manages game membership and relays game actions/state between
 // players and the battle server.
@@ -16,9 +23,15 @@ type GameRelay struct {
 	hub          *ConnectionHub
 	battleClient service.BattleClient
 
+	// spectateRelay is wired in after construction to avoid circular dependencies.
+	spectateRelay *SpectateRelay
+
 	mu          sync.RWMutex
 	gameMembers map[string][]string // gameID → []playerID
 	playerGames map[string]string   // playerID → gameID
+
+	timerMu    sync.Mutex
+	turnTimers map[string]*turnTimerInfo // gameID → active turn timer
 }
 
 func NewGameRelay(hub *ConnectionHub, battleClient service.BattleClient) *GameRelay {
@@ -27,6 +40,7 @@ func NewGameRelay(hub *ConnectionHub, battleClient service.BattleClient) *GameRe
 		battleClient: battleClient,
 		gameMembers:  make(map[string][]string),
 		playerGames:  make(map[string]string),
+		turnTimers:   make(map[string]*turnTimerInfo),
 	}
 }
 
@@ -82,13 +96,27 @@ func (r *GameRelay) SendGameStateToPlayers(gameID string) {
 	players := r.gameMembers[gameID]
 	r.mu.RUnlock()
 
+	var activePlayerID string
+	var activeTimeBank int64
+	// spectateState holds the transformed state for the first player,
+	// used as the canonical observer view sent to spectators.
+	var spectateState json.RawMessage
+
 	ctx := context.Background()
-	for _, pid := range players {
+	for i, pid := range players {
 		state, err := r.battleClient.GetGameStateForPlayer(ctx, gameID, pid)
 		if err != nil {
 			log.Printf("get game state for player %s: %v", pid, err)
 			continue
 		}
+
+		// Extract turn timer info from the raw battle state
+		var b battleGameState
+		if json.Unmarshal(state, &b) == nil && b.IsMyTurn {
+			activePlayerID = pid
+			activeTimeBank = b.MyView.TimeBank
+		}
+
 		transformed, err := transformGameState(state)
 		if err != nil {
 			log.Printf("transform game state for player %s: %v", pid, err)
@@ -98,6 +126,21 @@ func (r *GameRelay) SendGameStateToPlayers(gameID string) {
 			Type: constants.WSMsgGameState,
 			Data: transformed,
 		})
+
+		// Capture the first player's state for spectators.
+		if i == 0 {
+			spectateState = transformed
+		}
+	}
+
+	// Refresh turn timer based on active player's TimeBank
+	if activePlayerID != "" {
+		r.resetTurnTimer(gameID, activePlayerID, activeTimeBank)
+	}
+
+	// Forward state updates to spectators.
+	if r.spectateRelay != nil && spectateState != nil {
+		r.spectateRelay.BroadcastStateUpdate(gameID, spectateState)
 	}
 }
 
@@ -135,6 +178,11 @@ func (r *GameRelay) broadcastGameOver(gameID string, winnerNum int64, reason str
 			WinReason: reason,
 		}),
 	})
+
+	// Notify and clean up spectators.
+	if r.spectateRelay != nil {
+		r.spectateRelay.UnregisterGame(gameID, winnerNum, reason)
+	}
 }
 
 // HandleGameEnter processes a game_enter message.
@@ -179,11 +227,82 @@ func (r *GameRelay) HandleGameAction(ctx context.Context, conn *Connection, data
 	r.SendTurnControlsToPlayers(action.GameID)
 
 	if result != nil && result.GameOver {
+		r.cancelTurnTimer(action.GameID)
 		r.broadcastGameOver(action.GameID, result.WinnerNum, result.WinReason)
 
 		r.mu.RLock()
 		players := make([]string, len(r.gameMembers[action.GameID]))
 		copy(players, r.gameMembers[action.GameID])
+		r.mu.RUnlock()
+		for _, pid := range players {
+			r.LeaveGame(pid)
+		}
+	}
+}
+
+// resetTurnTimer cancels any existing timer for the game and starts a new one.
+// When the timer fires, it sends a forfeit for the active player (timeout loss).
+func (r *GameRelay) resetTurnTimer(gameID, activePlayerID string, timeBankSeconds int64) {
+	r.timerMu.Lock()
+	defer r.timerMu.Unlock()
+
+	// Cancel existing timer
+	if info, ok := r.turnTimers[gameID]; ok {
+		info.timer.Stop()
+		delete(r.turnTimers, gameID)
+	}
+
+	if timeBankSeconds <= 0 {
+		return
+	}
+
+	// Add a small buffer (2s) to account for network latency.
+	// The battle server is the authoritative source — if the player sends an
+	// action just before the Gateway timer fires, the server will deduct the
+	// real elapsed time and may still allow the action.
+	duration := time.Duration(timeBankSeconds+2) * time.Second
+
+	timer := time.AfterFunc(duration, func() {
+		r.timerMu.Lock()
+		delete(r.turnTimers, gameID)
+		r.timerMu.Unlock()
+
+		log.Printf("turn timer expired for game %s, player %s", gameID, activePlayerID)
+		r.handleTurnTimeout(gameID, activePlayerID)
+	})
+
+	r.turnTimers[gameID] = &turnTimerInfo{
+		timer:          timer,
+		activePlayerID: activePlayerID,
+	}
+}
+
+// cancelTurnTimer stops and removes the turn timer for a game.
+func (r *GameRelay) cancelTurnTimer(gameID string) {
+	r.timerMu.Lock()
+	defer r.timerMu.Unlock()
+
+	if info, ok := r.turnTimers[gameID]; ok {
+		info.timer.Stop()
+		delete(r.turnTimers, gameID)
+	}
+}
+
+// handleTurnTimeout sends a forfeit action when the turn timer expires.
+func (r *GameRelay) handleTurnTimeout(gameID, playerID string) {
+	ctx := context.Background()
+	result, err := r.battleClient.ProcessAction(ctx, gameID, playerID, "forfeit", nil)
+	if err != nil {
+		log.Printf("turn timeout forfeit error (game=%s, player=%s): %v", gameID, playerID, err)
+		return
+	}
+	if result != nil && result.GameOver {
+		r.SendGameStateToPlayers(gameID)
+		r.broadcastGameOver(gameID, result.WinnerNum, result.WinReason)
+
+		r.mu.RLock()
+		players := make([]string, len(r.gameMembers[gameID]))
+		copy(players, r.gameMembers[gameID])
 		r.mu.RUnlock()
 		for _, pid := range players {
 			r.LeaveGame(pid)
@@ -209,6 +328,8 @@ func (r *GameRelay) HandleUseStamp(conn *Connection, data json.RawMessage) {
 
 // HandleDisconnectTimeout processes a forfeit after disconnect timeout.
 func (r *GameRelay) HandleDisconnectTimeout(playerID, gameID string) {
+	r.cancelTurnTimer(gameID)
+
 	ctx := context.Background()
 	result, err := r.battleClient.ProcessAction(ctx, gameID, playerID, "forfeit", nil)
 	if err != nil {

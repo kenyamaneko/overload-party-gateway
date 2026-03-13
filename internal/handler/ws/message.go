@@ -77,3 +77,44 @@ type NPCBattleCreatedMessage struct {
 	Player1ID string `json:"player1_id"`
 	Player2ID string `json:"player2_id"`
 }
+
+// --- Spectate: Client → Server ---
+
+type SpectateJoinMessage struct {
+	GameID string `json:"game_id"`
+}
+
+type SpectateLeaveMessage struct {
+	GameID string `json:"game_id"`
+}
+
+type SpectateStampMessage struct {
+	GameID  string `json:"game_id"`
+	StampNo int64  `json:"stamp_no"`
+}
+
+// --- Spectate: Server → Client ---
+
+type SpectateJoinedMessage struct {
+	GameID    string          `json:"game_id"`
+	Player1ID string          `json:"player1_id"`
+	Player2ID string          `json:"player2_id"`
+	State     json.RawMessage `json:"state"`
+}
+
+type SpectateErrorMessage struct {
+	Code    string `json:"error_code"`
+	Message string `json:"message"`
+}
+
+type SpectateEndedMessage struct {
+	GameID    string `json:"game_id"`
+	WinnerNum int64  `json:"winner_num"`
+	WinReason string `json:"win_reason"`
+}
+
+type SpectateStampBroadcastMessage struct {
+	GameID      string `json:"game_id"`
+	SpectatorID string `json:"spectator_id"`
+	StampNo     int64  `json:"stamp_no"`
+}
