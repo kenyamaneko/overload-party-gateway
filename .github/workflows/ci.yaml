@@ -13,7 +13,7 @@ permissions:
 env:
   REGION: asia-northeast1
   REGISTRY: asia-northeast1-docker.pkg.dev
-  PROJECT_ID: overload-party-shared
+  PROJECT_ID: keyandnotes-platform
   REPOSITORY: overload-party
   IMAGE_NAME: overload-party-gateway
 
