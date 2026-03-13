@@ -18,7 +18,8 @@
       "maintenance_cost": 150
     },
     "restriction": "unlimited",
-    "is_active": true
+    "is_active": true,
+    "effect_text": "—"
   },
   {
     "card_no": 3,
@@ -39,7 +40,8 @@
       "maintenance_cost": 50
     },
     "restriction": "unlimited",
-    "is_active": true
+    "is_active": true,
+    "effect_text": "—"
   },
   {
     "card_no": 4,
@@ -60,7 +62,8 @@
       "maintenance_cost": 100
     },
     "restriction": "unlimited",
-    "is_active": true
+    "is_active": true,
+    "effect_text": "—"
   },
   {
     "card_no": 5,
@@ -81,7 +84,8 @@
       "maintenance_cost": 200
     },
     "restriction": "unlimited",
-    "is_active": true
+    "is_active": true,
+    "effect_text": "—"
   },
   {
     "card_no": 6,
@@ -159,7 +163,7 @@
     },
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "**星の連鎖:** 自分のバックエンドのこのカード以外の SDのDB系リソース1体につき、このカードの Yield を +200 する",
+    "effect_text": "**星の連鎖:** 自分のバックエンドのこのカード以外の SHEのDB系リソース1体につき、このカードの Yield を +200 する",
     "passive_effects": [
       {
         "type": "dv_per_other_db",
@@ -191,7 +195,7 @@
     },
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "**Versioning:** 自分のフィールドの SDのDB系リソース が破壊された時に発動できる。そのカードを自分の手札に戻す。"
+    "effect_text": "**Versioning:** 自分のフィールドの SHEのDB系リソース が破壊された時に発動できる。そのカードを自分の手札に戻す。"
   },
   {
     "card_no": 10,
@@ -703,7 +707,7 @@
   },
   {
     "card_no": 33,
-    "card_name": "レイウ",
+    "card_name": "シュウウ",
     "resource_label": "Cache",
     "faction": "Tenki",
     "card_type": "CacheDB",
@@ -971,7 +975,7 @@
   },
   {
     "card_no": 47,
-    "card_name": "コンフェッティート",
+    "card_name": "コンピエッタ",
     "resource_label": "Compute",
     "faction": "Sugar",
     "card_type": "Compute",
@@ -1472,7 +1476,8 @@
       "maintenance_cost": 100
     },
     "restriction": "unlimited",
-    "is_active": true
+    "is_active": true,
+    "effect_text": "—"
   },
   {
     "card_no": 72,
@@ -1515,7 +1520,8 @@
       "maintenance_cost": 50
     },
     "restriction": "unlimited",
-    "is_active": true
+    "is_active": true,
+    "effect_text": "—"
   },
   {
     "card_no": 74,
@@ -1564,7 +1570,8 @@
       "maintenance_cost": 0
     },
     "restriction": "unlimited",
-    "is_active": true
+    "is_active": true,
+    "effect_text": "—"
   },
   {
     "card_no": 76,
@@ -1620,7 +1627,8 @@
       "maintenance_cost": 50
     },
     "restriction": "unlimited",
-    "is_active": true
+    "is_active": true,
+    "effect_text": "—"
   },
   {
     "card_no": 78,
@@ -1641,7 +1649,8 @@
       "maintenance_cost": 300
     },
     "restriction": "unlimited",
-    "is_active": true
+    "is_active": true,
+    "effect_text": "—"
   },
   {
     "card_no": 79,
@@ -1662,7 +1671,8 @@
       "maintenance_cost": 50
     },
     "restriction": "unlimited",
-    "is_active": true
+    "is_active": true,
+    "effect_text": "—"
   },
   {
     "card_no": 81,
@@ -1683,7 +1693,8 @@
       "maintenance_cost": 100
     },
     "restriction": "unlimited",
-    "is_active": true
+    "is_active": true,
+    "effect_text": "—"
   },
   {
     "card_no": 82,
@@ -2539,7 +2550,7 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "自分の「しゅがーらぼ Compute - コンフェッティート」にのみ装備できる。①装備先の可用性を +400 する。②自分のメインフェーズに発動できる。このカードを別の自分の「しゅがーらぼ Compute - コンフェッティート」に付け替える。この効果は1ターン中に1回のみ使用できる。"
+    "effect_text": "自分の「しゅがーらぼ Compute - コンピエッタ」にのみ装備できる。①装備先の可用性を +400 する。②自分のメインフェーズに発動できる。このカードを別の自分の「しゅがーらぼ Compute - コンピエッタ」に付け替える。この効果は1ターン中に1回のみ使用できる。"
   },
   {
     "card_no": 134,

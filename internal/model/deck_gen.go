@@ -9,25 +9,25 @@ import (
 )
 
 type PlayerCard struct {
-	PlayerID            string `json:"player_id"`
-	CardNo              int64  `json:"card_no"`
-	ArtNo int64  `json:"art_no"`
-	Count               int    `json:"count"`
+	PlayerID string `json:"player_id"`
+	CardNo   int64  `json:"card_no"`
+	ArtNo    int64  `json:"art_no"`
+	Count    int    `json:"count"`
 }
 
 // PlayerCardWithDef is a PlayerCard enriched with card definition fields for API responses.
 type PlayerCardWithDef struct {
-	CardNo              int64           `json:"card_no"`
-	ArtNo int64           `json:"art_no"`
-	Count               int             `json:"count"`
-	CardName            string          `json:"card_name"`
-	Faction             string          `json:"faction"`
-	CardType            string          `json:"card_type"`
-	Resizable           bool            `json:"resizable"`
-	Elastic             bool            `json:"elastic"`
-	Stats               json.RawMessage `json:"stats"`
-	EffectText          *string         `json:"effect_text,omitempty"`
-	Restriction         string          `json:"restriction"`
+	CardNo      int64           `json:"card_no"`
+	ArtNo       int64           `json:"art_no"`
+	Count       int             `json:"count"`
+	CardName    string          `json:"card_name"`
+	Faction     string          `json:"faction"`
+	CardType    string          `json:"card_type"`
+	Resizable   bool            `json:"resizable"`
+	Elastic     bool            `json:"elastic"`
+	Stats       json.RawMessage `json:"stats"`
+	EffectText  *string         `json:"effect_text,omitempty"`
+	Restriction string          `json:"restriction"`
 }
 
 type Deck struct {
@@ -43,9 +43,9 @@ type Deck struct {
 }
 
 type DeckCard struct {
-	PlayerID            string `json:"player_id"`
-	DeckID              int64  `json:"deck_id"`
-	CardNo              int64  `json:"card_no"`
-	ArtNo int64  `json:"art_no"`
-	Count               int    `json:"count"`
+	PlayerID string `json:"player_id"`
+	DeckID   int64  `json:"deck_id"`
+	CardNo   int64  `json:"card_no"`
+	ArtNo    int64  `json:"art_no"`
+	Count    int    `json:"count"`
 }

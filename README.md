@@ -72,6 +72,10 @@ make run-gateway
 | `APPLE_PRIVATE_KEY_PATH` | - | - | App Store Connect 秘密鍵パス |
 | `APPLE_ENVIRONMENT` | - | `Sandbox` | `Production` / `Sandbox` |
 | `GOOGLE_PACKAGE_NAME` | - | - | Google Play パッケージ名 |
+| `BATTLE_SERVER_URL` | - | `http://localhost:9002` | Battle Server への接続 URL |
+| `APP_MIN_VERSION` | - | `0.1.0` | 最低必要バージョン |
+| `APP_LATEST_VERSION` | - | `0.1.0` | 最新バージョン |
+| `APP_FORCE_UPDATE` | - | `false` | 強制アップデートフラグ |
 
 ## 開発コマンド
 
