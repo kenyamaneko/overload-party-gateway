@@ -9,7 +9,11 @@
 
 # Binary
 bin/
+/main
 /local
+
+# Coverage
+coverage*.out
 
 # Claude
 .claude/
