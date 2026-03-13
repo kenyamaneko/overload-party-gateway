@@ -15,6 +15,9 @@ bin/
 # Coverage
 coverage*.out
 
+# Symlinks
+/docs
+
 # Claude
 .claude/
 CLAUDE.md
