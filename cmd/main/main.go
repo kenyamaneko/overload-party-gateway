@@ -11,6 +11,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	gcsstorage "cloud.google.com/go/storage"
+
 	"github.com/kenyamaneko/overload-party-gateway/internal/cache"
 	"github.com/kenyamaneko/overload-party-gateway/internal/config"
 	"github.com/kenyamaneko/overload-party-gateway/internal/handler/rest"
@@ -59,6 +61,8 @@ func main() {
 	cardRepo := repository.NewPgCardRepository(pool)
 	deckRepo := repository.NewPgDeckRepository(pool)
 	shopRepo := repository.NewPgShopRepository(pool)
+	factionRepo := repository.NewPgFactionRepository(pool)
+	storyRepo := repository.NewPgStoryRepository(pool)
 	userSettingsRepo := repository.NewPgUserSettingsRepository(pool)
 	gameConfigRepo := repository.NewPgGameConfigRepository(pool)
 	newsRepo := repository.NewPgNewsRepository(pool)
@@ -91,12 +95,24 @@ func main() {
 		googleVerifier = gv
 	}
 
+	// GCS client for story scripts
+	var gcsClient *gcsstorage.Client
+	if cfg.StoryBucket != "" {
+		gc, err := gcsstorage.NewClient(ctx)
+		if err != nil {
+			log.Fatalf("failed to create gcs client: %v", err)
+		}
+		defer gc.Close()
+		gcsClient = gc
+	}
+
 	// Services
 	authService := service.NewAuthService(playerRepo, shopRepo, userSettingsRepo)
 	playerService := service.NewPlayerService(playerRepo, gameConfigRepo)
 	cardService := service.NewCardService(cardRepo, deckRepo)
 	deckService := service.NewDeckService(deckRepo, cardCache)
-	shopService := service.NewShopService(shopRepo, playerRepo, cardCache, appleVerifier, googleVerifier)
+	shopService := service.NewShopService(shopRepo, playerRepo, factionRepo, cardCache, appleVerifier, googleVerifier)
+	storyService := service.NewStoryService(storyRepo, factionRepo, playerRepo, gcsClient, cfg.StoryBucket)
 	subscriptionService := service.NewSubscriptionService(shopRepo, playerRepo)
 
 	// Battle client (HTTP → battle server)
@@ -106,11 +122,13 @@ func main() {
 	wsHandler := ws.NewHandler(wsManager, authClient, playerRepo, cfg.AllowedOrigins)
 	authHandler := rest.NewAuthHandler(authService)
 	playerHandler := rest.NewPlayerHandler(playerService)
+	spectateHandler := rest.NewSpectateHandler(wsManager)
 	cardHandler := rest.NewCardHandler(cardService)
 	deckHandler := rest.NewDeckHandler(deckService)
 	playerCardHandler := rest.NewPlayerCardHandler(deckService)
 	gameLogHandler := rest.NewGameLogHandler(battleClient)
 	shopHandler := rest.NewShopHandler(shopService)
+	storyHandler := rest.NewStoryHandler(storyService)
 	webhookHandler := rest.NewWebhookHandler(subscriptionService)
 	userSettingsHandler := rest.NewUserSettingsHandler(userSettingsRepo)
 	newsHandler := rest.NewNewsHandler(newsRepo)
@@ -132,22 +150,10 @@ func main() {
 		pub.GET("/health", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"status": "ok"})
 		})
-		pub.GET("/version", func(c *gin.Context) {
-			c.JSON(http.StatusOK, gin.H{
-				"minimumVersion": "0.0.0",
-				"latestVersion":  "0.0.0",
-				"forceUpdate":    false,
-			})
-		})
-		pub.GET("/announcements", func(c *gin.Context) {
-			c.JSON(http.StatusOK, []gin.H{})
-		})
-		pub.GET("/daily", func(c *gin.Context) {
-			c.JSON(http.StatusOK, gin.H{
-				"id":   "daily-tip-1",
-				"text": "FEリソースの可用性が0になると相手のDVが加算されます。サポートカードで守りを固めましょう！",
-			})
-		})
+		staticHandler := rest.NewStaticHandler(cfg, "data")
+		pub.GET("/version", staticHandler.GetVersion)
+		pub.GET("/announcements", staticHandler.GetAnnouncements)
+		pub.GET("/daily", staticHandler.GetDaily)
 		pub.GET("/cloud-news", newsHandler.GetCloudNews)
 	}
 
@@ -184,11 +190,19 @@ func main() {
 		api.GET("/games/:gameId/log", gameLogHandler.GetGameLog)
 		api.GET("/games/:gameId/log/text", gameLogHandler.GetGameLogText)
 
+		// Spectate
+		api.GET("/spectate/games", spectateHandler.GetActiveGames)
+
 		// Shop
 		api.POST("/player/select-faction", shopHandler.SelectFaction)
 		api.GET("/shop/products", shopHandler.GetProducts)
 		api.POST("/shop/purchase", shopHandler.Purchase)
 		api.POST("/shop/subscribe", shopHandler.Subscribe)
+
+		// Story scenarios
+		api.GET("/scenarios", storyHandler.ListEpisodes)
+		api.GET("/scenarios/:episodeId/script", storyHandler.GetScript)
+		api.POST("/scenarios/:episodeId/complete", storyHandler.CompleteEpisode)
 	}
 
 	// Webhooks (no Firebase auth -- authenticated by Apple/Google)

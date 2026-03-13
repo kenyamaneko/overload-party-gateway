@@ -1,0 +1,54 @@
+package model
+
+import "time"
+
+// ScenarioEpisode represents a story episode definition.
+type ScenarioEpisode struct {
+	EpisodeID        string   `json:"episode_id" db:"episode_id"`
+	Faction          *string  `json:"faction" db:"faction"`
+	EpisodeNumber    int64    `json:"episode_number" db:"episode_number"`
+	TitleJa          string   `json:"title_ja" db:"title_ja"`
+	TitleEn          string   `json:"title_en" db:"title_en"`
+	RequiredLevel    int64    `json:"required_level" db:"required_level"`
+	RequiredFactions []string `json:"required_factions" db:"required_factions"`
+	RequiredEpisodes []string `json:"required_episodes" db:"required_episodes"`
+	ScriptPath       string   `json:"-" db:"script_path"`
+	ThumbnailPath    *string  `json:"-" db:"thumbnail_path"`
+	SortOrder        int64    `json:"sort_order" db:"sort_order"`
+	IsActive         bool     `json:"-" db:"is_active"`
+	CreatedAt        time.Time `json:"-" db:"created_at"`
+}
+
+// PlayerStoryProgress records that a player has completed an episode.
+type PlayerStoryProgress struct {
+	PlayerID    string    `json:"player_id" db:"player_id"`
+	EpisodeID   string    `json:"episode_id" db:"episode_id"`
+	CompletedAt time.Time `json:"completed_at" db:"completed_at"`
+}
+
+// PlayerFaction records that a player owns a faction's card set.
+type PlayerFaction struct {
+	PlayerID   string    `json:"player_id" db:"player_id"`
+	Faction    string    `json:"faction" db:"faction"`
+	Source     string    `json:"source" db:"source"`
+	AcquiredAt time.Time `json:"acquired_at" db:"acquired_at"`
+}
+
+// EpisodeWithStatus is the API response for a single episode with unlock status.
+type EpisodeWithStatus struct {
+	EpisodeID     string      `json:"episode_id"`
+	Faction       *string     `json:"faction"`
+	EpisodeNumber int64       `json:"episode_number"`
+	Title         string      `json:"title"`
+	ThumbnailURL  *string     `json:"thumbnail_url"`
+	IsUnlocked    bool        `json:"is_unlocked"`
+	IsCompleted   bool        `json:"is_completed"`
+	LockReason    *LockReason `json:"lock_reason"`
+}
+
+// LockReason describes why an episode is locked.
+type LockReason struct {
+	Type     string `json:"type"`               // "level" | "faction" | "episode"
+	Required any    `json:"required"`            // level number, faction name, or episode_id
+	Current  any    `json:"current,omitempty"`
+}

@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/cache"
+	"github.com/kenyamaneko/overload-party-gateway/internal/config"
 	"github.com/kenyamaneko/overload-party-gateway/internal/constants"
 	"github.com/kenyamaneko/overload-party-gateway/internal/handler/rest"
 	ws "github.com/kenyamaneko/overload-party-gateway/internal/handler/ws"
@@ -23,6 +24,8 @@ import (
 
 func main() {
 	log.Println("=== Overload Party Gateway (LOCAL MODE) ===")
+
+	cfg := config.Load()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -39,6 +42,8 @@ func main() {
 	deckRepo := repository.NewMockDeckRepository()
 	cardRepo := repository.NewMockCardRepository(cardCache.All())
 	shopRepo := repository.NewMockShopRepository()
+	factionRepo := repository.NewMockFactionRepository()
+	storyRepo := repository.NewMockStoryRepository()
 	userSettingsRepo := repository.NewMockUserSettingsRepository()
 	gameConfigRepo := repository.NewMockGameConfigRepository()
 
@@ -47,7 +52,8 @@ func main() {
 	playerService := service.NewPlayerService(playerRepo, gameConfigRepo)
 	cardService := service.NewCardService(cardRepo, deckRepo)
 	deckService := service.NewDeckService(deckRepo, cardCache)
-	shopService := service.NewShopService(shopRepo, playerRepo, cardCache, nil, nil)
+	shopService := service.NewShopService(shopRepo, playerRepo, factionRepo, cardCache, nil, nil)
+	storyService := service.NewStoryService(storyRepo, factionRepo, playerRepo, nil, "")
 	subscriptionService := service.NewSubscriptionService(shopRepo, playerRepo)
 	// 4. Battle client (real if BATTLE_SERVER_URL is set, mock otherwise)
 	var battleClient service.BattleClient
@@ -65,12 +71,14 @@ func main() {
 	wsHandler := ws.NewHandler(wsManager, nil, playerRepo, nil)
 	authHandler := rest.NewAuthHandler(authService)
 	playerHandler := rest.NewPlayerHandler(playerService)
+	spectateHandler := rest.NewSpectateHandler(wsManager)
 	cardHandler := rest.NewCardHandler(cardService)
 	deckHandler := rest.NewDeckHandler(deckService)
 	playerCardHandler := rest.NewPlayerCardHandler(deckService)
 	gameLogHandler := rest.NewGameLogHandler(battleClient)
 	shopHandler := rest.NewShopHandler(shopService)
 	webhookHandler := rest.NewWebhookHandler(subscriptionService)
+	storyHandler := rest.NewStoryHandler(storyService)
 	userSettingsHandler := rest.NewUserSettingsHandler(userSettingsRepo)
 
 	// 5. Dev player setup: give all active cards + starter decks on first request
@@ -153,22 +161,10 @@ func main() {
 		pub.GET("/health", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"status": "ok"})
 		})
-		pub.GET("/version", func(c *gin.Context) {
-			c.JSON(http.StatusOK, gin.H{
-				"minimumVersion": "0.0.0",
-				"latestVersion":  "0.0.0",
-				"forceUpdate":    false,
-			})
-		})
-		pub.GET("/announcements", func(c *gin.Context) {
-			c.JSON(http.StatusOK, []gin.H{})
-		})
-		pub.GET("/daily", func(c *gin.Context) {
-			c.JSON(http.StatusOK, gin.H{
-				"id":   "local-tip-1",
-				"text": "ローカルモードで開発中です。",
-			})
-		})
+		staticHandler := rest.NewStaticHandler(cfg, "data")
+		pub.GET("/version", staticHandler.GetVersion)
+		pub.GET("/announcements", staticHandler.GetAnnouncements)
+		pub.GET("/daily", staticHandler.GetDaily)
 		pub.GET("/cloud-news", func(c *gin.Context) {
 			c.JSON(http.StatusOK, []gin.H{
 				{"id": "1", "tag": "aws", "headline": "Lambda が ARM64 対応を拡大、コスト最大34%削減", "meta": "2時間前"},
@@ -213,11 +209,19 @@ func main() {
 		api.GET("/games/:gameId/log", gameLogHandler.GetGameLog)
 		api.GET("/games/:gameId/log/text", gameLogHandler.GetGameLogText)
 
+		// Spectate
+		api.GET("/spectate/games", spectateHandler.GetActiveGames)
+
 		// Shop
 		api.POST("/player/select-faction", shopHandler.SelectFaction)
 		api.GET("/shop/products", shopHandler.GetProducts)
 		api.POST("/shop/purchase", shopHandler.Purchase)
 		api.POST("/shop/subscribe", shopHandler.Subscribe)
+
+		// Story scenarios
+		api.GET("/scenarios", storyHandler.ListEpisodes)
+		api.GET("/scenarios/:episodeId/script", storyHandler.GetScript)
+		api.POST("/scenarios/:episodeId/complete", storyHandler.CompleteEpisode)
 	}
 
 	// Webhooks (no auth)

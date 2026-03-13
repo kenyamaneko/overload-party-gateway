@@ -39,6 +39,7 @@ func normalizeFaction(s string) (string, bool) {
 type ShopService struct {
 	shopRepo       repository.ShopRepository
 	playerRepo     repository.PlayerRepo
+	factionRepo    repository.FactionRepo
 	cardCache      *cache.CardCache
 	appleVerifier  platform.ReceiptVerifier
 	googleVerifier platform.ReceiptVerifier
@@ -47,6 +48,7 @@ type ShopService struct {
 func NewShopService(
 	shopRepo repository.ShopRepository,
 	playerRepo repository.PlayerRepo,
+	factionRepo repository.FactionRepo,
 	cardCache *cache.CardCache,
 	appleVerifier platform.ReceiptVerifier,
 	googleVerifier platform.ReceiptVerifier,
@@ -54,6 +56,7 @@ func NewShopService(
 	return &ShopService{
 		shopRepo:       shopRepo,
 		playerRepo:     playerRepo,
+		factionRepo:    factionRepo,
 		cardCache:      cardCache,
 		appleVerifier:  appleVerifier,
 		googleVerifier: googleVerifier,
@@ -86,6 +89,9 @@ func (s *ShopService) SelectFaction(ctx context.Context, playerID, faction strin
 	}
 	if err := s.playerRepo.UpdateFaction(ctx, playerID, faction); err != nil {
 		return 0, fmt.Errorf("update player faction: %w", err)
+	}
+	if err := s.factionRepo.AddPlayerFaction(ctx, playerID, faction, "initial_selection"); err != nil {
+		return 0, fmt.Errorf("add player faction: %w", err)
 	}
 
 	return len(allCards), nil
@@ -183,6 +189,9 @@ func (s *ShopService) Purchase(ctx context.Context, playerID, productID, pf, pur
 		cards := s.buildFactionCards(playerID, content.Faction)
 		if err := s.shopRepo.CreatePurchaseWithCards(ctx, purchase, cards); err != nil {
 			return fmt.Errorf("create purchase with cards: %w", err)
+		}
+		if err := s.factionRepo.AddPlayerFaction(ctx, playerID, content.Faction, "shop_purchase"); err != nil {
+			return fmt.Errorf("add player faction: %w", err)
 		}
 
 	case model.ProductTypeCosmetic:

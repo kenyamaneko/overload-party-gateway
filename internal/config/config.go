@@ -26,6 +26,14 @@ type Config struct {
 
 	// Battle server
 	BattleServerURL string // env: BATTLE_SERVER_URL
+
+	// App version
+	AppMinVersion    string // env: APP_MIN_VERSION
+	AppLatestVersion string // env: APP_LATEST_VERSION
+	AppForceUpdate   bool   // env: APP_FORCE_UPDATE
+
+	// Story scripts (GCS bucket; empty = local filesystem fallback)
+	StoryBucket string
 }
 
 func Load() *Config {
@@ -46,6 +54,12 @@ func Load() *Config {
 		AllowedOrigins: splitCSV(getEnv("ALLOWED_ORIGINS", "")),
 
 		BattleServerURL: getEnv("BATTLE_SERVER_URL", "http://localhost:9002"),
+
+		AppMinVersion:    getEnv("APP_MIN_VERSION", "0.1.0"),
+		AppLatestVersion: getEnv("APP_LATEST_VERSION", "0.1.0"),
+		AppForceUpdate:   getEnv("APP_FORCE_UPDATE", "false") == "true",
+
+		StoryBucket: getEnv("STORY_BUCKET", ""),
 	}
 }
 

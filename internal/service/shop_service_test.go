@@ -46,9 +46,10 @@ func newTestShopEnv() *testShopEnv {
 	// Tenki
 	cc.InjectForTest(200, &model.CardDefinition{CardNo: 200, CardName: "Tenki VM", Faction: "Tenki", CardType: "Compute", Restriction: "unlimited", IsActive: true})
 
+	factionRepo := repository.NewMockFactionRepository()
 	verifier := &platform.MockReceiptVerifier{}
 
-	svc := NewShopService(shopRepo, playerRepo, cc, verifier, verifier)
+	svc := NewShopService(shopRepo, playerRepo, factionRepo, cc, verifier, verifier)
 
 	return &testShopEnv{svc: svc, shopRepo: shopRepo, playerRepo: playerRepo, cardCache: cc}
 }
