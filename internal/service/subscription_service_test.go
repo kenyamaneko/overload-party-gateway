@@ -64,127 +64,40 @@ func buildAppleJWS(payload interface{}) string {
 	return header + "." + body + "." + sig
 }
 
-func TestHandleAppleNotification_Renewal(t *testing.T) {
-	env := newTestSubscriptionService()
-	sub := createTestSubscription(env, "p1", "apple-token-1")
-
-	newExpiry := time.Now().Add(60 * 24 * time.Hour).UnixMilli()
-
-	txnInfo := buildAppleJWS(map[string]interface{}{
-		"originalTransactionId": sub.PurchaseToken,
-		"expiresDate":           newExpiry,
-	})
-
-	notifPayload := buildAppleJWS(map[string]interface{}{
-		"notificationType": "DID_RENEW",
-		"data": map[string]interface{}{
-			"signedTransactionInfo": txnInfo,
-		},
-	})
-
-	err := env.svc.HandleAppleNotification(context.Background(), notifPayload)
-	require.NoError(t, err)
-
-	updatedSub, _ := env.shopRepo.FindSubscriptionByToken(context.Background(), sub.PurchaseToken)
-	require.NotNil(t, updatedSub)
-	assert.Equal(t, model.SubscriptionStatusActive, updatedSub.Status)
-
-	p, _ := env.playerRepo.FindByID(context.Background(), "p1")
-	require.NotNil(t, p)
-	assert.True(t, p.IsPremium)
-}
-
-func TestHandleAppleNotification_DeactivatesPremium(t *testing.T) {
+func TestHandleAppleNotification(t *testing.T) {
 	tests := []struct {
 		name           string
 		notifType      string
-		token          string
+		subtype        string
+		preExpire      bool
 		expectedStatus string
+		expectedPremium bool
 	}{
-		{
-			name:           "Expired",
-			notifType:      "EXPIRED",
-			token:          "apple-token-2",
-			expectedStatus: model.SubscriptionStatusExpired,
-		},
-		{
-			name:           "GracePeriodExpired",
-			notifType:      "GRACE_PERIOD_EXPIRED",
-			token:          "apple-token-gpe",
-			expectedStatus: model.SubscriptionStatusExpired,
-		},
-		{
-			name:           "Revoke",
-			notifType:      "REVOKE",
-			token:          "apple-token-revoke",
-			expectedStatus: model.SubscriptionStatusRevoked,
-		},
+		{"Renewal", "DID_RENEW", "", false, model.SubscriptionStatusActive, true},
+		{"Expired", "EXPIRED", "", false, model.SubscriptionStatusExpired, false},
+		{"GracePeriodExpired", "GRACE_PERIOD_EXPIRED", "", false, model.SubscriptionStatusExpired, false},
+		{"Revoke", "REVOKE", "", false, model.SubscriptionStatusRevoked, false},
+		{"UnknownType", "UNKNOWN_TYPE", "", false, model.SubscriptionStatusActive, true},
+		{"AutoRenewEnabled", "DID_CHANGE_RENEWAL_STATUS", "AUTO_RENEW_ENABLED", false, model.SubscriptionStatusActive, true},
+		{"AutoRenewDisabled", "DID_CHANGE_RENEWAL_STATUS", "AUTO_RENEW_DISABLED", false, model.SubscriptionStatusCancelled, true},
+		{"AlreadyExpired", "EXPIRED", "", true, model.SubscriptionStatusExpired, false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			env := newTestSubscriptionService()
-			sub := createTestSubscription(env, "p1", tt.token)
+			sub := createTestSubscription(env, "p1", "apple-token-"+tt.name)
+
+			if tt.preExpire {
+				sub.Status = model.SubscriptionStatusExpired
+				_ = env.shopRepo.UpdateSubscription(context.Background(), sub)
+				_ = env.playerRepo.UpdatePremium(context.Background(), "p1", false, nil)
+			}
 
 			txnInfo := buildAppleJWS(map[string]interface{}{
 				"originalTransactionId": sub.PurchaseToken,
 				"expiresDate":           time.Now().UnixMilli(),
 			})
-
-			notifPayload := buildAppleJWS(map[string]interface{}{
-				"notificationType": tt.notifType,
-				"data": map[string]interface{}{
-					"signedTransactionInfo": txnInfo,
-				},
-			})
-
-			err := env.svc.HandleAppleNotification(context.Background(), notifPayload)
-			require.NoError(t, err)
-
-			updatedSub, _ := env.shopRepo.FindSubscriptionByToken(context.Background(), sub.PurchaseToken)
-			require.NotNil(t, updatedSub)
-			assert.Equal(t, tt.expectedStatus, updatedSub.Status)
-
-			p, _ := env.playerRepo.FindByID(context.Background(), "p1")
-			require.NotNil(t, p)
-			assert.False(t, p.IsPremium)
-		})
-	}
-}
-
-func TestHandleAppleNotification_NoOpUnchanged(t *testing.T) {
-	tests := []struct {
-		name      string
-		notifType string
-		subtype   string
-		token     string
-	}{
-		{
-			name:      "UnknownType",
-			notifType: "UNKNOWN_TYPE",
-			token:     "apple-token-unknown",
-		},
-		{
-			name:      "AutoRenewEnabled",
-			notifType: "DID_CHANGE_RENEWAL_STATUS",
-			subtype:   "AUTO_RENEW_ENABLED",
-			token:     "apple-token-are",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			env := newTestSubscriptionService()
-			sub := createTestSubscription(env, "p1", tt.token)
-
-			txnPayload := map[string]interface{}{
-				"originalTransactionId": sub.PurchaseToken,
-				"expiresDate":           sub.CurrentPeriodEnd.UnixMilli(),
-			}
-			if tt.name == "UnknownType" {
-				txnPayload["expiresDate"] = time.Now().UnixMilli()
-			}
-			txnInfo := buildAppleJWS(txnPayload)
 
 			notifData := map[string]interface{}{
 				"notificationType": tt.notifType,
@@ -201,129 +114,47 @@ func TestHandleAppleNotification_NoOpUnchanged(t *testing.T) {
 			require.NoError(t, err)
 
 			updatedSub, _ := env.shopRepo.FindSubscriptionByToken(context.Background(), sub.PurchaseToken)
-			assert.Equal(t, model.SubscriptionStatusActive, updatedSub.Status)
+			require.NotNil(t, updatedSub)
+			assert.Equal(t, tt.expectedStatus, updatedSub.Status)
 
 			p, _ := env.playerRepo.FindByID(context.Background(), "p1")
 			require.NotNil(t, p)
-			assert.True(t, p.IsPremium)
+			assert.Equal(t, tt.expectedPremium, p.IsPremium)
 		})
 	}
 }
 
-func TestHandleAppleNotification_AutoRenewDisabled(t *testing.T) {
-	env := newTestSubscriptionService()
-	sub := createTestSubscription(env, "p1", "apple-token-ard")
-
-	txnInfo := buildAppleJWS(map[string]interface{}{
-		"originalTransactionId": sub.PurchaseToken,
-		"expiresDate":           sub.CurrentPeriodEnd.UnixMilli(),
-	})
-
-	notifPayload := buildAppleJWS(map[string]interface{}{
-		"notificationType": "DID_CHANGE_RENEWAL_STATUS",
-		"subtype":          "AUTO_RENEW_DISABLED",
-		"data": map[string]interface{}{
-			"signedTransactionInfo": txnInfo,
-		},
-	})
-
-	err := env.svc.HandleAppleNotification(context.Background(), notifPayload)
-	require.NoError(t, err)
-
-	updatedSub, _ := env.shopRepo.FindSubscriptionByToken(context.Background(), sub.PurchaseToken)
-	require.NotNil(t, updatedSub)
-	assert.Equal(t, model.SubscriptionStatusCancelled, updatedSub.Status)
-
-	// Premium should remain active until current_period_end
-	p, _ := env.playerRepo.FindByID(context.Background(), "p1")
-	require.NotNil(t, p)
-	assert.True(t, p.IsPremium)
-}
-
-func TestHandleAppleNotification_AlreadyExpired(t *testing.T) {
-	env := newTestSubscriptionService()
-	sub := createTestSubscription(env, "p1", "apple-token-already-exp")
-
-	// Pre-expire the subscription
-	sub.Status = model.SubscriptionStatusExpired
-	_ = env.shopRepo.UpdateSubscription(context.Background(), sub)
-	_ = env.playerRepo.UpdatePremium(context.Background(), "p1", false, nil)
-
-	txnInfo := buildAppleJWS(map[string]interface{}{
-		"originalTransactionId": sub.PurchaseToken,
-		"expiresDate":           time.Now().UnixMilli(),
-	})
-
-	notifPayload := buildAppleJWS(map[string]interface{}{
-		"notificationType": "EXPIRED",
-		"data": map[string]interface{}{
-			"signedTransactionInfo": txnInfo,
-		},
-	})
-
-	err := env.svc.HandleAppleNotification(context.Background(), notifPayload)
-	require.NoError(t, err)
-
-	updatedSub, _ := env.shopRepo.FindSubscriptionByToken(context.Background(), sub.PurchaseToken)
-	assert.Equal(t, model.SubscriptionStatusExpired, updatedSub.Status)
-
-	p, _ := env.playerRepo.FindByID(context.Background(), "p1")
-	require.NotNil(t, p)
-	assert.False(t, p.IsPremium)
-}
-
-func TestHandleGoogleNotification_Renewed(t *testing.T) {
-	env := newTestSubscriptionService()
-	_ = createTestSubscription(env, "p1", "google-token-1")
-
-	data, _ := json.Marshal(map[string]interface{}{
-		"subscriptionNotification": map[string]interface{}{
-			"notificationType": googleSubRenewed,
-			"purchaseToken":    "google-token-1",
-			"subscriptionId":   "premium_monthly",
-		},
-	})
-
-	msg := GoogleRTDNMessage{}
-	msg.Message.Data = base64.StdEncoding.EncodeToString(data)
-
-	err := env.svc.HandleGoogleNotification(context.Background(), msg)
-	require.NoError(t, err)
-
-	updatedSub, _ := env.shopRepo.FindSubscriptionByToken(context.Background(), "google-token-1")
-	assert.Equal(t, model.SubscriptionStatusActive, updatedSub.Status)
-}
-
-func TestHandleGoogleNotification_DeactivatesPremium(t *testing.T) {
+func TestHandleGoogleNotification(t *testing.T) {
 	tests := []struct {
-		name           string
-		notifType      int
-		token          string
-		expectedStatus string
+		name            string
+		notifType       int
+		preExpire       bool
+		expectedStatus  string
+		expectedPremium bool
 	}{
-		{
-			name:           "Revoked",
-			notifType:      googleSubRevoked,
-			token:          "google-token-2",
-			expectedStatus: model.SubscriptionStatusRevoked,
-		},
-		{
-			name:           "Expired",
-			notifType:      googleSubExpired,
-			token:          "google-token-expire",
-			expectedStatus: model.SubscriptionStatusExpired,
-		},
+		{"Renewed", googleSubRenewed, false, model.SubscriptionStatusActive, true},
+		{"Revoked", googleSubRevoked, false, model.SubscriptionStatusRevoked, false},
+		{"Expired", googleSubExpired, false, model.SubscriptionStatusExpired, false},
+		{"Canceled", googleSubCanceled, false, model.SubscriptionStatusCancelled, true},
+		{"Recovered", googleSubRecovered, true, model.SubscriptionStatusActive, true},
+		{"UnhandledType", 99, false, model.SubscriptionStatusActive, true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			env := newTestSubscriptionService()
-			_ = createTestSubscription(env, "p1", tt.token)
+			sub := createTestSubscription(env, "p1", "google-token-"+tt.name)
+
+			if tt.preExpire {
+				sub.Status = model.SubscriptionStatusExpired
+				_ = env.shopRepo.UpdateSubscription(context.Background(), sub)
+				_ = env.playerRepo.UpdatePremium(context.Background(), "p1", false, nil)
+			}
 
 			data, _ := json.Marshal(map[string]interface{}{
 				"subscriptionNotification": map[string]interface{}{
 					"notificationType": tt.notifType,
-					"purchaseToken":    tt.token,
+					"purchaseToken":    sub.PurchaseToken,
 					"subscriptionId":   "premium_monthly",
 				},
 			})
@@ -334,75 +165,15 @@ func TestHandleGoogleNotification_DeactivatesPremium(t *testing.T) {
 			err := env.svc.HandleGoogleNotification(context.Background(), msg)
 			require.NoError(t, err)
 
-			updatedSub, _ := env.shopRepo.FindSubscriptionByToken(context.Background(), tt.token)
+			updatedSub, _ := env.shopRepo.FindSubscriptionByToken(context.Background(), sub.PurchaseToken)
 			require.NotNil(t, updatedSub)
 			assert.Equal(t, tt.expectedStatus, updatedSub.Status)
 
 			p, _ := env.playerRepo.FindByID(context.Background(), "p1")
 			require.NotNil(t, p)
-			assert.False(t, p.IsPremium)
+			assert.Equal(t, tt.expectedPremium, p.IsPremium)
 		})
 	}
-}
-
-func TestHandleGoogleNotification_Canceled(t *testing.T) {
-	env := newTestSubscriptionService()
-	_ = createTestSubscription(env, "p1", "google-token-cancel")
-
-	data, _ := json.Marshal(map[string]interface{}{
-		"subscriptionNotification": map[string]interface{}{
-			"notificationType": googleSubCanceled,
-			"purchaseToken":    "google-token-cancel",
-			"subscriptionId":   "premium_monthly",
-		},
-	})
-
-	msg := GoogleRTDNMessage{}
-	msg.Message.Data = base64.StdEncoding.EncodeToString(data)
-
-	err := env.svc.HandleGoogleNotification(context.Background(), msg)
-	require.NoError(t, err)
-
-	updatedSub, _ := env.shopRepo.FindSubscriptionByToken(context.Background(), "google-token-cancel")
-	require.NotNil(t, updatedSub)
-	assert.Equal(t, model.SubscriptionStatusCancelled, updatedSub.Status)
-
-	// Premium should remain active until current_period_end (not revoked immediately)
-	p, _ := env.playerRepo.FindByID(context.Background(), "p1")
-	require.NotNil(t, p)
-	assert.True(t, p.IsPremium)
-}
-
-func TestHandleGoogleNotification_Recovered(t *testing.T) {
-	env := newTestSubscriptionService()
-	sub := createTestSubscription(env, "p1", "google-token-recover")
-
-	// Simulate a previously expired subscription
-	sub.Status = model.SubscriptionStatusExpired
-	_ = env.shopRepo.UpdateSubscription(context.Background(), sub)
-	_ = env.playerRepo.UpdatePremium(context.Background(), "p1", false, nil)
-
-	data, _ := json.Marshal(map[string]interface{}{
-		"subscriptionNotification": map[string]interface{}{
-			"notificationType": googleSubRecovered,
-			"purchaseToken":    "google-token-recover",
-			"subscriptionId":   "premium_monthly",
-		},
-	})
-
-	msg := GoogleRTDNMessage{}
-	msg.Message.Data = base64.StdEncoding.EncodeToString(data)
-
-	err := env.svc.HandleGoogleNotification(context.Background(), msg)
-	require.NoError(t, err)
-
-	updatedSub, _ := env.shopRepo.FindSubscriptionByToken(context.Background(), "google-token-recover")
-	require.NotNil(t, updatedSub)
-	assert.Equal(t, model.SubscriptionStatusActive, updatedSub.Status)
-
-	p, _ := env.playerRepo.FindByID(context.Background(), "p1")
-	require.NotNil(t, p)
-	assert.True(t, p.IsPremium)
 }
 
 func TestHandleGoogleNotification_NonSubscription(t *testing.T) {
@@ -419,28 +190,6 @@ func TestHandleGoogleNotification_NonSubscription(t *testing.T) {
 
 	err := env.svc.HandleGoogleNotification(context.Background(), msg)
 	require.NoError(t, err)
-}
-
-func TestHandleGoogleNotification_UnhandledType(t *testing.T) {
-	env := newTestSubscriptionService()
-	sub := createTestSubscription(env, "p1", "google-token-unhandled")
-
-	data, _ := json.Marshal(map[string]interface{}{
-		"subscriptionNotification": map[string]interface{}{
-			"notificationType": 99, // not in switch cases
-			"purchaseToken":    sub.PurchaseToken,
-			"subscriptionId":   "premium_monthly",
-		},
-	})
-
-	msg := GoogleRTDNMessage{}
-	msg.Message.Data = base64.StdEncoding.EncodeToString(data)
-
-	err := env.svc.HandleGoogleNotification(context.Background(), msg)
-	require.NoError(t, err)
-
-	updatedSub, _ := env.shopRepo.FindSubscriptionByToken(context.Background(), sub.PurchaseToken)
-	assert.Equal(t, model.SubscriptionStatusActive, updatedSub.Status)
 }
 
 func TestHandleNotification_SubscriptionNotFound(t *testing.T) {

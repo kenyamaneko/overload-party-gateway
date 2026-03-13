@@ -271,18 +271,22 @@ func TestUserSettingsHandler_UpdateSettings(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
-	var resp model.UserSettings
-	_ = json.Unmarshal(w.Body.Bytes(), &resp)
-	assert.Equal(t, "en", resp.Language)
-	assert.Equal(t, int64(80), resp.BgmVolume)
+	t.Run("returns updated settings", func(t *testing.T) {
+		var resp model.UserSettings
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
+		assert.Equal(t, "en", resp.Language)
+		assert.Equal(t, int64(80), resp.BgmVolume)
+	})
 
-	// Verify persistence via GET
-	req = httptest.NewRequest("GET", "/player/settings", nil)
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	t.Run("persists settings via GET", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/player/settings", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
 
-	_ = json.Unmarshal(w.Body.Bytes(), &resp)
-	assert.Equal(t, "en", resp.Language)
+		var resp model.UserSettings
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
+		assert.Equal(t, "en", resp.Language)
+	})
 }
 
 func TestUserSettingsHandler_UpdateSettings_MissingLanguage(t *testing.T) {
@@ -381,24 +385,23 @@ func TestDeckHandler_CreateDeck_MissingBody(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
-func TestDeckHandler_GetDeck_InvalidID(t *testing.T) {
-	r := setupDeckRouter()
-
-	req := httptest.NewRequest("GET", "/decks/abc", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
-
-func TestDeckHandler_DeleteDeck_InvalidID(t *testing.T) {
-	r := setupDeckRouter()
-
-	req := httptest.NewRequest("DELETE", "/decks/abc", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+func TestDeckHandler_InvalidDeckID(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+	}{
+		{"GET", "GET"},
+		{"DELETE", "DELETE"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := setupDeckRouter()
+			req := httptest.NewRequest(tt.method, "/decks/abc", nil)
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+		})
+	}
 }
 
 // ---------------------------------------------------------------------------

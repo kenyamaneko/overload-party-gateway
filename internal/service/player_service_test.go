@@ -182,11 +182,16 @@ func TestUpdateUsername_Success(t *testing.T) {
 
 	updated, err := svc.UpdateUsername(context.Background(), "p1", "Bob")
 	require.NoError(t, err)
-	assert.Equal(t, "Bob", updated.Username)
 
-	got, err := svc.GetPlayer(context.Background(), "p1")
-	require.NoError(t, err)
-	assert.Equal(t, "Bob", got.Username)
+	t.Run("returns updated username", func(t *testing.T) {
+		assert.Equal(t, "Bob", updated.Username)
+	})
+
+	t.Run("persists updated username", func(t *testing.T) {
+		got, err := svc.GetPlayer(context.Background(), "p1")
+		require.NoError(t, err)
+		assert.Equal(t, "Bob", got.Username)
+	})
 }
 
 // --- Boundary value tests ---
