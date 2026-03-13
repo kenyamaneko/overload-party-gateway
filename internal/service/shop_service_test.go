@@ -70,7 +70,7 @@ func TestSelectFaction_Success(t *testing.T) {
 	env := newTestShopEnv()
 	createTestPlayer(env, "p1")
 
-	count, err := env.svc.SelectFaction(context.Background(), "p1", "sd")
+	count, err := env.svc.SelectFaction(context.Background(), "p1", "she")
 	require.NoError(t, err)
 
 	t.Run("returns correct card count", func(t *testing.T) {
@@ -117,7 +117,7 @@ func TestSelectFaction_AlreadySelected(t *testing.T) {
 	createTestPlayer(env, "p1")
 
 	// First selection succeeds
-	_, err := env.svc.SelectFaction(context.Background(), "p1", "sd")
+	_, err := env.svc.SelectFaction(context.Background(), "p1", "she")
 	require.NoError(t, err)
 
 	// Second selection fails
@@ -614,7 +614,7 @@ func TestSelectFaction_PlayerNotFound(t *testing.T) {
 	env := newTestShopEnv()
 	// Do NOT create the player — "nonexistent" has no record in playerRepo.
 
-	_, err := env.svc.SelectFaction(context.Background(), "nonexistent", "sd")
+	_, err := env.svc.SelectFaction(context.Background(), "nonexistent", "she")
 	require.Error(t, err)
 }
 
@@ -668,7 +668,7 @@ func TestSelectFaction_CardCopiesVerified(t *testing.T) {
 	env := newTestShopEnv()
 	createTestPlayer(env, "p1")
 
-	_, err := env.svc.SelectFaction(context.Background(), "p1", "sd")
+	_, err := env.svc.SelectFaction(context.Background(), "p1", "she")
 	require.NoError(t, err)
 
 	cards := env.shopRepo.GetPlayerCardsForTest("p1")

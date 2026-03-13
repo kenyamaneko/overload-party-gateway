@@ -10,13 +10,14 @@ import (
 // ========================================================================
 
 type battleGameState struct {
-	GameID       string             `json:"gameID"`
-	CurrentTurn  int64              `json:"currentTurn"`
-	CurrentPhase string             `json:"currentPhase"`
-	ActivePlayer int64              `json:"activePlayer"`
-	IsMyTurn     bool               `json:"isMyTurn"`
-	MyView       battlePlayerView   `json:"myView"`
-	OppView      battleOpponentView `json:"oppView"`
+	GameID        string             `json:"gameID"`
+	CurrentTurn   int64              `json:"currentTurn"`
+	CurrentPhase  string             `json:"currentPhase"`
+	ActivePlayer  int64              `json:"activePlayer"`
+	IsMyTurn      bool               `json:"isMyTurn"`
+	TurnStartedAt string             `json:"turnStartedAt"`
+	MyView        battlePlayerView   `json:"myView"`
+	OppView       battleOpponentView `json:"oppView"`
 }
 
 type battlePlayerView struct {
@@ -141,13 +142,14 @@ type battleAvailableAction struct {
 // ========================================================================
 
 type clientGameState struct {
-	GameID       string             `json:"gameId"`
-	CurrentTurn  int64              `json:"currentTurn"`
-	CurrentPhase string             `json:"currentPhase"`
-	ActivePlayer int64              `json:"activePlayer"`
-	IsMyTurn     bool               `json:"isMyTurn"`
-	My           clientPlayerView   `json:"my"`
-	Opponent     clientOpponentView `json:"opponent"`
+	GameID        string             `json:"gameId"`
+	CurrentTurn   int64              `json:"currentTurn"`
+	CurrentPhase  string             `json:"currentPhase"`
+	ActivePlayer  int64              `json:"activePlayer"`
+	IsMyTurn      bool               `json:"isMyTurn"`
+	TurnStartedAt string             `json:"turnStartedAt"`
+	My            clientPlayerView   `json:"my"`
+	Opponent      clientOpponentView `json:"opponent"`
 }
 
 type clientPlayerView struct {
@@ -267,13 +269,14 @@ func transformGameState(raw json.RawMessage) (json.RawMessage, error) {
 	}
 
 	c := clientGameState{
-		GameID:       b.GameID,
-		CurrentTurn:  b.CurrentTurn,
-		CurrentPhase: b.CurrentPhase,
-		ActivePlayer: b.ActivePlayer,
-		IsMyTurn:     b.IsMyTurn,
-		My:           transformPlayerView(b.MyView),
-		Opponent:     transformOpponentView(b.OppView),
+		GameID:        b.GameID,
+		CurrentTurn:   b.CurrentTurn,
+		CurrentPhase:  b.CurrentPhase,
+		ActivePlayer:  b.ActivePlayer,
+		IsMyTurn:      b.IsMyTurn,
+		TurnStartedAt: b.TurnStartedAt,
+		My:            transformPlayerView(b.MyView),
+		Opponent:      transformOpponentView(b.OppView),
 	}
 
 	out, err := json.Marshal(c)
@@ -425,12 +428,7 @@ func transformAttachments(refs []battleAttachmentRef) []clientAttachmentRef {
 func transformTemporaryEffects(effs []battleTemporaryEffect) []clientTemporaryEffect {
 	out := make([]clientTemporaryEffect, len(effs))
 	for i, e := range effs {
-		out[i] = clientTemporaryEffect{
-			EffectType: e.EffectType,
-			Value:      e.Value,
-			Duration:   e.Duration,
-			SourceID:   e.SourceID,
-		}
+		out[i] = clientTemporaryEffect(e)
 	}
 	return out
 }
