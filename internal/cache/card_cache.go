@@ -89,10 +89,14 @@ func (c *CardCache) LoadFromJSON(path string) error {
 	if err != nil {
 		return fmt.Errorf("read card file: %w", err)
 	}
+	return c.LoadFromBytes(data)
+}
 
+// LoadFromBytes loads card definitions from a JSON byte slice.
+func (c *CardCache) LoadFromBytes(data []byte) error {
 	var cards []*model.CardDefinition
 	if err := json.Unmarshal(data, &cards); err != nil {
-		return fmt.Errorf("parse card file: %w", err)
+		return fmt.Errorf("parse card data: %w", err)
 	}
 
 	c.mu.Lock()
@@ -103,7 +107,7 @@ func (c *CardCache) LoadFromJSON(path string) error {
 		c.cards[card.CardNo] = card
 	}
 
-	log.Printf("card cache loaded from JSON: %d cards", len(c.cards))
+	log.Printf("card cache loaded: %d cards", len(c.cards))
 	return nil
 }
 

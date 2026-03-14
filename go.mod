@@ -4,12 +4,14 @@ go 1.25.1
 
 require (
 	cloud.google.com/go v0.123.0
+	cloud.google.com/go/storage v1.56.0
 	firebase.google.com/go/v4 v4.19.0
 	github.com/gin-gonic/gin v1.11.0
 	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/jackc/pgx/v5 v5.8.0
+	github.com/kenyamaneko/overload-party-common/gen/go v0.0.0
 	github.com/stretchr/testify v1.11.1
 	google.golang.org/api v0.267.0
 )
@@ -23,7 +25,6 @@ require (
 	cloud.google.com/go/iam v1.5.3 // indirect
 	cloud.google.com/go/longrunning v0.8.0 // indirect
 	cloud.google.com/go/monitoring v1.24.3 // indirect
-	cloud.google.com/go/storage v1.56.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.30.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.53.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.53.0 // indirect
@@ -96,3 +97,5 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/kenyamaneko/overload-party-common/gen/go => ../overload-party-common/gen/go

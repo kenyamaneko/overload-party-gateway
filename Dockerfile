@@ -10,6 +10,5 @@ FROM gcr.io/distroless/static-debian12
 WORKDIR /app
 COPY --from=builder /main /app/main
 COPY --from=builder /local /app/local
-COPY --from=builder /app/internal/cache/cards_gen.json /app/internal/cache/cards_gen.json
 EXPOSE 9001
 ENTRYPOINT ["/app/main"]

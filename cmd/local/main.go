@@ -11,9 +11,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	gencache "github.com/kenyamaneko/overload-party-common/gen/go/cache"
+	"github.com/kenyamaneko/overload-party-gateway/internal/constants"
 	"github.com/kenyamaneko/overload-party-gateway/internal/cache"
 	"github.com/kenyamaneko/overload-party-gateway/internal/config"
-	"github.com/kenyamaneko/overload-party-gateway/internal/constants"
 	"github.com/kenyamaneko/overload-party-gateway/internal/handler/rest"
 	ws "github.com/kenyamaneko/overload-party-gateway/internal/handler/ws"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
@@ -30,12 +31,12 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// 1. Card cache from JSON
+	// 1. Card cache from embedded JSON
 	cardCache := cache.NewCardCache()
-	if err := cardCache.LoadFromJSON("internal/cache/cards_gen.json"); err != nil {
-		log.Fatalf("failed to load cards from JSON: %v", err)
+	if err := cardCache.LoadFromBytes(gencache.CardsJSON); err != nil {
+		log.Fatalf("failed to load embedded cards: %v", err)
 	}
-	log.Printf("loaded %d cards from internal/cache/cards_gen.json", cardCache.Count())
+	log.Printf("loaded %d cards from embedded cards_gen.json", cardCache.Count())
 
 	// 2. Mock repositories
 	playerRepo := repository.NewMockPlayerRepository()

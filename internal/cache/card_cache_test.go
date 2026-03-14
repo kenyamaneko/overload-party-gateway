@@ -1,10 +1,9 @@
 package cache
 
 import (
-	"path/filepath"
-	"runtime"
 	"testing"
 
+	gencache "github.com/kenyamaneko/overload-party-common/gen/go/cache"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -18,16 +17,11 @@ func isResourceType(cardType string) bool {
 	return false
 }
 
-func testCardsGenPath() string {
-	_, file, _, _ := runtime.Caller(0)
-	return filepath.Join(filepath.Dir(file), "cards_gen.json")
-}
-
 func loadTestCache(t *testing.T) *CardCache {
 	t.Helper()
 	cc := NewCardCache()
-	if err := cc.LoadFromJSON(testCardsGenPath()); err != nil {
-		t.Fatalf("LoadFromJSON: %v", err)
+	if err := cc.LoadFromBytes(gencache.CardsJSON); err != nil {
+		t.Fatalf("LoadFromBytes: %v", err)
 	}
 	return cc
 }
@@ -63,16 +57,16 @@ func TestResourceLabel_SpecificCards(t *testing.T) {
 	cc := loadTestCache(t)
 
 	tests := []struct {
-		cardNo        int64
-		wantName      string
-		wantLabel     string
-		wantCardType  string
+		cardNo       int64
+		wantName     string
+		wantLabel    string
+		wantCardType string
 	}{
-		{1, "えくぼ", "Compute", "Compute"},             // SHE Compute
-		{23, "ソラ", "VM", "Compute"},                   // Tenki VM (resource_label differs from card_type)
-		{11, "メリーモ", "Cache", "CacheDB"},               // SHE CacheDB → label "Cache"
-		{15, "SHE Firewall", "", "Platform"},              // Platform — no label
-		{104, "DDoS 攻撃", "", "Incident"},               // Incident — no label
+		{1, "えくぼ", "Compute", "Compute"},       // SHE Compute
+		{23, "ソラ", "VM", "Compute"},             // Tenki VM (resource_label differs from card_type)
+		{11, "メリーモ", "Cache", "CacheDB"},         // SHE CacheDB → label "Cache"
+		{15, "SHE Firewall", "", "Platform"},      // Platform — no label
+		{104, "DDoS 攻撃", "", "Incident"},         // Incident — no label
 	}
 
 	for _, tt := range tests {

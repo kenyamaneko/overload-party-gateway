@@ -25,10 +25,16 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Configure Go private modules
+        run: git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        env:
+          GOPRIVATE: github.com/kenyamaneko/*
       # golangci-lint-action のビルド済みバイナリは Go 1.25 未対応のため
       # go install でソースからビルドして使う
       - run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
       - run: golangci-lint run --timeout 5m ./...
+        env:
+          GOPRIVATE: github.com/kenyamaneko/*
 
   test:
     runs-on: ubuntu-latest
@@ -37,8 +43,14 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Configure Go private modules
+        run: git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        env:
+          GOPRIVATE: github.com/kenyamaneko/*
       - name: Run unit tests
         run: go test -race ./internal/... -count=1
+        env:
+          GOPRIVATE: github.com/kenyamaneko/*
 
   build-and-push:
     needs: [lint, test]
