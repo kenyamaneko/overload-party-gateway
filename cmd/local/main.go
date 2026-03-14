@@ -11,7 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	gencache "github.com/kenyamaneko/overload-party-common/gen/go/cache"
+	gencache "github.com/kenyamaneko/overload-party-common/packages/go/cache"
 	"github.com/kenyamaneko/overload-party-gateway/internal/constants"
 	"github.com/kenyamaneko/overload-party-gateway/internal/cache"
 	"github.com/kenyamaneko/overload-party-gateway/internal/config"

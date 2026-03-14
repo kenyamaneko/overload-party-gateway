@@ -3,7 +3,7 @@ package cache
 import (
 	"testing"
 
-	gencache "github.com/kenyamaneko/overload-party-common/gen/go/cache"
+	gencache "github.com/kenyamaneko/overload-party-common/packages/go/cache"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

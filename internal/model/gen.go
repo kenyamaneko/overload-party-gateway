@@ -2,7 +2,7 @@
 // This allows all existing code to continue importing "internal/model" unchanged.
 package model
 
-import genmodel "github.com/kenyamaneko/overload-party-common/gen/go/model"
+import genmodel "github.com/kenyamaneko/overload-party-common/packages/go/model"
 
 // Type aliases for generated struct types.
 type CardDefinition = genmodel.CardDefinition
