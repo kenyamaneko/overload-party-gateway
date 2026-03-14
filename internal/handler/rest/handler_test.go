@@ -570,9 +570,10 @@ func (m *mockReceiptVerifier) VerifySubscription(_ context.Context, _ string) (*
 func setupShopRouter() *gin.Engine {
 	shopRepo := repository.NewMockShopRepository()
 	playerRepo := repository.NewMockPlayerRepository()
+	factionRepo := repository.NewMockFactionRepository()
 	cardCache := cache.NewCardCache()
 	verifier := &mockReceiptVerifier{}
-	shopService := service.NewShopService(shopRepo, playerRepo, cardCache, verifier, verifier)
+	shopService := service.NewShopService(shopRepo, playerRepo, factionRepo, cardCache, verifier, verifier)
 	handler := NewShopHandler(shopService)
 
 	r := gin.New()
@@ -723,4 +724,167 @@ func TestPlayerCardHandler_GetPlayerCards(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+}
+
+// ---------------------------------------------------------------------------
+// StoryHandler tests
+// ---------------------------------------------------------------------------
+
+func setupStoryRouter() (*gin.Engine, *testStoryEnv) {
+	storyRepo := repository.NewMockStoryRepository()
+	factionRepo := repository.NewMockFactionRepository()
+	playerRepo := repository.NewMockPlayerRepository()
+	storyRepo.SetDeps(playerRepo, factionRepo)
+
+	storyService := service.NewStoryService(storyRepo, factionRepo, playerRepo, nil, "")
+	handler := NewStoryHandler(storyService)
+
+	now := time.Now()
+	_ = playerRepo.Create(context.TODO(), &model.Player{
+		PlayerID:    "p1",
+		FirebaseUID: "uid-p1",
+		Username:    "Alice",
+		Level:       5,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}, &model.PlayerDailyBattle{PlayerID: "p1"})
+
+	_ = factionRepo.AddPlayerFaction(context.TODO(), "p1", "SHE", "initial_selection")
+
+	faction := "SHE"
+	storyRepo.SeedEpisodes([]*model.ScenarioEpisode{
+		{
+			EpisodeID:        "she_ep1",
+			Faction:          &faction,
+			EpisodeNumber:    1,
+			TitleJa:          "SHE 第1章",
+			TitleEn:          "SHE Chapter 1",
+			RequiredLevel:    2,
+			RequiredFactions: []string{"SHE"},
+			RequiredEpisodes: []string{},
+			ScriptPath:       "stories/{lang}/she_ep1.ks",
+			SortOrder:        1,
+			IsActive:         true,
+		},
+	})
+
+	r := gin.New()
+	r.Use(setPlayerID("p1"))
+	r.GET("/scenarios", handler.ListEpisodes)
+	r.GET("/scenarios/:episodeId/script", handler.GetScript)
+	r.POST("/scenarios/:episodeId/complete", handler.CompleteEpisode)
+
+	return r, &testStoryEnv{storyRepo: storyRepo, factionRepo: factionRepo, playerRepo: playerRepo}
+}
+
+type testStoryEnv struct {
+	storyRepo   *repository.MockStoryRepository
+	factionRepo *repository.MockFactionRepository
+	playerRepo  *repository.MockPlayerRepository
+}
+
+func TestStoryHandler_ListEpisodes_Success(t *testing.T) {
+	r, _ := setupStoryRouter()
+
+	req := httptest.NewRequest("GET", "/scenarios", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Contains(t, resp, "episodes")
+
+	episodes := resp["episodes"].([]interface{})
+	assert.Len(t, episodes, 1)
+
+	ep := episodes[0].(map[string]interface{})
+	assert.Equal(t, "she_ep1", ep["episode_id"])
+	assert.Equal(t, true, ep["is_unlocked"])
+}
+
+func TestStoryHandler_ListEpisodes_WithLang(t *testing.T) {
+	r, _ := setupStoryRouter()
+
+	req := httptest.NewRequest("GET", "/scenarios?lang=en", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var resp map[string]interface{}
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	episodes := resp["episodes"].([]interface{})
+	ep := episodes[0].(map[string]interface{})
+	assert.Equal(t, "SHE Chapter 1", ep["title"])
+}
+
+func TestStoryHandler_GetScript_NotFound(t *testing.T) {
+	r, _ := setupStoryRouter()
+
+	req := httptest.NewRequest("GET", "/scenarios/nonexistent/script", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestStoryHandler_CompleteEpisode_Success(t *testing.T) {
+	r, _ := setupStoryRouter()
+
+	req := httptest.NewRequest("POST", "/scenarios/she_ep1/complete", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "episode completed", resp["message"])
+	assert.Equal(t, "she_ep1", resp["episode_id"])
+}
+
+func TestStoryHandler_CompleteEpisode_NotFound(t *testing.T) {
+	r, _ := setupStoryRouter()
+
+	req := httptest.NewRequest("POST", "/scenarios/nonexistent/complete", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestStoryHandler_CompleteEpisode_Locked(t *testing.T) {
+	storyRepo := repository.NewMockStoryRepository()
+	factionRepo := repository.NewMockFactionRepository()
+	playerRepo := repository.NewMockPlayerRepository()
+	storyRepo.SetDeps(playerRepo, factionRepo)
+
+	storyService := service.NewStoryService(storyRepo, factionRepo, playerRepo, nil, "")
+	handler := NewStoryHandler(storyService)
+
+	now := time.Now()
+	_ = playerRepo.Create(context.TODO(), &model.Player{
+		PlayerID:    "p1",
+		FirebaseUID: "uid-p1",
+		Level:       1, // too low
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}, &model.PlayerDailyBattle{PlayerID: "p1"})
+
+	faction := "SHE"
+	storyRepo.SeedEpisodes([]*model.ScenarioEpisode{
+		{EpisodeID: "she_ep1", Faction: &faction, EpisodeNumber: 1, TitleJa: "SHE 1", TitleEn: "SHE 1", RequiredLevel: 5, RequiredFactions: []string{}, RequiredEpisodes: []string{}, ScriptPath: "s/{lang}/s.ks", SortOrder: 1, IsActive: true},
+	})
+
+	r := gin.New()
+	r.Use(setPlayerID("p1"))
+	r.POST("/scenarios/:episodeId/complete", handler.CompleteEpisode)
+
+	req := httptest.NewRequest("POST", "/scenarios/she_ep1/complete", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
 }

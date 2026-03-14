@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // ScenarioEpisode represents a story episode definition.
 type ScenarioEpisode struct {
@@ -47,8 +50,31 @@ type EpisodeWithStatus struct {
 }
 
 // LockReason describes why an episode is locked.
+// Required and Current are always strings for type safety and consistent JSON serialisation.
 type LockReason struct {
 	Type     string `json:"type"`               // "level" | "faction" | "episode"
-	Required any    `json:"required"`            // level number, faction name, or episode_id
-	Current  any    `json:"current,omitempty"`
+	Required string `json:"required"`
+	Current  string `json:"current,omitempty"`
+}
+
+// StoryUnlockContext holds pre-fetched data needed for episode unlock checks.
+type StoryUnlockContext struct {
+	PlayerLevel      int64
+	OwnedFactions    map[string]bool
+	CompletedEpisodes map[string]bool
+}
+
+// NewLockReasonLevel creates a level lock reason.
+func NewLockReasonLevel(required, current int64) *LockReason {
+	return &LockReason{Type: "level", Required: fmt.Sprintf("%d", required), Current: fmt.Sprintf("%d", current)}
+}
+
+// NewLockReasonFaction creates a faction lock reason.
+func NewLockReasonFaction(faction string) *LockReason {
+	return &LockReason{Type: "faction", Required: faction}
+}
+
+// NewLockReasonEpisode creates an episode prerequisite lock reason.
+func NewLockReasonEpisode(episodeID string) *LockReason {
+	return &LockReason{Type: "episode", Required: episodeID}
 }

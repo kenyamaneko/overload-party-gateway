@@ -11,5 +11,6 @@ type StoryRepo interface {
 	ListActiveEpisodes(ctx context.Context) ([]*model.ScenarioEpisode, error)
 	FindEpisodeByID(ctx context.Context, episodeID string) (*model.ScenarioEpisode, error)
 	GetCompletedEpisodeIDs(ctx context.Context, playerID string) ([]string, error)
+	GetUnlockContext(ctx context.Context, playerID string) (*model.StoryUnlockContext, error)
 	MarkComplete(ctx context.Context, playerID, episodeID string) error
 }

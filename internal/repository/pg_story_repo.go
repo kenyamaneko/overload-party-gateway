@@ -99,6 +99,39 @@ func (r *PgStoryRepository) GetCompletedEpisodeIDs(ctx context.Context, playerID
 	return ids, nil
 }
 
+func (r *PgStoryRepository) GetUnlockContext(ctx context.Context, playerID string) (*model.StoryUnlockContext, error) {
+	row := r.pool.QueryRow(ctx,
+		`SELECT
+		   p.level,
+		   COALESCE(ARRAY(SELECT faction FROM player_factions WHERE player_id = $1), '{}'),
+		   COALESCE(ARRAY(SELECT episode_id FROM player_story_progress WHERE player_id = $1), '{}')
+		 FROM players p
+		 WHERE p.player_id = $1`,
+		playerID)
+
+	var level int64
+	var factions []string
+	var episodes []string
+	if err := row.Scan(&level, &factions, &episodes); err != nil {
+		return nil, fmt.Errorf("query unlock context: %w", err)
+	}
+
+	factionSet := make(map[string]bool, len(factions))
+	for _, f := range factions {
+		factionSet[f] = true
+	}
+	episodeSet := make(map[string]bool, len(episodes))
+	for _, e := range episodes {
+		episodeSet[e] = true
+	}
+
+	return &model.StoryUnlockContext{
+		PlayerLevel:       level,
+		OwnedFactions:     factionSet,
+		CompletedEpisodes: episodeSet,
+	}, nil
+}
+
 func (r *PgStoryRepository) MarkComplete(ctx context.Context, playerID, episodeID string) error {
 	_, err := r.pool.Exec(ctx,
 		`INSERT INTO player_story_progress (player_id, episode_id)

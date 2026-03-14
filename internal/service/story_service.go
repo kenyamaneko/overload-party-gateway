@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -19,13 +20,14 @@ var (
 )
 
 type StoryService struct {
-	storyRepo   repository.StoryRepo
-	factionRepo repository.FactionRepo
-	playerRepo  repository.PlayerRepo
-	gcsClient   *storage.Client
-	bucketName  string
+	storyRepo  repository.StoryRepo
+	gcsClient  *storage.Client
+	bucketName string
 }
 
+// NewStoryService creates a new StoryService.
+// factionRepo and playerRepo are retained in the constructor signature for backward
+// compatibility but are no longer used — unlock context is fetched via storyRepo.GetUnlockContext.
 func NewStoryService(
 	storyRepo repository.StoryRepo,
 	factionRepo repository.FactionRepo,
@@ -34,11 +36,9 @@ func NewStoryService(
 	bucketName string,
 ) *StoryService {
 	return &StoryService{
-		storyRepo:   storyRepo,
-		factionRepo: factionRepo,
-		playerRepo:  playerRepo,
-		gcsClient:   gcsClient,
-		bucketName:  bucketName,
+		storyRepo:  storyRepo,
+		gcsClient:  gcsClient,
+		bucketName: bucketName,
 	}
 }
 
@@ -48,27 +48,9 @@ func (s *StoryService) ListEpisodes(ctx context.Context, playerID, lang string) 
 		return nil, fmt.Errorf("list episodes: %w", err)
 	}
 
-	player, err := s.playerRepo.FindByID(ctx, playerID)
+	uc, err := s.storyRepo.GetUnlockContext(ctx, playerID)
 	if err != nil {
-		return nil, fmt.Errorf("find player: %w", err)
-	}
-
-	ownedFactions, err := s.factionRepo.GetPlayerFactions(ctx, playerID)
-	if err != nil {
-		return nil, fmt.Errorf("get player factions: %w", err)
-	}
-	factionSet := make(map[string]bool, len(ownedFactions))
-	for _, f := range ownedFactions {
-		factionSet[f] = true
-	}
-
-	completedIDs, err := s.storyRepo.GetCompletedEpisodeIDs(ctx, playerID)
-	if err != nil {
-		return nil, fmt.Errorf("get completed episodes: %w", err)
-	}
-	completedSet := make(map[string]bool, len(completedIDs))
-	for _, id := range completedIDs {
-		completedSet[id] = true
+		return nil, fmt.Errorf("get unlock context: %w", err)
 	}
 
 	result := make([]model.EpisodeWithStatus, 0, len(episodes))
@@ -78,10 +60,10 @@ func (s *StoryService) ListEpisodes(ctx context.Context, playerID, lang string) 
 			Faction:       ep.Faction,
 			EpisodeNumber: ep.EpisodeNumber,
 			Title:         episodeTitle(ep, lang),
-			IsCompleted:   completedSet[ep.EpisodeID],
+			IsCompleted:   uc.CompletedEpisodes[ep.EpisodeID],
 		}
 
-		lockReason := checkUnlock(ep, player.Level, factionSet, completedSet)
+		lockReason := checkUnlock(ep, uc)
 		status.IsUnlocked = lockReason == nil
 		status.LockReason = lockReason
 
@@ -130,59 +112,31 @@ func (s *StoryService) CompleteEpisode(ctx context.Context, playerID, episodeID 
 }
 
 func (s *StoryService) validateUnlock(ctx context.Context, ep *model.ScenarioEpisode, playerID string) error {
-	player, err := s.playerRepo.FindByID(ctx, playerID)
+	uc, err := s.storyRepo.GetUnlockContext(ctx, playerID)
 	if err != nil {
-		return fmt.Errorf("find player: %w", err)
+		return fmt.Errorf("get unlock context: %w", err)
 	}
 
-	ownedFactions, err := s.factionRepo.GetPlayerFactions(ctx, playerID)
-	if err != nil {
-		return fmt.Errorf("get player factions: %w", err)
-	}
-	factionSet := make(map[string]bool, len(ownedFactions))
-	for _, f := range ownedFactions {
-		factionSet[f] = true
-	}
-
-	completedIDs, err := s.storyRepo.GetCompletedEpisodeIDs(ctx, playerID)
-	if err != nil {
-		return fmt.Errorf("get completed episodes: %w", err)
-	}
-	completedSet := make(map[string]bool, len(completedIDs))
-	for _, id := range completedIDs {
-		completedSet[id] = true
-	}
-
-	if reason := checkUnlock(ep, player.Level, factionSet, completedSet); reason != nil {
+	if reason := checkUnlock(ep, uc); reason != nil {
 		return ErrEpisodeLocked
 	}
 	return nil
 }
 
-func checkUnlock(ep *model.ScenarioEpisode, playerLevel int64, factionSet, completedSet map[string]bool) *model.LockReason {
-	if playerLevel < ep.RequiredLevel {
-		return &model.LockReason{
-			Type:     "level",
-			Required: ep.RequiredLevel,
-			Current:  playerLevel,
-		}
+func checkUnlock(ep *model.ScenarioEpisode, uc *model.StoryUnlockContext) *model.LockReason {
+	if uc.PlayerLevel < ep.RequiredLevel {
+		return model.NewLockReasonLevel(ep.RequiredLevel, uc.PlayerLevel)
 	}
 
 	for _, f := range ep.RequiredFactions {
-		if !factionSet[f] {
-			return &model.LockReason{
-				Type:     "faction",
-				Required: f,
-			}
+		if !uc.OwnedFactions[f] {
+			return model.NewLockReasonFaction(f)
 		}
 	}
 
 	for _, reqEp := range ep.RequiredEpisodes {
-		if !completedSet[reqEp] {
-			return &model.LockReason{
-				Type:     "episode",
-				Required: reqEp,
-			}
+		if !uc.CompletedEpisodes[reqEp] {
+			return model.NewLockReasonEpisode(reqEp)
 		}
 	}
 
@@ -196,8 +150,8 @@ func (s *StoryService) readScript(ctx context.Context, pathTemplate, lang string
 	if s.bucketName == "" {
 		data, err := os.ReadFile(path)
 		if err != nil {
-			// Fallback to Japanese if requested language is not found.
-			if lang != "ja" {
+			// Fallback to Japanese only when the requested file does not exist.
+			if lang != "ja" && os.IsNotExist(err) {
 				jaPath := strings.Replace(pathTemplate, "{lang}", "ja", 1)
 				data, err = os.ReadFile(jaPath)
 				if err != nil {
@@ -212,8 +166,8 @@ func (s *StoryService) readScript(ctx context.Context, pathTemplate, lang string
 
 	rc, err := s.gcsClient.Bucket(s.bucketName).Object(path).NewReader(ctx)
 	if err != nil {
-		// Fallback to Japanese.
-		if lang != "ja" {
+		// Fallback to Japanese only for ErrObjectNotExist; other errors (permission, network) propagate.
+		if lang != "ja" && errors.Is(err, storage.ErrObjectNotExist) {
 			jaPath := strings.Replace(pathTemplate, "{lang}", "ja", 1)
 			rc, err = s.gcsClient.Bucket(s.bucketName).Object(jaPath).NewReader(ctx)
 			if err != nil {

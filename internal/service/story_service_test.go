@@ -26,6 +26,7 @@ func newTestStoryEnv() *testStoryEnv {
 	storyRepo := repository.NewMockStoryRepository()
 	factionRepo := repository.NewMockFactionRepository()
 	playerRepo := repository.NewMockPlayerRepository()
+	storyRepo.SetDeps(playerRepo, factionRepo)
 
 	svc := NewStoryService(storyRepo, factionRepo, playerRepo, nil, "")
 
@@ -92,6 +93,24 @@ func seedTestEpisodes(env *testStoryEnv) {
 	})
 }
 
+func seedAllFactionEpisodes(env *testStoryEnv) {
+	she := "SHE"
+	tenki := "Tenki"
+	sugar := "Sugar"
+	tuners := "Tuners"
+
+	episodes := []*model.ScenarioEpisode{
+		{EpisodeID: "she_ep1", Faction: &she, EpisodeNumber: 1, TitleJa: "SHE 1", TitleEn: "SHE 1", RequiredLevel: 2, RequiredFactions: []string{"SHE"}, RequiredEpisodes: []string{}, ScriptPath: "stories/{lang}/she_ep1.ks", SortOrder: 1, IsActive: true},
+		{EpisodeID: "she_ep5", Faction: &she, EpisodeNumber: 5, TitleJa: "SHE 5", TitleEn: "SHE 5", RequiredLevel: 18, RequiredFactions: []string{"SHE"}, RequiredEpisodes: []string{"she_ep1"}, ScriptPath: "stories/{lang}/she_ep5.ks", SortOrder: 17, IsActive: true},
+		{EpisodeID: "tenki_ep5", Faction: &tenki, EpisodeNumber: 5, TitleJa: "天気 5", TitleEn: "Tenki 5", RequiredLevel: 19, RequiredFactions: []string{"Tenki"}, RequiredEpisodes: []string{}, ScriptPath: "stories/{lang}/tenki_ep5.ks", SortOrder: 18, IsActive: true},
+		{EpisodeID: "sugar_ep5", Faction: &sugar, EpisodeNumber: 5, TitleJa: "Sugar 5", TitleEn: "Sugar 5", RequiredLevel: 20, RequiredFactions: []string{"Sugar"}, RequiredEpisodes: []string{}, ScriptPath: "stories/{lang}/sugar_ep5.ks", SortOrder: 19, IsActive: true},
+		{EpisodeID: "tuners_ep5", Faction: &tuners, EpisodeNumber: 5, TitleJa: "Tuners 5", TitleEn: "Tuners 5", RequiredLevel: 21, RequiredFactions: []string{"Tuners"}, RequiredEpisodes: []string{}, ScriptPath: "stories/{lang}/tuners_ep5.ks", SortOrder: 20, IsActive: true},
+		{EpisodeID: "final", Faction: nil, EpisodeNumber: 1, TitleJa: "最終話", TitleEn: "Final Chapter", RequiredLevel: 22, RequiredFactions: []string{"SHE", "Tenki", "Sugar", "Tuners"}, RequiredEpisodes: []string{"she_ep5", "tenki_ep5", "sugar_ep5", "tuners_ep5"}, ScriptPath: "stories/{lang}/final.ks", SortOrder: 21, IsActive: true},
+	}
+
+	env.storyRepo.SeedEpisodes(episodes)
+}
+
 // ---------------------------------------------------------------------------
 // ListEpisodes tests
 // ---------------------------------------------------------------------------
@@ -106,7 +125,6 @@ func TestListEpisodes_UnlockedAndLocked(t *testing.T) {
 	episodes, err := env.svc.ListEpisodes(context.Background(), "p1", "ja")
 	require.NoError(t, err)
 
-	// inactive episodes are excluded by mock
 	require.Len(t, episodes, 2)
 
 	t.Run("first episode is unlocked", func(t *testing.T) {
@@ -129,8 +147,6 @@ func TestListEpisodes_LockedByFaction(t *testing.T) {
 	createStoryTestPlayer(env, "p1", 10)
 	seedTestEpisodes(env)
 
-	// No factions owned
-
 	episodes, err := env.svc.ListEpisodes(context.Background(), "p1", "ja")
 	require.NoError(t, err)
 
@@ -147,7 +163,6 @@ func TestListEpisodes_LockedByEpisode(t *testing.T) {
 	seedTestEpisodes(env)
 
 	_ = env.factionRepo.AddPlayerFaction(context.Background(), "p1", "SHE", "initial_selection")
-	// she_ep1 NOT completed → she_ep2 locked by episode
 
 	episodes, err := env.svc.ListEpisodes(context.Background(), "p1", "ja")
 	require.NoError(t, err)
@@ -186,6 +201,121 @@ func TestListEpisodes_CompletedStatus(t *testing.T) {
 	t.Run("completing ep1 unlocks ep2", func(t *testing.T) {
 		assert.True(t, episodes[1].IsUnlocked)
 	})
+}
+
+// ---------------------------------------------------------------------------
+// Grand Ending unlock tests
+// ---------------------------------------------------------------------------
+
+func TestListEpisodes_GrandEnding_Locked(t *testing.T) {
+	env := newTestStoryEnv()
+	createStoryTestPlayer(env, "p1", 25)
+	seedAllFactionEpisodes(env)
+
+	for _, f := range []string{"SHE", "Tenki", "Sugar", "Tuners"} {
+		_ = env.factionRepo.AddPlayerFaction(context.Background(), "p1", f, "initial_selection")
+	}
+
+	episodes, err := env.svc.ListEpisodes(context.Background(), "p1", "ja")
+	require.NoError(t, err)
+
+	var final *model.EpisodeWithStatus
+	for i := range episodes {
+		if episodes[i].EpisodeID == "final" {
+			final = &episodes[i]
+			break
+		}
+	}
+	require.NotNil(t, final)
+	assert.False(t, final.IsUnlocked)
+	require.NotNil(t, final.LockReason)
+	assert.Equal(t, "episode", final.LockReason.Type)
+}
+
+func TestListEpisodes_GrandEnding_LockedByFaction(t *testing.T) {
+	env := newTestStoryEnv()
+	createStoryTestPlayer(env, "p1", 25)
+	seedAllFactionEpisodes(env)
+
+	_ = env.factionRepo.AddPlayerFaction(context.Background(), "p1", "SHE", "initial_selection")
+
+	for _, ep := range []string{"she_ep1", "she_ep5", "tenki_ep5", "sugar_ep5", "tuners_ep5"} {
+		_ = env.storyRepo.MarkComplete(context.Background(), "p1", ep)
+	}
+
+	episodes, err := env.svc.ListEpisodes(context.Background(), "p1", "ja")
+	require.NoError(t, err)
+
+	var final *model.EpisodeWithStatus
+	for i := range episodes {
+		if episodes[i].EpisodeID == "final" {
+			final = &episodes[i]
+			break
+		}
+	}
+	require.NotNil(t, final)
+	assert.False(t, final.IsUnlocked)
+	require.NotNil(t, final.LockReason)
+	assert.Equal(t, "faction", final.LockReason.Type)
+}
+
+func TestListEpisodes_GrandEnding_LockedByLevel(t *testing.T) {
+	env := newTestStoryEnv()
+	createStoryTestPlayer(env, "p1", 10)
+	seedAllFactionEpisodes(env)
+
+	for _, f := range []string{"SHE", "Tenki", "Sugar", "Tuners"} {
+		_ = env.factionRepo.AddPlayerFaction(context.Background(), "p1", f, "initial_selection")
+	}
+	for _, ep := range []string{"she_ep1", "she_ep5", "tenki_ep5", "sugar_ep5", "tuners_ep5"} {
+		_ = env.storyRepo.MarkComplete(context.Background(), "p1", ep)
+	}
+
+	episodes, err := env.svc.ListEpisodes(context.Background(), "p1", "ja")
+	require.NoError(t, err)
+
+	var final *model.EpisodeWithStatus
+	for i := range episodes {
+		if episodes[i].EpisodeID == "final" {
+			final = &episodes[i]
+			break
+		}
+	}
+	require.NotNil(t, final)
+	assert.False(t, final.IsUnlocked)
+	require.NotNil(t, final.LockReason)
+	assert.Equal(t, "level", final.LockReason.Type)
+	assert.Equal(t, "22", final.LockReason.Required)
+	assert.Equal(t, "10", final.LockReason.Current)
+}
+
+func TestListEpisodes_GrandEnding_Unlocked(t *testing.T) {
+	env := newTestStoryEnv()
+	createStoryTestPlayer(env, "p1", 25)
+	seedAllFactionEpisodes(env)
+
+	for _, f := range []string{"SHE", "Tenki", "Sugar", "Tuners"} {
+		_ = env.factionRepo.AddPlayerFaction(context.Background(), "p1", f, "initial_selection")
+	}
+	for _, ep := range []string{"she_ep1", "she_ep5", "tenki_ep5", "sugar_ep5", "tuners_ep5"} {
+		_ = env.storyRepo.MarkComplete(context.Background(), "p1", ep)
+	}
+
+	episodes, err := env.svc.ListEpisodes(context.Background(), "p1", "ja")
+	require.NoError(t, err)
+
+	var final *model.EpisodeWithStatus
+	for i := range episodes {
+		if episodes[i].EpisodeID == "final" {
+			final = &episodes[i]
+			break
+		}
+	}
+	require.NotNil(t, final)
+	assert.True(t, final.IsUnlocked)
+	assert.Nil(t, final.LockReason)
+	assert.Nil(t, final.Faction)
+	assert.Equal(t, "最終話", final.Title)
 }
 
 // ---------------------------------------------------------------------------
@@ -238,7 +368,7 @@ func TestCompleteEpisode_NotFound(t *testing.T) {
 
 func TestCompleteEpisode_Locked(t *testing.T) {
 	env := newTestStoryEnv()
-	createStoryTestPlayer(env, "p1", 1) // level too low
+	createStoryTestPlayer(env, "p1", 1)
 	seedTestEpisodes(env)
 
 	err := env.svc.CompleteEpisode(context.Background(), "p1", "she_ep1")
@@ -255,22 +385,54 @@ func TestCompleteEpisode_InactiveEpisode(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// GetScript tests (validates unlock + not-found paths; no file IO)
+// ---------------------------------------------------------------------------
+
+func TestGetScript_NotFound(t *testing.T) {
+	env := newTestStoryEnv()
+	createStoryTestPlayer(env, "p1", 10)
+	seedTestEpisodes(env)
+
+	_, err := env.svc.GetScript(context.Background(), "p1", "nonexistent", "ja")
+	assert.ErrorIs(t, err, ErrEpisodeNotFound)
+}
+
+func TestGetScript_InactiveEpisode(t *testing.T) {
+	env := newTestStoryEnv()
+	createStoryTestPlayer(env, "p1", 99)
+	seedTestEpisodes(env)
+
+	_, err := env.svc.GetScript(context.Background(), "p1", "inactive_ep", "ja")
+	assert.ErrorIs(t, err, ErrEpisodeNotFound)
+}
+
+func TestGetScript_Locked(t *testing.T) {
+	env := newTestStoryEnv()
+	createStoryTestPlayer(env, "p1", 1)
+	seedTestEpisodes(env)
+
+	_, err := env.svc.GetScript(context.Background(), "p1", "she_ep1", "ja")
+	assert.ErrorIs(t, err, ErrEpisodeLocked)
+}
+
+// ---------------------------------------------------------------------------
 // checkUnlock tests
 // ---------------------------------------------------------------------------
 
 func TestCheckUnlock_AllConditionsMet(t *testing.T) {
-	faction := "SHE"
 	ep := &model.ScenarioEpisode{
 		RequiredLevel:    5,
 		RequiredFactions: []string{"SHE"},
 		RequiredEpisodes: []string{"she_ep1"},
 	}
-	ep.Faction = &faction
 
-	factionSet := map[string]bool{"SHE": true}
-	completedSet := map[string]bool{"she_ep1": true}
+	uc := &model.StoryUnlockContext{
+		PlayerLevel:       10,
+		OwnedFactions:     map[string]bool{"SHE": true},
+		CompletedEpisodes: map[string]bool{"she_ep1": true},
+	}
 
-	reason := checkUnlock(ep, 10, factionSet, completedSet)
+	reason := checkUnlock(ep, uc)
 	assert.Nil(t, reason)
 }
 
@@ -281,10 +443,17 @@ func TestCheckUnlock_LevelPriority(t *testing.T) {
 		RequiredEpisodes: []string{"she_ep1"},
 	}
 
-	// All conditions unmet — level is checked first
-	reason := checkUnlock(ep, 1, map[string]bool{}, map[string]bool{})
+	uc := &model.StoryUnlockContext{
+		PlayerLevel:       1,
+		OwnedFactions:     map[string]bool{},
+		CompletedEpisodes: map[string]bool{},
+	}
+
+	reason := checkUnlock(ep, uc)
 	require.NotNil(t, reason)
 	assert.Equal(t, "level", reason.Type)
+	assert.Equal(t, "5", reason.Required)
+	assert.Equal(t, "1", reason.Current)
 }
 
 func TestCheckUnlock_FactionAfterLevel(t *testing.T) {
@@ -294,8 +463,13 @@ func TestCheckUnlock_FactionAfterLevel(t *testing.T) {
 		RequiredEpisodes: []string{"she_ep1"},
 	}
 
-	// Level met, faction not
-	reason := checkUnlock(ep, 10, map[string]bool{}, map[string]bool{})
+	uc := &model.StoryUnlockContext{
+		PlayerLevel:       10,
+		OwnedFactions:     map[string]bool{},
+		CompletedEpisodes: map[string]bool{},
+	}
+
+	reason := checkUnlock(ep, uc)
 	require.NotNil(t, reason)
 	assert.Equal(t, "faction", reason.Type)
 }
@@ -307,8 +481,14 @@ func TestCheckUnlock_EpisodeAfterFaction(t *testing.T) {
 		RequiredEpisodes: []string{"she_ep1"},
 	}
 
-	// Level + faction met, episode not
-	reason := checkUnlock(ep, 10, map[string]bool{"SHE": true}, map[string]bool{})
+	uc := &model.StoryUnlockContext{
+		PlayerLevel:       10,
+		OwnedFactions:     map[string]bool{"SHE": true},
+		CompletedEpisodes: map[string]bool{},
+	}
+
+	reason := checkUnlock(ep, uc)
 	require.NotNil(t, reason)
 	assert.Equal(t, "episode", reason.Type)
+	assert.Equal(t, "she_ep1", reason.Required)
 }
