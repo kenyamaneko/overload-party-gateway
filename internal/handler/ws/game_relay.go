@@ -107,6 +107,7 @@ func (r *GameRelay) SendGameStateToPlayers(gameID string) {
 		state, err := r.battleClient.GetGameStateForPlayer(ctx, gameID, pid)
 		if err != nil {
 			log.Printf("get game state for player %s: %v", pid, err)
+			r.sendErrorToPlayer(pid, "game_state_error", "failed to retrieve game state", true)
 			continue
 		}
 
@@ -120,6 +121,7 @@ func (r *GameRelay) SendGameStateToPlayers(gameID string) {
 		transformed, err := transformGameState(state)
 		if err != nil {
 			log.Printf("transform game state for player %s: %v", pid, err)
+			r.sendErrorToPlayer(pid, "game_state_error", "failed to process game state", true)
 			continue
 		}
 		r.hub.SendToPlayer(pid, &WSMessage{
@@ -154,6 +156,7 @@ func (r *GameRelay) SendTurnControlsToPlayers(gameID string) {
 		tc, err := r.battleClient.GetTurnControlsForPlayer(ctx, gameID, pid)
 		if err != nil {
 			log.Printf("get turn controls for player %s: %v", pid, err)
+			r.sendErrorToPlayer(pid, "turn_controls_error", "failed to retrieve turn controls", true)
 			continue
 		}
 		if tc == nil {
@@ -357,6 +360,13 @@ func (r *GameRelay) NotifyMatchFound(gameID, player1ID, player2ID string) {
 
 func (r *GameRelay) sendError(conn *Connection, code, message string, retryable bool) {
 	conn.SendMessage(&WSMessage{
+		Type: constants.WSMsgError,
+		Data: mustMarshal(ErrorMessage{Code: code, Message: message, Retryable: retryable}),
+	})
+}
+
+func (r *GameRelay) sendErrorToPlayer(playerID, code, message string, retryable bool) {
+	r.hub.SendToPlayer(playerID, &WSMessage{
 		Type: constants.WSMsgError,
 		Data: mustMarshal(ErrorMessage{Code: code, Message: message, Retryable: retryable}),
 	})
