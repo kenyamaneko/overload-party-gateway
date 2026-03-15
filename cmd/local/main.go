@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"net/http"
-	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -56,15 +55,9 @@ func main() {
 	shopService := service.NewShopService(shopRepo, playerRepo, factionRepo, cardCache, nil, nil)
 	storyService := service.NewStoryService(storyRepo, factionRepo, playerRepo, nil, "")
 	subscriptionService := service.NewSubscriptionService(shopRepo, playerRepo)
-	// 4. Battle client (real if BATTLE_SERVER_URL is set, mock otherwise)
-	var battleClient service.BattleClient
-	if battleURL := os.Getenv("BATTLE_SERVER_URL"); battleURL != "" {
-		log.Printf("using real battle client: %s", battleURL)
-		battleClient = service.NewBattleClient(battleURL)
-	} else {
-		log.Println("using mock battle client")
-		battleClient = service.NewMockBattleClient()
-	}
+	// 4. Battle client (uses cfg.BattleServerURL, default http://localhost:9002)
+	log.Printf("battle client: %s", cfg.BattleServerURL)
+	battleClient := service.NewBattleClient(cfg.BattleServerURL)
 
 	// 5. Handlers
 	wsManager := ws.NewManager(battleClient, playerService, deckRepo)

@@ -11,7 +11,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/jackc/pgx/v5 v5.8.0
-	github.com/kenyamaneko/overload-party-common/packages/go v0.0.0
+	github.com/kenyamaneko/overload-party-common/packages/go v0.1.1
 	github.com/stretchr/testify v1.11.1
 	google.golang.org/api v0.267.0
 )
@@ -97,5 +97,3 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/kenyamaneko/overload-party-common/packages/go => ../overload-party-common/packages/go
