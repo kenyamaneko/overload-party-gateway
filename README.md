@@ -94,6 +94,21 @@ make generate          # コード生成 (YAML → Go/JSON)
 make build             # Docker イメージビルド
 ```
 
+## 依存管理 (Go Modules + Vendor)
+
+Docker ビルドではプライベートリポジトリ (`overload-party-common`) への認証を不要にするため、`go mod vendor` で依存を `vendor/` に含めています。
+
+**依存を更新した場合** は、必ず `go mod vendor` を実行してコミットしてください。
+
+```bash
+go get -u github.com/kenyamaneko/overload-party-common/packages/go@latest  # 例: common を更新
+go mod tidy
+go mod vendor
+# vendor/ の変更もコミット
+```
+
+CI の lint/test ジョブでは vendor を使わず、トークン認証で最新パッケージを取得します。
+
 ## 統合テスト
 
 PostgreSQL に対する統合テスト (`internal/repository/pg_*`) は Docker が必要です。
