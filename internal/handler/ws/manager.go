@@ -58,14 +58,26 @@ func NewManager(battleClient service.BattleClient, playerService *service.Player
 // StartMatchmaking starts the matchmaking loop. Should be called in a goroutine.
 func (m *Manager) StartMatchmaking(ctx context.Context) {
 	matcher := service.NewMatchmakingService(m.queue, func(ctx context.Context, result model.MatchResult) {
+		notifyError := func(msg string) {
+			errMsg := &WSMessage{
+				Type: constants.WSMsgError,
+				Data: mustMarshal(ErrorMessage{Code: "matchmaking_error", Message: msg, Retryable: true}),
+			}
+			for _, pid := range []string{result.Player1ID, result.Player2ID} {
+				m.Hub.SendToPlayer(pid, errMsg)
+			}
+		}
+
 		p1Cards, err := m.resolveDeckCards(ctx, result.Player1ID, result.Player1Deck)
 		if err != nil {
 			log.Printf("matchmaking: resolve p1 deck failed: %v", err)
+			notifyError("failed to create game")
 			return
 		}
 		p2Cards, err := m.resolveDeckCards(ctx, result.Player2ID, result.Player2Deck)
 		if err != nil {
 			log.Printf("matchmaking: resolve p2 deck failed: %v", err)
+			notifyError("failed to create game")
 			return
 		}
 		game, err := m.battleClient.CreatePvPGame(
@@ -75,6 +87,7 @@ func (m *Manager) StartMatchmaking(ctx context.Context) {
 		)
 		if err != nil {
 			log.Printf("matchmaking: create pvp game failed: %v", err)
+			notifyError("failed to create game")
 			return
 		}
 		m.Spectate.RegisterGame(game.GameID, game.Player1ID, game.Player2ID)
