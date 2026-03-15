@@ -42,11 +42,21 @@ type GameCreatedResult struct {
 	Player2ID string `json:"player2_id"`
 }
 
+// ActionEvent represents a single game event returned by the battle server.
+type ActionEvent struct {
+	Sequence  int64                  `json:"sequence"`
+	EventType string                 `json:"event_type"`
+	PlayerID  string                 `json:"player_id"`
+	EventData map[string]interface{} `json:"event_data"`
+	State     json.RawMessage        `json:"state"`
+}
+
 // ActionResult is returned after a game action is processed.
 type ActionResult struct {
-	GameOver  bool   `json:"game_over"`
-	WinnerNum int64  `json:"winner_num"`
-	WinReason string `json:"win_reason"`
+	GameOver  bool          `json:"game_over"`
+	WinnerNum int64         `json:"winner_num"`
+	WinReason string        `json:"win_reason"`
+	Events    []ActionEvent `json:"events"`
 }
 
 // TurnControls describes available in-game controls for the active player.

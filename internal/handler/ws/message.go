@@ -61,6 +61,14 @@ type ActionRejectedMessage struct {
 	Reason     string `json:"reason"`
 }
 
+// ActionPerformedMessage notifies a player of an action and the resulting state.
+type ActionPerformedMessage struct {
+	Sequence   int64           `json:"sequence"`
+	ActionType string          `json:"action_type"`
+	ActionData json.RawMessage `json:"action_data"`
+	State      json.RawMessage `json:"state"`
+}
+
 type TurnControlsMessage struct {
 	CanEndPhase     bool `json:"can_end_phase"`
 	DiscardRequired int  `json:"discard_required"`

@@ -172,6 +172,74 @@ func (r *GameRelay) SendTurnControlsToPlayers(gameID string) {
 	}
 }
 
+// sendActionPerformed dispatches action_performed messages for each event.
+//
+// Routing is based on who performed the action (event.PlayerID):
+//   - Player's own action  → sent to opponents (gateway fetches their info-hidden state)
+//   - Other player's action (NPC) → sent to the acting player (state included from battle server)
+func (r *GameRelay) sendActionPerformed(gameID, actingPlayerID string, result *service.ActionResult) {
+	if result == nil || len(result.Events) == 0 {
+		return
+	}
+
+	r.mu.RLock()
+	players := r.gameMembers[gameID]
+	r.mu.RUnlock()
+
+	ctx := context.Background()
+	for _, evt := range result.Events {
+		actionData := mustMarshal(evt.EventData)
+
+		if evt.PlayerID == actingPlayerID || evt.PlayerID == "" {
+			// Player's own action (or system event) → send to opponents
+			for _, pid := range players {
+				if pid == actingPlayerID {
+					continue
+				}
+				state, err := r.battleClient.GetGameStateForPlayer(ctx, gameID, pid)
+				if err != nil {
+					log.Printf("get game state for action_performed (player %s): %v", pid, err)
+					continue
+				}
+				transformed, err := transformGameState(state)
+				if err != nil {
+					log.Printf("transform game state for action_performed (player %s): %v", pid, err)
+					continue
+				}
+				r.hub.SendToPlayer(pid, &WSMessage{
+					Type: constants.WSMsgActionPerformed,
+					Data: mustMarshal(ActionPerformedMessage{
+						Sequence:   evt.Sequence,
+						ActionType: evt.EventType,
+						ActionData: actionData,
+						State:      transformed,
+					}),
+				})
+			}
+		} else {
+			// Other player's action (NPC) → send to the acting player
+			// State snapshot is included from battle server; transform field names.
+			if len(evt.State) == 0 {
+				continue
+			}
+			transformed, err := transformGameState(evt.State)
+			if err != nil {
+				log.Printf("transform NPC action state for player %s: %v", actingPlayerID, err)
+				continue
+			}
+			r.hub.SendToPlayer(actingPlayerID, &WSMessage{
+				Type: constants.WSMsgActionPerformed,
+				Data: mustMarshal(ActionPerformedMessage{
+					Sequence:   evt.Sequence,
+					ActionType: evt.EventType,
+					ActionData: actionData,
+					State:      transformed,
+				}),
+			})
+		}
+	}
+}
+
 func (r *GameRelay) broadcastGameOver(gameID string, winnerNum int64, reason string) {
 	r.BroadcastToGame(gameID, &WSMessage{
 		Type: constants.WSMsgGameOver,
@@ -226,6 +294,7 @@ func (r *GameRelay) HandleGameAction(ctx context.Context, conn *Connection, data
 		return
 	}
 
+	r.sendActionPerformed(action.GameID, conn.playerID, result)
 	r.SendGameStateToPlayers(action.GameID)
 	r.SendTurnControlsToPlayers(action.GameID)
 
