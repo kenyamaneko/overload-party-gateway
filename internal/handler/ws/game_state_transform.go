@@ -3,7 +3,43 @@ package ws
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 )
+
+// flexString accepts both JSON strings and numbers, converting numbers to strings.
+// This handles C# enum fields that may be serialized as integers or strings
+// depending on whether JsonStringEnumConverter is applied.
+type flexString struct {
+	Value *string
+}
+
+func (f *flexString) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		f.Value = nil
+		return nil
+	}
+	// Try string first
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		f.Value = &s
+		return nil
+	}
+	// Fall back to number → string
+	var n json.Number
+	if err := json.Unmarshal(data, &n); err == nil {
+		s = n.String()
+		f.Value = &s
+		return nil
+	}
+	return fmt.Errorf("flexString: cannot unmarshal %s", strconv.Quote(string(data)))
+}
+
+func (f flexString) MarshalJSON() ([]byte, error) {
+	if f.Value == nil {
+		return []byte("null"), nil
+	}
+	return json.Marshal(*f.Value)
+}
 
 // ========================================================================
 // Battle server input structs (C# ASP.NET camelCase serialization)
@@ -61,8 +97,8 @@ type battleResourceInstance struct {
 	InstanceID           string                   `json:"instanceID"`
 	CardID               int64                    `json:"cardID"`
 	ArtNo                int64                    `json:"artNo"`
-	Rank                 *string                  `json:"rank"`
-	InstanceFamily       *string                  `json:"instanceFamily"`
+	Rank                 flexString               `json:"rank"`
+	InstanceFamily       flexString               `json:"instanceFamily"`
 	FaceUp               bool                     `json:"faceUp"`
 	DeployingTurnsLeft   int64                    `json:"deployingTurnsLeft"`
 	CurrentAV            int64                    `json:"currentAV"`
@@ -348,8 +384,8 @@ func transformResourceInstance(b *battleResourceInstance) *clientResourceInstanc
 	return &clientResourceInstance{
 		InstanceID:         b.InstanceID,
 		CardID:             b.CardID,
-		Rank:               b.Rank,
-		InstanceFamily:     b.InstanceFamily,
+		Rank:               b.Rank.Value,
+		InstanceFamily:     b.InstanceFamily.Value,
 		CurrentAV:          b.CurrentAV,
 		MaxAV:              b.MaxAV,
 		CurrentTP:          b.CurrentTP,
