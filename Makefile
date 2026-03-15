@@ -1,6 +1,6 @@
 .PHONY: build test test-unit test-integration test-db-up test-db-down lint vet fmt \
        run run-local run-gateway \
-       generate clean help
+       generate update-common clean help
 
 # ─── Environment ─────────────────────────────────────────
 ifneq (,$(wildcard .env))
@@ -23,6 +23,15 @@ generate:  ## Generate cards.json, constants, cardno_gen.go, CARDS.md
 		--gateway-dir $(CURDIR) \
 		--battle-dir $(BATTLE_DIR) \
 		--client-dir $(CLIENT_DIR)
+
+# ─── Dependency ──────────────────────────────────────────
+COMMON_PKG := github.com/kenyamaneko/overload-party-common/packages/go
+
+update-common:  ## Update common package to latest and re-vendor
+	GOPRIVATE=github.com/kenyamaneko/* go get -u $(COMMON_PKG)@latest
+	go mod tidy
+	go mod vendor
+	@echo "vendor/ updated — don't forget to commit the changes"
 
 # ─── Build ───────────────────────────────────────────────
 build:  ## Build Docker image

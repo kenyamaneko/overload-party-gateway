@@ -98,16 +98,21 @@ make build             # Docker イメージビルド
 
 Docker ビルドではプライベートリポジトリ (`overload-party-common`) への認証を不要にするため、`go mod vendor` で依存を `vendor/` に含めています。
 
-**依存を更新した場合** は、必ず `go mod vendor` を実行してコミットしてください。
+### ローカルでの依存更新
+
+`overload-party-common` はプライベートリポジトリのため、Go proxy 経由では取得できません。
+`go get` を実行する前に `GOPRIVATE` を設定してください（`GONOSUMCHECK` は `GOPRIVATE` に含まれるため不要です）。
 
 ```bash
-go get -u github.com/kenyamaneko/overload-party-common/packages/go@latest  # 例: common を更新
-go mod tidy
-go mod vendor
+make update-common
 # vendor/ の変更もコミット
 ```
 
-CI の lint/test ジョブでは vendor を使わず、トークン認証で最新パッケージを取得します。
+> **注意:** `go mod vendor` を忘れると、Docker ビルドや CI の build ジョブで古い依存のままになります。
+
+### CI
+
+lint/test ジョブでは vendor を使わず、`GITHUB_TOKEN` によるトークン認証で最新パッケージを取得します。build-and-push ジョブでは `vendor/` を使用するため認証は不要です。
 
 ## 統合テスト
 
