@@ -29,6 +29,9 @@ type BattleClient interface {
 	GetGameStateForPlayer(ctx context.Context, gameID, playerID string) (json.RawMessage, error)
 	// GetTurnControlsForPlayer returns the turn controls for a specific player, or nil if not their turn.
 	GetTurnControlsForPlayer(ctx context.Context, gameID, playerID string) (*TurnControls, error)
+	// AdvanceNpcTurn runs the NPC turn if the active player is NPC.
+	// Returns action events so the gateway can relay them to the human player.
+	AdvanceNpcTurn(ctx context.Context, gameID, playerID string) (*ActionResult, error)
 	// GetGameLog returns the game log (replay) as JSON.
 	GetGameLog(ctx context.Context, gameID string) (json.RawMessage, error)
 	// GetGameLogText returns the game log (replay) as plain text.
@@ -117,6 +120,17 @@ func (c *battleClient) ProcessAction(ctx context.Context, gameID, playerID, acti
 	}
 	var result ActionResult
 	if err := c.post(ctx, fmt.Sprintf("/api/v1/games/%s/actions", gameID), body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (c *battleClient) AdvanceNpcTurn(ctx context.Context, gameID, playerID string) (*ActionResult, error) {
+	body := map[string]any{
+		"PlayerID": playerID,
+	}
+	var result ActionResult
+	if err := c.post(ctx, fmt.Sprintf("/api/v1/games/%s/advance-npc", gameID), body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil

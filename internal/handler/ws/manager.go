@@ -52,6 +52,20 @@ func NewManager(battleClient service.BattleClient, playerService *service.Player
 	// Cross-wire: GameRelay notifies SpectateRelay on state updates and game over.
 	relay.spectateRelay = spectate
 
+	// Wire player lookup for battle_start banner data.
+	if playerService != nil {
+		relay.playerLookup = func(ctx context.Context, playerID string) (string, int64, error) {
+			p, err := playerService.GetPlayer(ctx, playerID)
+			if err != nil {
+				return "", 0, err
+			}
+			if p == nil {
+				return "", 0, nil
+			}
+			return p.Username, p.Level, nil
+		}
+	}
+
 	return m
 }
 
@@ -90,6 +104,7 @@ func (m *Manager) StartMatchmaking(ctx context.Context) {
 			notifyError("failed to create game")
 			return
 		}
+		m.Relay.RegisterGameMeta(game.GameID, game.Player1ID, game.Player2ID, "pvp")
 		m.Spectate.RegisterGame(game.GameID, game.Player1ID, game.Player2ID)
 		m.Relay.NotifyMatchFound(game.GameID, game.Player1ID, game.Player2ID)
 	})
@@ -191,6 +206,7 @@ func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, da
 		m.sendError(conn, "npc_battle_error", err.Error(), true)
 		return
 	}
+	m.Relay.RegisterGameMeta(game.GameID, game.Player1ID, game.Player2ID, "npc")
 	m.Spectate.RegisterGame(game.GameID, game.Player1ID, game.Player2ID)
 	conn.SendMessage(&WSMessage{
 		Type: constants.WSMsgNpcBattleCreated,

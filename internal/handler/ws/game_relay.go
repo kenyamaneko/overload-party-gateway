@@ -17,6 +17,16 @@ type turnTimerInfo struct {
 	activePlayerID string
 }
 
+// gameMetaInfo stores per-game metadata set at creation time.
+type gameMetaInfo struct {
+	player1ID string
+	player2ID string
+	matchType string // "pvp" or "npc"
+}
+
+// PlayerLookupFunc resolves a player's display name and level by ID.
+type PlayerLookupFunc func(ctx context.Context, playerID string) (name string, level int64, err error)
+
 // GameRelay manages game membership and relays game actions/state between
 // players and the battle server.
 type GameRelay struct {
@@ -25,10 +35,13 @@ type GameRelay struct {
 
 	// spectateRelay is wired in after construction to avoid circular dependencies.
 	spectateRelay *SpectateRelay
+	// playerLookup is wired in after construction by the Manager.
+	playerLookup PlayerLookupFunc
 
 	mu          sync.RWMutex
-	gameMembers map[string][]string // gameID → []playerID
-	playerGames map[string]string   // playerID → gameID
+	gameMembers map[string][]string    // gameID → []playerID
+	playerGames map[string]string      // playerID → gameID
+	gameMeta    map[string]gameMetaInfo // gameID → metadata
 
 	timerMu    sync.Mutex
 	turnTimers map[string]*turnTimerInfo // gameID → active turn timer
@@ -40,7 +53,20 @@ func NewGameRelay(hub *ConnectionHub, battleClient service.BattleClient) *GameRe
 		battleClient: battleClient,
 		gameMembers:  make(map[string][]string),
 		playerGames:  make(map[string]string),
+		gameMeta:     make(map[string]gameMetaInfo),
 		turnTimers:   make(map[string]*turnTimerInfo),
+	}
+}
+
+// RegisterGameMeta stores player IDs and match type for a game.
+// Called at game creation time (matchmaking result or NPC battle start).
+func (r *GameRelay) RegisterGameMeta(gameID, player1ID, player2ID, matchType string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.gameMeta[gameID] = gameMetaInfo{
+		player1ID: player1ID,
+		player2ID: player2ID,
+		matchType: matchType,
 	}
 }
 
@@ -69,6 +95,7 @@ func (r *GameRelay) LeaveGame(playerID string) {
 		r.gameMembers[gameID] = removeString(r.gameMembers[gameID], playerID)
 		if len(r.gameMembers[gameID]) == 0 {
 			delete(r.gameMembers, gameID)
+			delete(r.gameMeta, gameID)
 		}
 	}
 }
@@ -188,10 +215,34 @@ func (r *GameRelay) sendActionPerformed(gameID, actingPlayerID string, result *s
 
 	ctx := context.Background()
 	for _, evt := range result.Events {
-		actionData := mustMarshal(evt.EventData)
+		switch {
+		case evt.PlayerID == "":
+			// System event (turn_start etc.) → send to ALL players
+			for _, pid := range players {
+				state, err := r.battleClient.GetGameStateForPlayer(ctx, gameID, pid)
+				if err != nil {
+					log.Printf("get game state for action_performed (player %s): %v", pid, err)
+					continue
+				}
+				transformed, err := transformGameState(state)
+				if err != nil {
+					log.Printf("transform game state for action_performed (player %s): %v", pid, err)
+					continue
+				}
+				actionData := r.transformActionData(evt, state)
+				r.hub.SendToPlayer(pid, &WSMessage{
+					Type: constants.WSMsgActionPerformed,
+					Data: mustMarshal(ActionPerformedMessage{
+						Sequence:   evt.Sequence,
+						ActionType: evt.EventType,
+						ActionData: actionData,
+						State:      transformed,
+					}),
+				})
+			}
 
-		if evt.PlayerID == actingPlayerID || evt.PlayerID == "" {
-			// Player's own action (or system event) → send to opponents
+		case evt.PlayerID == actingPlayerID:
+			// Player's own action → send to opponents
 			for _, pid := range players {
 				if pid == actingPlayerID {
 					continue
@@ -206,6 +257,7 @@ func (r *GameRelay) sendActionPerformed(gameID, actingPlayerID string, result *s
 					log.Printf("transform game state for action_performed (player %s): %v", pid, err)
 					continue
 				}
+				actionData := r.transformActionData(evt, state)
 				r.hub.SendToPlayer(pid, &WSMessage{
 					Type: constants.WSMsgActionPerformed,
 					Data: mustMarshal(ActionPerformedMessage{
@@ -216,7 +268,8 @@ func (r *GameRelay) sendActionPerformed(gameID, actingPlayerID string, result *s
 					}),
 				})
 			}
-		} else {
+
+		default:
 			// Other player's action (NPC) → send to the acting player
 			// State snapshot is included from battle server; transform field names.
 			if len(evt.State) == 0 {
@@ -227,6 +280,7 @@ func (r *GameRelay) sendActionPerformed(gameID, actingPlayerID string, result *s
 				log.Printf("transform NPC action state for player %s: %v", actingPlayerID, err)
 				continue
 			}
+			actionData := r.transformActionData(evt, evt.State)
 			r.hub.SendToPlayer(actingPlayerID, &WSMessage{
 				Type: constants.WSMsgActionPerformed,
 				Data: mustMarshal(ActionPerformedMessage{
@@ -238,6 +292,24 @@ func (r *GameRelay) sendActionPerformed(gameID, actingPlayerID string, result *s
 			})
 		}
 	}
+}
+
+// transformActionData converts battle-server event_data to the client format.
+// For turn_start events, it replaces activePlayer with is_my_turn.
+func (r *GameRelay) transformActionData(evt service.ActionEvent, rawState json.RawMessage) json.RawMessage {
+	if evt.EventType != "turn_start" {
+		return mustMarshal(evt.EventData)
+	}
+
+	var b battleGameState
+	if err := json.Unmarshal(rawState, &b); err != nil {
+		return mustMarshal(evt.EventData)
+	}
+
+	return mustMarshal(map[string]interface{}{
+		"turn":       evt.EventData["turn"],
+		"is_my_turn": b.IsMyTurn,
+	})
 }
 
 func (r *GameRelay) broadcastGameOver(gameID string, winnerNum int64, reason string) {
@@ -269,8 +341,132 @@ func (r *GameRelay) HandleGameEnter(conn *Connection, data json.RawMessage) {
 		Type: constants.WSMsgGameEntered,
 		Data: mustMarshal(map[string]string{"game_id": req.GameID}),
 	})
+
+	r.sendBattleStartAndTurnStart(conn, req.GameID)
+	r.advanceNpcIfNeeded(req.GameID, conn.playerID)
 	r.SendGameStateToPlayers(req.GameID)
 	r.SendTurnControlsToPlayers(req.GameID)
+}
+
+// advanceNpcIfNeeded triggers the NPC's first turn if the NPC is the active
+// player. This ensures NPC action events are delivered after game_enter,
+// using the same flow as subsequent NPC turns.
+func (r *GameRelay) advanceNpcIfNeeded(gameID, playerID string) {
+	r.mu.RLock()
+	meta, hasMeta := r.gameMeta[gameID]
+	r.mu.RUnlock()
+
+	if !hasMeta || meta.matchType != "npc" {
+		return
+	}
+
+	ctx := context.Background()
+	result, err := r.battleClient.AdvanceNpcTurn(ctx, gameID, playerID)
+	if err != nil {
+		log.Printf("advance NPC turn (game %s): %v", gameID, err)
+		return
+	}
+
+	r.sendActionPerformed(gameID, playerID, result)
+
+	if result != nil && result.GameOver {
+		r.cancelTurnTimer(gameID)
+		r.broadcastGameOver(gameID, result.WinnerNum, result.WinReason)
+	}
+}
+
+// sendBattleStartAndTurnStart sends battle_start and turn_start action_performed
+// events to the entering player. These are synthetic events generated by the
+// gateway (not from the battle server) because they require player profile data.
+func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string) {
+	ctx := context.Background()
+
+	// Fetch initial game state for this player
+	rawState, err := r.battleClient.GetGameStateForPlayer(ctx, gameID, conn.playerID)
+	if err != nil {
+		log.Printf("get game state for battle_start (player %s): %v", conn.playerID, err)
+		return
+	}
+	transformed, err := transformGameState(rawState)
+	if err != nil {
+		log.Printf("transform game state for battle_start (player %s): %v", conn.playerID, err)
+		return
+	}
+
+	// Resolve game metadata
+	r.mu.RLock()
+	meta, hasMeta := r.gameMeta[gameID]
+	r.mu.RUnlock()
+
+	// Build battle_start action_data
+	battleStartData := map[string]interface{}{
+		"match_type": "pvp",
+	}
+	if hasMeta {
+		battleStartData["match_type"] = meta.matchType
+
+		myName, myLevel := r.lookupPlayer(ctx, conn.playerID)
+		opponentID := meta.player2ID
+		if conn.playerID == meta.player2ID {
+			opponentID = meta.player1ID
+		}
+		oppName, oppLevel := r.lookupPlayer(ctx, opponentID)
+
+		battleStartData["my_name"] = myName
+		battleStartData["my_level"] = myLevel
+		battleStartData["opponent_name"] = oppName
+		battleStartData["opponent_level"] = oppLevel
+	}
+
+	// Send battle_start
+	conn.SendMessage(&WSMessage{
+		Type: constants.WSMsgActionPerformed,
+		Data: mustMarshal(ActionPerformedMessage{
+			Sequence:   0,
+			ActionType: "battle_start",
+			ActionData: mustMarshal(battleStartData),
+			State:      transformed,
+		}),
+	})
+
+	// Build turn_start action_data from game state
+	var b battleGameState
+	if err := json.Unmarshal(rawState, &b); err == nil {
+		turnStartData := map[string]interface{}{
+			"turn":      b.CurrentTurn,
+			"is_my_turn": b.IsMyTurn,
+		}
+		conn.SendMessage(&WSMessage{
+			Type: constants.WSMsgActionPerformed,
+			Data: mustMarshal(ActionPerformedMessage{
+				Sequence:   0,
+				ActionType: "turn_start",
+				ActionData: mustMarshal(turnStartData),
+				State:      transformed,
+			}),
+		})
+	}
+}
+
+// lookupPlayer resolves a player's display name and level.
+// Returns defaults for NPC or on error.
+func (r *GameRelay) lookupPlayer(ctx context.Context, playerID string) (string, int64) {
+	if isNpcPlayer(playerID) {
+		return "NPC", 0
+	}
+	if r.playerLookup == nil {
+		return "", 0
+	}
+	name, level, err := r.playerLookup(ctx, playerID)
+	if err != nil {
+		log.Printf("lookup player %s: %v", playerID, err)
+		return "", 0
+	}
+	return name, level
+}
+
+func isNpcPlayer(playerID string) bool {
+	return len(playerID) >= 4 && playerID[:4] == "npc-"
 }
 
 // HandleGameAction processes a game_action message.
