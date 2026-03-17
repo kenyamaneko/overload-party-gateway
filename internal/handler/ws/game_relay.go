@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -218,56 +219,17 @@ func (r *GameRelay) sendActionPerformed(gameID, actingPlayerID string, result *s
 		switch {
 		case evt.PlayerID == "":
 			// System event (turn_start etc.) → send to ALL players
-			for _, pid := range players {
-				state, err := r.battleClient.GetGameStateForPlayer(ctx, gameID, pid)
-				if err != nil {
-					log.Printf("get game state for action_performed (player %s): %v", pid, err)
-					continue
-				}
-				transformed, err := transformGameState(state)
-				if err != nil {
-					log.Printf("transform game state for action_performed (player %s): %v", pid, err)
-					continue
-				}
-				actionData := r.transformActionData(evt, state)
-				r.hub.SendToPlayer(pid, &WSMessage{
-					Type: constants.WSMsgActionPerformed,
-					Data: mustMarshal(ActionPerformedMessage{
-						Sequence:   evt.Sequence,
-						ActionType: evt.EventType,
-						ActionData: actionData,
-						State:      transformed,
-					}),
-				})
-			}
+			r.sendActionToPlayers(ctx, gameID, players, evt)
 
 		case evt.PlayerID == actingPlayerID:
 			// Player's own action → send to opponents
+			opponents := make([]string, 0, len(players))
 			for _, pid := range players {
-				if pid == actingPlayerID {
-					continue
+				if pid != actingPlayerID {
+					opponents = append(opponents, pid)
 				}
-				state, err := r.battleClient.GetGameStateForPlayer(ctx, gameID, pid)
-				if err != nil {
-					log.Printf("get game state for action_performed (player %s): %v", pid, err)
-					continue
-				}
-				transformed, err := transformGameState(state)
-				if err != nil {
-					log.Printf("transform game state for action_performed (player %s): %v", pid, err)
-					continue
-				}
-				actionData := r.transformActionData(evt, state)
-				r.hub.SendToPlayer(pid, &WSMessage{
-					Type: constants.WSMsgActionPerformed,
-					Data: mustMarshal(ActionPerformedMessage{
-						Sequence:   evt.Sequence,
-						ActionType: evt.EventType,
-						ActionData: actionData,
-						State:      transformed,
-					}),
-				})
 			}
+			r.sendActionToPlayers(ctx, gameID, opponents, evt)
 
 		default:
 			// Other player's action (NPC) → send to the acting player
@@ -291,6 +253,33 @@ func (r *GameRelay) sendActionPerformed(gameID, actingPlayerID string, result *s
 				}),
 			})
 		}
+	}
+}
+
+// sendActionToPlayers fetches each player's game state, transforms it,
+// and sends the action_performed message.
+func (r *GameRelay) sendActionToPlayers(ctx context.Context, gameID string, pids []string, evt service.ActionEvent) {
+	for _, pid := range pids {
+		state, err := r.battleClient.GetGameStateForPlayer(ctx, gameID, pid)
+		if err != nil {
+			log.Printf("get game state for action_performed (player %s): %v", pid, err)
+			continue
+		}
+		transformed, err := transformGameState(state)
+		if err != nil {
+			log.Printf("transform game state for action_performed (player %s): %v", pid, err)
+			continue
+		}
+		actionData := r.transformActionData(evt, state)
+		r.hub.SendToPlayer(pid, &WSMessage{
+			Type: constants.WSMsgActionPerformed,
+			Data: mustMarshal(ActionPerformedMessage{
+				Sequence:   evt.Sequence,
+				ActionType: evt.EventType,
+				ActionData: actionData,
+				State:      transformed,
+			}),
+		})
 	}
 }
 
@@ -342,6 +331,9 @@ func (r *GameRelay) HandleGameEnter(conn *Connection, data json.RawMessage) {
 		Data: mustMarshal(map[string]string{"game_id": req.GameID}),
 	})
 
+	// battle_start/turn_start carry the initial state for entry animation.
+	// SendGameStateToPlayers follows to deliver the authoritative state
+	// and start the turn timer. Clients use the two messages for different purposes.
 	r.sendBattleStartAndTurnStart(conn, req.GameID)
 	r.advanceNpcIfNeeded(req.GameID, conn.playerID)
 	r.SendGameStateToPlayers(req.GameID)
@@ -385,11 +377,13 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 	rawState, err := r.battleClient.GetGameStateForPlayer(ctx, gameID, conn.playerID)
 	if err != nil {
 		log.Printf("get game state for battle_start (player %s): %v", conn.playerID, err)
+		r.sendErrorToPlayer(conn.playerID, "game_state_error", "failed to retrieve game state", true)
 		return
 	}
 	transformed, err := transformGameState(rawState)
 	if err != nil {
 		log.Printf("transform game state for battle_start (player %s): %v", conn.playerID, err)
+		r.sendErrorToPlayer(conn.playerID, "game_state_error", "failed to process game state", true)
 		return
 	}
 
@@ -466,7 +460,7 @@ func (r *GameRelay) lookupPlayer(ctx context.Context, playerID string) (string, 
 }
 
 func isNpcPlayer(playerID string) bool {
-	return len(playerID) >= 4 && playerID[:4] == "npc-"
+	return strings.HasPrefix(playerID, "npc-")
 }
 
 // HandleGameAction processes a game_action message.
@@ -490,6 +484,9 @@ func (r *GameRelay) HandleGameAction(ctx context.Context, conn *Connection, data
 		return
 	}
 
+	// action_performed carries the state snapshot for client-side animation.
+	// SendGameStateToPlayers follows to deliver the authoritative final state
+	// and reset the turn timer. Clients use the two messages for different purposes.
 	r.sendActionPerformed(action.GameID, conn.playerID, result)
 	r.SendGameStateToPlayers(action.GameID)
 	r.SendTurnControlsToPlayers(action.GameID)

@@ -251,6 +251,68 @@ func TestTransformGameState_AvailableActions(t *testing.T) {
 }
 
 // --------------------------------------------------------------------------
+// flexString — number/null/invalid handling
+// --------------------------------------------------------------------------
+
+func TestFlexString_UnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    *string
+		wantErr bool
+	}{
+		{"string value", `"S"`, ptr("S"), false},
+		{"integer", `1`, ptr("1"), false},
+		{"float", `2.5`, ptr("2.5"), false},
+		{"null", `null`, nil, false},
+		{"invalid array", `[]`, nil, true},
+		{"invalid object", `{}`, nil, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var f flexString
+			err := json.Unmarshal([]byte(tc.input), &f)
+			if tc.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			if tc.want == nil {
+				assert.Nil(t, f.Value)
+			} else {
+				require.NotNil(t, f.Value)
+				assert.Equal(t, *tc.want, *f.Value)
+			}
+		})
+	}
+}
+
+func TestFlexString_MarshalJSON(t *testing.T) {
+	t.Run("non-nil", func(t *testing.T) {
+		f := flexString{ptr("A")}
+		data, err := json.Marshal(f)
+		require.NoError(t, err)
+		assert.Equal(t, `"A"`, string(data))
+	})
+	t.Run("nil", func(t *testing.T) {
+		f := flexString{nil}
+		data, err := json.Marshal(f)
+		require.NoError(t, err)
+		assert.Equal(t, `null`, string(data))
+	})
+}
+
+func TestFlexString_RoundTripInBattleState(t *testing.T) {
+	// Simulate C# sending Rank as integer (JsonStringEnumConverter not applied)
+	raw := `{"instanceId":"ri-1","cardId":100,"artNo":1,"rank":1,"instanceFamily":"familyA","faceUp":true,"currentAV":0,"maxAV":0,"damage":0,"monetizedAmount":0,"hasAttacked":false,"effectUsedThisTurn":false,"scaleChangedThisTurn":false,"deployedOnTurn":0,"deployOrder":0,"migratingOnTurn":0,"elasticBonus":0,"attachments":[],"temporaryEffects":[]}`
+
+	var ri battleResourceInstance
+	require.NoError(t, json.Unmarshal([]byte(raw), &ri))
+	require.NotNil(t, ri.Rank.Value)
+	assert.Equal(t, "1", *ri.Rank.Value, "integer rank should be converted to string")
+}
+
+// --------------------------------------------------------------------------
 // 2. Invalid JSON
 // --------------------------------------------------------------------------
 
