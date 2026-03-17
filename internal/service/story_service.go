@@ -55,17 +55,16 @@ func (s *StoryService) ListEpisodes(ctx context.Context, playerID, lang string) 
 
 	result := make([]model.EpisodeWithStatus, 0, len(episodes))
 	for _, ep := range episodes {
+		reasons := checkUnlock(ep, uc)
 		status := model.EpisodeWithStatus{
 			EpisodeID:     ep.EpisodeID,
 			Faction:       ep.Faction,
 			EpisodeNumber: ep.EpisodeNumber,
 			Title:         episodeTitle(ep, lang),
 			IsCompleted:   uc.CompletedEpisodes[ep.EpisodeID],
+			IsUnlocked:    len(reasons) == 0,
+			LockReasons:   reasons,
 		}
-
-		lockReason := checkUnlock(ep, uc)
-		status.IsUnlocked = lockReason == nil
-		status.LockReason = lockReason
 
 		result = append(result, status)
 	}
@@ -117,30 +116,32 @@ func (s *StoryService) validateUnlock(ctx context.Context, ep *model.ScenarioEpi
 		return fmt.Errorf("get unlock context: %w", err)
 	}
 
-	if reason := checkUnlock(ep, uc); reason != nil {
+	if reasons := checkUnlock(ep, uc); len(reasons) > 0 {
 		return ErrEpisodeLocked
 	}
 	return nil
 }
 
-func checkUnlock(ep *model.ScenarioEpisode, uc *model.StoryUnlockContext) *model.LockReason {
+func checkUnlock(ep *model.ScenarioEpisode, uc *model.StoryUnlockContext) []model.LockReason {
+	var reasons []model.LockReason
+
 	if uc.PlayerLevel < ep.RequiredLevel {
-		return model.NewLockReasonLevel(ep.RequiredLevel, uc.PlayerLevel)
+		reasons = append(reasons, model.NewLockReasonLevel(ep.RequiredLevel, uc.PlayerLevel))
 	}
 
 	for _, f := range ep.RequiredFactions {
 		if !uc.OwnedFactions[f] {
-			return model.NewLockReasonFaction(f)
+			reasons = append(reasons, model.NewLockReasonFaction(f))
 		}
 	}
 
 	for _, reqEp := range ep.RequiredEpisodes {
 		if !uc.CompletedEpisodes[reqEp] {
-			return model.NewLockReasonEpisode(reqEp)
+			reasons = append(reasons, model.NewLockReasonEpisode(reqEp))
 		}
 	}
 
-	return nil
+	return reasons
 }
 
 func (s *StoryService) readScript(ctx context.Context, pathTemplate, lang string) (string, error) {

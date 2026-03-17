@@ -1,7 +1,6 @@
 package model
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -39,42 +38,41 @@ type PlayerFaction struct {
 
 // EpisodeWithStatus is the API response for a single episode with unlock status.
 type EpisodeWithStatus struct {
-	EpisodeID     string      `json:"episode_id"`
-	Faction       *string     `json:"faction"`
-	EpisodeNumber int64       `json:"episode_number"`
-	Title         string      `json:"title"`
-	ThumbnailURL  *string     `json:"thumbnail_url"`
-	IsUnlocked    bool        `json:"is_unlocked"`
-	IsCompleted   bool        `json:"is_completed"`
-	LockReason    *LockReason `json:"lock_reason"`
+	EpisodeID     string       `json:"episode_id"`
+	Faction       *string      `json:"faction"`
+	EpisodeNumber int64        `json:"episode_number"`
+	Title         string       `json:"title"`
+	ThumbnailURL  *string      `json:"thumbnail_url"`
+	IsUnlocked    bool         `json:"is_unlocked"`
+	IsCompleted   bool         `json:"is_completed"`
+	LockReasons   []LockReason `json:"lock_reasons"`
 }
 
-// LockReason describes why an episode is locked.
-// Required and Current are always strings for type safety and consistent JSON serialisation.
+// LockReason describes a single unmet unlock condition for an episode.
 type LockReason struct {
 	Type     string `json:"type"`               // "level" | "faction" | "episode"
-	Required string `json:"required"`
-	Current  string `json:"current,omitempty"`
+	Required any    `json:"required"`           // int64 for level, string for faction/episode
+	Current  any    `json:"current,omitempty"`  // int64 for level, omitted otherwise
 }
 
 // StoryUnlockContext holds pre-fetched data needed for episode unlock checks.
 type StoryUnlockContext struct {
-	PlayerLevel      int64
-	OwnedFactions    map[string]bool
+	PlayerLevel       int64
+	OwnedFactions     map[string]bool
 	CompletedEpisodes map[string]bool
 }
 
-// NewLockReasonLevel creates a level lock reason.
-func NewLockReasonLevel(required, current int64) *LockReason {
-	return &LockReason{Type: "level", Required: fmt.Sprintf("%d", required), Current: fmt.Sprintf("%d", current)}
+// NewLockReasonLevel creates a level lock reason with numeric values.
+func NewLockReasonLevel(required, current int64) LockReason {
+	return LockReason{Type: "level", Required: required, Current: current}
 }
 
 // NewLockReasonFaction creates a faction lock reason.
-func NewLockReasonFaction(faction string) *LockReason {
-	return &LockReason{Type: "faction", Required: faction}
+func NewLockReasonFaction(faction string) LockReason {
+	return LockReason{Type: "faction", Required: faction}
 }
 
 // NewLockReasonEpisode creates an episode prerequisite lock reason.
-func NewLockReasonEpisode(episodeID string) *LockReason {
-	return &LockReason{Type: "episode", Required: episodeID}
+func NewLockReasonEpisode(episodeID string) LockReason {
+	return LockReason{Type: "episode", Required: episodeID}
 }

@@ -111,6 +111,16 @@ func seedAllFactionEpisodes(env *testStoryEnv) {
 	env.storyRepo.SeedEpisodes(episodes)
 }
 
+// findReasonByType returns the first LockReason with the given type, or nil.
+func findReasonByType(reasons []model.LockReason, typ string) *model.LockReason {
+	for i := range reasons {
+		if reasons[i].Type == typ {
+			return &reasons[i]
+		}
+	}
+	return nil
+}
+
 // ---------------------------------------------------------------------------
 // ListEpisodes tests
 // ---------------------------------------------------------------------------
@@ -130,15 +140,15 @@ func TestListEpisodes_UnlockedAndLocked(t *testing.T) {
 	t.Run("first episode is unlocked", func(t *testing.T) {
 		assert.Equal(t, "she_ep1", episodes[0].EpisodeID)
 		assert.True(t, episodes[0].IsUnlocked)
-		assert.Nil(t, episodes[0].LockReason)
+		assert.Empty(t, episodes[0].LockReasons)
 		assert.Equal(t, "SHE 第1章", episodes[0].Title)
 	})
 
 	t.Run("second episode locked by level", func(t *testing.T) {
 		assert.Equal(t, "she_ep2", episodes[1].EpisodeID)
 		assert.False(t, episodes[1].IsUnlocked)
-		require.NotNil(t, episodes[1].LockReason)
-		assert.Equal(t, "level", episodes[1].LockReason.Type)
+		require.NotEmpty(t, episodes[1].LockReasons)
+		assert.NotNil(t, findReasonByType(episodes[1].LockReasons, "level"))
 	})
 }
 
@@ -152,9 +162,10 @@ func TestListEpisodes_LockedByFaction(t *testing.T) {
 
 	require.Len(t, episodes, 2)
 	assert.False(t, episodes[0].IsUnlocked)
-	require.NotNil(t, episodes[0].LockReason)
-	assert.Equal(t, "faction", episodes[0].LockReason.Type)
-	assert.Equal(t, "SHE", episodes[0].LockReason.Required)
+	require.NotEmpty(t, episodes[0].LockReasons)
+	r := findReasonByType(episodes[0].LockReasons, "faction")
+	require.NotNil(t, r)
+	assert.Equal(t, "SHE", r.Required)
 }
 
 func TestListEpisodes_LockedByEpisode(t *testing.T) {
@@ -169,8 +180,8 @@ func TestListEpisodes_LockedByEpisode(t *testing.T) {
 
 	ep2 := episodes[1]
 	assert.False(t, ep2.IsUnlocked)
-	require.NotNil(t, ep2.LockReason)
-	assert.Equal(t, "episode", ep2.LockReason.Type)
+	require.NotEmpty(t, ep2.LockReasons)
+	assert.NotNil(t, findReasonByType(ep2.LockReasons, "episode"))
 }
 
 func TestListEpisodes_EnglishTitle(t *testing.T) {
@@ -228,8 +239,8 @@ func TestListEpisodes_GrandEnding_Locked(t *testing.T) {
 	}
 	require.NotNil(t, final)
 	assert.False(t, final.IsUnlocked)
-	require.NotNil(t, final.LockReason)
-	assert.Equal(t, "episode", final.LockReason.Type)
+	require.NotEmpty(t, final.LockReasons)
+	assert.NotNil(t, findReasonByType(final.LockReasons, "episode"))
 }
 
 func TestListEpisodes_GrandEnding_LockedByFaction(t *testing.T) {
@@ -255,8 +266,8 @@ func TestListEpisodes_GrandEnding_LockedByFaction(t *testing.T) {
 	}
 	require.NotNil(t, final)
 	assert.False(t, final.IsUnlocked)
-	require.NotNil(t, final.LockReason)
-	assert.Equal(t, "faction", final.LockReason.Type)
+	require.NotEmpty(t, final.LockReasons)
+	assert.NotNil(t, findReasonByType(final.LockReasons, "faction"))
 }
 
 func TestListEpisodes_GrandEnding_LockedByLevel(t *testing.T) {
@@ -283,10 +294,11 @@ func TestListEpisodes_GrandEnding_LockedByLevel(t *testing.T) {
 	}
 	require.NotNil(t, final)
 	assert.False(t, final.IsUnlocked)
-	require.NotNil(t, final.LockReason)
-	assert.Equal(t, "level", final.LockReason.Type)
-	assert.Equal(t, "22", final.LockReason.Required)
-	assert.Equal(t, "10", final.LockReason.Current)
+	require.NotEmpty(t, final.LockReasons)
+	r := findReasonByType(final.LockReasons, "level")
+	require.NotNil(t, r)
+	assert.Equal(t, int64(22), r.Required)
+	assert.Equal(t, int64(10), r.Current)
 }
 
 func TestListEpisodes_GrandEnding_Unlocked(t *testing.T) {
@@ -313,9 +325,42 @@ func TestListEpisodes_GrandEnding_Unlocked(t *testing.T) {
 	}
 	require.NotNil(t, final)
 	assert.True(t, final.IsUnlocked)
-	assert.Nil(t, final.LockReason)
+	assert.Empty(t, final.LockReasons)
 	assert.Nil(t, final.Faction)
 	assert.Equal(t, "最終話", final.Title)
+}
+
+// ---------------------------------------------------------------------------
+// Grand Ending: multiple lock reasons returned at once
+// ---------------------------------------------------------------------------
+
+func TestListEpisodes_GrandEnding_MultipleLockReasons(t *testing.T) {
+	env := newTestStoryEnv()
+	createStoryTestPlayer(env, "p1", 10)
+	seedAllFactionEpisodes(env)
+
+	// Own only SHE, complete no episodes → level + 3 factions + 4 episodes = 8 reasons
+	_ = env.factionRepo.AddPlayerFaction(context.Background(), "p1", "SHE", "initial_selection")
+
+	episodes, err := env.svc.ListEpisodes(context.Background(), "p1", "ja")
+	require.NoError(t, err)
+
+	var final *model.EpisodeWithStatus
+	for i := range episodes {
+		if episodes[i].EpisodeID == "final" {
+			final = &episodes[i]
+			break
+		}
+	}
+	require.NotNil(t, final)
+	assert.False(t, final.IsUnlocked)
+
+	assert.NotNil(t, findReasonByType(final.LockReasons, "level"))
+	assert.NotNil(t, findReasonByType(final.LockReasons, "faction"))
+	assert.NotNil(t, findReasonByType(final.LockReasons, "episode"))
+
+	// Count: 1 level + 3 factions (Tenki, Sugar, Tuners) + 4 episodes
+	assert.Len(t, final.LockReasons, 8)
 }
 
 // ---------------------------------------------------------------------------
@@ -432,11 +477,11 @@ func TestCheckUnlock_AllConditionsMet(t *testing.T) {
 		CompletedEpisodes: map[string]bool{"she_ep1": true},
 	}
 
-	reason := checkUnlock(ep, uc)
-	assert.Nil(t, reason)
+	reasons := checkUnlock(ep, uc)
+	assert.Empty(t, reasons)
 }
 
-func TestCheckUnlock_LevelPriority(t *testing.T) {
+func TestCheckUnlock_AllConditionsUnmet(t *testing.T) {
 	ep := &model.ScenarioEpisode{
 		RequiredLevel:    5,
 		RequiredFactions: []string{"SHE"},
@@ -449,14 +494,36 @@ func TestCheckUnlock_LevelPriority(t *testing.T) {
 		CompletedEpisodes: map[string]bool{},
 	}
 
-	reason := checkUnlock(ep, uc)
-	require.NotNil(t, reason)
-	assert.Equal(t, "level", reason.Type)
-	assert.Equal(t, "5", reason.Required)
-	assert.Equal(t, "1", reason.Current)
+	reasons := checkUnlock(ep, uc)
+	require.Len(t, reasons, 3)
+	assert.Equal(t, "level", reasons[0].Type)
+	assert.Equal(t, int64(5), reasons[0].Required)
+	assert.Equal(t, int64(1), reasons[0].Current)
+	assert.Equal(t, "faction", reasons[1].Type)
+	assert.Equal(t, "SHE", reasons[1].Required)
+	assert.Equal(t, "episode", reasons[2].Type)
+	assert.Equal(t, "she_ep1", reasons[2].Required)
 }
 
-func TestCheckUnlock_FactionAfterLevel(t *testing.T) {
+func TestCheckUnlock_LevelOnly(t *testing.T) {
+	ep := &model.ScenarioEpisode{
+		RequiredLevel:    5,
+		RequiredFactions: []string{"SHE"},
+		RequiredEpisodes: []string{"she_ep1"},
+	}
+
+	uc := &model.StoryUnlockContext{
+		PlayerLevel:       1,
+		OwnedFactions:     map[string]bool{"SHE": true},
+		CompletedEpisodes: map[string]bool{"she_ep1": true},
+	}
+
+	reasons := checkUnlock(ep, uc)
+	require.Len(t, reasons, 1)
+	assert.Equal(t, "level", reasons[0].Type)
+}
+
+func TestCheckUnlock_FactionOnly(t *testing.T) {
 	ep := &model.ScenarioEpisode{
 		RequiredLevel:    5,
 		RequiredFactions: []string{"SHE"},
@@ -466,15 +533,15 @@ func TestCheckUnlock_FactionAfterLevel(t *testing.T) {
 	uc := &model.StoryUnlockContext{
 		PlayerLevel:       10,
 		OwnedFactions:     map[string]bool{},
-		CompletedEpisodes: map[string]bool{},
+		CompletedEpisodes: map[string]bool{"she_ep1": true},
 	}
 
-	reason := checkUnlock(ep, uc)
-	require.NotNil(t, reason)
-	assert.Equal(t, "faction", reason.Type)
+	reasons := checkUnlock(ep, uc)
+	require.Len(t, reasons, 1)
+	assert.Equal(t, "faction", reasons[0].Type)
 }
 
-func TestCheckUnlock_EpisodeAfterFaction(t *testing.T) {
+func TestCheckUnlock_EpisodeOnly(t *testing.T) {
 	ep := &model.ScenarioEpisode{
 		RequiredLevel:    5,
 		RequiredFactions: []string{"SHE"},
@@ -487,8 +554,8 @@ func TestCheckUnlock_EpisodeAfterFaction(t *testing.T) {
 		CompletedEpisodes: map[string]bool{},
 	}
 
-	reason := checkUnlock(ep, uc)
-	require.NotNil(t, reason)
-	assert.Equal(t, "episode", reason.Type)
-	assert.Equal(t, "she_ep1", reason.Required)
+	reasons := checkUnlock(ep, uc)
+	require.Len(t, reasons, 1)
+	assert.Equal(t, "episode", reasons[0].Type)
+	assert.Equal(t, "she_ep1", reasons[0].Required)
 }
