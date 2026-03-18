@@ -50,8 +50,6 @@ func (s *AuthService) Register(ctx context.Context, firebaseUID, username string
 		Username:    username,
 		Level:       1,
 		Exp:         0,
-		Wins:        0,
-		Losses:      0,
 		IsPremium:   false,
 		CreatedAt:   now,
 		UpdatedAt:   now,

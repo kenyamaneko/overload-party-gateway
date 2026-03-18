@@ -53,8 +53,6 @@ func TestRegister_Success(t *testing.T) {
 		assert.Equal(t, "TestUser", player.Username)
 		assert.Equal(t, int64(1), player.Level)
 		assert.Equal(t, int64(0), player.Exp)
-		assert.Equal(t, int64(0), player.Wins)
-		assert.Equal(t, int64(0), player.Losses)
 		assert.False(t, player.IsPremium)
 	})
 

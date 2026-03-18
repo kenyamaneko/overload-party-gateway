@@ -90,7 +90,6 @@ make test-db-up        # テスト用 PostgreSQL 起動
 make test-db-down      # テスト用 PostgreSQL 停止
 make lint              # Lint 実行
 make fmt               # コードフォーマット
-make generate          # コード生成 (YAML → Go/JSON)
 make build             # Docker イメージビルド
 ```
 

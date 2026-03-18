@@ -1,6 +1,6 @@
 .PHONY: build test test-unit test-integration test-db-up test-db-down lint vet fmt \
        run run-local run-gateway \
-       generate update-common clean help
+       update-common clean help
 
 # ─── Environment ─────────────────────────────────────────
 ifneq (,$(wildcard .env))
@@ -14,15 +14,6 @@ MODULE := github.com/kenyamaneko/$(APP)
 
 # ─── Common Repo ─────────────────────────────────────────
 COMMON_DIR  ?= $(CURDIR)/../overload-party-common
-CLIENT_DIR  ?= $(CURDIR)/../overload-party-client
-BATTLE_DIR  ?= $(CURDIR)/../overload-party-battle
-
-# ─── Code Generation ────────────────────────────────────
-generate:  ## Generate cards.json, constants, cardno_gen.go, CARDS.md
-	python3 $(COMMON_DIR)/scripts/generate_from_yaml.py \
-		--gateway-dir $(CURDIR) \
-		--battle-dir $(BATTLE_DIR) \
-		--client-dir $(CLIENT_DIR)
 
 # ─── Dependency ──────────────────────────────────────────
 COMMON_PKG := github.com/kenyamaneko/overload-party-common/packages/go

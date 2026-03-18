@@ -35,15 +35,13 @@ func (r *PgPlayerRepository) Create(ctx context.Context, player *model.Player, d
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	_, err = tx.Exec(ctx,
-		`INSERT INTO players (player_id, firebase_uid, username, level, exp, wins, losses, is_premium, equipped_icon_no, selected_faction, premium_expires_at, created_at, updated_at)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+		`INSERT INTO players (player_id, firebase_uid, username, level, exp, is_premium, equipped_icon_no, selected_faction, premium_expires_at, created_at, updated_at)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
 		player.PlayerID,
 		player.FirebaseUID,
 		player.Username,
 		player.Level,
 		player.Exp,
-		player.Wins,
-		player.Losses,
 		player.IsPremium,
 		player.EquippedIconNo,
 		player.SelectedFaction,
@@ -76,7 +74,7 @@ func (r *PgPlayerRepository) Create(ctx context.Context, player *model.Player, d
 // FindByID looks up a player by primary key.
 func (r *PgPlayerRepository) FindByID(ctx context.Context, playerID string) (*model.Player, error) {
 	row := r.pool.QueryRow(ctx,
-		`SELECT player_id, firebase_uid, username, level, exp, wins, losses, is_premium, equipped_icon_no, selected_faction, premium_expires_at, created_at, updated_at
+		`SELECT player_id, firebase_uid, username, level, exp, is_premium, equipped_icon_no, selected_faction, premium_expires_at, created_at, updated_at
 		 FROM players WHERE player_id = $1`,
 		playerID,
 	)
@@ -95,7 +93,7 @@ func (r *PgPlayerRepository) FindByID(ctx context.Context, playerID string) (*mo
 // Returns (nil, nil) when no matching row exists.
 func (r *PgPlayerRepository) FindByFirebaseUID(ctx context.Context, firebaseUID string) (*model.Player, error) {
 	row := r.pool.QueryRow(ctx,
-		`SELECT player_id, firebase_uid, username, level, exp, wins, losses, is_premium, equipped_icon_no, selected_faction, premium_expires_at, created_at, updated_at
+		`SELECT player_id, firebase_uid, username, level, exp, is_premium, equipped_icon_no, selected_faction, premium_expires_at, created_at, updated_at
 		 FROM players WHERE firebase_uid = $1 LIMIT 1`,
 		firebaseUID,
 	)
@@ -178,7 +176,7 @@ func (r *PgPlayerRepository) UpdateUsername(ctx context.Context, playerID string
 	row := r.pool.QueryRow(ctx,
 		`UPDATE players SET username = $1, updated_at = NOW()
 		 WHERE player_id = $2
-		 RETURNING player_id, firebase_uid, username, level, exp, wins, losses, is_premium, equipped_icon_no, selected_faction, premium_expires_at, created_at, updated_at`,
+		 RETURNING player_id, firebase_uid, username, level, exp, is_premium, equipped_icon_no, selected_faction, premium_expires_at, created_at, updated_at`,
 		username, playerID,
 	)
 
@@ -222,8 +220,6 @@ func scanPlayer(row pgx.Row) (*model.Player, error) {
 		&p.Username,
 		&p.Level,
 		&p.Exp,
-		&p.Wins,
-		&p.Losses,
 		&p.IsPremium,
 		&p.EquippedIconNo,
 		&p.SelectedFaction,

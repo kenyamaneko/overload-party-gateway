@@ -13,7 +13,6 @@ type PlayerCardWithDef = genmodel.PlayerCardWithDef
 type Deck = genmodel.Deck
 type DeckCard = genmodel.DeckCard
 type GameConfig = genmodel.GameConfig
-type Match = genmodel.Match
 type Player = genmodel.Player
 type PlayerDailyBattle = genmodel.PlayerDailyBattle
 type PassiveEffect = genmodel.PassiveEffect
