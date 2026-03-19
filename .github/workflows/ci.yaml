@@ -15,7 +15,7 @@ env:
   REGISTRY: asia-northeast1-docker.pkg.dev
   PROJECT_ID: keyandnotes-platform
   REPOSITORY: overload-party
-  IMAGE_NAME: overload-party-gateway
+  IMAGE_NAME: gateway
 
 jobs:
   lint:
