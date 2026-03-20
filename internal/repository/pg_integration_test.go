@@ -358,7 +358,7 @@ func TestPgDeck_GetPlayerCards(t *testing.T) {
 		{PlayerID: pid, CardNo: 1, ArtNo: 1, Count: 5},
 		{PlayerID: pid, CardNo: 2, ArtNo: 1, Count: 3},
 	})
-	repo := NewPgDeckRepository(pool)
+	repo := NewPgPlayerCardRepository(pool)
 
 	cards, err := repo.GetPlayerCards(context.Background(), pid)
 	require.NoError(t, err)
@@ -585,8 +585,8 @@ func TestPgShop_CreatePurchaseWithCards(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify player cards were inserted
-	deckRepo := NewPgDeckRepository(pool)
-	pc, _ := deckRepo.GetPlayerCards(ctx, pid)
+	pcRepo := NewPgPlayerCardRepository(pool)
+	pc, _ := pcRepo.GetPlayerCards(ctx, pid)
 	assert.Len(t, pc, 2)
 }
 
@@ -683,8 +683,8 @@ func TestPgShop_InsertPlayerCards(t *testing.T) {
 	err = repo.InsertPlayerCards(ctx, cards2)
 	require.NoError(t, err)
 
-	deckRepo := NewPgDeckRepository(pool)
-	pc, _ := deckRepo.GetPlayerCards(ctx, pid)
+	pcRepo := NewPgPlayerCardRepository(pool)
+	pc, _ := pcRepo.GetPlayerCards(ctx, pid)
 	require.Len(t, pc, 1)
 	assert.Equal(t, 5, pc[0].Count) // 2 + 3
 }

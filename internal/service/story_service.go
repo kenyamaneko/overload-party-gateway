@@ -26,12 +26,8 @@ type StoryService struct {
 }
 
 // NewStoryService creates a new StoryService.
-// factionRepo and playerRepo are retained in the constructor signature for backward
-// compatibility but are no longer used — unlock context is fetched via storyRepo.GetUnlockContext.
 func NewStoryService(
 	storyRepo repository.StoryRepo,
-	factionRepo repository.FactionRepo,
-	playerRepo repository.PlayerRepo,
 	gcsClient *storage.Client,
 	bucketName string,
 ) *StoryService {

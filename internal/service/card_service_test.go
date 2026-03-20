@@ -17,13 +17,13 @@ func TestGetAllCards_WithOwnership(t *testing.T) {
 		3: {CardNo: 3, CardName: "Heal"},
 	}
 	cardRepo := repository.NewMockCardRepository(cards)
-	deckRepo := repository.NewMockDeckRepository()
-	deckRepo.SeedPlayerCards("player1", []*model.PlayerCard{
+	pcRepo := repository.NewMockPlayerCardRepository()
+	pcRepo.SeedPlayerCards("player1", []*model.PlayerCard{
 		{PlayerID: "player1", CardNo: 1, ArtNo: 1, Count: 1},
 		{PlayerID: "player1", CardNo: 3, ArtNo: 1, Count: 2},
 	})
 
-	svc := NewCardService(cardRepo, deckRepo)
+	svc := NewCardService(cardRepo, pcRepo)
 
 	result, err := svc.GetAllCards(context.Background(), "player1")
 	require.NoError(t, err)
@@ -42,9 +42,8 @@ func TestGetAllCards_WithOwnership(t *testing.T) {
 
 func TestGetAllCards_NoCards(t *testing.T) {
 	cardRepo := repository.NewMockCardRepository(map[int64]*model.CardDefinition{})
-	deckRepo := repository.NewMockDeckRepository()
 
-	svc := NewCardService(cardRepo, deckRepo)
+	svc := NewCardService(cardRepo, repository.NewMockPlayerCardRepository())
 
 	result, err := svc.GetAllCards(context.Background(), "player1")
 	require.NoError(t, err)
@@ -57,9 +56,8 @@ func TestGetAllCards_NoOwnedCards(t *testing.T) {
 		2: {CardNo: 2, CardName: "Shield"},
 	}
 	cardRepo := repository.NewMockCardRepository(cards)
-	deckRepo := repository.NewMockDeckRepository()
 
-	svc := NewCardService(cardRepo, deckRepo)
+	svc := NewCardService(cardRepo, repository.NewMockPlayerCardRepository())
 
 	result, err := svc.GetAllCards(context.Background(), "player1")
 	require.NoError(t, err)

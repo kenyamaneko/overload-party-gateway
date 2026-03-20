@@ -10,6 +10,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Compile-time interface check.
+var _ GameConfigRepo = (*PgGameConfigRepository)(nil)
+
 // PgGameConfigRepository implements GameConfigRepo backed by PostgreSQL.
 type PgGameConfigRepository struct {
 	pool *pgxpool.Pool

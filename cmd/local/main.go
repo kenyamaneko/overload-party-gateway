@@ -40,6 +40,7 @@ func main() {
 	// 2. Mock repositories
 	playerRepo := repository.NewMockPlayerRepository()
 	deckRepo := repository.NewMockDeckRepository()
+	playerCardRepo := repository.NewMockPlayerCardRepository()
 	cardRepo := repository.NewMockCardRepository(cardCache.All())
 	shopRepo := repository.NewMockShopRepository()
 	factionRepo := repository.NewMockFactionRepository()
@@ -50,10 +51,10 @@ func main() {
 	// 3. Services
 	authService := service.NewAuthService(playerRepo, shopRepo, userSettingsRepo)
 	playerService := service.NewPlayerService(playerRepo, gameConfigRepo)
-	cardService := service.NewCardService(cardRepo, deckRepo)
-	deckService := service.NewDeckService(deckRepo, cardCache)
+	cardService := service.NewCardService(cardRepo, playerCardRepo)
+	deckService := service.NewDeckService(deckRepo, playerCardRepo, cardCache)
 	shopService := service.NewShopService(shopRepo, playerRepo, factionRepo, cardCache, nil, nil)
-	storyService := service.NewStoryService(storyRepo, factionRepo, playerRepo, nil, "")
+	storyService := service.NewStoryService(storyRepo, nil, "")
 	subscriptionService := service.NewSubscriptionService(shopRepo, playerRepo)
 	// 4. Battle client (uses cfg.BattleServerURL, default http://localhost:9002)
 	log.Printf("battle client: %s", cfg.BattleServerURL)
@@ -89,7 +90,7 @@ func main() {
 				Count:               3, // 保持できるカードは制限しない
 			})
 		}
-		deckRepo.SeedPlayerCards(playerID, playerCards)
+		playerCardRepo.SeedPlayerCards(playerID, playerCards)
 
 		// Create starter decks
 		starterDecks := map[string][]int64{
@@ -132,10 +133,10 @@ func main() {
 	}
 
 	// 6. Bridge: when ShopService inserts player cards (e.g. select-faction),
-	// also add them to MockDeckRepository so DeckService.GetPlayerCards can find them.
+	// also add them to MockPlayerCardRepository so services can read them.
 	shopRepo.SetOnCardsInserted(func(playerID string, cards []*model.PlayerCard) {
-		deckRepo.SeedPlayerCards(playerID, cards)
-		log.Printf("synced %d player cards for %s (shop → deck)", len(cards), playerID)
+		playerCardRepo.SeedPlayerCards(playerID, cards)
+		log.Printf("synced %d player cards for %s (shop → playerCard)", len(cards), playerID)
 	})
 
 	// 7. Router (DevAuth instead of FirebaseAuth)

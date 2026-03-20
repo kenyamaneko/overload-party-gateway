@@ -112,6 +112,11 @@ func (m *Manager) StartMatchmaking(ctx context.Context) {
 }
 
 // HandleMessage routes an incoming WebSocket message to the appropriate handler.
+//
+// TODO: context.Background() means in-flight operations (DB queries, battle
+// server HTTP calls) continue even after the WebSocket disconnects. Ideally
+// Connection should carry a context that is cancelled on disconnect, and
+// HandleMessage should derive from it so resources are released promptly.
 func (m *Manager) HandleMessage(conn *Connection, msg *WSMessage) {
 	ctx := context.Background()
 
@@ -161,20 +166,20 @@ func (m *Manager) HandleMessage(conn *Connection, msg *WSMessage) {
 func (m *Manager) handleMatchmakingStart(ctx context.Context, conn *Connection, data json.RawMessage) {
 	var req MatchmakingStartMessage
 	if err := json.Unmarshal(data, &req); err != nil {
-		m.sendError(conn, "invalid_data", "invalid matchmaking_start data", false)
+		sendError(conn, "invalid_data", "invalid matchmaking_start data", false)
 		return
 	}
 
 	if msg, err := m.checkAndIncrementBattleLimit(ctx, conn.playerID); err != nil {
-		m.sendError(conn, "matchmaking_error", err.Error(), false)
+		sendError(conn, "matchmaking_error", err.Error(), false)
 		return
 	} else if msg != "" {
-		m.sendError(conn, "matchmaking_error", msg, false)
+		sendError(conn, "matchmaking_error", msg, false)
 		return
 	}
 
 	if err := m.queue.Join(conn.playerID, req.DeckID); err != nil {
-		m.sendError(conn, "matchmaking_error", err.Error(), true)
+		sendError(conn, "matchmaking_error", err.Error(), true)
 		return
 	}
 	conn.SendMessage(&WSMessage{Type: constants.WSMsgMatchmakingStarted})
@@ -183,27 +188,27 @@ func (m *Manager) handleMatchmakingStart(ctx context.Context, conn *Connection, 
 func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, data json.RawMessage) {
 	var req NPCBattleStartMessage
 	if err := json.Unmarshal(data, &req); err != nil {
-		m.sendError(conn, "invalid_data", "invalid npc_battle_start data", false)
+		sendError(conn, "invalid_data", "invalid npc_battle_start data", false)
 		return
 	}
 
 	if msg, err := m.checkAndIncrementBattleLimit(ctx, conn.playerID); err != nil {
-		m.sendError(conn, "npc_battle_error", err.Error(), false)
+		sendError(conn, "npc_battle_error", err.Error(), false)
 		return
 	} else if msg != "" {
-		m.sendError(conn, "npc_battle_error", msg, false)
+		sendError(conn, "npc_battle_error", msg, false)
 		return
 	}
 
 	cards, err := m.resolveDeckCards(ctx, conn.playerID, req.DeckID)
 	if err != nil {
-		m.sendError(conn, "npc_battle_error", "failed to resolve deck", true)
+		sendError(conn, "npc_battle_error", "failed to resolve deck", true)
 		return
 	}
 
 	game, err := m.battleClient.StartNPCBattle(ctx, conn.playerID, req.DeckID, cards, req.NPCFaction)
 	if err != nil {
-		m.sendError(conn, "npc_battle_error", err.Error(), true)
+		sendError(conn, "npc_battle_error", err.Error(), true)
 		return
 	}
 	m.Relay.RegisterGameMeta(game.GameID, game.Player1ID, game.Player2ID, "npc")
@@ -215,13 +220,6 @@ func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, da
 			Player1ID: game.Player1ID,
 			Player2ID: game.Player2ID,
 		}),
-	})
-}
-
-func (m *Manager) sendError(conn *Connection, code, message string, retryable bool) {
-	conn.SendMessage(&WSMessage{
-		Type: constants.WSMsgError,
-		Data: mustMarshal(ErrorMessage{Code: code, Message: message, Retryable: retryable}),
 	})
 }
 

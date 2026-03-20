@@ -134,32 +134,6 @@ func (r *PgDeckRepository) GetDeckCards(ctx context.Context, playerID string, de
 	return cards, nil
 }
 
-// GetPlayerCards returns all player_cards for a player ordered by card_no.
-func (r *PgDeckRepository) GetPlayerCards(ctx context.Context, playerID string) ([]*model.PlayerCard, error) {
-	rows, err := r.pool.Query(ctx,
-		`SELECT player_id, card_no, art_no, count
-		 FROM player_cards WHERE player_id = $1 ORDER BY card_no, art_no`,
-		playerID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("query player cards: %w", err)
-	}
-	defer rows.Close()
-
-	cards := make([]*model.PlayerCard, 0, 32)
-	for rows.Next() {
-		var pc model.PlayerCard
-		if err := rows.Scan(&pc.PlayerID, &pc.CardNo, &pc.ArtNo, &pc.Count); err != nil {
-			return nil, fmt.Errorf("scan player card: %w", err)
-		}
-		cards = append(cards, &pc)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate player cards: %w", err)
-	}
-	return cards, nil
-}
-
 // Update replaces a deck's metadata and cards atomically.
 func (r *PgDeckRepository) Update(ctx context.Context, deck *model.Deck, cards []model.DeckCard) error {
 	tx, err := r.pool.Begin(ctx)

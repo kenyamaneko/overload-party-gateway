@@ -309,6 +309,7 @@ func TestUserSettingsHandler_UpdateSettings_MissingLanguage(t *testing.T) {
 
 func setupDeckRouter() *gin.Engine {
 	deckRepo := repository.NewMockDeckRepository()
+	playerCardRepo := repository.NewMockPlayerCardRepository()
 	cardCache := cache.NewCardCache()
 
 	// Seed 10 card definitions and player cards (3 copies each = 30 total).
@@ -321,9 +322,9 @@ func setupDeckRouter() *gin.Engine {
 		})
 		playerCards[i-1] = &model.PlayerCard{CardNo: i, ArtNo: 1, Count: 3}
 	}
-	deckRepo.SeedPlayerCards("p1", playerCards)
+	playerCardRepo.SeedPlayerCards("p1", playerCards)
 
-	deckService := service.NewDeckService(deckRepo, cardCache)
+	deckService := service.NewDeckService(deckRepo, playerCardRepo, cardCache)
 	handler := NewDeckHandler(deckService)
 
 	r := gin.New()
@@ -676,8 +677,7 @@ func TestWebhookHandler_HandleGoogleWebhook_MissingBody(t *testing.T) {
 
 func setupCardRouter() *gin.Engine {
 	cardRepo := repository.NewMockCardRepository(map[int64]*model.CardDefinition{})
-	deckRepo := repository.NewMockDeckRepository()
-	cardService := service.NewCardService(cardRepo, deckRepo)
+	cardService := service.NewCardService(cardRepo, repository.NewMockPlayerCardRepository())
 	handler := NewCardHandler(cardService)
 
 	r := gin.New()
@@ -707,7 +707,7 @@ func TestCardHandler_GetAllCards_Empty(t *testing.T) {
 func setupPlayerCardRouter() *gin.Engine {
 	deckRepo := repository.NewMockDeckRepository()
 	cardCache := cache.NewCardCache()
-	deckService := service.NewDeckService(deckRepo, cardCache)
+	deckService := service.NewDeckService(deckRepo, repository.NewMockPlayerCardRepository(), cardCache)
 	handler := NewPlayerCardHandler(deckService)
 
 	r := gin.New()
@@ -736,7 +736,7 @@ func setupStoryRouter() (*gin.Engine, *testStoryEnv) {
 	playerRepo := repository.NewMockPlayerRepository()
 	storyRepo.SetDeps(playerRepo, factionRepo)
 
-	storyService := service.NewStoryService(storyRepo, factionRepo, playerRepo, nil, "")
+	storyService := service.NewStoryService(storyRepo, nil, "")
 	handler := NewStoryHandler(storyService)
 
 	now := time.Now()
@@ -861,7 +861,7 @@ func TestStoryHandler_CompleteEpisode_Locked(t *testing.T) {
 	playerRepo := repository.NewMockPlayerRepository()
 	storyRepo.SetDeps(playerRepo, factionRepo)
 
-	storyService := service.NewStoryService(storyRepo, factionRepo, playerRepo, nil, "")
+	storyService := service.NewStoryService(storyRepo, nil, "")
 	handler := NewStoryHandler(storyService)
 
 	now := time.Now()

@@ -11,3 +11,4 @@ type GameConfig struct {
 	Value     string    `json:"value" db:"value"`
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 }
+

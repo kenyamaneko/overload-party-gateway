@@ -209,18 +209,21 @@ func TestGetBattleLimit_FreeLimitZero_ReturnsError(t *testing.T) {
 
 // --- Error path tests ---
 
+func TestGetPlayer_NotFound_ReturnsNil(t *testing.T) {
+	player := &model.Player{PlayerID: "p1", FirebaseUID: "uid1"}
+	daily := &model.PlayerDailyBattle{PlayerID: "p1", DailyBattleCount: 0, LastResetDate: today()}
+	svc := setupPlayerService(t, player, daily)
+
+	p, err := svc.GetPlayer(context.Background(), "nonexistent")
+	require.NoError(t, err)
+	assert.Nil(t, p)
+}
+
 func TestNotFound(t *testing.T) {
 	tests := []struct {
 		name string
 		fn   func(svc *PlayerService) error
 	}{
-		{
-			name: "GetPlayer_NotFound",
-			fn: func(svc *PlayerService) error {
-				_, err := svc.GetPlayer(context.Background(), "nonexistent")
-				return err
-			},
-		},
 		{
 			name: "UpdateUsername_NotFound",
 			fn: func(svc *PlayerService) error {

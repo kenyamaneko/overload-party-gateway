@@ -15,8 +15,10 @@ const (
 	configKeyFreeDailyBattleLimit = "free_daily_battle_limit"
 
 	// gameDayOffset is the UTC offset used to calculate the "game day".
-	// The game day resets at JST 05:00 (= UTC 20:00).
-	// JST+9 minus 5h reset offset = +4h from UTC.
+	// The game day resets at JST 05:00 (= UTC 20:00 of the previous calendar day).
+	// Offset derivation: JST (UTC+9) minus 5 h reset = +4 h from UTC.
+	// Example: JST 2024-01-02 04:59 → UTC 2024-01-01 19:59 + 4h = Jan 2 (game day 2024-01-01)
+	//          JST 2024-01-02 05:00 → UTC 2024-01-01 20:00 + 4h = Jan 2 (game day 2024-01-02)
 	gameDayOffset = 4 * time.Hour
 )
 
@@ -51,6 +53,9 @@ func (s *PlayerService) GetBattleLimit(ctx context.Context, playerID string) (*B
 	player, err := s.playerRepo.FindByID(ctx, playerID)
 	if err != nil {
 		return nil, fmt.Errorf("find player: %w", err)
+	}
+	if player == nil {
+		return nil, fmt.Errorf("player %s not found", playerID)
 	}
 
 	if player.IsPremium {

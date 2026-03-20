@@ -155,7 +155,3 @@ func (c *Connection) Close() {
 	}
 }
 
-func mustMarshal(v interface{}) json.RawMessage {
-	data, _ := json.Marshal(v)
-	return data
-}

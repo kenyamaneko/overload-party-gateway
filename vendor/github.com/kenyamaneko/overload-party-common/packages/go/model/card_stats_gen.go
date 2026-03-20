@@ -19,3 +19,4 @@ type DataStats struct {
 	MaintenanceCost int64  `json:"maintenance_cost"`
 	SLAPenalty      int64  `json:"sla_penalty"`
 }
+

@@ -9,12 +9,12 @@ import (
 )
 
 type CardService struct {
-	cardRepo repository.CardRepo
-	deckRepo repository.DeckRepo
+	cardRepo       repository.CardRepo
+	playerCardRepo repository.PlayerCardRepo
 }
 
-func NewCardService(cardRepo repository.CardRepo, deckRepo repository.DeckRepo) *CardService {
-	return &CardService{cardRepo: cardRepo, deckRepo: deckRepo}
+func NewCardService(cardRepo repository.CardRepo, playerCardRepo repository.PlayerCardRepo) *CardService {
+	return &CardService{cardRepo: cardRepo, playerCardRepo: playerCardRepo}
 }
 
 type CardWithOwnership struct {
@@ -28,7 +28,7 @@ func (s *CardService) GetAllCards(ctx context.Context, playerID string) ([]*Card
 		return nil, fmt.Errorf("get all cards: %w", err)
 	}
 
-	playerCards, err := s.deckRepo.GetPlayerCards(ctx, playerID)
+	playerCards, err := s.playerCardRepo.GetPlayerCards(ctx, playerID)
 	if err != nil {
 		return nil, fmt.Errorf("get player cards: %w", err)
 	}

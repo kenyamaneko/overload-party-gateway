@@ -53,12 +53,12 @@ type appleNotificationTxn struct {
 }
 
 func (s *SubscriptionService) HandleAppleNotification(ctx context.Context, signedPayload string) error {
-	notif, err := decodeAppleNotification(signedPayload)
+	notif, err := decodeJWSPayload[appleNotification](signedPayload)
 	if err != nil {
 		return fmt.Errorf("decode notification: %w", err)
 	}
 
-	txnInfo, err := decodeAppleNotificationTxn(notif.Data.SignedTransactionInfo)
+	txnInfo, err := decodeJWSPayload[appleNotificationTxn](notif.Data.SignedTransactionInfo)
 	if err != nil {
 		return fmt.Errorf("decode transaction info: %w", err)
 	}
@@ -211,7 +211,8 @@ func (s *SubscriptionService) HandleGoogleNotification(ctx context.Context, msg 
 	return nil
 }
 
-func decodeAppleNotification(jws string) (*appleNotification, error) {
+// decodeJWSPayload extracts and unmarshals the payload section of a JWS token.
+func decodeJWSPayload[T any](jws string) (*T, error) {
 	parts := strings.Split(jws, ".")
 	if len(parts) != 3 {
 		return nil, fmt.Errorf("invalid JWS format")
@@ -220,25 +221,9 @@ func decodeAppleNotification(jws string) (*appleNotification, error) {
 	if err != nil {
 		return nil, fmt.Errorf("decode JWS payload: %w", err)
 	}
-	var notif appleNotification
-	if err := json.Unmarshal(payload, &notif); err != nil {
-		return nil, fmt.Errorf("unmarshal notification: %w", err)
+	var v T
+	if err := json.Unmarshal(payload, &v); err != nil {
+		return nil, fmt.Errorf("unmarshal JWS payload: %w", err)
 	}
-	return &notif, nil
-}
-
-func decodeAppleNotificationTxn(jws string) (*appleNotificationTxn, error) {
-	parts := strings.Split(jws, ".")
-	if len(parts) != 3 {
-		return nil, fmt.Errorf("invalid JWS format")
-	}
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil {
-		return nil, fmt.Errorf("decode JWS payload: %w", err)
-	}
-	var txn appleNotificationTxn
-	if err := json.Unmarshal(payload, &txn); err != nil {
-		return nil, fmt.Errorf("unmarshal transaction: %w", err)
-	}
-	return &txn, nil
+	return &v, nil
 }

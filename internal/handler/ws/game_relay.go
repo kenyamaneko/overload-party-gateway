@@ -135,7 +135,7 @@ func (r *GameRelay) SendGameStateToPlayers(gameID string) {
 		state, err := r.battleClient.GetGameStateForPlayer(ctx, gameID, pid)
 		if err != nil {
 			log.Printf("get game state for player %s: %v", pid, err)
-			r.sendErrorToPlayer(pid, "game_state_error", "failed to retrieve game state", true)
+			sendErrorToPlayer(r.hub, pid, "game_state_error", "failed to retrieve game state", true)
 			continue
 		}
 
@@ -149,7 +149,7 @@ func (r *GameRelay) SendGameStateToPlayers(gameID string) {
 		transformed, err := transformGameState(state)
 		if err != nil {
 			log.Printf("transform game state for player %s: %v", pid, err)
-			r.sendErrorToPlayer(pid, "game_state_error", "failed to process game state", true)
+			sendErrorToPlayer(r.hub, pid, "game_state_error", "failed to process game state", true)
 			continue
 		}
 		r.hub.SendToPlayer(pid, &WSMessage{
@@ -184,7 +184,7 @@ func (r *GameRelay) SendTurnControlsToPlayers(gameID string) {
 		tc, err := r.battleClient.GetTurnControlsForPlayer(ctx, gameID, pid)
 		if err != nil {
 			log.Printf("get turn controls for player %s: %v", pid, err)
-			r.sendErrorToPlayer(pid, "turn_controls_error", "failed to retrieve turn controls", true)
+			sendErrorToPlayer(r.hub, pid, "turn_controls_error", "failed to retrieve turn controls", true)
 			continue
 		}
 		if tc == nil {
@@ -321,7 +321,7 @@ func (r *GameRelay) broadcastGameOver(gameID string, winnerNum int64, reason str
 func (r *GameRelay) HandleGameEnter(conn *Connection, data json.RawMessage) {
 	var req GameEnterMessage
 	if err := json.Unmarshal(data, &req); err != nil {
-		r.sendError(conn, "invalid_data", "invalid game_enter data", false)
+		sendError(conn, "invalid_data", "invalid game_enter data", false)
 		return
 	}
 
@@ -364,6 +364,7 @@ func (r *GameRelay) advanceNpcIfNeeded(gameID, playerID string) {
 	if result != nil && result.GameOver {
 		r.cancelTurnTimer(gameID)
 		r.broadcastGameOver(gameID, result.WinnerNum, result.WinReason)
+		r.leaveAllPlayers(gameID)
 	}
 }
 
@@ -377,13 +378,13 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 	rawState, err := r.battleClient.GetGameStateForPlayer(ctx, gameID, conn.playerID)
 	if err != nil {
 		log.Printf("get game state for battle_start (player %s): %v", conn.playerID, err)
-		r.sendErrorToPlayer(conn.playerID, "game_state_error", "failed to retrieve game state", true)
+		sendErrorToPlayer(r.hub, conn.playerID, "game_state_error", "failed to retrieve game state", true)
 		return
 	}
 	transformed, err := transformGameState(rawState)
 	if err != nil {
 		log.Printf("transform game state for battle_start (player %s): %v", conn.playerID, err)
-		r.sendErrorToPlayer(conn.playerID, "game_state_error", "failed to process game state", true)
+		sendErrorToPlayer(r.hub, conn.playerID, "game_state_error", "failed to process game state", true)
 		return
 	}
 
@@ -412,7 +413,9 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 		battleStartData["opponent_level"] = oppLevel
 	}
 
-	// Send battle_start
+	// Send battle_start.
+	// Sequence is 0 because battle_start and turn_start are synthetic gateway
+	// events, not part of the battle server's event sequence.
 	conn.SendMessage(&WSMessage{
 		Type: constants.WSMsgActionPerformed,
 		Data: mustMarshal(ActionPerformedMessage{
@@ -467,7 +470,7 @@ func isNpcPlayer(playerID string) bool {
 func (r *GameRelay) HandleGameAction(ctx context.Context, conn *Connection, data json.RawMessage) {
 	var action GameActionMessage
 	if err := json.Unmarshal(data, &action); err != nil {
-		r.sendError(conn, "invalid_data", "invalid game_action data", false)
+		sendError(conn, "invalid_data", "invalid game_action data", false)
 		return
 	}
 
@@ -494,14 +497,19 @@ func (r *GameRelay) HandleGameAction(ctx context.Context, conn *Connection, data
 	if result != nil && result.GameOver {
 		r.cancelTurnTimer(action.GameID)
 		r.broadcastGameOver(action.GameID, result.WinnerNum, result.WinReason)
+		r.leaveAllPlayers(action.GameID)
+	}
+}
 
-		r.mu.RLock()
-		players := make([]string, len(r.gameMembers[action.GameID]))
-		copy(players, r.gameMembers[action.GameID])
-		r.mu.RUnlock()
-		for _, pid := range players {
-			r.LeaveGame(pid)
-		}
+// leaveAllPlayers removes all players from a game's membership.
+// Used after game over to clean up gameMembers / playerGames.
+func (r *GameRelay) leaveAllPlayers(gameID string) {
+	r.mu.RLock()
+	players := make([]string, len(r.gameMembers[gameID]))
+	copy(players, r.gameMembers[gameID])
+	r.mu.RUnlock()
+	for _, pid := range players {
+		r.LeaveGame(pid)
 	}
 }
 
@@ -564,14 +572,7 @@ func (r *GameRelay) handleTurnTimeout(gameID, playerID string) {
 	if result != nil && result.GameOver {
 		r.SendGameStateToPlayers(gameID)
 		r.broadcastGameOver(gameID, result.WinnerNum, result.WinReason)
-
-		r.mu.RLock()
-		players := make([]string, len(r.gameMembers[gameID]))
-		copy(players, r.gameMembers[gameID])
-		r.mu.RUnlock()
-		for _, pid := range players {
-			r.LeaveGame(pid)
-		}
+		r.leaveAllPlayers(gameID)
 	}
 }
 
@@ -603,6 +604,7 @@ func (r *GameRelay) HandleDisconnectTimeout(playerID, gameID string) {
 	}
 	if result != nil && result.GameOver {
 		r.broadcastGameOver(gameID, result.WinnerNum, constants.WinReasonDisconnect)
+		r.leaveAllPlayers(gameID)
 	}
 }
 
@@ -618,20 +620,6 @@ func (r *GameRelay) NotifyMatchFound(gameID, player1ID, player2ID string) {
 	}
 	r.hub.SendToPlayer(player1ID, msg)
 	r.hub.SendToPlayer(player2ID, msg)
-}
-
-func (r *GameRelay) sendError(conn *Connection, code, message string, retryable bool) {
-	conn.SendMessage(&WSMessage{
-		Type: constants.WSMsgError,
-		Data: mustMarshal(ErrorMessage{Code: code, Message: message, Retryable: retryable}),
-	})
-}
-
-func (r *GameRelay) sendErrorToPlayer(playerID, code, message string, retryable bool) {
-	r.hub.SendToPlayer(playerID, &WSMessage{
-		Type: constants.WSMsgError,
-		Data: mustMarshal(ErrorMessage{Code: code, Message: message, Retryable: retryable}),
-	})
 }
 
 func appendUnique(slice []string, s string) []string {

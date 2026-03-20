@@ -60,6 +60,7 @@ func main() {
 	playerRepo := repository.NewPgPlayerRepository(pool)
 	cardRepo := repository.NewPgCardRepository(pool)
 	deckRepo := repository.NewPgDeckRepository(pool)
+	playerCardRepo := repository.NewPgPlayerCardRepository(pool)
 	shopRepo := repository.NewPgShopRepository(pool)
 	factionRepo := repository.NewPgFactionRepository(pool)
 	storyRepo := repository.NewPgStoryRepository(pool)
@@ -109,10 +110,10 @@ func main() {
 	// Services
 	authService := service.NewAuthService(playerRepo, shopRepo, userSettingsRepo)
 	playerService := service.NewPlayerService(playerRepo, gameConfigRepo)
-	cardService := service.NewCardService(cardRepo, deckRepo)
-	deckService := service.NewDeckService(deckRepo, cardCache)
+	cardService := service.NewCardService(cardRepo, playerCardRepo)
+	deckService := service.NewDeckService(deckRepo, playerCardRepo, cardCache)
 	shopService := service.NewShopService(shopRepo, playerRepo, factionRepo, cardCache, appleVerifier, googleVerifier)
-	storyService := service.NewStoryService(storyRepo, factionRepo, playerRepo, gcsClient, cfg.StoryBucket)
+	storyService := service.NewStoryService(storyRepo, gcsClient, cfg.StoryBucket)
 	subscriptionService := service.NewSubscriptionService(shopRepo, playerRepo)
 
 	// Battle client (HTTP → battle server)

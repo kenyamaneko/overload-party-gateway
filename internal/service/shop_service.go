@@ -76,6 +76,9 @@ func (s *ShopService) SelectFaction(ctx context.Context, playerID, faction strin
 	if err != nil {
 		return 0, fmt.Errorf("find player: %w", err)
 	}
+	if player == nil {
+		return 0, fmt.Errorf("player %s not found", playerID)
+	}
 	if player.SelectedFaction != nil {
 		return 0, ErrFactionAlreadySelected
 	}

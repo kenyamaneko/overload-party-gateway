@@ -14,8 +14,6 @@ type Player struct {
 	Username         string     `json:"username" db:"username"`
 	Level            int64      `json:"level" db:"level"`
 	Exp              int64      `json:"exp" db:"exp"`
-	Wins             int64      `json:"wins" db:"wins"`
-	Losses           int64      `json:"losses" db:"losses"`
 	IsPremium        bool       `json:"is_premium" db:"is_premium"`
 	EquippedIconNo   *int64     `json:"equipped_icon_no,omitempty" db:"equipped_icon_no"`
 	SelectedFaction  *string    `json:"selected_faction,omitempty" db:"selected_faction"`
@@ -29,3 +27,4 @@ type PlayerDailyBattle struct {
 	DailyBattleCount int64      `json:"daily_battle_count" db:"daily_battle_count"`
 	LastResetDate    civil.Date `json:"last_reset_date" db:"last_reset_date"`
 }
+

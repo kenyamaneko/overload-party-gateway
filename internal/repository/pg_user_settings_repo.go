@@ -12,6 +12,9 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 )
 
+// Compile-time interface check.
+var _ UserSettingsRepo = (*PgUserSettingsRepository)(nil)
+
 // PgUserSettingsRepository implements UserSettingsRepo backed by PostgreSQL.
 type PgUserSettingsRepository struct {
 	pool *pgxpool.Pool

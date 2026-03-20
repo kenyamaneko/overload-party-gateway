@@ -12,12 +12,13 @@ import (
 )
 
 type DeckService struct {
-	deckRepo  repository.DeckRepo
-	cardCache *cache.CardCache
+	deckRepo       repository.DeckRepo
+	playerCardRepo repository.PlayerCardRepo
+	cardCache      *cache.CardCache
 }
 
-func NewDeckService(deckRepo repository.DeckRepo, cardCache *cache.CardCache) *DeckService {
-	return &DeckService{deckRepo: deckRepo, cardCache: cardCache}
+func NewDeckService(deckRepo repository.DeckRepo, playerCardRepo repository.PlayerCardRepo, cardCache *cache.CardCache) *DeckService {
+	return &DeckService{deckRepo: deckRepo, playerCardRepo: playerCardRepo, cardCache: cardCache}
 }
 
 func (s *DeckService) GetDecks(ctx context.Context, playerID string) ([]*model.Deck, error) {
@@ -26,7 +27,9 @@ func (s *DeckService) GetDecks(ctx context.Context, playerID string) ([]*model.D
 		return nil, err
 	}
 	for _, d := range decks {
-		s.populateDeckCards(ctx, d)
+		if err := s.populateDeckCards(ctx, d); err != nil {
+			return nil, err
+		}
 	}
 	return decks, nil
 }
@@ -60,7 +63,7 @@ type CreateDeckRequest struct {
 }
 
 func (s *DeckService) CreateDeck(ctx context.Context, playerID string, req CreateDeckRequest) (*model.Deck, error) {
-	ownedCards, err := s.deckRepo.GetPlayerCards(ctx, playerID)
+	ownedCards, err := s.playerCardRepo.GetPlayerCards(ctx, playerID)
 	if err != nil {
 		return nil, fmt.Errorf("get owned cards: %w", err)
 	}
@@ -100,7 +103,9 @@ func (s *DeckService) CreateDeck(ctx context.Context, playerID string, req Creat
 		return nil, fmt.Errorf("create deck: %w", err)
 	}
 
-	s.populateDeckCards(ctx, deck)
+	if err := s.populateDeckCards(ctx, deck); err != nil {
+		return nil, err
+	}
 	return deck, nil
 }
 
@@ -112,7 +117,7 @@ type UpdateDeckRequest struct {
 }
 
 func (s *DeckService) UpdateDeck(ctx context.Context, playerID string, deckID int64, req UpdateDeckRequest) (*model.Deck, error) {
-	ownedCards, err := s.deckRepo.GetPlayerCards(ctx, playerID)
+	ownedCards, err := s.playerCardRepo.GetPlayerCards(ctx, playerID)
 	if err != nil {
 		return nil, fmt.Errorf("get owned cards: %w", err)
 	}
@@ -151,7 +156,9 @@ func (s *DeckService) UpdateDeck(ctx context.Context, playerID string, deckID in
 		return nil, fmt.Errorf("update deck: %w", err)
 	}
 
-	s.populateDeckCards(ctx, deck)
+	if err := s.populateDeckCards(ctx, deck); err != nil {
+		return nil, err
+	}
 	return deck, nil
 }
 
@@ -160,16 +167,17 @@ func (s *DeckService) DeleteDeck(ctx context.Context, playerID string, deckID in
 }
 
 // populateDeckCards fills deck.DeckCards with the card composition (card_no + art_no + count).
-func (s *DeckService) populateDeckCards(ctx context.Context, deck *model.Deck) {
+func (s *DeckService) populateDeckCards(ctx context.Context, deck *model.Deck) error {
 	cards, err := s.deckRepo.GetDeckCards(ctx, deck.PlayerID, deck.DeckID)
 	if err != nil {
-		return
+		return fmt.Errorf("get deck cards for deck %d: %w", deck.DeckID, err)
 	}
 	deck.DeckCards = cards
+	return nil
 }
 
 func (s *DeckService) GetPlayerCards(ctx context.Context, playerID string) ([]*model.PlayerCardWithDef, error) {
-	pcs, err := s.deckRepo.GetPlayerCards(ctx, playerID)
+	pcs, err := s.playerCardRepo.GetPlayerCards(ctx, playerID)
 	if err != nil {
 		return nil, err
 	}

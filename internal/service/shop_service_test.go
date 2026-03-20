@@ -155,9 +155,9 @@ func TestBuildFactionCards_Copies(t *testing.T) {
 	for _, c := range cards {
 		counts[c.CardNo] = c.Count
 	}
-	assert.Equal(t, 3, counts[1], "card 1 (unlimited)")
-	assert.Equal(t, 3, counts[3], "card 3 (limited)")
-	assert.Equal(t, 3, counts[4], "card 4 (semi_limited)")
+	assert.Equal(t, 3, counts[1], "card 1 (unlimited) — all cards get 3 copies at grant time")
+	assert.Equal(t, 3, counts[3], "card 3 (limited) — restriction applies at deck build, not grant")
+	assert.Equal(t, 3, counts[4], "card 4 (semi_limited) — restriction applies at deck build, not grant")
 	assert.Equal(t, 0, counts[5], "card 5 (inactive)")
 }
 

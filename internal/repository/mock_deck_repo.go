@@ -14,20 +14,18 @@ func deckKey(playerID string, deckID int64) string {
 
 // MockDeckRepository is an in-memory implementation of DeckRepo for local mode and testing.
 type MockDeckRepository struct {
-	mu          sync.Mutex
-	nextDeckID  int64
-	decks       map[string]*model.Deck         // "playerID|deckID" → Deck
-	deckCards   map[string][]model.DeckCard    // "playerID|deckID" → DeckCards
-	playerCards map[string][]*model.PlayerCard // playerID → PlayerCards
+	mu         sync.Mutex
+	nextDeckID int64
+	decks      map[string]*model.Deck      // "playerID|deckID" → Deck
+	deckCards  map[string][]model.DeckCard // "playerID|deckID" → DeckCards
 }
 
 var _ DeckRepo = (*MockDeckRepository)(nil)
 
 func NewMockDeckRepository() *MockDeckRepository {
 	return &MockDeckRepository{
-		decks:       make(map[string]*model.Deck),
-		deckCards:   make(map[string][]model.DeckCard),
-		playerCards: make(map[string][]*model.PlayerCard),
+		decks:     make(map[string]*model.Deck),
+		deckCards: make(map[string][]model.DeckCard),
 	}
 }
 
@@ -84,13 +82,6 @@ func (r *MockDeckRepository) GetDeckCards(ctx context.Context, playerID string, 
 	return cards, nil
 }
 
-func (r *MockDeckRepository) GetPlayerCards(ctx context.Context, playerID string) ([]*model.PlayerCard, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	return r.playerCards[playerID], nil
-}
-
 func (r *MockDeckRepository) Update(ctx context.Context, deck *model.Deck, cards []model.DeckCard) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -111,25 +102,3 @@ func (r *MockDeckRepository) Delete(ctx context.Context, playerID string, deckID
 	return nil
 }
 
-// SeedPlayerCards adds player cards to the mock repository (for local mode initialization).
-// Merges counts for existing (card_no, art_no) pairs.
-func (r *MockDeckRepository) SeedPlayerCards(playerID string, cards []*model.PlayerCard) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	existing := r.playerCards[playerID]
-	for _, newCard := range cards {
-		found := false
-		for _, ex := range existing {
-			if ex.CardNo == newCard.CardNo && ex.ArtNo == newCard.ArtNo {
-				ex.Count += newCard.Count
-				found = true
-				break
-			}
-		}
-		if !found {
-			existing = append(existing, newCard)
-		}
-	}
-	r.playerCards[playerID] = existing
-}

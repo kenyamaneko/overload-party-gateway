@@ -21,15 +21,19 @@ type PlayerRepo interface {
 	UpdateFaction(ctx context.Context, playerID, faction string) error
 }
 
-// DeckRepo defines the data access contract for deck and player card operations.
+// DeckRepo defines the data access contract for deck operations.
 type DeckRepo interface {
 	Create(ctx context.Context, deck *model.Deck, cards []model.DeckCard) error
 	FindByPlayerID(ctx context.Context, playerID string) ([]*model.Deck, error)
 	FindByID(ctx context.Context, playerID string, deckID int64) (*model.Deck, error)
 	GetDeckCards(ctx context.Context, playerID string, deckID int64) ([]model.DeckCard, error)
-	GetPlayerCards(ctx context.Context, playerID string) ([]*model.PlayerCard, error)
 	Update(ctx context.Context, deck *model.Deck, cards []model.DeckCard) error
 	Delete(ctx context.Context, playerID string, deckID int64) error
+}
+
+// PlayerCardRepo defines the data access contract for player card inventory.
+type PlayerCardRepo interface {
+	GetPlayerCards(ctx context.Context, playerID string) ([]*model.PlayerCard, error)
 }
 
 // CardRepo defines the data access contract for card definitions.
@@ -54,12 +58,3 @@ type NewsRepo interface {
 	List(ctx context.Context, limit int, offset int) ([]*model.NewsArticle, error)
 }
 
-// Compile-time interface checks for PostgreSQL implementations.
-var _ PlayerRepo = (*PgPlayerRepository)(nil)
-var _ DeckRepo = (*PgDeckRepository)(nil)
-var _ CardRepo = (*PgCardRepository)(nil)
-var _ UserSettingsRepo = (*PgUserSettingsRepository)(nil)
-var _ GameConfigRepo = (*PgGameConfigRepository)(nil)
-var _ NewsRepo = (*PgNewsRepository)(nil)
-var _ FactionRepo = (*PgFactionRepository)(nil)
-var _ StoryRepo = (*PgStoryRepository)(nil)

@@ -28,7 +28,7 @@ func newTestStoryEnv() *testStoryEnv {
 	playerRepo := repository.NewMockPlayerRepository()
 	storyRepo.SetDeps(playerRepo, factionRepo)
 
-	svc := NewStoryService(storyRepo, factionRepo, playerRepo, nil, "")
+	svc := NewStoryService(storyRepo, nil, "")
 
 	return &testStoryEnv{
 		svc:         svc,

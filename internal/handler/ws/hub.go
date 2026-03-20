@@ -9,9 +9,8 @@ import (
 const disconnectTimeout = 60 * time.Second
 
 type disconnectInfo struct {
-	playerID string
-	gameID   string
-	timer    *time.Timer
+	gameID string
+	timer  *time.Timer
 }
 
 // DisconnectCallback is called when a player disconnects while in a game.
@@ -86,9 +85,8 @@ func (h *ConnectionHub) Unregister(conn *Connection) {
 			h.onDisconnectTimeout(conn.playerID, gameID)
 		})
 		h.disconnects[conn.playerID] = &disconnectInfo{
-			playerID: conn.playerID,
-			gameID:   gameID,
-			timer:    timer,
+			gameID: gameID,
+			timer:  timer,
 		}
 		log.Printf("player %s disconnected, %v timeout started", conn.playerID, disconnectTimeout)
 	}

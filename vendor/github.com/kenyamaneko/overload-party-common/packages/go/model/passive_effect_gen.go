@@ -64,3 +64,4 @@ type AttachmentEffectConfig struct {
 	StatType string `json:"stat_type"`
 	Bonus    int64  `json:"bonus"`
 }
+

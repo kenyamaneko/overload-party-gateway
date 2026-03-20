@@ -57,11 +57,9 @@ func (r *errorGetDailyBattlePlayerRepo) GetDailyBattle(_ context.Context, _ stri
 // Error-injecting wrappers for DeckRepo
 // ---------------------------------------------------------------------------
 
-type errorGetPlayerCardsDeckRepo struct {
-	*mockDeckRepo
-}
+type errorPlayerCardRepo struct{}
 
-func (r *errorGetPlayerCardsDeckRepo) GetPlayerCards(_ context.Context, _ string) ([]*model.PlayerCard, error) {
+func (r *errorPlayerCardRepo) GetPlayerCards(_ context.Context, _ string) ([]*model.PlayerCard, error) {
 	return nil, errDB
 }
 
@@ -106,14 +104,6 @@ type errorFindAllCardRepo struct {
 }
 
 func (r *errorFindAllCardRepo) FindAll(_ context.Context) ([]*model.CardDefinition, error) {
-	return nil, errDB
-}
-
-type errorGetPlayerCardsDeckRepoForCard struct {
-	*repository.MockDeckRepository
-}
-
-func (r *errorGetPlayerCardsDeckRepoForCard) GetPlayerCards(_ context.Context, _ string) ([]*model.PlayerCard, error) {
 	return nil, errDB
 }
 
@@ -192,9 +182,9 @@ func TestLogin_FindByFirebaseUID_Error(t *testing.T) {
 // ===========================================================================
 
 func TestCreateDeck_GetPlayerCards_Error(t *testing.T) {
-	repo := &errorGetPlayerCardsDeckRepo{newMockDeckRepo()}
+	repo := newMockDeckRepo()
 	cc := cache.NewCardCache()
-	svc := NewDeckService(repo, cc)
+	svc := NewDeckService(repo, &errorPlayerCardRepo{}, cc)
 
 	_, err := svc.CreateDeck(context.Background(), "p1", CreateDeckRequest{
 		DeckName: "Test", Cards: makeEntries(1, 3),
@@ -206,11 +196,12 @@ func TestCreateDeck_GetPlayerCards_Error(t *testing.T) {
 func TestCreateDeck_RepoCreate_Error(t *testing.T) {
 	baseRepo := newMockDeckRepo()
 	repo := &errorCreateDeckRepo{baseRepo}
-	_, _, cc := setupDeckService()
-	svc := NewDeckService(repo, cc)
+	pcRepo := newMockPlayerCardRepo()
+	_, _, _, cc := setupDeckService()
+	svc := NewDeckService(repo, pcRepo, cc)
 
 	// Grant cards so validation passes
-	grantUnlimited(baseRepo, "p1", 1)
+	grantUnlimited(pcRepo, "p1", 1)
 
 	_, err := svc.CreateDeck(context.Background(), "p1", CreateDeckRequest{
 		DeckName: "Test", Cards: makeEntries(1, 3),
@@ -222,7 +213,7 @@ func TestCreateDeck_RepoCreate_Error(t *testing.T) {
 func TestGetDecks_FindByPlayerID_Error(t *testing.T) {
 	repo := &errorFindByPlayerIDDeckRepo{newMockDeckRepo()}
 	cc := cache.NewCardCache()
-	svc := NewDeckService(repo, cc)
+	svc := NewDeckService(repo, newMockPlayerCardRepo(), cc)
 
 	_, err := svc.GetDecks(context.Background(), "p1")
 	require.Error(t, err)
@@ -231,11 +222,12 @@ func TestGetDecks_FindByPlayerID_Error(t *testing.T) {
 
 func TestGetDeck_GetDeckCards_Error(t *testing.T) {
 	baseRepo := newMockDeckRepo()
+	pcRepo := newMockPlayerCardRepo()
 	// Create a deck first, then wrap with error repo
 	cc := cache.NewCardCache()
 	cc.InjectForTest(1, &model.CardDefinition{CardNo: 1, Restriction: "unlimited", IsActive: true})
-	grantUnlimited(baseRepo, "p1", 1)
-	svc := NewDeckService(baseRepo, cc)
+	grantUnlimited(pcRepo, "p1", 1)
+	svc := NewDeckService(baseRepo, pcRepo, cc)
 	created, err := svc.CreateDeck(context.Background(), "p1", CreateDeckRequest{
 		DeckName: "Test", Cards: makeEntries(1, 3),
 	})
@@ -243,7 +235,7 @@ func TestGetDeck_GetDeckCards_Error(t *testing.T) {
 
 	// Now wrap with error repo for GetDeckCards
 	errRepo := &errorGetDeckCardsDeckRepo{baseRepo}
-	svc2 := NewDeckService(errRepo, cc)
+	svc2 := NewDeckService(errRepo, pcRepo, cc)
 
 	_, _, err = svc2.GetDeck(context.Background(), "p1", created.DeckID)
 	require.Error(t, err)
@@ -251,9 +243,9 @@ func TestGetDeck_GetDeckCards_Error(t *testing.T) {
 }
 
 func TestUpdateDeck_GetPlayerCards_Error(t *testing.T) {
-	repo := &errorGetPlayerCardsDeckRepo{newMockDeckRepo()}
+	repo := newMockDeckRepo()
 	cc := cache.NewCardCache()
-	svc := NewDeckService(repo, cc)
+	svc := NewDeckService(repo, &errorPlayerCardRepo{}, cc)
 
 	_, err := svc.UpdateDeck(context.Background(), "p1", 1, UpdateDeckRequest{
 		DeckName: "Test", Cards: makeEntries(1, 3),
@@ -264,9 +256,10 @@ func TestUpdateDeck_GetPlayerCards_Error(t *testing.T) {
 
 func TestUpdateDeck_RepoUpdate_Error(t *testing.T) {
 	baseRepo := newMockDeckRepo()
-	_, _, cc := setupDeckService()
-	svc := NewDeckService(baseRepo, cc)
-	grantUnlimited(baseRepo, "p1", 1)
+	pcRepo := newMockPlayerCardRepo()
+	_, _, _, cc := setupDeckService()
+	svc := NewDeckService(baseRepo, pcRepo, cc)
+	grantUnlimited(pcRepo, "p1", 1)
 
 	created, err := svc.CreateDeck(context.Background(), "p1", CreateDeckRequest{
 		DeckName: "Test", Cards: makeEntries(1, 3),
@@ -274,7 +267,7 @@ func TestUpdateDeck_RepoUpdate_Error(t *testing.T) {
 	require.NoError(t, err)
 
 	errRepo := &errorUpdateDeckRepo{baseRepo}
-	svc2 := NewDeckService(errRepo, cc)
+	svc2 := NewDeckService(errRepo, pcRepo, cc)
 
 	_, err = svc2.UpdateDeck(context.Background(), "p1", created.DeckID, UpdateDeckRequest{
 		DeckName: "Updated", Cards: makeEntries(1, 3),
@@ -284,9 +277,9 @@ func TestUpdateDeck_RepoUpdate_Error(t *testing.T) {
 }
 
 func TestGetPlayerCards_Error(t *testing.T) {
-	repo := &errorGetPlayerCardsDeckRepo{newMockDeckRepo()}
+	repo := newMockDeckRepo()
 	cc := cache.NewCardCache()
-	svc := NewDeckService(repo, cc)
+	svc := NewDeckService(repo, &errorPlayerCardRepo{}, cc)
 
 	_, err := svc.GetPlayerCards(context.Background(), "p1")
 	require.Error(t, err)
@@ -354,8 +347,7 @@ func TestGetBattleLimit_GetGameConfig_Error(t *testing.T) {
 
 func TestGetAllCards_FindAll_Error(t *testing.T) {
 	cardRepo := &errorFindAllCardRepo{repository.NewMockCardRepository(nil)}
-	deckRepo := repository.NewMockDeckRepository()
-	svc := NewCardService(cardRepo, deckRepo)
+	svc := NewCardService(cardRepo, newMockPlayerCardRepo())
 
 	_, err := svc.GetAllCards(context.Background(), "p1")
 	require.Error(t, err)
@@ -364,8 +356,7 @@ func TestGetAllCards_FindAll_Error(t *testing.T) {
 
 func TestGetAllCards_GetPlayerCards_Error(t *testing.T) {
 	cardRepo := repository.NewMockCardRepository(nil)
-	deckRepo := &errorGetPlayerCardsDeckRepoForCard{repository.NewMockDeckRepository()}
-	svc := NewCardService(cardRepo, deckRepo)
+	svc := NewCardService(cardRepo, &errorPlayerCardRepo{})
 
 	_, err := svc.GetAllCards(context.Background(), "p1")
 	require.Error(t, err)

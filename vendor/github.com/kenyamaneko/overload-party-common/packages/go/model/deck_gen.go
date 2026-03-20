@@ -49,3 +49,4 @@ type DeckCard struct {
 	ArtNo    int64  `json:"art_no"`
 	Count    int    `json:"count"`
 }
+

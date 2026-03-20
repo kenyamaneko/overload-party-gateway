@@ -9,6 +9,9 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 )
 
+// Compile-time interface check.
+var _ NewsRepo = (*PgNewsRepository)(nil)
+
 type PgNewsRepository struct {
 	pool *pgxpool.Pool
 }
