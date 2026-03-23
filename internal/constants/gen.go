@@ -2,7 +2,7 @@
 // This allows all existing code to continue importing "internal/constants" unchanged.
 package constants
 
-import genconstants "github.com/kenyamaneko/overload-party-common/packages/go/constants"
+import genconstants "github.com/kenyamaneko/overload-party-common/packages/gamedata/constants"
 
 const (
 	DeckSize       = genconstants.DeckSize

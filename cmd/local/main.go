@@ -10,7 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	gencache "github.com/kenyamaneko/overload-party-common/packages/go/cache"
+	gencache "github.com/kenyamaneko/overload-party-common/packages/gamedata/cache"
 	"github.com/kenyamaneko/overload-party-gateway/internal/cache"
 	"github.com/kenyamaneko/overload-party-gateway/internal/config"
 	"github.com/kenyamaneko/overload-party-gateway/internal/handler/rest"

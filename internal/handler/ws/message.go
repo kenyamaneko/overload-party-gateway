@@ -3,7 +3,7 @@ package ws
 import (
 	"encoding/json"
 
-	genmodel "github.com/kenyamaneko/overload-party-common/packages/go/model"
+	genmodel "github.com/kenyamaneko/overload-party-common/packages/gamedata/model"
 )
 
 // WSMessage is the envelope for all WebSocket messages.

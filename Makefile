@@ -16,7 +16,7 @@ MODULE := github.com/kenyamaneko/$(APP)
 COMMON_DIR  ?= $(CURDIR)/../overload-party-common
 
 # ─── Dependency ──────────────────────────────────────────
-COMMON_PKG := github.com/kenyamaneko/overload-party-common/packages/go
+COMMON_PKG := github.com/kenyamaneko/overload-party-common/packages/gamedata
 
 update-common:  ## Update common package to latest and re-vendor
 	GOPRIVATE=github.com/kenyamaneko/* go get -u $(COMMON_PKG)@latest
