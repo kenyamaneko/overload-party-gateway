@@ -11,7 +11,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	gencache "github.com/kenyamaneko/overload-party-common/packages/go/cache"
-	"github.com/kenyamaneko/overload-party-gateway/internal/constants"
 	"github.com/kenyamaneko/overload-party-gateway/internal/cache"
 	"github.com/kenyamaneko/overload-party-gateway/internal/config"
 	"github.com/kenyamaneko/overload-party-gateway/internal/handler/rest"
@@ -61,7 +60,7 @@ func main() {
 	battleClient := service.NewBattleClient(cfg.BattleServerURL)
 
 	// 5. Handlers
-	wsManager := ws.NewManager(battleClient, playerService, deckRepo)
+	wsManager := ws.NewManager(battleClient, playerService, deckService, deckRepo)
 	go wsManager.StartMatchmaking(ctx)
 	wsHandler := ws.NewHandler(wsManager, nil, playerRepo, nil)
 	authHandler := rest.NewAuthHandler(authService)
@@ -119,7 +118,6 @@ func main() {
 			deck := &model.Deck{
 				PlayerID:  playerID,
 				DeckName:  deckName,
-				IsValid:   len(cardNos) == constants.DeckSize,
 				CreatedAt: time.Now(),
 				UpdatedAt: time.Now(),
 			}
@@ -161,11 +159,12 @@ func main() {
 		pub.GET("/announcements", staticHandler.GetAnnouncements)
 		pub.GET("/daily", staticHandler.GetDaily)
 		pub.GET("/cloud-news", func(c *gin.Context) {
-			c.JSON(http.StatusOK, []gin.H{
-				{"id": "1", "tag": "aws", "headline": "Lambda が ARM64 対応を拡大、コスト最大34%削減", "meta": "2時間前"},
-				{"id": "2", "tag": "gcp", "headline": "Cloud Run に GPU サポートが GA、ML推論ワークロードに対応", "meta": "5時間前"},
-				{"id": "3", "tag": "azure", "headline": "Cosmos DB の新プライシングモデルが発表", "meta": "8時間前"},
-				{"id": "4", "tag": "topic", "headline": "マルチクラウド戦略の落とし穴: 3つの失敗パターン", "meta": "1日前"},
+			now := time.Now()
+			c.JSON(http.StatusOK, []model.NewsArticle{
+				{ArticleID: "dev-1", Source: "aws", Title: "Lambda が ARM64 対応を拡大、コスト最大34%削減", Tags: []string{"aws", "serverless"}, FetchedAt: now},
+				{ArticleID: "dev-2", Source: "gcp", Title: "Cloud Run に GPU サポートが GA、ML推論ワークロードに対応", Tags: []string{"gcp", "container"}, FetchedAt: now},
+				{ArticleID: "dev-3", Source: "azure", Title: "Cosmos DB の新プライシングモデルが発表", Tags: []string{"azure", "database"}, FetchedAt: now},
+				{ArticleID: "dev-4", Source: "oci", Title: "マルチクラウド戦略の落とし穴: 3つの失敗パターン", Tags: []string{"multi-cloud"}, FetchedAt: now},
 			})
 		})
 	}

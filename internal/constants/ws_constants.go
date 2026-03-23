@@ -14,7 +14,6 @@ const (
 	WSMsgStampUsed            = "stamp_used"
 	WSMsgPong                 = "pong"
 	WSMsgMatchFound           = "match_found"
-	WSMsgGameStateRestore     = "game_state_restore"
 	WSMsgActionPerformed      = "action_performed"
 	WSMsgTurnControls         = "turn_controls"
 	WSMsgNpcBattleCreated     = "npc_battle_created"

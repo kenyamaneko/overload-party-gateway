@@ -21,16 +21,18 @@ type Manager struct {
 
 	battleClient  service.BattleClient
 	playerService *service.PlayerService
+	deckService   *service.DeckService
 	deckRepo      repository.DeckRepo
 	queue         *repository.MatchmakingQueue
 }
 
-func NewManager(battleClient service.BattleClient, playerService *service.PlayerService, deckRepo repository.DeckRepo) *Manager {
+func NewManager(battleClient service.BattleClient, playerService *service.PlayerService, deckService *service.DeckService, deckRepo repository.DeckRepo) *Manager {
 	queue := repository.NewMatchmakingQueue()
 
 	m := &Manager{
 		battleClient:  battleClient,
 		playerService: playerService,
+		deckService:   deckService,
 		deckRepo:      deckRepo,
 		queue:         queue,
 	}
@@ -178,6 +180,11 @@ func (m *Manager) handleMatchmakingStart(ctx context.Context, conn *Connection, 
 		return
 	}
 
+	if err := m.deckService.ValidateDeckForBattle(ctx, conn.playerID, req.DeckID); err != nil {
+		sendError(conn, "matchmaking_error", "deck validation failed: "+err.Error(), false)
+		return
+	}
+
 	if err := m.queue.Join(conn.playerID, req.DeckID); err != nil {
 		sendError(conn, "matchmaking_error", err.Error(), true)
 		return
@@ -197,6 +204,11 @@ func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, da
 		return
 	} else if msg != "" {
 		sendError(conn, "npc_battle_error", msg, false)
+		return
+	}
+
+	if err := m.deckService.ValidateDeckForBattle(ctx, conn.playerID, req.DeckID); err != nil {
+		sendError(conn, "npc_battle_error", "deck validation failed: "+err.Error(), false)
 		return
 	}
 

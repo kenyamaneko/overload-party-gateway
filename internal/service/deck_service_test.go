@@ -687,6 +687,57 @@ func TestDeleteDeck_OnlyDeletesTarget(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Tests for ValidateDeckForBattle
+// ---------------------------------------------------------------------------
+
+func TestValidateDeckForBattle_Full30Cards(t *testing.T) {
+	svc, _, pcRepo, _ := setupDeckService()
+	pid := "p1"
+	grantUnlimited(pcRepo, pid, allTenCards...)
+
+	deck, err := svc.CreateDeck(context.Background(), pid, CreateDeckRequest{
+		DeckName: "Full Deck", Cards: full30Entries(),
+	})
+	require.NoError(t, err)
+
+	err = svc.ValidateDeckForBattle(context.Background(), pid, deck.DeckID)
+	assert.NoError(t, err)
+}
+
+func TestValidateDeckForBattle_PartialDeck(t *testing.T) {
+	svc, _, pcRepo, _ := setupDeckService()
+	pid := "p1"
+	grantUnlimited(pcRepo, pid, 1, 2)
+
+	deck, err := svc.CreateDeck(context.Background(), pid, CreateDeckRequest{
+		DeckName: "Partial", Cards: makeEntries(1, 3, 2, 3),
+	})
+	require.NoError(t, err)
+
+	err = svc.ValidateDeckForBattle(context.Background(), pid, deck.DeckID)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "need exactly 30")
+}
+
+func TestValidateDeckForBattle_UnownedAfterCreate(t *testing.T) {
+	svc, _, pcRepo, _ := setupDeckService()
+	pid := "p1"
+	grantUnlimited(pcRepo, pid, allTenCards...)
+
+	deck, err := svc.CreateDeck(context.Background(), pid, CreateDeckRequest{
+		DeckName: "Full Deck", Cards: full30Entries(),
+	})
+	require.NoError(t, err)
+
+	// Simulate losing cards after deck creation (e.g. trade, ban)
+	pcRepo.playerCards[pid] = nil
+
+	err = svc.ValidateDeckForBattle(context.Background(), pid, deck.DeckID)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not enough owned")
+}
+
+// ---------------------------------------------------------------------------
 // RestrictionCopyCount tests
 // ---------------------------------------------------------------------------
 

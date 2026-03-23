@@ -1,6 +1,10 @@
 package ws
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	genmodel "github.com/kenyamaneko/overload-party-common/packages/go/model"
+)
 
 // WSMessage is the envelope for all WebSocket messages.
 type WSMessage struct {
@@ -10,119 +14,32 @@ type WSMessage struct {
 
 // --- Client → Server ---
 
-type GameEnterMessage struct {
-	GameID string `json:"game_id"`
-	DeckID int64  `json:"deck_id"`
-}
-
-type MatchmakingStartMessage struct {
-	DeckID int64 `json:"deck_id"`
-}
-
-type GameActionMessage struct {
-	GameID     string          `json:"game_id"`
-	ActionType string          `json:"action_type"`
-	Data       json.RawMessage `json:"data"`
-}
-
-type UseStampMessage struct {
-	GameID  string `json:"game_id"`
-	StampNo int64  `json:"stamp_no"`
-}
-
-type NPCBattleStartMessage struct {
-	DeckID     int64  `json:"deck_id"`
-	NPCFaction string `json:"npc_faction"`
-}
+type MatchmakingStartMessage = genmodel.MatchmakingStartMessage
+type GameEnterMessage = genmodel.GameEnterMessage
+type NPCBattleStartMessage = genmodel.NPCBattleStartMessage
+type GameActionMessage = genmodel.GameActionMessage
+type UseStampMessage = genmodel.UseStampMessage
 
 // --- Server → Client ---
 
-type ErrorMessage struct {
-	Code      string `json:"error_code"`
-	Message   string `json:"message"`
-	Retryable bool   `json:"retryable"`
-}
-
-type MatchFoundMessage struct {
-	GameID    string `json:"game_id"`
-	Player1ID string `json:"player1_id"`
-	Player2ID string `json:"player2_id"`
-}
-
-type GameOverMessage struct {
-	GameID    string `json:"game_id"`
-	WinnerNum int64  `json:"winner_num"`
-	WinReason string `json:"win_reason"`
-}
-
-type ActionRejectedMessage struct {
-	GameID     string `json:"game_id"`
-	ActionType string `json:"action_type"`
-	Reason     string `json:"reason"`
-}
-
-// ActionPerformedMessage notifies a player of an action and the resulting state.
-type ActionPerformedMessage struct {
-	Sequence   int64           `json:"sequence"`
-	ActionType string          `json:"action_type"`
-	ActionData json.RawMessage `json:"action_data"`
-	State      json.RawMessage `json:"state"`
-}
-
-type TurnControlsMessage struct {
-	CanEndPhase     bool `json:"can_end_phase"`
-	DiscardRequired int  `json:"discard_required"`
-}
-
-type StampUsedMessage struct {
-	GameID   string `json:"game_id"`
-	PlayerID string `json:"player_id"`
-	StampNo  int64  `json:"stamp_no"`
-}
-
-type NPCBattleCreatedMessage struct {
-	GameID    string `json:"game_id"`
-	Player1ID string `json:"player1_id"`
-	Player2ID string `json:"player2_id"`
-}
+type ErrorMessage = genmodel.ErrorMessage
+type MatchFoundMessage = genmodel.MatchFoundMessage
+type GameOverMessage = genmodel.GameOverMessage
+type ActionRejectedMessage = genmodel.ActionRejectedMessage
+type ActionPerformedMessage = genmodel.ActionPerformedMessage
+type TurnControlsMessage = genmodel.TurnControlsMessage
+type StampUsedMessage = genmodel.StampUsedMessage
+type NPCBattleCreatedMessage = genmodel.NPCBattleCreatedMessage
 
 // --- Spectate: Client → Server ---
 
-type SpectateJoinMessage struct {
-	GameID string `json:"game_id"`
-}
-
-type SpectateLeaveMessage struct {
-	GameID string `json:"game_id"`
-}
-
-type SpectateStampMessage struct {
-	GameID  string `json:"game_id"`
-	StampNo int64  `json:"stamp_no"`
-}
+type SpectateJoinMessage = genmodel.SpectateJoinMessage
+type SpectateLeaveMessage = genmodel.SpectateLeaveMessage
+type SpectateStampMessage = genmodel.SpectateStampMessage
 
 // --- Spectate: Server → Client ---
 
-type SpectateJoinedMessage struct {
-	GameID    string          `json:"game_id"`
-	Player1ID string          `json:"player1_id"`
-	Player2ID string          `json:"player2_id"`
-	State     json.RawMessage `json:"state"`
-}
-
-type SpectateErrorMessage struct {
-	Code    string `json:"error_code"`
-	Message string `json:"message"`
-}
-
-type SpectateEndedMessage struct {
-	GameID    string `json:"game_id"`
-	WinnerNum int64  `json:"winner_num"`
-	WinReason string `json:"win_reason"`
-}
-
-type SpectateStampBroadcastMessage struct {
-	GameID      string `json:"game_id"`
-	SpectatorID string `json:"spectator_id"`
-	StampNo     int64  `json:"stamp_no"`
-}
+type SpectateJoinedMessage = genmodel.SpectateJoinedMessage
+type SpectateErrorMessage = genmodel.SpectateErrorMessage
+type SpectateEndedMessage = genmodel.SpectateEndedMessage
+type SpectateStampBroadcastMessage = genmodel.SpectateStampBroadcastMessage

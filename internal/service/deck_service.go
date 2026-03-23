@@ -26,10 +26,17 @@ func (s *DeckService) GetDecks(ctx context.Context, playerID string) ([]*model.D
 	if err != nil {
 		return nil, err
 	}
+
+	ownedCards, err := s.playerCardRepo.GetPlayerCards(ctx, playerID)
+	if err != nil {
+		return nil, fmt.Errorf("get owned cards: %w", err)
+	}
+
 	for _, d := range decks {
 		if err := s.populateDeckCards(ctx, d); err != nil {
 			return nil, err
 		}
+		d.IsValid = s.computeIsValid(d.DeckCards, ownedCards)
 	}
 	return decks, nil
 }
@@ -162,6 +169,37 @@ func (s *DeckService) UpdateDeck(ctx context.Context, playerID string, deckID in
 	return deck, nil
 }
 
+// ValidateDeckForBattle checks that a deck is battle-ready:
+// exactly DeckSize cards, all cards owned, and all restriction limits respected.
+func (s *DeckService) ValidateDeckForBattle(ctx context.Context, playerID string, deckID int64) error {
+	deckCards, err := s.deckRepo.GetDeckCards(ctx, playerID, deckID)
+	if err != nil {
+		return fmt.Errorf("get deck cards: %w", err)
+	}
+
+	// Convert DeckCard → DeckCardEntry for reuse of validateDeckCards.
+	entries := make([]DeckCardEntry, len(deckCards))
+	for i, dc := range deckCards {
+		entries[i] = DeckCardEntry{CardNo: dc.CardNo, ArtNo: dc.ArtNo, Count: dc.Count}
+	}
+
+	// Check total card count is exactly DeckSize.
+	totalCards := 0
+	for _, e := range entries {
+		totalCards += e.Count
+	}
+	if totalCards != constants.DeckSize {
+		return fmt.Errorf("deck has %d cards, need exactly %d", totalCards, constants.DeckSize)
+	}
+
+	ownedCards, err := s.playerCardRepo.GetPlayerCards(ctx, playerID)
+	if err != nil {
+		return fmt.Errorf("get owned cards: %w", err)
+	}
+
+	return s.validateDeckCards(entries, ownedCards)
+}
+
 func (s *DeckService) DeleteDeck(ctx context.Context, playerID string, deckID int64) error {
 	return s.deckRepo.Delete(ctx, playerID, deckID)
 }
@@ -257,6 +295,24 @@ func (s *DeckService) validateDeckCards(entries []DeckCardEntry, ownedCards []*m
 	}
 
 	return nil
+}
+
+// computeIsValid checks whether a deck's cards satisfy all battle-readiness
+// conditions: exactly DeckSize total, all owned, and within restriction limits.
+func (s *DeckService) computeIsValid(deckCards []model.DeckCard, ownedCards []*model.PlayerCard) bool {
+	totalCards := 0
+	for _, dc := range deckCards {
+		totalCards += dc.Count
+	}
+	if totalCards != constants.DeckSize {
+		return false
+	}
+
+	entries := make([]DeckCardEntry, len(deckCards))
+	for i, dc := range deckCards {
+		entries[i] = DeckCardEntry{CardNo: dc.CardNo, ArtNo: dc.ArtNo, Count: dc.Count}
+	}
+	return s.validateDeckCards(entries, ownedCards) == nil
 }
 
 func restrictionCopyCount(restriction string) int {

@@ -287,7 +287,7 @@ func TestPgDeck_CreateAndFindByPlayerID(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 
 	deck := &model.Deck{
-		PlayerID: pid, DeckName: "My Deck", IsValid: true,
+		PlayerID: pid, DeckName: "My Deck",
 		CreatedAt: now, UpdatedAt: now,
 	}
 	cards := []model.DeckCard{
@@ -313,7 +313,7 @@ func TestPgDeck_FindByID(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 
 	deck := &model.Deck{
-		PlayerID: pid, DeckName: "Test Deck", IsValid: true,
+		PlayerID: pid, DeckName: "Test Deck",
 		CreatedAt: now, UpdatedAt: now,
 	}
 	_ = repo.Create(ctx, deck, nil)
@@ -336,7 +336,7 @@ func TestPgDeck_GetDeckCards(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 
 	deck := &model.Deck{
-		PlayerID: pid, DeckName: "Card Deck", IsValid: true,
+		PlayerID: pid, DeckName: "Card Deck",
 		CreatedAt: now, UpdatedAt: now,
 	}
 	cards := []model.DeckCard{
@@ -374,7 +374,7 @@ func TestPgDeck_Update(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 
 	deck := &model.Deck{
-		PlayerID: pid, DeckName: "Original", IsValid: true,
+		PlayerID: pid, DeckName: "Original",
 		CreatedAt: now, UpdatedAt: now,
 	}
 	oldCards := []model.DeckCard{
@@ -405,7 +405,7 @@ func TestPgDeck_Delete(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 
 	deck := &model.Deck{
-		PlayerID: pid, DeckName: "ToDelete", IsValid: true,
+		PlayerID: pid, DeckName: "ToDelete",
 		CreatedAt: now, UpdatedAt: now,
 	}
 	_ = repo.Create(ctx, deck, nil)

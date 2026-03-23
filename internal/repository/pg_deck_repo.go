@@ -36,11 +36,10 @@ func (r *PgDeckRepository) Create(ctx context.Context, deck *model.Deck, cards [
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	err = tx.QueryRow(ctx,
-		`INSERT INTO decks (player_id, deck_name, is_valid, playmat_no, sleeve_no, created_at, updated_at)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING deck_id`,
+		`INSERT INTO decks (player_id, deck_name, playmat_no, sleeve_no, created_at, updated_at)
+		 VALUES ($1,$2,$3,$4,$5,$6) RETURNING deck_id`,
 		deck.PlayerID,
 		deck.DeckName,
-		deck.IsValid,
 		deck.PlaymatNo,
 		deck.SleeveNo,
 		deck.CreatedAt,
@@ -67,7 +66,7 @@ func (r *PgDeckRepository) Create(ctx context.Context, deck *model.Deck, cards [
 // FindByPlayerID returns all decks for a player, ordered by updated_at descending.
 func (r *PgDeckRepository) FindByPlayerID(ctx context.Context, playerID string) ([]*model.Deck, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT player_id, deck_id, deck_name, is_valid, playmat_no, sleeve_no, created_at, updated_at
+		`SELECT player_id, deck_id, deck_name, playmat_no, sleeve_no, created_at, updated_at
 		 FROM decks WHERE player_id = $1 ORDER BY updated_at DESC`,
 		playerID,
 	)
@@ -93,7 +92,7 @@ func (r *PgDeckRepository) FindByPlayerID(ctx context.Context, playerID string) 
 // FindByID returns a single deck by player_id and deck_id.
 func (r *PgDeckRepository) FindByID(ctx context.Context, playerID string, deckID int64) (*model.Deck, error) {
 	row := r.pool.QueryRow(ctx,
-		`SELECT player_id, deck_id, deck_name, is_valid, playmat_no, sleeve_no, created_at, updated_at
+		`SELECT player_id, deck_id, deck_name, playmat_no, sleeve_no, created_at, updated_at
 		 FROM decks WHERE player_id = $1 AND deck_id = $2`,
 		playerID, deckID,
 	)
@@ -153,10 +152,9 @@ func (r *PgDeckRepository) Update(ctx context.Context, deck *model.Deck, cards [
 	now := time.Now()
 	deck.UpdatedAt = now
 	_, err = tx.Exec(ctx,
-		`UPDATE decks SET deck_name = $1, is_valid = $2, playmat_no = $3, sleeve_no = $4, updated_at = $5
-		 WHERE player_id = $6 AND deck_id = $7`,
+		`UPDATE decks SET deck_name = $1, playmat_no = $2, sleeve_no = $3, updated_at = $4
+		 WHERE player_id = $5 AND deck_id = $6`,
 		deck.DeckName,
-		deck.IsValid,
 		deck.PlaymatNo,
 		deck.SleeveNo,
 		deck.UpdatedAt,
@@ -200,7 +198,6 @@ func scanDeck(row pgx.Row) (*model.Deck, error) {
 		&d.PlayerID,
 		&d.DeckID,
 		&d.DeckName,
-		&d.IsValid,
 		&d.PlaymatNo,
 		&d.SleeveNo,
 		&d.CreatedAt,
