@@ -141,7 +141,9 @@ func (r *GameRelay) SendGameStateToPlayers(gameID string) {
 
 		// Extract turn timer info from the raw battle state
 		var b battleGameState
-		if json.Unmarshal(state, &b) == nil && b.IsMyTurn {
+		if err := json.Unmarshal(state, &b); err != nil {
+			log.Printf("failed to extract turn timer for player %s: %v", pid, err)
+		} else if b.IsMyTurn {
 			activePlayerID = pid
 			activeTimeBank = b.MyView.TimeBank
 		}
