@@ -314,13 +314,14 @@ func setupDeckRouter() *gin.Engine {
 
 	// Seed 10 card definitions and player cards (3 copies each = 30 total).
 	playerCards := make([]*model.PlayerCard, 10)
-	for i := int64(1); i <= 10; i++ {
-		cardCache.InjectForTest(i, &model.CardDefinition{
-			CardNo:      i,
+	for i := 1; i <= 10; i++ {
+		cardID := fmt.Sprintf("C-%03d", i)
+		cardCache.InjectForTest(cardID, &model.CardDefinition{
+			CardID:      cardID,
 			CardName:    fmt.Sprintf("Card%d", i),
 			Restriction: "none",
 		})
-		playerCards[i-1] = &model.PlayerCard{CardNo: i, ArtNo: 1, Count: 3}
+		playerCards[i-1] = &model.PlayerCard{CardID: cardID, ArtNo: 1, Count: 3}
 	}
 	playerCardRepo.SeedPlayerCards("p1", playerCards)
 
@@ -355,8 +356,8 @@ func TestDeckHandler_CreateDeck_Success(t *testing.T) {
 	r := setupDeckRouter()
 
 	entries := make([]service.DeckCardEntry, 10)
-	for i := int64(1); i <= 10; i++ {
-		entries[i-1] = service.DeckCardEntry{CardNo: i, ArtNo: 1, Count: 3}
+	for i := 1; i <= 10; i++ {
+		entries[i-1] = service.DeckCardEntry{CardID: fmt.Sprintf("C-%03d", i), ArtNo: 1, Count: 3}
 	}
 	body, _ := json.Marshal(service.CreateDeckRequest{
 		DeckName: "MyDeck",
@@ -676,7 +677,7 @@ func TestWebhookHandler_HandleGoogleWebhook_MissingBody(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func setupCardRouter() *gin.Engine {
-	cardRepo := repository.NewMockCardRepository(map[int64]*model.CardDefinition{})
+	cardRepo := repository.NewMockCardRepository(map[string]*model.CardDefinition{})
 	cardService := service.NewCardService(cardRepo, repository.NewMockPlayerCardRepository())
 	handler := NewCardHandler(cardService)
 

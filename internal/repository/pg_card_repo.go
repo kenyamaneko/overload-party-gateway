@@ -25,11 +25,11 @@ func NewPgCardRepository(pool *pgxpool.Pool) *PgCardRepository {
 	return &PgCardRepository{pool: pool}
 }
 
-// FindAll returns all active card definitions ordered by card_no.
+// FindAll returns all active card definitions ordered by card_id.
 func (r *PgCardRepository) FindAll(ctx context.Context) ([]*model.CardDefinition, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT card_no, card_name, resource_label, faction, card_type, resizable, elastic, stats, effect_text, effects, restriction, is_active, created_at, updated_at
-		 FROM card_definitions WHERE is_active = true ORDER BY card_no`,
+		`SELECT card_id, card_name, resource_label, faction, card_type, resizable, elastic, stats, effect_text, effects, restriction, is_active, created_at, updated_at
+		 FROM card_definitions WHERE is_active = true ORDER BY card_id`,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("query cards: %w", err)
@@ -50,13 +50,13 @@ func (r *PgCardRepository) FindAll(ctx context.Context) ([]*model.CardDefinition
 	return cards, nil
 }
 
-// FindByCardNo returns a single card definition by its card number.
+// FindByCardID returns a single card definition by its card ID.
 // Returns (nil, nil) when no matching row exists.
-func (r *PgCardRepository) FindByCardNo(ctx context.Context, cardNo int64) (*model.CardDefinition, error) {
+func (r *PgCardRepository) FindByCardID(ctx context.Context, cardID string) (*model.CardDefinition, error) {
 	row := r.pool.QueryRow(ctx,
-		`SELECT card_no, card_name, resource_label, faction, card_type, resizable, elastic, stats, effect_text, effects, restriction, is_active, created_at, updated_at
-		 FROM card_definitions WHERE card_no = $1`,
-		cardNo,
+		`SELECT card_id, card_name, resource_label, faction, card_type, resizable, elastic, stats, effect_text, effects, restriction, is_active, created_at, updated_at
+		 FROM card_definitions WHERE card_id = $1`,
+		cardID,
 	)
 
 	c, err := scanCardDefinition(row)
@@ -64,7 +64,7 @@ func (r *PgCardRepository) FindByCardNo(ctx context.Context, cardNo int64) (*mod
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("find card by card_no: %w", err)
+		return nil, fmt.Errorf("find card by card_id: %w", err)
 	}
 	return c, nil
 }
@@ -83,7 +83,7 @@ func scanCardDefinition(row pgxScannable) (*model.CardDefinition, error) {
 	var c model.CardDefinition
 	var stats, effects json.RawMessage
 	err := row.Scan(
-		&c.CardNo,
+		&c.CardID,
 		&c.CardName,
 		&c.ResourceLabel,
 		&c.Faction,

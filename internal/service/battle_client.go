@@ -12,8 +12,8 @@ import (
 
 // BattleDeckCard represents a card in a deck snapshot sent to the battle server.
 type BattleDeckCard struct {
-	CardNo int64 `json:"CardNo"`
-	ArtNo  int64 `json:"ArtNo"`
+	CardID string `json:"CardId"`
+	ArtNo  int64  `json:"ArtNo"`
 }
 
 // BattleClient is the interface for communicating with the battle server REST API.

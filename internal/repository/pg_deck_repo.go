@@ -110,7 +110,7 @@ func (r *PgDeckRepository) FindByID(ctx context.Context, playerID string, deckID
 // GetDeckCards returns the deck_cards rows for a given deck.
 func (r *PgDeckRepository) GetDeckCards(ctx context.Context, playerID string, deckID int64) ([]model.DeckCard, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT player_id, deck_id, card_no, art_no, count
+		`SELECT player_id, deck_id, card_id, art_no, count
 		 FROM deck_cards WHERE player_id = $1 AND deck_id = $2`,
 		playerID, deckID,
 	)
@@ -122,7 +122,7 @@ func (r *PgDeckRepository) GetDeckCards(ctx context.Context, playerID string, de
 	cards := make([]model.DeckCard, 0, 16)
 	for rows.Next() {
 		var dc model.DeckCard
-		if err := rows.Scan(&dc.PlayerID, &dc.DeckID, &dc.CardNo, &dc.ArtNo, &dc.Count); err != nil {
+		if err := rows.Scan(&dc.PlayerID, &dc.DeckID, &dc.CardID, &dc.ArtNo, &dc.Count); err != nil {
 			return nil, fmt.Errorf("scan deck card: %w", err)
 		}
 		cards = append(cards, dc)
@@ -216,7 +216,7 @@ func bulkInsertDeckCards(ctx context.Context, tx pgx.Tx, cards []model.DeckCard)
 	}
 
 	var sb strings.Builder
-	sb.WriteString("INSERT INTO deck_cards (player_id, deck_id, card_no, art_no, count) VALUES ")
+	sb.WriteString("INSERT INTO deck_cards (player_id, deck_id, card_id, art_no, count) VALUES ")
 
 	args := make([]interface{}, 0, len(cards)*5)
 	for i, c := range cards {
@@ -225,7 +225,7 @@ func bulkInsertDeckCards(ctx context.Context, tx pgx.Tx, cards []model.DeckCard)
 		}
 		base := i*5 + 1
 		fmt.Fprintf(&sb, "($%d,$%d,$%d,$%d,$%d)", base, base+1, base+2, base+3, base+4)
-		args = append(args, c.PlayerID, c.DeckID, c.CardNo, c.ArtNo, c.Count)
+		args = append(args, c.PlayerID, c.DeckID, c.CardID, c.ArtNo, c.Count)
 	}
 
 	_, err := tx.Exec(ctx, sb.String(), args...)

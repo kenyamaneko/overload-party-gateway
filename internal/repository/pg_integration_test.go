@@ -252,15 +252,15 @@ func createTestPlayer(t *testing.T, pool *pgxpool.Pool, name string) string {
 	return pid
 }
 
-func seedCardDefinitions(t *testing.T, pool *pgxpool.Pool, cardNos ...int64) {
+func seedCardDefinitions(t *testing.T, pool *pgxpool.Pool, cardIDs ...string) {
 	t.Helper()
 	ctx := context.Background()
-	for _, no := range cardNos {
+	for _, id := range cardIDs {
 		_, err := pool.Exec(ctx,
-			`INSERT INTO card_definitions (card_no, card_name, resource_label, faction, card_type, resizable, elastic, stats, restriction, is_active, created_at, updated_at)
+			`INSERT INTO card_definitions (card_id, card_name, resource_label, faction, card_type, resizable, elastic, stats, restriction, is_active, created_at, updated_at)
 			 VALUES ($1, $2, 'res', 'Neutral', 'resource', false, false, '{}', 'unlimited', true, NOW(), NOW())
-			 ON CONFLICT (card_no) DO NOTHING`,
-			no, fmt.Sprintf("Card%d", no))
+			 ON CONFLICT (card_id) DO NOTHING`,
+			id, fmt.Sprintf("Card-%s", id))
 		require.NoError(t, err)
 	}
 }
@@ -270,11 +270,11 @@ func seedPlayerCards(t *testing.T, pool *pgxpool.Pool, playerID string, cards []
 	ctx := context.Background()
 	for _, c := range cards {
 		_, err := pool.Exec(ctx,
-			`INSERT INTO player_cards (player_id, card_no, art_no, count)
+			`INSERT INTO player_cards (player_id, card_id, art_no, count)
 			 VALUES ($1,$2,$3,$4)
-			 ON CONFLICT (player_id, card_no, art_no)
+			 ON CONFLICT (player_id, card_id, art_no)
 			 DO UPDATE SET count = player_cards.count + EXCLUDED.count`,
-			playerID, c.CardNo, c.ArtNo, c.Count)
+			playerID, c.CardID, c.ArtNo, c.Count)
 		require.NoError(t, err)
 	}
 }
@@ -291,8 +291,8 @@ func TestPgDeck_CreateAndFindByPlayerID(t *testing.T) {
 		CreatedAt: now, UpdatedAt: now,
 	}
 	cards := []model.DeckCard{
-		{PlayerID: pid, CardNo: 1, ArtNo: 1, Count: 3},
-		{PlayerID: pid, CardNo: 2, ArtNo: 1, Count: 2},
+		{PlayerID: pid, CardID: "C-001", ArtNo: 1, Count: 3},
+		{PlayerID: pid, CardID: "C-002", ArtNo: 1, Count: 2},
 	}
 
 	err := repo.Create(ctx, deck, cards)
@@ -340,8 +340,8 @@ func TestPgDeck_GetDeckCards(t *testing.T) {
 		CreatedAt: now, UpdatedAt: now,
 	}
 	cards := []model.DeckCard{
-		{PlayerID: pid, CardNo: 1, ArtNo: 1, Count: 3},
-		{PlayerID: pid, CardNo: 2, ArtNo: 1, Count: 2},
+		{PlayerID: pid, CardID: "C-001", ArtNo: 1, Count: 3},
+		{PlayerID: pid, CardID: "C-002", ArtNo: 1, Count: 2},
 	}
 	_ = repo.Create(ctx, deck, cards)
 
@@ -353,17 +353,17 @@ func TestPgDeck_GetDeckCards(t *testing.T) {
 func TestPgDeck_GetPlayerCards(t *testing.T) {
 	pool := setupPool(t)
 	pid := createTestPlayer(t, pool, "DeckUser4")
-	seedCardDefinitions(t, pool, 1, 2)
+	seedCardDefinitions(t, pool, "C-001", "C-002")
 	seedPlayerCards(t, pool, pid, []model.PlayerCard{
-		{PlayerID: pid, CardNo: 1, ArtNo: 1, Count: 5},
-		{PlayerID: pid, CardNo: 2, ArtNo: 1, Count: 3},
+		{PlayerID: pid, CardID: "C-001", ArtNo: 1, Count: 5},
+		{PlayerID: pid, CardID: "C-002", ArtNo: 1, Count: 3},
 	})
 	repo := NewPgPlayerCardRepository(pool)
 
 	cards, err := repo.GetPlayerCards(context.Background(), pid)
 	require.NoError(t, err)
 	assert.Len(t, cards, 2)
-	assert.Equal(t, int64(1), cards[0].CardNo)
+	assert.Equal(t, "C-001", cards[0].CardID)
 }
 
 func TestPgDeck_Update(t *testing.T) {
@@ -378,14 +378,14 @@ func TestPgDeck_Update(t *testing.T) {
 		CreatedAt: now, UpdatedAt: now,
 	}
 	oldCards := []model.DeckCard{
-		{PlayerID: pid, CardNo: 1, ArtNo: 1, Count: 3},
+		{PlayerID: pid, CardID: "C-001", ArtNo: 1, Count: 3},
 	}
 	_ = repo.Create(ctx, deck, oldCards)
 
 	deck.DeckName = "Updated"
 	newCards := []model.DeckCard{
-		{PlayerID: pid, DeckID: deck.DeckID, CardNo: 2, ArtNo: 1, Count: 2},
-		{PlayerID: pid, DeckID: deck.DeckID, CardNo: 3, ArtNo: 1, Count: 1},
+		{PlayerID: pid, DeckID: deck.DeckID, CardID: "C-002", ArtNo: 1, Count: 2},
+		{PlayerID: pid, DeckID: deck.DeckID, CardID: "C-003", ArtNo: 1, Count: 1},
 	}
 	err := repo.Update(ctx, deck, newCards)
 	require.NoError(t, err)
@@ -424,26 +424,26 @@ func TestPgDeck_Delete(t *testing.T) {
 
 func TestPgCard_FindAll(t *testing.T) {
 	pool := setupPool(t)
-	seedCardDefinitions(t, pool, 1, 2, 3)
+	seedCardDefinitions(t, pool, "C-001", "C-002", "C-003")
 	repo := NewPgCardRepository(pool)
 
 	cards, err := repo.FindAll(context.Background())
 	require.NoError(t, err)
 	assert.Len(t, cards, 3)
-	assert.Equal(t, int64(1), cards[0].CardNo)
+	assert.Equal(t, "C-001", cards[0].CardID)
 }
 
-func TestPgCard_FindByCardNo(t *testing.T) {
+func TestPgCard_FindByCardID(t *testing.T) {
 	pool := setupPool(t)
-	seedCardDefinitions(t, pool, 10)
+	seedCardDefinitions(t, pool, "C-010")
 	repo := NewPgCardRepository(pool)
 
-	card, err := repo.FindByCardNo(context.Background(), 10)
+	card, err := repo.FindByCardID(context.Background(), "C-010")
 	require.NoError(t, err)
 	require.NotNil(t, card)
-	assert.Equal(t, int64(10), card.CardNo)
+	assert.Equal(t, "C-010", card.CardID)
 
-	notFound, err := repo.FindByCardNo(context.Background(), 999)
+	notFound, err := repo.FindByCardID(context.Background(), "C-999")
 	require.NoError(t, err)
 	assert.Nil(t, notFound)
 }
@@ -560,7 +560,7 @@ func TestPgShop_CreatePurchaseWithCards(t *testing.T) {
 	pool := setupPool(t)
 	pid := createTestPlayer(t, pool, "ShopUser")
 	seedProducts(t, pool)
-	seedCardDefinitions(t, pool, 1, 2)
+	seedCardDefinitions(t, pool, "C-001", "C-002")
 	repo := NewPgShopRepository(pool)
 	ctx := context.Background()
 
@@ -572,8 +572,8 @@ func TestPgShop_CreatePurchaseWithCards(t *testing.T) {
 		PurchasedAt:   time.Now(),
 	}
 	cards := []*model.PlayerCard{
-		{PlayerID: pid, CardNo: 1, ArtNo: 1, Count: 3},
-		{PlayerID: pid, CardNo: 2, ArtNo: 1, Count: 2},
+		{PlayerID: pid, CardID: "C-001", ArtNo: 1, Count: 3},
+		{PlayerID: pid, CardID: "C-002", ArtNo: 1, Count: 2},
 	}
 
 	err := repo.CreatePurchaseWithCards(ctx, purchase, cards)
@@ -666,19 +666,19 @@ func TestPgShop_Subscription_CRUD(t *testing.T) {
 func TestPgShop_InsertPlayerCards(t *testing.T) {
 	pool := setupPool(t)
 	pid := createTestPlayer(t, pool, "CardUser")
-	seedCardDefinitions(t, pool, 1)
+	seedCardDefinitions(t, pool, "C-001")
 	repo := NewPgShopRepository(pool)
 	ctx := context.Background()
 
 	cards := []*model.PlayerCard{
-		{PlayerID: pid, CardNo: 1, ArtNo: 1, Count: 2},
+		{PlayerID: pid, CardID: "C-001", ArtNo: 1, Count: 2},
 	}
 	err := repo.InsertPlayerCards(ctx, cards)
 	require.NoError(t, err)
 
 	// Upsert: add more
 	cards2 := []*model.PlayerCard{
-		{PlayerID: pid, CardNo: 1, ArtNo: 1, Count: 3},
+		{PlayerID: pid, CardID: "C-001", ArtNo: 1, Count: 3},
 	}
 	err = repo.InsertPlayerCards(ctx, cards2)
 	require.NoError(t, err)
@@ -696,16 +696,16 @@ func TestPgShop_GetPlayerOwnedFactions(t *testing.T) {
 
 	// Insert card definitions with different factions
 	_, _ = pool.Exec(ctx,
-		`INSERT INTO card_definitions (card_no, card_name, resource_label, faction, card_type, resizable, elastic, stats, restriction, is_active, created_at, updated_at) VALUES
-		 (101, 'CF Card', 'res', 'CloudForge', 'resource', false, false, '{}', 'unlimited', true, NOW(), NOW()),
-		 (102, 'NX Card', 'res', 'NetX', 'resource', false, false, '{}', 'unlimited', true, NOW(), NOW()),
-		 (103, 'Neutral Card', 'res', 'Neutral', 'resource', false, false, '{}', 'unlimited', true, NOW(), NOW())
-		 ON CONFLICT (card_no) DO NOTHING`)
+		`INSERT INTO card_definitions (card_id, card_name, resource_label, faction, card_type, resizable, elastic, stats, restriction, is_active, created_at, updated_at) VALUES
+		 ('CF-001', 'CF Card', 'res', 'CloudForge', 'resource', false, false, '{}', 'unlimited', true, NOW(), NOW()),
+		 ('NX-001', 'NX Card', 'res', 'NetX', 'resource', false, false, '{}', 'unlimited', true, NOW(), NOW()),
+		 ('NT-001', 'Neutral Card', 'res', 'Neutral', 'resource', false, false, '{}', 'unlimited', true, NOW(), NOW())
+		 ON CONFLICT (card_id) DO NOTHING`)
 
 	seedPlayerCards(t, pool, pid, []model.PlayerCard{
-		{PlayerID: pid, CardNo: 101, ArtNo: 1, Count: 1},
-		{PlayerID: pid, CardNo: 102, ArtNo: 1, Count: 1},
-		{PlayerID: pid, CardNo: 103, ArtNo: 1, Count: 1},
+		{PlayerID: pid, CardID: "CF-001", ArtNo: 1, Count: 1},
+		{PlayerID: pid, CardID: "NX-001", ArtNo: 1, Count: 1},
+		{PlayerID: pid, CardID: "NT-001", ArtNo: 1, Count: 1},
 	})
 
 	repo := NewPgShopRepository(pool)

@@ -33,18 +33,18 @@ func newTestShopEnv() *testShopEnv {
 	cc := cache.NewCardCache()
 
 	// SHE: unlimited=2, limited=1, semi_limited=1, inactive=1
-	cc.InjectForTest(1, &model.CardDefinition{CardNo: 1, CardName: "SHE Compute", Faction: "SHE", CardType: "Compute", Restriction: "unlimited", IsActive: true})
-	cc.InjectForTest(2, &model.CardDefinition{CardNo: 2, CardName: "SHE RDB", Faction: "SHE", CardType: "Database", Restriction: "unlimited", IsActive: true})
-	cc.InjectForTest(3, &model.CardDefinition{CardNo: 3, CardName: "SHE Limited", Faction: "SHE", CardType: "Strategy", Restriction: "limited", IsActive: true})
-	cc.InjectForTest(4, &model.CardDefinition{CardNo: 4, CardName: "SHE SemiLimited", Faction: "SHE", CardType: "Strategy", Restriction: "semi_limited", IsActive: true})
-	cc.InjectForTest(5, &model.CardDefinition{CardNo: 5, CardName: "SHE Inactive", Faction: "SHE", CardType: "Compute", Restriction: "unlimited", IsActive: false})
+	cc.InjectForTest("SH-0001", &model.CardDefinition{CardID: "SH-0001", CardName: "SHE Compute", Faction: "SHE", CardType: "Compute", Restriction: "unlimited", IsActive: true})
+	cc.InjectForTest("SH-0002", &model.CardDefinition{CardID: "SH-0002", CardName: "SHE RDB", Faction: "SHE", CardType: "Database", Restriction: "unlimited", IsActive: true})
+	cc.InjectForTest("SH-0003", &model.CardDefinition{CardID: "SH-0003", CardName: "SHE Limited", Faction: "SHE", CardType: "Strategy", Restriction: "limited", IsActive: true})
+	cc.InjectForTest("SH-0004", &model.CardDefinition{CardID: "SH-0004", CardName: "SHE SemiLimited", Faction: "SHE", CardType: "Strategy", Restriction: "semi_limited", IsActive: true})
+	cc.InjectForTest("SH-0005", &model.CardDefinition{CardID: "SH-0005", CardName: "SHE Inactive", Faction: "SHE", CardType: "Compute", Restriction: "unlimited", IsActive: false})
 
 	// Neutral: unlimited=1, limited=1
-	cc.InjectForTest(100, &model.CardDefinition{CardNo: 100, CardName: "Neutral Card 1", Faction: "Neutral", CardType: "Strategy", Restriction: "unlimited", IsActive: true})
-	cc.InjectForTest(101, &model.CardDefinition{CardNo: 101, CardName: "Neutral Card 2", Faction: "Neutral", CardType: "Incident", Restriction: "limited", IsActive: true})
+	cc.InjectForTest("NT-0001", &model.CardDefinition{CardID: "NT-0001", CardName: "Neutral Card 1", Faction: "Neutral", CardType: "Strategy", Restriction: "unlimited", IsActive: true})
+	cc.InjectForTest("NT-0002", &model.CardDefinition{CardID: "NT-0002", CardName: "Neutral Card 2", Faction: "Neutral", CardType: "Incident", Restriction: "limited", IsActive: true})
 
 	// Tenki
-	cc.InjectForTest(200, &model.CardDefinition{CardNo: 200, CardName: "Tenki VM", Faction: "Tenki", CardType: "Compute", Restriction: "unlimited", IsActive: true})
+	cc.InjectForTest("TK-0001", &model.CardDefinition{CardID: "TK-0001", CardName: "Tenki VM", Faction: "Tenki", CardType: "Compute", Restriction: "unlimited", IsActive: true})
 
 	factionRepo := repository.NewMockFactionRepository()
 	verifier := &platform.MockReceiptVerifier{}
@@ -75,8 +75,8 @@ func TestSelectFaction_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("returns correct card count", func(t *testing.T) {
-		// SHE active cards: 1(3) + 2(3) + 3(1) + 4(2) = 4 entries, 9 copies
-		// Neutral cards: 100(3) + 101(1) = 2 entries, 4 copies
+		// SHE active cards: SH-0001(3) + SH-0002(3) + SH-0003(1) + SH-0004(2) = 4 entries, 9 copies
+		// Neutral cards: NT-0001(3) + NT-0002(1) = 2 entries, 4 copies
 		// Total entries = 6
 		assert.Equal(t, 6, count)
 	})
@@ -148,17 +148,17 @@ func TestBuildFactionCards_Copies(t *testing.T) {
 
 	cards := env.svc.buildFactionCards("p1", "SHE")
 
-	// Expected: card 1, 2, 3, 4 (card 5 inactive → excluded)
+	// Expected: SH-0001, SH-0002, SH-0003, SH-0004 (SH-0005 inactive → excluded)
 	require.Len(t, cards, 4)
 
-	counts := make(map[int64]int)
+	counts := make(map[string]int)
 	for _, c := range cards {
-		counts[c.CardNo] = c.Count
+		counts[c.CardID] = c.Count
 	}
-	assert.Equal(t, 3, counts[1], "card 1 (unlimited) — all cards get 3 copies at grant time")
-	assert.Equal(t, 3, counts[3], "card 3 (limited) — restriction applies at deck build, not grant")
-	assert.Equal(t, 3, counts[4], "card 4 (semi_limited) — restriction applies at deck build, not grant")
-	assert.Equal(t, 0, counts[5], "card 5 (inactive)")
+	assert.Equal(t, 3, counts["SH-0001"], "SH-0001 (unlimited) — all cards get 3 copies at grant time")
+	assert.Equal(t, 3, counts["SH-0003"], "SH-0003 (limited) — restriction applies at deck build, not grant")
+	assert.Equal(t, 3, counts["SH-0004"], "SH-0004 (semi_limited) — restriction applies at deck build, not grant")
+	assert.Equal(t, 0, counts["SH-0005"], "SH-0005 (inactive)")
 }
 
 func TestBuildFactionCards_Neutral(t *testing.T) {
@@ -674,26 +674,26 @@ func TestSelectFaction_CardCopiesVerified(t *testing.T) {
 
 	cards := env.shopRepo.GetPlayerCardsForTest("p1")
 
-	// Build a map of cardNo -> count for easy lookup.
-	counts := make(map[int64]int)
+	// Build a map of cardID -> count for easy lookup.
+	counts := make(map[string]int)
 	for _, c := range cards {
-		counts[c.CardNo] = c.Count
+		counts[c.CardID] = c.Count
 	}
 
 	// All cards get 3 copies regardless of restriction.
-	// SHE cards: 1, 2, 3, 4; Neutral cards: 100, 101
-	expected := map[int64]int{
-		1:   3,
-		2:   3,
-		3:   3,
-		4:   3,
-		100: 3,
-		101: 3,
+	// SHE cards: SH-0001, SH-0002, SH-0003, SH-0004; Neutral cards: NT-0001, NT-0002
+	expected := map[string]int{
+		"SH-0001": 3,
+		"SH-0002": 3,
+		"SH-0003": 3,
+		"SH-0004": 3,
+		"NT-0001": 3,
+		"NT-0002": 3,
 	}
 
-	for cardNo, wantCount := range expected {
-		gotCount, ok := counts[cardNo]
-		require.True(t, ok, "card %d not found in player cards", cardNo)
-		assert.Equal(t, wantCount, gotCount, "card %d", cardNo)
+	for cardID, wantCount := range expected {
+		gotCount, ok := counts[cardID]
+		require.True(t, ok, "card %s not found in player cards", cardID)
+		assert.Equal(t, wantCount, gotCount, "card %s", cardID)
 	}
 }

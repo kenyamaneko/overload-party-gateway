@@ -106,40 +106,40 @@ func setupDeckService() (*DeckService, *mockDeckRepo, *mockPlayerCardRepo, *cach
 
 	// Unlimited cards (limit = 3)
 	unlimitedCards := []struct {
-		no      int64
+		id      string
 		name    string
 		faction string
 		typ     string
 	}{
-		{1, "Compute A", "SHE", "Compute"},
-		{2, "Compute B", "SHE", "Compute"},
-		{3, "Database A", "SHE", "Database"},
-		{4, "Strategy A", "SHE", "Strategy"},
-		{5, "Incident A", "SHE", "Incident"},
-		{6, "Platform A", "SHE", "Platform"},
-		{7, "Compute C", "Tenki", "Compute"},
-		{8, "Database B", "Tenki", "Database"},
-		{9, "Strategy B", "Tenki", "Strategy"},
-		{10, "Incident B", "Tenki", "Incident"},
+		{"C-001", "Compute A", "SHE", "Compute"},
+		{"C-002", "Compute B", "SHE", "Compute"},
+		{"C-003", "Database A", "SHE", "Database"},
+		{"C-004", "Strategy A", "SHE", "Strategy"},
+		{"C-005", "Incident A", "SHE", "Incident"},
+		{"C-006", "Platform A", "SHE", "Platform"},
+		{"C-007", "Compute C", "Tenki", "Compute"},
+		{"C-008", "Database B", "Tenki", "Database"},
+		{"C-009", "Strategy B", "Tenki", "Strategy"},
+		{"C-010", "Incident B", "Tenki", "Incident"},
 	}
 	for _, c := range unlimitedCards {
-		cc.InjectForTest(c.no, &model.CardDefinition{
-			CardNo: c.no, CardName: c.name, Faction: c.faction, CardType: c.typ,
+		cc.InjectForTest(c.id, &model.CardDefinition{
+			CardID: c.id, CardName: c.name, Faction: c.faction, CardType: c.typ,
 			Restriction: "unlimited", IsActive: true,
 			Stats: json.RawMessage(`{}`),
 		})
 	}
 
 	// Limited card (limit = 1)
-	cc.InjectForTest(50, &model.CardDefinition{
-		CardNo: 50, CardName: "Limited Spell", Faction: "SHE", CardType: "Strategy",
+	cc.InjectForTest("C-050", &model.CardDefinition{
+		CardID: "C-050", CardName: "Limited Spell", Faction: "SHE", CardType: "Strategy",
 		Restriction: "limited", IsActive: true,
 		Stats: json.RawMessage(`{}`),
 	})
 
 	// Semi-limited card (limit = 2)
-	cc.InjectForTest(60, &model.CardDefinition{
-		CardNo: 60, CardName: "SemiLimited Trap", Faction: "SHE", CardType: "Incident",
+	cc.InjectForTest("C-060", &model.CardDefinition{
+		CardID: "C-060", CardName: "SemiLimited Trap", Faction: "SHE", CardType: "Incident",
 		Restriction: "semi_limited", IsActive: true,
 		Stats: json.RawMessage(`{}`),
 	})
@@ -157,34 +157,34 @@ func grantCards(repo *mockPlayerCardRepo, playerID string, cards ...*model.Playe
 	repo.playerCards[playerID] = append(repo.playerCards[playerID], cards...)
 }
 
-// makeEntries builds DeckCardEntry slice from (cardNo, count) pairs.
-func makeEntries(pairs ...int64) []DeckCardEntry {
+// makeEntries builds DeckCardEntry slice from (cardID, count) pairs.
+func makeEntries(pairs ...interface{}) []DeckCardEntry {
 	var entries []DeckCardEntry
 	for i := 0; i < len(pairs); i += 2 {
 		entries = append(entries, DeckCardEntry{
-			CardNo: pairs[i],
+			CardID: pairs[i].(string),
 			ArtNo:  0,
-			Count:  int(pairs[i+1]),
+			Count:  pairs[i+1].(int),
 		})
 	}
 	return entries
 }
 
-// grantUnlimited grants 3 copies each of the given card numbers.
-func grantUnlimited(repo *mockPlayerCardRepo, playerID string, cardNos ...int64) {
-	for _, no := range cardNos {
-		grantCards(repo, playerID, &model.PlayerCard{CardNo: no, ArtNo: 0, Count: 3})
+// grantUnlimited grants 3 copies each of the given card IDs.
+func grantUnlimited(repo *mockPlayerCardRepo, playerID string, cardIDs ...string) {
+	for _, id := range cardIDs {
+		grantCards(repo, playerID, &model.PlayerCard{CardID: id, ArtNo: 0, Count: 3})
 	}
 }
 
 // allTenCards is a convenience for granting/building 10 distinct cards.
-var allTenCards = []int64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+var allTenCards = []string{"C-001", "C-002", "C-003", "C-004", "C-005", "C-006", "C-007", "C-008", "C-009", "C-010"}
 
-// full30Entries returns entries for a valid 30-card deck (3 copies × 10 cards).
+// full30Entries returns entries for a valid 30-card deck (3 copies x 10 cards).
 func full30Entries() []DeckCardEntry {
 	return makeEntries(
-		1, 3, 2, 3, 3, 3, 4, 3, 5, 3,
-		6, 3, 7, 3, 8, 3, 9, 3, 10, 3,
+		"C-001", 3, "C-002", 3, "C-003", 3, "C-004", 3, "C-005", 3,
+		"C-006", 3, "C-007", 3, "C-008", 3, "C-009", 3, "C-010", 3,
 	)
 }
 
@@ -215,12 +215,12 @@ func TestCreateDeck_Validity(t *testing.T) {
 			name:     "29 cards → invalid",
 			deckName: "Almost Full",
 			grant: func(pcRepo *mockPlayerCardRepo, pid string) {
-				grantUnlimited(pcRepo, pid, 1, 2, 3, 4, 5, 6, 7, 8, 9)
-				grantCards(pcRepo, pid, &model.PlayerCard{CardNo: 10, ArtNo: 0, Count: 2})
+				grantUnlimited(pcRepo, pid, "C-001", "C-002", "C-003", "C-004", "C-005", "C-006", "C-007", "C-008", "C-009")
+				grantCards(pcRepo, pid, &model.PlayerCard{CardID: "C-010", ArtNo: 0, Count: 2})
 			},
 			entries: makeEntries(
-				1, 3, 2, 3, 3, 3, 4, 3, 5, 3,
-				6, 3, 7, 3, 8, 3, 9, 3, 10, 2,
+				"C-001", 3, "C-002", 3, "C-003", 3, "C-004", 3, "C-005", 3,
+				"C-006", 3, "C-007", 3, "C-008", 3, "C-009", 3, "C-010", 2,
 			),
 			wantValid: false,
 		},
@@ -266,82 +266,82 @@ func TestCreateDeck_ValidationErrors(t *testing.T) {
 			name: "31 cards exceeds max",
 			grant: func(pcRepo *mockPlayerCardRepo, pid string) {
 				grantUnlimited(pcRepo, pid, allTenCards...)
-				grantCards(pcRepo, pid, &model.PlayerCard{CardNo: 50, ArtNo: 0, Count: 1})
+				grantCards(pcRepo, pid, &model.PlayerCard{CardID: "C-050", ArtNo: 0, Count: 1})
 			},
 			entries: makeEntries(
-				1, 3, 2, 3, 3, 3, 4, 3, 5, 3,
-				6, 3, 7, 3, 8, 3, 9, 3, 10, 3,
-				50, 1,
+				"C-001", 3, "C-002", 3, "C-003", 3, "C-004", 3, "C-005", 3,
+				"C-006", 3, "C-007", 3, "C-008", 3, "C-009", 3, "C-010", 3,
+				"C-050", 1,
 			),
 			wantErrMsg: "deck cannot exceed 30 cards",
 		},
 		{
 			name: "unowned card",
 			grant: func(pcRepo *mockPlayerCardRepo, pid string) {
-				grantCards(pcRepo, pid, &model.PlayerCard{CardNo: 1, ArtNo: 0, Count: 3})
+				grantCards(pcRepo, pid, &model.PlayerCard{CardID: "C-001", ArtNo: 0, Count: 3})
 			},
-			entries:    makeEntries(1, 3, 2, 1),
+			entries:    makeEntries("C-001", 3, "C-002", 1),
 			wantErrMsg: "not enough owned",
 		},
 		{
 			name: "unlimited card 4 copies (max 3)",
 			grant: func(pcRepo *mockPlayerCardRepo, pid string) {
-				grantCards(pcRepo, pid, &model.PlayerCard{CardNo: 1, ArtNo: 0, Count: 4})
+				grantCards(pcRepo, pid, &model.PlayerCard{CardID: "C-001", ArtNo: 0, Count: 4})
 			},
-			entries:    makeEntries(1, 4),
+			entries:    makeEntries("C-001", 4),
 			wantErrMsg: "exceeds restriction limit (4/3)",
 		},
 		{
 			name: "limited card 2 copies (max 1)",
 			grant: func(pcRepo *mockPlayerCardRepo, pid string) {
-				grantCards(pcRepo, pid, &model.PlayerCard{CardNo: 50, ArtNo: 0, Count: 2})
+				grantCards(pcRepo, pid, &model.PlayerCard{CardID: "C-050", ArtNo: 0, Count: 2})
 			},
-			entries:    makeEntries(50, 2),
+			entries:    makeEntries("C-050", 2),
 			wantErrMsg: "exceeds restriction limit (2/1)",
 		},
 		{
 			name: "semi_limited card 3 copies (max 2)",
 			grant: func(pcRepo *mockPlayerCardRepo, pid string) {
-				grantCards(pcRepo, pid, &model.PlayerCard{CardNo: 60, ArtNo: 0, Count: 3})
+				grantCards(pcRepo, pid, &model.PlayerCard{CardID: "C-060", ArtNo: 0, Count: 3})
 			},
-			entries:    makeEntries(60, 3),
+			entries:    makeEntries("C-060", 3),
 			wantErrMsg: "exceeds restriction limit (3/2)",
 		},
 		{
 			name: "count = 0",
 			grant: func(pcRepo *mockPlayerCardRepo, pid string) {
-				grantCards(pcRepo, pid, &model.PlayerCard{CardNo: 1, ArtNo: 0, Count: 3})
+				grantCards(pcRepo, pid, &model.PlayerCard{CardID: "C-001", ArtNo: 0, Count: 3})
 			},
-			entries:    []DeckCardEntry{{CardNo: 1, ArtNo: 0, Count: 0}},
+			entries:    []DeckCardEntry{{CardID: "C-001", ArtNo: 0, Count: 0}},
 			wantErrMsg: "count must be positive",
 		},
 		{
 			name: "count = -1",
 			grant: func(pcRepo *mockPlayerCardRepo, pid string) {
-				grantCards(pcRepo, pid, &model.PlayerCard{CardNo: 1, ArtNo: 0, Count: 3})
+				grantCards(pcRepo, pid, &model.PlayerCard{CardID: "C-001", ArtNo: 0, Count: 3})
 			},
-			entries:    []DeckCardEntry{{CardNo: 1, ArtNo: 0, Count: -1}},
+			entries:    []DeckCardEntry{{CardID: "C-001", ArtNo: 0, Count: -1}},
 			wantErrMsg: "count must be positive",
 		},
 		{
 			name: "card not in definitions",
 			grant: func(pcRepo *mockPlayerCardRepo, pid string) {
-				grantCards(pcRepo, pid, &model.PlayerCard{CardNo: 999, ArtNo: 0, Count: 3})
+				grantCards(pcRepo, pid, &model.PlayerCard{CardID: "C-999", ArtNo: 0, Count: 3})
 			},
-			entries:    makeEntries(999, 1),
-			wantErrMsg: "card 999 not found in card definitions",
+			entries:    makeEntries("C-999", 1),
+			wantErrMsg: "card C-999 not found in card definitions",
 		},
 		{
 			name: "cross-variant exceeds restriction",
 			grant: func(pcRepo *mockPlayerCardRepo, pid string) {
 				grantCards(pcRepo, pid,
-					&model.PlayerCard{CardNo: 1, ArtNo: 0, Count: 3},
-					&model.PlayerCard{CardNo: 1, ArtNo: 1, Count: 3},
+					&model.PlayerCard{CardID: "C-001", ArtNo: 0, Count: 3},
+					&model.PlayerCard{CardID: "C-001", ArtNo: 1, Count: 3},
 				)
 			},
 			entries: []DeckCardEntry{
-				{CardNo: 1, ArtNo: 0, Count: 3},
-				{CardNo: 1, ArtNo: 1, Count: 1}, // total 4, max 3
+				{CardID: "C-001", ArtNo: 0, Count: 3},
+				{CardID: "C-001", ArtNo: 1, Count: 1}, // total 4, max 3
 			},
 			wantErrMsg: "exceeds restriction limit (4/3)",
 		},
@@ -370,24 +370,24 @@ func TestCreateDeck_ValidationErrors(t *testing.T) {
 
 func TestCreateDeck_RestrictionAtLimit(t *testing.T) {
 	tests := []struct {
-		name    string
-		cardNo  int64
-		count   int
+		name   string
+		cardID string
+		count  int
 	}{
-		{"limited 1 copy (max 1)", 50, 1},
-		{"semi_limited 2 copies (max 2)", 60, 2},
-		{"unlimited 3 copies (max 3)", 1, 3},
+		{"limited 1 copy (max 1)", "C-050", 1},
+		{"semi_limited 2 copies (max 2)", "C-060", 2},
+		{"unlimited 3 copies (max 3)", "C-001", 3},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			svc, _, pcRepo, _ := setupDeckService()
 			pid := "p1"
-			grantCards(pcRepo, pid, &model.PlayerCard{CardNo: tt.cardNo, ArtNo: 0, Count: tt.count})
+			grantCards(pcRepo, pid, &model.PlayerCard{CardID: tt.cardID, ArtNo: 0, Count: tt.count})
 
 			_, err := svc.CreateDeck(context.Background(), pid, CreateDeckRequest{
 				DeckName: "OK Deck",
-				Cards:    makeEntries(tt.cardNo, int64(tt.count)),
+				Cards:    makeEntries(tt.cardID, tt.count),
 			})
 
 			require.NoError(t, err)
@@ -402,11 +402,11 @@ func TestCreateDeck_RestrictionAtLimit(t *testing.T) {
 func TestCreateDeck_DeckIDAssigned(t *testing.T) {
 	svc, _, pcRepo, _ := setupDeckService()
 	pid := "p1"
-	grantCards(pcRepo, pid, &model.PlayerCard{CardNo: 1, ArtNo: 0, Count: 3})
+	grantCards(pcRepo, pid, &model.PlayerCard{CardID: "C-001", ArtNo: 0, Count: 3})
 
 	deck, err := svc.CreateDeck(context.Background(), pid, CreateDeckRequest{
 		DeckName: "ID Check",
-		Cards:    makeEntries(1, 3),
+		Cards:    makeEntries("C-001", 3),
 	})
 
 	require.NoError(t, err)
@@ -435,8 +435,8 @@ func TestGetPlayerCards_EnrichedWithDef(t *testing.T) {
 	svc, _, pcRepo, _ := setupDeckService()
 	pid := "p1"
 	grantCards(pcRepo, pid,
-		&model.PlayerCard{CardNo: 1, ArtNo: 0, Count: 3},
-		&model.PlayerCard{CardNo: 50, ArtNo: 0, Count: 1},
+		&model.PlayerCard{CardID: "C-001", ArtNo: 0, Count: 3},
+		&model.PlayerCard{CardID: "C-050", ArtNo: 0, Count: 1},
 	)
 
 	cards, err := svc.GetPlayerCards(context.Background(), pid)
@@ -444,34 +444,34 @@ func TestGetPlayerCards_EnrichedWithDef(t *testing.T) {
 	require.Len(t, cards, 2)
 
 	// Build a map for easy lookup.
-	byNo := map[int64]*model.PlayerCardWithDef{}
+	byID := map[string]*model.PlayerCardWithDef{}
 	for _, c := range cards {
-		byNo[c.CardNo] = c
+		byID[c.CardID] = c
 	}
 
-	assert.Equal(t, "Compute A", byNo[1].CardName)
-	assert.Equal(t, "SHE", byNo[1].Faction)
-	assert.Equal(t, "unlimited", byNo[1].Restriction)
-	assert.Equal(t, 3, byNo[1].Count)
+	assert.Equal(t, "Compute A", byID["C-001"].CardName)
+	assert.Equal(t, "SHE", byID["C-001"].Faction)
+	assert.Equal(t, "unlimited", byID["C-001"].Restriction)
+	assert.Equal(t, 3, byID["C-001"].Count)
 
-	assert.Equal(t, "Limited Spell", byNo[50].CardName)
-	assert.Equal(t, "limited", byNo[50].Restriction)
-	assert.Equal(t, 1, byNo[50].Count)
+	assert.Equal(t, "Limited Spell", byID["C-050"].CardName)
+	assert.Equal(t, "limited", byID["C-050"].Restriction)
+	assert.Equal(t, 1, byID["C-050"].Count)
 }
 
 func TestGetPlayerCards_SkipsMissingDef(t *testing.T) {
 	svc, _, pcRepo, _ := setupDeckService()
 	pid := "p1"
 	grantCards(pcRepo, pid,
-		&model.PlayerCard{CardNo: 1, ArtNo: 0, Count: 3},
-		&model.PlayerCard{CardNo: 888, ArtNo: 0, Count: 2}, // not in cache
+		&model.PlayerCard{CardID: "C-001", ArtNo: 0, Count: 3},
+		&model.PlayerCard{CardID: "C-888", ArtNo: 0, Count: 2}, // not in cache
 	)
 
 	cards, err := svc.GetPlayerCards(context.Background(), pid)
 
 	require.NoError(t, err)
 	require.Len(t, cards, 1)
-	assert.Equal(t, int64(1), cards[0].CardNo)
+	assert.Equal(t, "C-001", cards[0].CardID)
 }
 
 // ---------------------------------------------------------------------------
@@ -490,13 +490,13 @@ func TestGetDecks_Empty(t *testing.T) {
 func TestGetDecks_Multiple(t *testing.T) {
 	svc, _, pcRepo, _ := setupDeckService()
 	pid := "p1"
-	grantUnlimited(pcRepo, pid, 1, 2, 3)
+	grantUnlimited(pcRepo, pid, "C-001", "C-002", "C-003")
 
 	_, _ = svc.CreateDeck(context.Background(), pid, CreateDeckRequest{
-		DeckName: "Deck A", Cards: makeEntries(1, 3, 2, 3),
+		DeckName: "Deck A", Cards: makeEntries("C-001", 3, "C-002", 3),
 	})
 	_, _ = svc.CreateDeck(context.Background(), pid, CreateDeckRequest{
-		DeckName: "Deck B", Cards: makeEntries(2, 3, 3, 3),
+		DeckName: "Deck B", Cards: makeEntries("C-002", 3, "C-003", 3),
 	})
 
 	decks, err := svc.GetDecks(context.Background(), pid)
@@ -515,10 +515,10 @@ func TestGetDecks_Multiple(t *testing.T) {
 func TestGetDeck_Success(t *testing.T) {
 	svc, _, pcRepo, _ := setupDeckService()
 	pid := "p1"
-	grantUnlimited(pcRepo, pid, 1, 2)
+	grantUnlimited(pcRepo, pid, "C-001", "C-002")
 
 	created, _ := svc.CreateDeck(context.Background(), pid, CreateDeckRequest{
-		DeckName: "Test Deck", Cards: makeEntries(1, 3, 2, 3),
+		DeckName: "Test Deck", Cards: makeEntries("C-001", 3, "C-002", 3),
 	})
 
 	deck, cards, err := svc.GetDeck(context.Background(), pid, created.DeckID)
@@ -569,7 +569,7 @@ func TestUpdateDeck_Success(t *testing.T) {
 
 	// Create a partial deck (6 cards → invalid)
 	created, err := svc.CreateDeck(context.Background(), pid, CreateDeckRequest{
-		DeckName: "Original", Cards: makeEntries(1, 3, 2, 3),
+		DeckName: "Original", Cards: makeEntries("C-001", 3, "C-002", 3),
 	})
 	require.NoError(t, err)
 	assert.False(t, created.IsValid)
@@ -588,14 +588,14 @@ func TestUpdateDeck_Success(t *testing.T) {
 func TestUpdateDeck_ValidationFails(t *testing.T) {
 	svc, _, pcRepo, _ := setupDeckService()
 	pid := "p1"
-	grantCards(pcRepo, pid, &model.PlayerCard{CardNo: 1, ArtNo: 0, Count: 3})
+	grantCards(pcRepo, pid, &model.PlayerCard{CardID: "C-001", ArtNo: 0, Count: 3})
 
 	created, _ := svc.CreateDeck(context.Background(), pid, CreateDeckRequest{
-		DeckName: "Original", Cards: makeEntries(1, 3),
+		DeckName: "Original", Cards: makeEntries("C-001", 3),
 	})
 
 	_, err := svc.UpdateDeck(context.Background(), pid, created.DeckID, UpdateDeckRequest{
-		DeckName: "Bad Update", Cards: makeEntries(1, 3, 2, 1), // card 2 not owned
+		DeckName: "Bad Update", Cards: makeEntries("C-001", 3, "C-002", 1), // card C-002 not owned
 	})
 
 	require.Error(t, err)
@@ -605,16 +605,16 @@ func TestUpdateDeck_ValidationFails(t *testing.T) {
 func TestUpdateDeck_PlaymatAndSleeve(t *testing.T) {
 	svc, _, pcRepo, _ := setupDeckService()
 	pid := "p1"
-	grantCards(pcRepo, pid, &model.PlayerCard{CardNo: 1, ArtNo: 0, Count: 3})
+	grantCards(pcRepo, pid, &model.PlayerCard{CardID: "C-001", ArtNo: 0, Count: 3})
 
 	created, _ := svc.CreateDeck(context.Background(), pid, CreateDeckRequest{
-		DeckName: "Original", Cards: makeEntries(1, 3),
+		DeckName: "Original", Cards: makeEntries("C-001", 3),
 	})
 
 	playmatNo := int64(5)
 	sleeveNo := int64(3)
 	updated, err := svc.UpdateDeck(context.Background(), pid, created.DeckID, UpdateDeckRequest{
-		DeckName: "With Cosmetics", Cards: makeEntries(1, 3),
+		DeckName: "With Cosmetics", Cards: makeEntries("C-001", 3),
 		PlaymatNo: &playmatNo, SleeveNo: &sleeveNo,
 	})
 
@@ -628,15 +628,15 @@ func TestUpdateDeck_PlaymatAndSleeve(t *testing.T) {
 func TestUpdateDeck_VerifyPersistence(t *testing.T) {
 	svc, _, pcRepo, _ := setupDeckService()
 	pid := "p1"
-	grantUnlimited(pcRepo, pid, 1, 2)
+	grantUnlimited(pcRepo, pid, "C-001", "C-002")
 
 	created, err := svc.CreateDeck(context.Background(), pid, CreateDeckRequest{
-		DeckName: "Before Update", Cards: makeEntries(1, 3),
+		DeckName: "Before Update", Cards: makeEntries("C-001", 3),
 	})
 	require.NoError(t, err)
 
 	_, err = svc.UpdateDeck(context.Background(), pid, created.DeckID, UpdateDeckRequest{
-		DeckName: "After Update", Cards: makeEntries(1, 3, 2, 3),
+		DeckName: "After Update", Cards: makeEntries("C-001", 3, "C-002", 3),
 	})
 	require.NoError(t, err)
 
@@ -654,10 +654,10 @@ func TestUpdateDeck_VerifyPersistence(t *testing.T) {
 func TestDeleteDeck_Success(t *testing.T) {
 	svc, _, pcRepo, _ := setupDeckService()
 	pid := "p1"
-	grantCards(pcRepo, pid, &model.PlayerCard{CardNo: 1, ArtNo: 0, Count: 3})
+	grantCards(pcRepo, pid, &model.PlayerCard{CardID: "C-001", ArtNo: 0, Count: 3})
 
 	created, _ := svc.CreateDeck(context.Background(), pid, CreateDeckRequest{
-		DeckName: "To Delete", Cards: makeEntries(1, 3),
+		DeckName: "To Delete", Cards: makeEntries("C-001", 3),
 	})
 
 	err := svc.DeleteDeck(context.Background(), pid, created.DeckID)
@@ -670,13 +670,13 @@ func TestDeleteDeck_Success(t *testing.T) {
 func TestDeleteDeck_OnlyDeletesTarget(t *testing.T) {
 	svc, _, pcRepo, _ := setupDeckService()
 	pid := "p1"
-	grantUnlimited(pcRepo, pid, 1, 2)
+	grantUnlimited(pcRepo, pid, "C-001", "C-002")
 
 	deck1, _ := svc.CreateDeck(context.Background(), pid, CreateDeckRequest{
-		DeckName: "Keep", Cards: makeEntries(1, 3),
+		DeckName: "Keep", Cards: makeEntries("C-001", 3),
 	})
 	deck2, _ := svc.CreateDeck(context.Background(), pid, CreateDeckRequest{
-		DeckName: "Delete", Cards: makeEntries(2, 3),
+		DeckName: "Delete", Cards: makeEntries("C-002", 3),
 	})
 
 	_ = svc.DeleteDeck(context.Background(), pid, deck2.DeckID)
@@ -707,10 +707,10 @@ func TestValidateDeckForBattle_Full30Cards(t *testing.T) {
 func TestValidateDeckForBattle_PartialDeck(t *testing.T) {
 	svc, _, pcRepo, _ := setupDeckService()
 	pid := "p1"
-	grantUnlimited(pcRepo, pid, 1, 2)
+	grantUnlimited(pcRepo, pid, "C-001", "C-002")
 
 	deck, err := svc.CreateDeck(context.Background(), pid, CreateDeckRequest{
-		DeckName: "Partial", Cards: makeEntries(1, 3, 2, 3),
+		DeckName: "Partial", Cards: makeEntries("C-001", 3, "C-002", 3),
 	})
 	require.NoError(t, err)
 

@@ -187,7 +187,7 @@ func TestCreateDeck_GetPlayerCards_Error(t *testing.T) {
 	svc := NewDeckService(repo, &errorPlayerCardRepo{}, cc)
 
 	_, err := svc.CreateDeck(context.Background(), "p1", CreateDeckRequest{
-		DeckName: "Test", Cards: makeEntries(1, 3),
+		DeckName: "Test", Cards: makeEntries("C-001", 3),
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "get owned cards")
@@ -201,10 +201,10 @@ func TestCreateDeck_RepoCreate_Error(t *testing.T) {
 	svc := NewDeckService(repo, pcRepo, cc)
 
 	// Grant cards so validation passes
-	grantUnlimited(pcRepo, "p1", 1)
+	grantUnlimited(pcRepo, "p1", "C-001")
 
 	_, err := svc.CreateDeck(context.Background(), "p1", CreateDeckRequest{
-		DeckName: "Test", Cards: makeEntries(1, 3),
+		DeckName: "Test", Cards: makeEntries("C-001", 3),
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "create deck")
@@ -225,11 +225,11 @@ func TestGetDeck_GetDeckCards_Error(t *testing.T) {
 	pcRepo := newMockPlayerCardRepo()
 	// Create a deck first, then wrap with error repo
 	cc := cache.NewCardCache()
-	cc.InjectForTest(1, &model.CardDefinition{CardNo: 1, Restriction: "unlimited", IsActive: true})
-	grantUnlimited(pcRepo, "p1", 1)
+	cc.InjectForTest("C-001", &model.CardDefinition{CardID: "C-001", Restriction: "unlimited", IsActive: true})
+	grantUnlimited(pcRepo, "p1", "C-001")
 	svc := NewDeckService(baseRepo, pcRepo, cc)
 	created, err := svc.CreateDeck(context.Background(), "p1", CreateDeckRequest{
-		DeckName: "Test", Cards: makeEntries(1, 3),
+		DeckName: "Test", Cards: makeEntries("C-001", 3),
 	})
 	require.NoError(t, err)
 
@@ -248,7 +248,7 @@ func TestUpdateDeck_GetPlayerCards_Error(t *testing.T) {
 	svc := NewDeckService(repo, &errorPlayerCardRepo{}, cc)
 
 	_, err := svc.UpdateDeck(context.Background(), "p1", 1, UpdateDeckRequest{
-		DeckName: "Test", Cards: makeEntries(1, 3),
+		DeckName: "Test", Cards: makeEntries("C-001", 3),
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "get owned cards")
@@ -259,10 +259,10 @@ func TestUpdateDeck_RepoUpdate_Error(t *testing.T) {
 	pcRepo := newMockPlayerCardRepo()
 	_, _, _, cc := setupDeckService()
 	svc := NewDeckService(baseRepo, pcRepo, cc)
-	grantUnlimited(pcRepo, "p1", 1)
+	grantUnlimited(pcRepo, "p1", "C-001")
 
 	created, err := svc.CreateDeck(context.Background(), "p1", CreateDeckRequest{
-		DeckName: "Test", Cards: makeEntries(1, 3),
+		DeckName: "Test", Cards: makeEntries("C-001", 3),
 	})
 	require.NoError(t, err)
 
@@ -270,7 +270,7 @@ func TestUpdateDeck_RepoUpdate_Error(t *testing.T) {
 	svc2 := NewDeckService(errRepo, pcRepo, cc)
 
 	_, err = svc2.UpdateDeck(context.Background(), "p1", created.DeckID, UpdateDeckRequest{
-		DeckName: "Updated", Cards: makeEntries(1, 3),
+		DeckName: "Updated", Cards: makeEntries("C-001", 3),
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "update deck")
@@ -346,7 +346,7 @@ func TestGetBattleLimit_GetGameConfig_Error(t *testing.T) {
 // ===========================================================================
 
 func TestGetAllCards_FindAll_Error(t *testing.T) {
-	cardRepo := &errorFindAllCardRepo{repository.NewMockCardRepository(nil)}
+	cardRepo := &errorFindAllCardRepo{repository.NewMockCardRepository(map[string]*model.CardDefinition{})}
 	svc := NewCardService(cardRepo, newMockPlayerCardRepo())
 
 	_, err := svc.GetAllCards(context.Background(), "p1")
@@ -355,7 +355,7 @@ func TestGetAllCards_FindAll_Error(t *testing.T) {
 }
 
 func TestGetAllCards_GetPlayerCards_Error(t *testing.T) {
-	cardRepo := repository.NewMockCardRepository(nil)
+	cardRepo := repository.NewMockCardRepository(map[string]*model.CardDefinition{})
 	svc := NewCardService(cardRepo, &errorPlayerCardRepo{})
 
 	_, err := svc.GetAllCards(context.Background(), "p1")

@@ -29,7 +29,7 @@ func (r *MockPlayerCardRepository) GetPlayerCards(ctx context.Context, playerID 
 }
 
 // SeedPlayerCards adds player cards to the mock repository (for local mode initialization).
-// Merges counts for existing (card_no, art_no) pairs.
+// Merges counts for existing (card_id, art_no) pairs.
 func (r *MockPlayerCardRepository) SeedPlayerCards(playerID string, cards []*model.PlayerCard) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -38,7 +38,7 @@ func (r *MockPlayerCardRepository) SeedPlayerCards(playerID string, cards []*mod
 	for _, newCard := range cards {
 		found := false
 		for _, ex := range existing {
-			if ex.CardNo == newCard.CardNo && ex.ArtNo == newCard.ArtNo {
+			if ex.CardID == newCard.CardID && ex.ArtNo == newCard.ArtNo {
 				ex.Count += newCard.Count
 				found = true
 				break

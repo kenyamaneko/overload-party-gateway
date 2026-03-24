@@ -9,7 +9,7 @@ import (
 )
 
 type CardDefinition struct {
-	CardNo            int64              `json:"card_no"`
+	CardID            string             `json:"card_id"`
 	CardName          string             `json:"card_name"`
 	ResourceLabel     string             `json:"resource_label"`
 	Faction           string             `json:"faction"`

@@ -27,7 +27,7 @@ func buildMinimalBattleState() battleGameState {
 				Frontend: []*battleResourceInstance{
 					{
 						InstanceID:     "inst-f1",
-						CardID:         100,
+						CardID:         "SH-0001",
 						ArtNo:          1,
 						Rank:           flexString{ptr("S")},
 						InstanceFamily: flexString{ptr("familyA")},
@@ -40,7 +40,7 @@ func buildMinimalBattleState() battleGameState {
 						MaxYield:       ptr(int64(3)),
 						Damage:         1,
 						Attachments: []battleAttachmentRef{
-							{InstanceID: "att-1", CardID: 200, ArtNo: 2},
+							{InstanceID: "att-1", CardID: "SH-0002", ArtNo: 2},
 						},
 						TemporaryEffects: []battleTemporaryEffect{
 							{EffectType: "buff", Value: 1, Duration: "endOfTurn", SourceID: "src-1"},
@@ -61,7 +61,7 @@ func buildMinimalBattleState() battleGameState {
 				Support: []*battleSupportInstance{
 					{
 						InstanceID:         "inst-s1",
-						CardID:             300,
+						CardID:             "NT-0001",
 						ArtNo:              3,
 						FaceUp:             false,
 						DeployingTurnsLeft: 0,
@@ -71,17 +71,17 @@ func buildMinimalBattleState() battleGameState {
 				},
 			},
 			Hand: []battleHandCard{
-				{InstanceID: "hand-1", CardID: 400, ArtNo: 4},
-				{InstanceID: "hand-2", CardID: 401, ArtNo: 5},
+				{InstanceID: "hand-1", CardID: "TK-0001", ArtNo: 4},
+				{InstanceID: "hand-2", CardID: "TK-0002", ArtNo: 5},
 			},
 			RepoCount:  10,
 			TrashCount: 2,
-			Trash:      []battleHandCard{{InstanceID: "trash-1", CardID: 500, ArtNo: 6}},
+			Trash:      []battleHandCard{{InstanceID: "trash-1", CardID: "SL-0001", ArtNo: 6}},
 			AvailableActions: []battleAvailableAction{
 				{
 					Type:              "deploy",
 					HandInstanceID:    ptr("hand-1"),
-					CardID:            400,
+					CardID:            "TK-0001",
 					ValidZones:        []string{"frontend", "backend"},
 					SourceInstanceID:  nil,
 					ValidTargets:      nil,
@@ -104,7 +104,7 @@ func buildMinimalBattleState() battleGameState {
 				Frontend: []*battleResourceInstance{
 					{
 						InstanceID: "opp-f1",
-						CardID:     150,
+						CardID:     "TN-0001",
 						ArtNo:      1,
 						FaceUp:     false,
 						CurrentAV:  2,
@@ -115,14 +115,14 @@ func buildMinimalBattleState() battleGameState {
 				},
 				Backend: []*battleResourceInstance{},
 				Support: []*battleHiddenSupportInstance{
-					{InstanceID: "opp-s1", CardID: ptr(int64(350)), FaceUp: true},
+					{InstanceID: "opp-s1", CardID: ptr("NT-0005"), FaceUp: true},
 					{InstanceID: "opp-s2", CardID: nil, FaceUp: false},
 				},
 			},
 			HandCount:  4,
 			RepoCount:  8,
 			TrashCount: 1,
-			Trash:      []battleHandCard{{InstanceID: "opp-trash-1", CardID: 550, ArtNo: 7}},
+			Trash:      []battleHandCard{{InstanceID: "opp-trash-1", CardID: "SL-0005", ArtNo: 7}},
 		},
 	}
 }
@@ -173,7 +173,7 @@ func TestTransformGameState_MyField(t *testing.T) {
 		require.Len(t, hand, 2)
 		h0 := hand[0].(map[string]interface{})
 		assert.Equal(t, "hand-1", h0["instanceId"])
-		assert.Equal(t, float64(400), h0["cardId"])
+		assert.Equal(t, "TK-0001", h0["cardId"])
 		assert.Nil(t, h0["artNo"], "artNo should be dropped from hand cards")
 	})
 
@@ -183,7 +183,7 @@ func TestTransformGameState_MyField(t *testing.T) {
 		res := frontend[0].(map[string]interface{})
 		assert.Equal(t, "inst-f1", res["instanceId"])
 		assert.Nil(t, res["instanceID"], "old key instanceID should not appear")
-		assert.Equal(t, float64(100), res["cardId"])
+		assert.Equal(t, "SH-0001", res["cardId"])
 		assert.Nil(t, res["cardID"], "old key cardID should not appear")
 		assert.Nil(t, res["artNo"], "artNo should be dropped from resource instances")
 		assert.Equal(t, false, res["faceDown"])
@@ -193,7 +193,7 @@ func TestTransformGameState_MyField(t *testing.T) {
 		require.Len(t, attachments, 1)
 		att := attachments[0].(map[string]interface{})
 		assert.Equal(t, "att-1", att["instanceId"])
-		assert.Equal(t, float64(200), att["cardId"])
+		assert.Equal(t, "SH-0002", att["cardId"])
 		assert.Nil(t, att["artNo"], "artNo should be dropped from attachments")
 
 		effects := res["temporaryEffects"].([]interface{})
@@ -208,7 +208,7 @@ func TestTransformGameState_MyField(t *testing.T) {
 		require.Len(t, support, 1)
 		sup := support[0].(map[string]interface{})
 		assert.Equal(t, "inst-s1", sup["instanceId"])
-		assert.Equal(t, float64(300), sup["cardId"])
+		assert.Equal(t, "NT-0001", sup["cardId"])
 		assert.Equal(t, true, sup["faceDown"])
 		assert.Nil(t, sup["artNo"], "artNo should be dropped from support instances")
 	})
@@ -227,12 +227,12 @@ func TestTransformGameState_OpponentView(t *testing.T) {
 
 	os0 := oppSupport[0].(map[string]interface{})
 	assert.Equal(t, "opp-s1", os0["instanceId"])
-	assert.Equal(t, float64(350), os0["cardId"])
+	assert.Equal(t, "NT-0005", os0["cardId"])
 	assert.Equal(t, false, os0["faceDown"])
 
 	os1 := oppSupport[1].(map[string]interface{})
 	assert.Equal(t, "opp-s2", os1["instanceId"])
-	assert.Equal(t, float64(0), os1["cardId"])
+	assert.Equal(t, "", os1["cardId"])
 	assert.Equal(t, true, os1["faceDown"])
 }
 
@@ -245,7 +245,7 @@ func TestTransformGameState_AvailableActions(t *testing.T) {
 	act := actions[0].(map[string]interface{})
 	assert.Equal(t, "deploy", act["type"])
 	assert.Equal(t, "hand-1", act["hand_instance_id"])
-	assert.Equal(t, float64(400), act["card_id"])
+	assert.Equal(t, "TK-0001", act["card_id"])
 	zones := act["valid_zones"].([]interface{})
 	assert.Equal(t, []interface{}{"frontend", "backend"}, zones)
 }
@@ -304,7 +304,7 @@ func TestFlexString_MarshalJSON(t *testing.T) {
 
 func TestFlexString_RoundTripInBattleState(t *testing.T) {
 	// Simulate C# sending Rank as integer (JsonStringEnumConverter not applied)
-	raw := `{"instanceId":"ri-1","cardId":100,"artNo":1,"rank":1,"instanceFamily":"familyA","faceUp":true,"currentAV":0,"maxAV":0,"damage":0,"monetizedAmount":0,"hasAttacked":false,"effectUsedThisTurn":false,"scaleChangedThisTurn":false,"deployedOnTurn":0,"deployOrder":0,"migratingOnTurn":0,"elasticBonus":0,"attachments":[],"temporaryEffects":[]}`
+	raw := `{"instanceId":"ri-1","cardID":"SH-0001","artNo":1,"rank":1,"instanceFamily":"familyA","faceUp":true,"currentAV":0,"maxAV":0,"damage":0,"monetizedAmount":0,"hasAttacked":false,"effectUsedThisTurn":false,"scaleChangedThisTurn":false,"deployedOnTurn":0,"deployOrder":0,"migratingOnTurn":0,"elasticBonus":0,"attachments":[],"temporaryEffects":[]}`
 
 	var ri battleResourceInstance
 	require.NoError(t, json.Unmarshal([]byte(raw), &ri))
@@ -343,7 +343,7 @@ func TestTransformField_NilSlots(t *testing.T) {
 			nil,
 			{
 				InstanceID:       "f1",
-				CardID:           10,
+				CardID:           "SH-0010",
 				FaceUp:           true,
 				Attachments:      []battleAttachmentRef{},
 				TemporaryEffects: []battleTemporaryEffect{},
@@ -353,7 +353,7 @@ func TestTransformField_NilSlots(t *testing.T) {
 		Backend: []*battleResourceInstance{nil, nil},
 		Support: []*battleSupportInstance{nil, {
 			InstanceID: "s1",
-			CardID:     20,
+			CardID:     "NT-0020",
 			FaceUp:     false,
 		}},
 	}
@@ -387,7 +387,7 @@ func TestTransformField_NilSlots(t *testing.T) {
 
 func TestTransformHiddenSupportSlots(t *testing.T) {
 	slots := []*battleHiddenSupportInstance{
-		{InstanceID: "hs-1", CardID: ptr(int64(42)), FaceUp: true},
+		{InstanceID: "hs-1", CardID: ptr("NT-0042"), FaceUp: true},
 		{InstanceID: "hs-2", CardID: nil, FaceUp: false},
 		nil,
 	}
@@ -399,13 +399,13 @@ func TestTransformHiddenSupportSlots(t *testing.T) {
 	// Non-nil cardID
 	require.NotNil(t, out[0])
 	assert.Equal(t, "hs-1", out[0].InstanceID)
-	assert.Equal(t, int64(42), out[0].CardID)
+	assert.Equal(t, "NT-0042", out[0].CardID)
 	assert.Equal(t, false, out[0].FaceDown) // faceUp=true
 
-	// Nil cardID → 0
+	// Nil cardID → ""
 	require.NotNil(t, out[1])
 	assert.Equal(t, "hs-2", out[1].InstanceID)
-	assert.Equal(t, int64(0), out[1].CardID)
+	assert.Equal(t, "", out[1].CardID)
 	assert.Equal(t, true, out[1].FaceDown) // faceUp=false
 
 	// Nil slot preserved
@@ -430,7 +430,7 @@ func TestTransformResourceInstance_FaceUpInversion(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			b := &battleResourceInstance{
 				InstanceID:       "ri-1",
-				CardID:           99,
+				CardID:           "SH-0099",
 				FaceUp:           tc.faceUp,
 				Attachments:      []battleAttachmentRef{},
 				TemporaryEffects: []battleTemporaryEffect{},
@@ -450,7 +450,7 @@ func TestTransformAvailableActions(t *testing.T) {
 		{
 			Type:              "activate_effect",
 			HandInstanceID:    nil,
-			CardID:            0,
+			CardID:            "",
 			ValidZones:        nil,
 			SourceInstanceID:  ptr("src-inst"),
 			ValidTargets:      []string{"target-1", "target-2"},
@@ -465,7 +465,7 @@ func TestTransformAvailableActions(t *testing.T) {
 		{
 			Type:              "deploy",
 			HandInstanceID:    ptr("hand-99"),
-			CardID:            55,
+			CardID:            "SL-0055",
 			ValidZones:        []string{"backend"},
 			SourceInstanceID:  nil,
 			ValidTargets:      nil,
@@ -486,7 +486,7 @@ func TestTransformAvailableActions(t *testing.T) {
 	// First action
 	assert.Equal(t, "activate_effect", out[0].Type)
 	assert.Nil(t, out[0].HandInstanceID)
-	assert.Equal(t, int64(0), out[0].CardID)
+	assert.Equal(t, "", out[0].CardID)
 	assert.Nil(t, out[0].ValidZones)
 	require.NotNil(t, out[0].SourceInstanceID)
 	assert.Equal(t, "src-inst", *out[0].SourceInstanceID)
@@ -499,7 +499,7 @@ func TestTransformAvailableActions(t *testing.T) {
 	assert.Equal(t, "deploy", out[1].Type)
 	require.NotNil(t, out[1].HandInstanceID)
 	assert.Equal(t, "hand-99", *out[1].HandInstanceID)
-	assert.Equal(t, int64(55), out[1].CardID)
+	assert.Equal(t, "SL-0055", out[1].CardID)
 	assert.Equal(t, []string{"backend"}, out[1].ValidZones)
 	assert.Nil(t, out[1].SourceInstanceID)
 	require.NotNil(t, out[1].TargetRank)
@@ -547,16 +547,16 @@ func TestTransformHandCards(t *testing.T) {
 
 	t.Run("populated", func(t *testing.T) {
 		cards := []battleHandCard{
-			{InstanceID: "h1", CardID: 10, ArtNo: 1},
-			{InstanceID: "h2", CardID: 20, ArtNo: 2},
+			{InstanceID: "h1", CardID: "SH-0010", ArtNo: 1},
+			{InstanceID: "h2", CardID: "TK-0020", ArtNo: 2},
 		}
 		out := transformHandCards(cards)
 		require.Len(t, out, 2)
 
 		assert.Equal(t, "h1", out[0].InstanceID)
-		assert.Equal(t, int64(10), out[0].CardID)
+		assert.Equal(t, "SH-0010", out[0].CardID)
 		assert.Equal(t, "h2", out[1].InstanceID)
-		assert.Equal(t, int64(20), out[1].CardID)
+		assert.Equal(t, "TK-0020", out[1].CardID)
 
 		// artNo must not appear in JSON
 		raw, err := json.Marshal(out[0])
@@ -565,6 +565,6 @@ func TestTransformHandCards(t *testing.T) {
 		require.NoError(t, json.Unmarshal(raw, &m))
 		assert.Nil(t, m["artNo"], "artNo should not be present in client hand card JSON")
 		assert.Equal(t, "h1", m["instanceId"])
-		assert.Equal(t, float64(10), m["cardId"])
+		assert.Equal(t, "SH-0010", m["cardId"])
 	})
 }

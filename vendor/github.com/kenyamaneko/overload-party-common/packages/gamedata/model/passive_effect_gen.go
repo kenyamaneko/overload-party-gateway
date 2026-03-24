@@ -42,14 +42,14 @@ type AttachmentEffect struct {
 }
 
 type PassiveEffectConfig struct {
-	Faction         string   `json:"faction,omitempty"`
-	CardTypes       []string `json:"card_types,omitempty"`
-	BonusPerCard    int64    `json:"bonus_per_card,omitempty"`
-	FlatBonus       int64    `json:"flat_bonus,omitempty"`
-	MultiModelCards []int64  `json:"multi_model_cards,omitempty"`
-	SpecificCardNos []int64  `json:"specific_card_nos,omitempty"`
-	Zone            string   `json:"zone,omitempty"`
-	ExcludeSelf     bool     `json:"exclude_self,omitempty"`
+	Faction           string   `json:"faction,omitempty"`
+	CardTypes         []string `json:"card_types,omitempty"`
+	BonusPerCard      int64    `json:"bonus_per_card,omitempty"`
+	FlatBonus         int64    `json:"flat_bonus,omitempty"`
+	MultiModelCardIDs []string `json:"multi_model_card_ids,omitempty"`
+	SpecificCardIDs   []string `json:"specific_card_ids,omitempty"`
+	Zone              string   `json:"zone,omitempty"`
+	ExcludeSelf       bool     `json:"exclude_self,omitempty"`
 }
 
 type PlatformEffectConfig struct {

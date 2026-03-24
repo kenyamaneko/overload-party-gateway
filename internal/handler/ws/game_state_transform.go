@@ -95,7 +95,7 @@ type battleOpponentField struct {
 
 type battleResourceInstance struct {
 	InstanceID           string                   `json:"instanceID"`
-	CardID               int64                    `json:"cardID"`
+	CardID               string                   `json:"cardID"`
 	ArtNo                int64                    `json:"artNo"`
 	Rank                 flexString               `json:"rank"`
 	InstanceFamily       flexString               `json:"instanceFamily"`
@@ -124,7 +124,7 @@ type battleResourceInstance struct {
 
 type battleSupportInstance struct {
 	InstanceID         string `json:"instanceID"`
-	CardID             int64  `json:"cardID"`
+	CardID             string `json:"cardID"`
 	ArtNo              int64  `json:"artNo"`
 	FaceUp             bool   `json:"faceUp"`
 	DeployingTurnsLeft int64  `json:"deployingTurnsLeft"`
@@ -133,20 +133,20 @@ type battleSupportInstance struct {
 }
 
 type battleHiddenSupportInstance struct {
-	InstanceID string `json:"instanceID"`
-	CardID     *int64 `json:"cardID"`
-	FaceUp     bool   `json:"faceUp"`
+	InstanceID string  `json:"instanceID"`
+	CardID     *string `json:"cardID"`
+	FaceUp     bool    `json:"faceUp"`
 }
 
 type battleHandCard struct {
 	InstanceID string `json:"instanceID"`
-	CardID     int64  `json:"cardID"`
+	CardID     string `json:"cardID"`
 	ArtNo      int64  `json:"artNo"`
 }
 
 type battleAttachmentRef struct {
 	InstanceID string `json:"instanceID"`
-	CardID     int64  `json:"cardID"`
+	CardID     string `json:"cardID"`
 	ArtNo      int64  `json:"artNo"`
 }
 
@@ -160,7 +160,7 @@ type battleTemporaryEffect struct {
 type battleAvailableAction struct {
 	Type              string   `json:"type"`
 	HandInstanceID    *string  `json:"handInstanceID"`
-	CardID            int64    `json:"cardID"`
+	CardID            string   `json:"cardID"`
 	ValidZones        []string `json:"validZones"`
 	SourceInstanceID  *string  `json:"sourceInstanceID"`
 	ValidTargets      []string `json:"validTargets"`
@@ -227,7 +227,7 @@ type clientOpponentField struct {
 
 type clientResourceInstance struct {
 	InstanceID         string                   `json:"instanceId"`
-	CardID             int64                    `json:"cardId"`
+	CardID             string                   `json:"cardId"`
 	Rank               *string                  `json:"rank"`
 	InstanceFamily     *string                  `json:"instanceFamily"`
 	CurrentAV          int64                    `json:"currentAV"`
@@ -250,7 +250,7 @@ type clientResourceInstance struct {
 
 type clientSupportInstance struct {
 	InstanceID         string `json:"instanceId"`
-	CardID             int64  `json:"cardId"`
+	CardID             string `json:"cardId"`
 	FaceDown           bool   `json:"faceDown"`
 	DeployOrder        int64  `json:"deployOrder"`
 	EffectUsedThisTurn bool   `json:"effectUsedThisTurn"`
@@ -258,18 +258,18 @@ type clientSupportInstance struct {
 
 type clientHiddenSupportInstance struct {
 	InstanceID string `json:"instanceId"`
-	CardID     int64  `json:"cardId"`
+	CardID     string `json:"cardId"`
 	FaceDown   bool   `json:"faceDown"`
 }
 
 type clientHandCard struct {
 	InstanceID string `json:"instanceId"`
-	CardID     int64  `json:"cardId"`
+	CardID     string `json:"cardId"`
 }
 
 type clientAttachmentRef struct {
 	InstanceID string `json:"instanceId"`
-	CardID     int64  `json:"cardId"`
+	CardID     string `json:"cardId"`
 }
 
 type clientTemporaryEffect struct {
@@ -282,7 +282,7 @@ type clientTemporaryEffect struct {
 type clientAvailableAction struct {
 	Type              string   `json:"type"`
 	HandInstanceID    *string  `json:"hand_instance_id,omitempty"`
-	CardID            int64    `json:"card_id,omitempty"`
+	CardID            string   `json:"card_id,omitempty"`
 	ValidZones        []string `json:"valid_zones,omitempty"`
 	SourceInstanceID  *string  `json:"source_instance_id,omitempty"`
 	ValidTargets      []string `json:"valid_targets,omitempty"`
@@ -425,7 +425,7 @@ func transformHiddenSupportSlots(slots []*battleHiddenSupportInstance) []*client
 	out := make([]*clientHiddenSupportInstance, len(slots))
 	for i, s := range slots {
 		if s != nil {
-			cardID := int64(0)
+			cardID := ""
 			if s.CardID != nil {
 				cardID = *s.CardID
 			}

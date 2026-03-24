@@ -83,35 +83,35 @@ func main() {
 				continue
 			}
 			playerCards = append(playerCards, &model.PlayerCard{
-				PlayerID:            playerID,
-				CardNo:              card.CardNo,
-				ArtNo: 0,
-				Count:               3, // 保持できるカードは制限しない
+				PlayerID: playerID,
+				CardID:   card.CardID,
+				ArtNo:    0,
+				Count:    3, // 保持できるカードは制限しない
 			})
 		}
 		playerCardRepo.SeedPlayerCards(playerID, playerCards)
 
 		// Create starter decks
-		starterDecks := map[string][]int64{
-			"SHE Standard":    {1, 1, 1, 3, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 13, 13, 15, 17, 20, 20, 20, 98, 99, 100, 101, 101, 115, 118, 119, 121},
-			"Tenki Standard":  {23, 23, 26, 26, 26, 27, 27, 29, 29, 29, 31, 32, 32, 32, 35, 35, 37, 38, 38, 38, 41, 46, 46, 94, 98, 99, 100, 101, 101, 117},
-			"Sugar Standard":  {47, 47, 47, 48, 48, 48, 49, 49, 50, 50, 51, 51, 52, 55, 56, 58, 58, 60, 60, 61, 62, 62, 66, 98, 99, 100, 104, 104, 104, 106},
-			"Tuners Standard": {70, 70, 70, 72, 74, 74, 74, 76, 76, 77, 77, 77, 78, 79, 79, 81, 82, 84, 85, 86, 86, 86, 89, 89, 90, 90, 100, 101, 101, 101},
+		starterDecks := map[string][]string{
+			"SHE Standard":    {"SH-0001", "SH-0001", "SH-0001", "SH-0002", "SH-0005", "SH-0005", "SH-0006", "SH-0006", "SH-0006", "SH-0007", "SH-0007", "SH-0007", "SH-0008", "SH-0008", "SH-0012", "SH-0012", "SH-0014", "SH-0016", "SH-0019", "SH-0019", "SH-0019", "NT-0007", "NT-0008", "NT-0009", "NT-0010", "NT-0010", "NT-0023", "SH-0022", "NT-0025", "SH-0023"},
+			"Tenki Standard":  {"TK-0001", "TK-0001", "TK-0004", "TK-0004", "TK-0004", "TK-0005", "TK-0005", "TK-0007", "TK-0007", "TK-0007", "TK-0009", "TK-0010", "TK-0010", "TK-0010", "TK-0013", "TK-0013", "TK-0014", "TK-0015", "TK-0015", "TK-0015", "TK-0018", "TK-0024", "TK-0024", "NT-0004", "NT-0007", "NT-0008", "NT-0009", "NT-0010", "NT-0010", "NT-0024"},
+			"Sugar Standard":  {"SL-0001", "SL-0001", "SL-0001", "SL-0002", "SL-0002", "SL-0002", "SL-0003", "SL-0003", "SL-0004", "SL-0004", "SL-0006", "SL-0006", "SL-0007", "SL-0009", "SL-0013", "SL-0011", "SL-0011", "SL-0015", "SL-0015", "SL-0016", "SL-0017", "SL-0017", "SL-0022", "NT-0007", "NT-0008", "NT-0009", "NT-0013", "NT-0013", "NT-0013", "NT-0015"},
+			"Tuners Standard": {"TN-0001", "TN-0001", "TN-0001", "TN-0002", "TN-0004", "TN-0004", "TN-0004", "TN-0006", "TN-0006", "TN-0007", "TN-0007", "TN-0007", "TN-0008", "TN-0009", "TN-0009", "TN-0010", "TN-0011", "TN-0013", "TN-0014", "TN-0015", "TN-0015", "TN-0015", "TN-0017", "TN-0017", "TN-0018", "TN-0018", "NT-0009", "NT-0010", "NT-0010", "NT-0010"},
 		}
 
-		for deckName, cardNos := range starterDecks {
-			cardCounts := make(map[int64]int)
-			for _, cardNo := range cardNos {
-				cardCounts[cardNo]++
+		for deckName, cardIDs := range starterDecks {
+			cardCounts := make(map[string]int)
+			for _, cardID := range cardIDs {
+				cardCounts[cardID]++
 			}
 
 			var deckCards []model.DeckCard
-			for cardNo, count := range cardCounts {
+			for cardID, count := range cardCounts {
 				deckCards = append(deckCards, model.DeckCard{
-					PlayerID:            playerID,
-					CardNo:              cardNo,
-					ArtNo: 0,
-					Count:               count,
+					PlayerID: playerID,
+					CardID:   cardID,
+					ArtNo:    0,
+					Count:    count,
 				})
 			}
 
@@ -124,7 +124,7 @@ func main() {
 			if err := deckRepo.Create(ctx, deck, deckCards); err != nil {
 				return err
 			}
-			log.Printf("auto-created starter deck %s for %s: %d cards, deckID=%d", deckName, playerID, len(cardNos), deck.DeckID)
+			log.Printf("auto-created starter deck %s for %s: %d cards, deckID=%d", deckName, playerID, len(cardIDs), deck.DeckID)
 		}
 
 		return nil

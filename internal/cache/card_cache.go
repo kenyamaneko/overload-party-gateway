@@ -16,26 +16,26 @@ import (
 // Loaded once at startup, refreshed periodically.
 type CardCache struct {
 	mu    sync.RWMutex
-	cards map[int64]*model.CardDefinition
+	cards map[string]*model.CardDefinition
 }
 
 func NewCardCache() *CardCache {
-	return &CardCache{cards: make(map[int64]*model.CardDefinition)}
+	return &CardCache{cards: make(map[string]*model.CardDefinition)}
 }
 
-// Get returns a card definition by card_no. Returns nil if not found.
-func (c *CardCache) Get(cardNo int64) *model.CardDefinition {
+// Get returns a card definition by card_id. Returns nil if not found.
+func (c *CardCache) Get(cardID string) *model.CardDefinition {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.cards[cardNo]
+	return c.cards[cardID]
 }
 
-// MustGet returns a card definition by card_no, panicking if not found.
-// Use only when the card_no is known to be valid (e.g., from a deck snapshot).
-func (c *CardCache) MustGet(cardNo int64) *model.CardDefinition {
-	card := c.Get(cardNo)
+// MustGet returns a card definition by card_id, panicking if not found.
+// Use only when the card_id is known to be valid (e.g., from a deck snapshot).
+func (c *CardCache) MustGet(cardID string) *model.CardDefinition {
+	card := c.Get(cardID)
 	if card == nil {
-		panic(fmt.Sprintf("card_no %d not found in cache", cardNo))
+		panic(fmt.Sprintf("card_id %s not found in cache", cardID))
 	}
 	return card
 }
@@ -50,9 +50,9 @@ func (c *CardCache) Load(ctx context.Context, repo repository.CardRepo) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.cards = make(map[int64]*model.CardDefinition, len(cards))
+	c.cards = make(map[string]*model.CardDefinition, len(cards))
 	for _, card := range cards {
-		c.cards[card.CardNo] = card
+		c.cards[card.CardID] = card
 	}
 
 	log.Printf("card cache loaded: %d cards", len(c.cards))
@@ -65,11 +65,11 @@ func (c *CardCache) Refresh(ctx context.Context, repo repository.CardRepo) error
 }
 
 // All returns a snapshot of all cached cards.
-func (c *CardCache) All() map[int64]*model.CardDefinition {
+func (c *CardCache) All() map[string]*model.CardDefinition {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	snapshot := make(map[int64]*model.CardDefinition, len(c.cards))
+	snapshot := make(map[string]*model.CardDefinition, len(c.cards))
 	for k, v := range c.cards {
 		snapshot[k] = v
 	}
@@ -102,9 +102,9 @@ func (c *CardCache) LoadFromBytes(data []byte) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.cards = make(map[int64]*model.CardDefinition, len(cards))
+	c.cards = make(map[string]*model.CardDefinition, len(cards))
 	for _, card := range cards {
-		c.cards[card.CardNo] = card
+		c.cards[card.CardID] = card
 	}
 
 	log.Printf("card cache loaded: %d cards", len(c.cards))
@@ -113,8 +113,8 @@ func (c *CardCache) LoadFromBytes(data []byte) error {
 
 // InjectForTest inserts a card definition directly into the cache.
 // For use in unit tests only.
-func (c *CardCache) InjectForTest(cardNo int64, card *model.CardDefinition) {
+func (c *CardCache) InjectForTest(cardID string, card *model.CardDefinition) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.cards[cardNo] = card
+	c.cards[cardID] = card
 }

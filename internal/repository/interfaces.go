@@ -39,7 +39,7 @@ type PlayerCardRepo interface {
 // CardRepo defines the data access contract for card definitions.
 type CardRepo interface {
 	FindAll(ctx context.Context) ([]*model.CardDefinition, error)
-	FindByCardNo(ctx context.Context, cardNo int64) (*model.CardDefinition, error)
+	FindByCardID(ctx context.Context, cardID string) (*model.CardDefinition, error)
 }
 
 // UserSettingsRepo defines the data access contract for user settings.

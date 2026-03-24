@@ -33,16 +33,16 @@ func (s *CardService) GetAllCards(ctx context.Context, playerID string) ([]*Card
 		return nil, fmt.Errorf("get player cards: %w", err)
 	}
 
-	owned := make(map[int64]bool, len(playerCards))
+	owned := make(map[string]bool, len(playerCards))
 	for _, pc := range playerCards {
-		owned[pc.CardNo] = true
+		owned[pc.CardID] = true
 	}
 
 	result := make([]*CardWithOwnership, len(cards))
 	for i, card := range cards {
 		result[i] = &CardWithOwnership{
 			CardDefinition: card,
-			IsOwned:        owned[card.CardNo],
+			IsOwned:        owned[card.CardID],
 		}
 	}
 	return result, nil

@@ -57,9 +57,9 @@ func (s *DeckService) GetDeck(ctx context.Context, playerID string, deckID int64
 
 // DeckCardEntry represents a card entry in a deck create/update request.
 type DeckCardEntry struct {
-	CardNo              int64 `json:"card_no"`
-	ArtNo int64 `json:"art_no"`
-	Count               int   `json:"count"`
+	CardID string `json:"card_id"`
+	ArtNo  int64  `json:"art_no"`
+	Count  int    `json:"count"`
 }
 
 type CreateDeckRequest struct {
@@ -99,10 +99,10 @@ func (s *DeckService) CreateDeck(ctx context.Context, playerID string, req Creat
 	var deckCards []model.DeckCard
 	for _, entry := range req.Cards {
 		deckCards = append(deckCards, model.DeckCard{
-			PlayerID:            playerID,
-			CardNo:              entry.CardNo,
-			ArtNo: entry.ArtNo,
-			Count:               entry.Count,
+			PlayerID: playerID,
+			CardID:   entry.CardID,
+			ArtNo:    entry.ArtNo,
+			Count:    entry.Count,
 		})
 	}
 
@@ -151,11 +151,11 @@ func (s *DeckService) UpdateDeck(ctx context.Context, playerID string, deckID in
 	var deckCards []model.DeckCard
 	for _, entry := range req.Cards {
 		deckCards = append(deckCards, model.DeckCard{
-			PlayerID:            playerID,
-			DeckID:              deckID,
-			CardNo:              entry.CardNo,
-			ArtNo: entry.ArtNo,
-			Count:               entry.Count,
+			PlayerID: playerID,
+			DeckID:   deckID,
+			CardID:   entry.CardID,
+			ArtNo:    entry.ArtNo,
+			Count:    entry.Count,
 		})
 	}
 
@@ -180,7 +180,7 @@ func (s *DeckService) ValidateDeckForBattle(ctx context.Context, playerID string
 	// Convert DeckCard → DeckCardEntry for reuse of validateDeckCards.
 	entries := make([]DeckCardEntry, len(deckCards))
 	for i, dc := range deckCards {
-		entries[i] = DeckCardEntry{CardNo: dc.CardNo, ArtNo: dc.ArtNo, Count: dc.Count}
+		entries[i] = DeckCardEntry{CardID: dc.CardID, ArtNo: dc.ArtNo, Count: dc.Count}
 	}
 
 	// Check total card count is exactly DeckSize.
@@ -204,7 +204,7 @@ func (s *DeckService) DeleteDeck(ctx context.Context, playerID string, deckID in
 	return s.deckRepo.Delete(ctx, playerID, deckID)
 }
 
-// populateDeckCards fills deck.DeckCards with the card composition (card_no + art_no + count).
+// populateDeckCards fills deck.DeckCards with the card composition (card_id + art_no + count).
 func (s *DeckService) populateDeckCards(ctx context.Context, deck *model.Deck) error {
 	cards, err := s.deckRepo.GetDeckCards(ctx, deck.PlayerID, deck.DeckID)
 	if err != nil {
@@ -222,30 +222,30 @@ func (s *DeckService) GetPlayerCards(ctx context.Context, playerID string) ([]*m
 
 	result := make([]*model.PlayerCardWithDef, 0, len(pcs))
 	for _, pc := range pcs {
-		cd := s.cardCache.Get(pc.CardNo)
+		cd := s.cardCache.Get(pc.CardID)
 		if cd == nil {
 			continue // skip cards not in cache (deleted/inactive)
 		}
 		result = append(result, &model.PlayerCardWithDef{
-			CardNo:              pc.CardNo,
-			ArtNo: pc.ArtNo,
-			Count:               pc.Count,
-			CardName:            cd.CardName,
-			Faction:             cd.Faction,
-			CardType:            cd.CardType,
-			Resizable:           cd.Resizable,
-			Elastic:             cd.Elastic,
-			Stats:               cd.Stats,
-			EffectText:          cd.EffectText,
-			Restriction:         cd.Restriction,
+			CardID:      pc.CardID,
+			ArtNo:       pc.ArtNo,
+			Count:       pc.Count,
+			CardName:    cd.CardName,
+			Faction:     cd.Faction,
+			CardType:    cd.CardType,
+			Resizable:   cd.Resizable,
+			Elastic:     cd.Elastic,
+			Stats:       cd.Stats,
+			EffectText:  cd.EffectText,
+			Restriction: cd.Restriction,
 		})
 	}
 	return result, nil
 }
 
-// ownedKey returns a key for the (card_no, art_no) pair.
+// ownedKey returns a key for the (card_id, art_no) pair.
 type ownedKey struct {
-	cardNo  int64
+	cardID  string
 	variant int64
 }
 
@@ -254,7 +254,7 @@ func (s *DeckService) validateDeckCards(entries []DeckCardEntry, ownedCards []*m
 	totalCards := 0
 	for _, e := range entries {
 		if e.Count <= 0 {
-			return fmt.Errorf("card %d variant %d: count must be positive", e.CardNo, e.ArtNo)
+			return fmt.Errorf("card %s variant %d: count must be positive", e.CardID, e.ArtNo)
 		}
 		totalCards += e.Count
 	}
@@ -262,35 +262,35 @@ func (s *DeckService) validateDeckCards(entries []DeckCardEntry, ownedCards []*m
 		return fmt.Errorf("deck cannot exceed %d cards", constants.DeckSize)
 	}
 
-	// Build owned map: (card_no, art_no) → count.
+	// Build owned map: (card_id, art_no) → count.
 	owned := make(map[ownedKey]int, len(ownedCards))
 	for _, c := range ownedCards {
-		owned[ownedKey{c.CardNo, c.ArtNo}] = c.Count
+		owned[ownedKey{c.CardID, c.ArtNo}] = c.Count
 	}
 
-	// Ownership check: each (card_no, variant) count ≤ owned count.
+	// Ownership check: each (card_id, variant) count ≤ owned count.
 	for _, e := range entries {
-		key := ownedKey{e.CardNo, e.ArtNo}
+		key := ownedKey{e.CardID, e.ArtNo}
 		if owned[key] < e.Count {
-			return fmt.Errorf("card %d variant %d: not enough owned (need %d, have %d)",
-				e.CardNo, e.ArtNo, e.Count, owned[key])
+			return fmt.Errorf("card %s variant %d: not enough owned (need %d, have %d)",
+				e.CardID, e.ArtNo, e.Count, owned[key])
 		}
 	}
 
-	// Restriction check: total count per card_no ≤ restriction limit.
-	cardNoTotals := make(map[int64]int)
+	// Restriction check: total count per card_id ≤ restriction limit.
+	cardIDTotals := make(map[string]int)
 	for _, e := range entries {
-		cardNoTotals[e.CardNo] += e.Count
+		cardIDTotals[e.CardID] += e.Count
 	}
-	for cardNo, total := range cardNoTotals {
-		card := s.cardCache.Get(cardNo)
+	for cardID, total := range cardIDTotals {
+		card := s.cardCache.Get(cardID)
 		if card == nil {
-			return fmt.Errorf("card %d not found in card definitions", cardNo)
+			return fmt.Errorf("card %s not found in card definitions", cardID)
 		}
 		limit := restrictionCopyCount(card.Restriction)
 		if total > limit {
-			return fmt.Errorf("card %d (%s): exceeds restriction limit (%d/%d)",
-				cardNo, card.Restriction, total, limit)
+			return fmt.Errorf("card %s (%s): exceeds restriction limit (%d/%d)",
+				cardID, card.Restriction, total, limit)
 		}
 	}
 
@@ -310,7 +310,7 @@ func (s *DeckService) computeIsValid(deckCards []model.DeckCard, ownedCards []*m
 
 	entries := make([]DeckCardEntry, len(deckCards))
 	for i, dc := range deckCards {
-		entries[i] = DeckCardEntry{CardNo: dc.CardNo, ArtNo: dc.ArtNo, Count: dc.Count}
+		entries[i] = DeckCardEntry{CardID: dc.CardID, ArtNo: dc.ArtNo, Count: dc.Count}
 	}
 	return s.validateDeckCards(entries, ownedCards) == nil
 }

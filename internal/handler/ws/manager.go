@@ -249,7 +249,7 @@ func (m *Manager) resolveDeckCards(ctx context.Context, playerID string, deckID 
 	cards := make([]service.BattleDeckCard, 0, totalCount)
 	for _, dc := range deckCards {
 		for i := 0; i < dc.Count; i++ {
-			cards = append(cards, service.BattleDeckCard{CardNo: dc.CardNo, ArtNo: dc.ArtNo})
+			cards = append(cards, service.BattleDeckCard{CardID: dc.CardID, ArtNo: dc.ArtNo})
 		}
 	}
 	return cards, nil

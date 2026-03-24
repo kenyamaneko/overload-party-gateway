@@ -33,22 +33,22 @@ func TestLoadFromJSON_CardCount(t *testing.T) {
 
 func TestResourceLabel_ResourceCardsHaveLabel(t *testing.T) {
 	cc := loadTestCache(t)
-	for cardNo, card := range cc.All() {
+	for cardID, card := range cc.All() {
 		if isResourceType(card.CardType) {
 			assert.NotEmptyf(t, card.ResourceLabel,
-				"resource card #%d (%s, type=%s) has empty resource_label",
-				cardNo, card.CardName, card.CardType)
+				"resource card %s (%s, type=%s) has empty resource_label",
+				cardID, card.CardName, card.CardType)
 		}
 	}
 }
 
 func TestResourceLabel_SupportCardsHaveNoLabel(t *testing.T) {
 	cc := loadTestCache(t)
-	for cardNo, card := range cc.All() {
+	for cardID, card := range cc.All() {
 		if !isResourceType(card.CardType) {
 			assert.Emptyf(t, card.ResourceLabel,
-				"support card #%d (%s, type=%s) should have empty resource_label, got %q",
-				cardNo, card.CardName, card.CardType, card.ResourceLabel)
+				"support card %s (%s, type=%s) should have empty resource_label, got %q",
+				cardID, card.CardName, card.CardType, card.ResourceLabel)
 		}
 	}
 }
@@ -57,25 +57,25 @@ func TestResourceLabel_SpecificCards(t *testing.T) {
 	cc := loadTestCache(t)
 
 	tests := []struct {
-		cardNo       int64
+		cardID       string
 		wantName     string
 		wantLabel    string
 		wantCardType string
 	}{
-		{1, "えくぼ", "Compute", "Compute"},       // SHE Compute
-		{23, "ソラ", "VM", "Compute"},             // Tenki VM (resource_label differs from card_type)
-		{11, "メリーモ", "Cache", "CacheDB"},         // SHE CacheDB → label "Cache"
-		{15, "SHE Firewall", "", "Platform"},      // Platform — no label
-		{104, "DDoS 攻撃", "", "Incident"},         // Incident — no label
+		{"SH-0001", "えくぼ", "Compute", "Compute"},       // SHE Compute
+		{"TK-0001", "ソラ", "VM", "Compute"},             // Tenki VM (resource_label differs from card_type)
+		{"SH-0010", "メリーモ", "Cache", "CacheDB"},         // SHE CacheDB → label "Cache"
+		{"SH-0014", "SHE Firewall", "", "Platform"},      // Platform — no label
+		{"NT-0013", "DDoS 攻撃", "", "Incident"},         // Incident — no label
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.wantName, func(t *testing.T) {
-			card := cc.Get(tt.cardNo)
-			require.NotNilf(t, card, "card #%d not found", tt.cardNo)
-			assert.Equal(t, tt.wantName, card.CardName, "card #%d: card_name", tt.cardNo)
-			assert.Equal(t, tt.wantLabel, card.ResourceLabel, "card #%d: resource_label", tt.cardNo)
-			assert.Equal(t, tt.wantCardType, card.CardType, "card #%d: card_type", tt.cardNo)
+			card := cc.Get(tt.cardID)
+			require.NotNilf(t, card, "card %s not found", tt.cardID)
+			assert.Equal(t, tt.wantName, card.CardName, "card %s: card_name", tt.cardID)
+			assert.Equal(t, tt.wantLabel, card.ResourceLabel, "card %s: resource_label", tt.cardID)
+			assert.Equal(t, tt.wantCardType, card.CardType, "card %s: card_type", tt.cardID)
 		})
 	}
 }

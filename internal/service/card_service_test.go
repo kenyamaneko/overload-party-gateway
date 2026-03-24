@@ -11,16 +11,16 @@ import (
 )
 
 func TestGetAllCards_WithOwnership(t *testing.T) {
-	cards := map[int64]*model.CardDefinition{
-		1: {CardNo: 1, CardName: "Fireball"},
-		2: {CardNo: 2, CardName: "Shield"},
-		3: {CardNo: 3, CardName: "Heal"},
+	cards := map[string]*model.CardDefinition{
+		"C-001": {CardID: "C-001", CardName: "Fireball"},
+		"C-002": {CardID: "C-002", CardName: "Shield"},
+		"C-003": {CardID: "C-003", CardName: "Heal"},
 	}
 	cardRepo := repository.NewMockCardRepository(cards)
 	pcRepo := repository.NewMockPlayerCardRepository()
 	pcRepo.SeedPlayerCards("player1", []*model.PlayerCard{
-		{PlayerID: "player1", CardNo: 1, ArtNo: 1, Count: 1},
-		{PlayerID: "player1", CardNo: 3, ArtNo: 1, Count: 2},
+		{PlayerID: "player1", CardID: "C-001", ArtNo: 1, Count: 1},
+		{PlayerID: "player1", CardID: "C-003", ArtNo: 1, Count: 2},
 	})
 
 	svc := NewCardService(cardRepo, pcRepo)
@@ -29,19 +29,19 @@ func TestGetAllCards_WithOwnership(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, result, 3)
 
-	// Results are sorted by CardNo from the mock repo
-	assert.Equal(t, int64(1), result[0].CardNo)
+	// Results are sorted by CardID from the mock repo
+	assert.Equal(t, "C-001", result[0].CardID)
 	assert.True(t, result[0].IsOwned)
 
-	assert.Equal(t, int64(2), result[1].CardNo)
+	assert.Equal(t, "C-002", result[1].CardID)
 	assert.False(t, result[1].IsOwned)
 
-	assert.Equal(t, int64(3), result[2].CardNo)
+	assert.Equal(t, "C-003", result[2].CardID)
 	assert.True(t, result[2].IsOwned)
 }
 
 func TestGetAllCards_NoCards(t *testing.T) {
-	cardRepo := repository.NewMockCardRepository(map[int64]*model.CardDefinition{})
+	cardRepo := repository.NewMockCardRepository(map[string]*model.CardDefinition{})
 
 	svc := NewCardService(cardRepo, repository.NewMockPlayerCardRepository())
 
@@ -51,9 +51,9 @@ func TestGetAllCards_NoCards(t *testing.T) {
 }
 
 func TestGetAllCards_NoOwnedCards(t *testing.T) {
-	cards := map[int64]*model.CardDefinition{
-		1: {CardNo: 1, CardName: "Fireball"},
-		2: {CardNo: 2, CardName: "Shield"},
+	cards := map[string]*model.CardDefinition{
+		"C-001": {CardID: "C-001", CardName: "Fireball"},
+		"C-002": {CardID: "C-002", CardName: "Shield"},
 	}
 	cardRepo := repository.NewMockCardRepository(cards)
 
@@ -64,6 +64,6 @@ func TestGetAllCards_NoOwnedCards(t *testing.T) {
 	require.Len(t, result, 2)
 
 	for _, c := range result {
-		assert.False(t, c.IsOwned, "card %d should not be owned", c.CardNo)
+		assert.False(t, c.IsOwned, "card %s should not be owned", c.CardID)
 	}
 }

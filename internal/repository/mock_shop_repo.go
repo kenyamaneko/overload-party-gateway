@@ -150,14 +150,14 @@ func (r *MockShopRepository) InsertPlayerCards(ctx context.Context, cards []*mod
 	return nil
 }
 
-// mergePlayerCards merges card counts for existing (card_no, art_no) pairs.
+// mergePlayerCards merges card counts for existing (card_id, art_no) pairs.
 // Must be called with r.mu held.
 func (r *MockShopRepository) mergePlayerCards(playerID string, cards []*model.PlayerCard) {
 	existing := r.playerCards[playerID]
 	for _, newCard := range cards {
 		found := false
 		for _, ex := range existing {
-			if ex.CardNo == newCard.CardNo && ex.ArtNo == newCard.ArtNo {
+			if ex.CardID == newCard.CardID && ex.ArtNo == newCard.ArtNo {
 				ex.Count += newCard.Count
 				found = true
 				break

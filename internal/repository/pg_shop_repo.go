@@ -122,11 +122,11 @@ func (r *PgShopRepository) CreatePurchaseWithCards(ctx context.Context, purchase
 
 	for _, card := range cards {
 		_, err = tx.Exec(ctx,
-			`INSERT INTO player_cards (player_id, card_no, art_no, count)
+			`INSERT INTO player_cards (player_id, card_id, art_no, count)
 			 VALUES ($1,$2,$3,$4)
-			 ON CONFLICT (player_id, card_no, art_no)
+			 ON CONFLICT (player_id, card_id, art_no)
 			 DO UPDATE SET count = player_cards.count + EXCLUDED.count`,
-			card.PlayerID, card.CardNo,
+			card.PlayerID, card.CardID,
 			card.ArtNo, card.Count,
 		)
 		if err != nil {
@@ -196,11 +196,11 @@ func (r *PgShopRepository) InsertPlayerCards(ctx context.Context, cards []*model
 
 	for _, card := range cards {
 		_, err = tx.Exec(ctx,
-			`INSERT INTO player_cards (player_id, card_no, art_no, count)
+			`INSERT INTO player_cards (player_id, card_id, art_no, count)
 			 VALUES ($1,$2,$3,$4)
-			 ON CONFLICT (player_id, card_no, art_no)
+			 ON CONFLICT (player_id, card_id, art_no)
 			 DO UPDATE SET count = player_cards.count + EXCLUDED.count`,
-			card.PlayerID, card.CardNo,
+			card.PlayerID, card.CardID,
 			card.ArtNo, card.Count,
 		)
 		if err != nil {
@@ -242,7 +242,7 @@ func (r *PgShopRepository) GetPlayerOwnedFactions(ctx context.Context, playerID 
 	rows, err := r.pool.Query(ctx,
 		`SELECT DISTINCT cd.faction
 		 FROM player_cards pc
-		 JOIN card_definitions cd ON pc.card_no = cd.card_no
+		 JOIN card_definitions cd ON pc.card_id = cd.card_id
 		 WHERE pc.player_id = $1 AND cd.faction != 'Neutral'`,
 		playerID)
 	if err != nil {
