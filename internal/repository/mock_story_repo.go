@@ -5,9 +5,10 @@ import (
 	"sync"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
-var _ StoryRepo = (*MockStoryRepository)(nil)
+var _ port.StoryRepo = (*MockStoryRepository)(nil)
 
 type MockStoryRepository struct {
 	mu        sync.Mutex

@@ -52,7 +52,7 @@ func main() {
 	playerService := service.NewPlayerService(playerRepo, gameConfigRepo)
 	cardService := service.NewCardService(cardRepo, playerCardRepo)
 	deckService := service.NewDeckService(deckRepo, playerCardRepo, cardCache)
-	shopService := service.NewShopService(shopRepo, playerRepo, factionRepo, cardCache, nil, nil)
+	shopService := service.NewShopService(shopRepo, shopRepo, playerRepo, factionRepo, cardCache, nil, nil)
 	storyService := service.NewStoryService(storyRepo, nil, "")
 	subscriptionService := service.NewSubscriptionService(shopRepo, playerRepo)
 	// 4. Battle client (uses cfg.BattleServerURL, default http://localhost:9002)

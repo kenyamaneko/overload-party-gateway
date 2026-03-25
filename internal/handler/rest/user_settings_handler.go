@@ -8,15 +8,15 @@ import (
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
-	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
 type UserSettingsHandler struct {
-	repo repository.UserSettingsRepo
+	repo port.UserSettingsRepo
 }
 
-func NewUserSettingsHandler(repo repository.UserSettingsRepo) *UserSettingsHandler {
+func NewUserSettingsHandler(repo port.UserSettingsRepo) *UserSettingsHandler {
 	return &UserSettingsHandler{repo: repo}
 }
 

@@ -5,15 +5,15 @@ import (
 	"fmt"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
-	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 type CardService struct {
-	cardRepo       repository.CardRepo
-	playerCardRepo repository.PlayerCardRepo
+	cardRepo       port.CardRepo
+	playerCardRepo port.PlayerCardRepo
 }
 
-func NewCardService(cardRepo repository.CardRepo, playerCardRepo repository.PlayerCardRepo) *CardService {
+func NewCardService(cardRepo port.CardRepo, playerCardRepo port.PlayerCardRepo) *CardService {
 	return &CardService{cardRepo: cardRepo, playerCardRepo: playerCardRepo}
 }
 

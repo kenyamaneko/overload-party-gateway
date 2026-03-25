@@ -6,14 +6,14 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 type NewsHandler struct {
-	newsRepo repository.NewsRepo
+	newsRepo port.NewsRepo
 }
 
-func NewNewsHandler(newsRepo repository.NewsRepo) *NewsHandler {
+func NewNewsHandler(newsRepo port.NewsRepo) *NewsHandler {
 	return &NewsHandler{newsRepo: newsRepo}
 }
 

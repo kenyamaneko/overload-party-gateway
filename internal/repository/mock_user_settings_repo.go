@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 // MockUserSettingsRepository is an in-memory implementation of UserSettingsRepo for local mode.
@@ -14,7 +15,7 @@ type MockUserSettingsRepository struct {
 	settings map[string]*model.UserSettings // playerID → UserSettings
 }
 
-var _ UserSettingsRepo = (*MockUserSettingsRepository)(nil)
+var _ port.UserSettingsRepo = (*MockUserSettingsRepository)(nil)
 
 func NewMockUserSettingsRepository() *MockUserSettingsRepository {
 	return &MockUserSettingsRepository{
@@ -33,11 +34,7 @@ func (r *MockUserSettingsRepository) Get(_ context.Context, playerID string) (*m
 	return s, nil
 }
 
-func (r *MockUserSettingsRepository) Upsert(ctx context.Context, s *model.UserSettings) error {
-	return r.UpsertWithTx(ctx, nil, s)
-}
-
-func (r *MockUserSettingsRepository) UpsertWithTx(_ context.Context, _ DBTX, s *model.UserSettings) error {
+func (r *MockUserSettingsRepository) Upsert(_ context.Context, s *model.UserSettings) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 

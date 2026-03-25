@@ -7,10 +7,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 // Compile-time interface check.
-var _ PlayerCardRepo = (*PgPlayerCardRepository)(nil)
+var _ port.PlayerCardRepo = (*PgPlayerCardRepository)(nil)
 
 // PgPlayerCardRepository implements PlayerCardRepo backed by PostgreSQL.
 type PgPlayerCardRepository struct {

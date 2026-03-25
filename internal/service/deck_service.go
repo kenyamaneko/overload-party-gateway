@@ -8,16 +8,16 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/cache"
 	"github.com/kenyamaneko/overload-party-gateway/internal/constants"
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
-	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 type DeckService struct {
-	deckRepo       repository.DeckRepo
-	playerCardRepo repository.PlayerCardRepo
+	deckRepo       port.DeckRepo
+	playerCardRepo port.PlayerCardRepo
 	cardCache      *cache.CardCache
 }
 
-func NewDeckService(deckRepo repository.DeckRepo, playerCardRepo repository.PlayerCardRepo, cardCache *cache.CardCache) *DeckService {
+func NewDeckService(deckRepo port.DeckRepo, playerCardRepo port.PlayerCardRepo, cardCache *cache.CardCache) *DeckService {
 	return &DeckService{deckRepo: deckRepo, playerCardRepo: playerCardRepo, cardCache: cardCache}
 }
 

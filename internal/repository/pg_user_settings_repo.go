@@ -10,10 +10,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 // Compile-time interface check.
-var _ UserSettingsRepo = (*PgUserSettingsRepository)(nil)
+var _ port.UserSettingsRepo = (*PgUserSettingsRepository)(nil)
 
 // PgUserSettingsRepository implements UserSettingsRepo backed by PostgreSQL.
 type PgUserSettingsRepository struct {
@@ -44,9 +45,12 @@ func (r *PgUserSettingsRepository) Get(ctx context.Context, playerID string) (*m
 	return &s, nil
 }
 
-// UpsertWithTx inserts or updates user settings using the given DBTX.
-func (r *PgUserSettingsRepository) UpsertWithTx(ctx context.Context, db DBTX, s *model.UserSettings) error {
-	s.UpdatedAt = time.Now()
+// Upsert inserts or updates user settings.
+// If a transaction is present in the context, it participates in that transaction.
+func (r *PgUserSettingsRepository) Upsert(ctx context.Context, s *model.UserSettings) error {
+	db := connFrom(ctx, r.pool)
+
+	now := time.Now()
 	_, err := db.Exec(ctx,
 		`INSERT INTO user_settings (player_id, language, bgm_volume, se_volume, push_enabled, updated_at)
 		 VALUES ($1,$2,$3,$4,$5,$6)
@@ -56,15 +60,11 @@ func (r *PgUserSettingsRepository) UpsertWithTx(ctx context.Context, db DBTX, s 
 		   se_volume = EXCLUDED.se_volume,
 		   push_enabled = EXCLUDED.push_enabled,
 		   updated_at = EXCLUDED.updated_at`,
-		s.PlayerID, s.Language, s.BgmVolume, s.SeVolume, s.PushEnabled, s.UpdatedAt,
+		s.PlayerID, s.Language, s.BgmVolume, s.SeVolume, s.PushEnabled, now,
 	)
 	if err != nil {
 		return fmt.Errorf("upsert user settings: %w", err)
 	}
+	s.UpdatedAt = now
 	return nil
-}
-
-// Upsert inserts or updates user settings.
-func (r *PgUserSettingsRepository) Upsert(ctx context.Context, s *model.UserSettings) error {
-	return r.UpsertWithTx(ctx, r.pool, s)
 }

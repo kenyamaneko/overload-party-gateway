@@ -575,7 +575,7 @@ func setupShopRouter() *gin.Engine {
 	factionRepo := repository.NewMockFactionRepository()
 	cardCache := cache.NewCardCache()
 	verifier := &mockReceiptVerifier{}
-	shopService := service.NewShopService(shopRepo, playerRepo, factionRepo, cardCache, verifier, verifier)
+	shopService := service.NewShopService(shopRepo, shopRepo, playerRepo, factionRepo, cardCache, verifier, verifier)
 	handler := NewShopHandler(shopService)
 
 	r := gin.New()

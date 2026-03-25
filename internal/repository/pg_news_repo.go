@@ -7,10 +7,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 // Compile-time interface check.
-var _ NewsRepo = (*PgNewsRepository)(nil)
+var _ port.NewsRepo = (*PgNewsRepository)(nil)
 
 type PgNewsRepository struct {
 	pool *pgxpool.Pool

@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
-	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 const starterStampCount = int64(7)
@@ -24,13 +24,13 @@ const (
 )
 
 type AuthService struct {
-	playerRepo       repository.PlayerRepo
-	shopRepo         repository.ShopRepository
-	userSettingsRepo repository.UserSettingsRepo
-	txRunner         repository.TxRunner
+	playerRepo       port.PlayerRepo
+	shopRepo         port.ShopRepository
+	userSettingsRepo port.UserSettingsRepo
+	txRunner         port.TxRunner
 }
 
-func NewAuthService(playerRepo repository.PlayerRepo, shopRepo repository.ShopRepository, userSettingsRepo repository.UserSettingsRepo, txRunner repository.TxRunner) *AuthService {
+func NewAuthService(playerRepo port.PlayerRepo, shopRepo port.ShopRepository, userSettingsRepo port.UserSettingsRepo, txRunner port.TxRunner) *AuthService {
 	return &AuthService{playerRepo: playerRepo, shopRepo: shopRepo, userSettingsRepo: userSettingsRepo, txRunner: txRunner}
 }
 
@@ -80,14 +80,14 @@ func (s *AuthService) Register(ctx context.Context, firebaseUID, username string
 		})
 	}
 
-	if err := s.txRunner.RunInTx(ctx, func(tx repository.DBTX) error {
-		if err := s.playerRepo.CreateWithTx(ctx, tx, player, dailyBattle); err != nil {
+	if err := s.txRunner.RunInTx(ctx, func(ctx context.Context) error {
+		if err := s.playerRepo.Create(ctx, player, dailyBattle); err != nil {
 			return fmt.Errorf("create player: %w", err)
 		}
-		if err := s.userSettingsRepo.UpsertWithTx(ctx, tx, settings); err != nil {
+		if err := s.userSettingsRepo.Upsert(ctx, settings); err != nil {
 			return fmt.Errorf("create default user settings: %w", err)
 		}
-		if err := s.shopRepo.InsertPlayerItemsWithTx(ctx, tx, items); err != nil {
+		if err := s.shopRepo.InsertPlayerItems(ctx, items); err != nil {
 			return fmt.Errorf("grant starter stamps: %w", err)
 		}
 		return nil

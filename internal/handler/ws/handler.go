@@ -10,18 +10,18 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
-	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 // Handler upgrades HTTP connections to WebSocket and hands off to Manager.
 type Handler struct {
 	manager    *Manager
 	authClient *auth.Client // nil in local/dev mode
-	playerRepo repository.PlayerRepo
+	playerRepo port.PlayerRepo
 	upgrader   websocket.Upgrader
 }
 
-func NewHandler(manager *Manager, authClient *auth.Client, playerRepo repository.PlayerRepo, allowedOrigins []string) *Handler {
+func NewHandler(manager *Manager, authClient *auth.Client, playerRepo port.PlayerRepo, allowedOrigins []string) *Handler {
 	origins := make(map[string]struct{}, len(allowedOrigins))
 	for _, o := range allowedOrigins {
 		origins[o] = struct{}{}

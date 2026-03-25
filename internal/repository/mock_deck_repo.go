@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 func deckKey(playerID string, deckID int64) string {
@@ -20,7 +21,7 @@ type MockDeckRepository struct {
 	deckCards  map[string][]model.DeckCard // "playerID|deckID" → DeckCards
 }
 
-var _ DeckRepo = (*MockDeckRepository)(nil)
+var _ port.DeckRepo = (*MockDeckRepository)(nil)
 
 func NewMockDeckRepository() *MockDeckRepository {
 	return &MockDeckRepository{

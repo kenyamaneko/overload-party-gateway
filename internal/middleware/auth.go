@@ -9,7 +9,7 @@ import (
 	"firebase.google.com/go/v4/auth"
 	"github.com/gin-gonic/gin"
 
-	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 type contextKey string
@@ -69,7 +69,7 @@ func GetPlayerID(c *gin.Context) string {
 // PlayerResolve returns a Gin middleware that resolves the authenticated
 // Firebase UID to a player UUID. Must be chained AFTER FirebaseAuth.
 // Sets "player_id" in the Gin context. Returns 401 if the player is not registered.
-func PlayerResolve(playerRepo repository.PlayerRepo) gin.HandlerFunc {
+func PlayerResolve(playerRepo port.PlayerRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		uid := GetFirebaseUID(c)
 		if uid == "" {

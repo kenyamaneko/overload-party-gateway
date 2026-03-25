@@ -45,10 +45,6 @@ func (r *errorCreatePlayerRepo) Create(_ context.Context, _ *model.Player, _ *mo
 	return errDB
 }
 
-func (r *errorCreatePlayerRepo) CreateWithTx(_ context.Context, _ repository.DBTX, _ *model.Player, _ *model.PlayerDailyBattle) error {
-	return errDB
-}
-
 type errorGetDailyBattlePlayerRepo struct {
 	*repository.MockPlayerRepository
 }
@@ -130,10 +126,6 @@ type errorUpsertSettingsRepo struct {
 }
 
 func (r *errorUpsertSettingsRepo) Upsert(_ context.Context, _ *model.UserSettings) error {
-	return errDB
-}
-
-func (r *errorUpsertSettingsRepo) UpsertWithTx(_ context.Context, _ repository.DBTX, _ *model.UserSettings) error {
 	return errDB
 }
 

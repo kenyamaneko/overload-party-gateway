@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
-	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 // Apple App Store Server Notification V2 types.
@@ -27,12 +27,12 @@ const (
 const googleSubRenewalExtension = 30 * 24 * time.Hour
 
 type SubscriptionService struct {
-	shopRepo   repository.ShopRepository
-	playerRepo repository.PlayerRepo
+	subRepo    port.SubscriptionRepo
+	playerRepo port.PlayerRepo
 }
 
-func NewSubscriptionService(shopRepo repository.ShopRepository, playerRepo repository.PlayerRepo) *SubscriptionService {
-	return &SubscriptionService{shopRepo: shopRepo, playerRepo: playerRepo}
+func NewSubscriptionService(subRepo port.SubscriptionRepo, playerRepo port.PlayerRepo) *SubscriptionService {
+	return &SubscriptionService{subRepo: subRepo, playerRepo: playerRepo}
 }
 
 type AppleNotificationPayload struct {
@@ -63,7 +63,7 @@ func (s *SubscriptionService) HandleAppleNotification(ctx context.Context, signe
 		return fmt.Errorf("decode transaction info: %w", err)
 	}
 
-	sub, err := s.shopRepo.FindSubscriptionByToken(ctx, txnInfo.OriginalTransactionID)
+	sub, err := s.subRepo.FindSubscriptionByToken(ctx, txnInfo.OriginalTransactionID)
 	if err != nil {
 		return fmt.Errorf("find subscription: %w", err)
 	}
@@ -77,7 +77,7 @@ func (s *SubscriptionService) HandleAppleNotification(ctx context.Context, signe
 		sub.CurrentPeriodEnd = expiresAt
 		sub.Status = model.SubscriptionStatusActive
 		sub.UpdatedAt = time.Now()
-		if err := s.shopRepo.UpdateSubscription(ctx, sub); err != nil {
+		if err := s.subRepo.UpdateSubscription(ctx, sub); err != nil {
 			return fmt.Errorf("update subscription: %w", err)
 		}
 		if err := s.playerRepo.UpdatePremium(ctx, sub.PlayerID, true, &expiresAt); err != nil {
@@ -87,7 +87,7 @@ func (s *SubscriptionService) HandleAppleNotification(ctx context.Context, signe
 	case appleNotifExpired, appleNotifGracePeriodExpired:
 		sub.Status = model.SubscriptionStatusExpired
 		sub.UpdatedAt = time.Now()
-		if err := s.shopRepo.UpdateSubscription(ctx, sub); err != nil {
+		if err := s.subRepo.UpdateSubscription(ctx, sub); err != nil {
 			return fmt.Errorf("update subscription: %w", err)
 		}
 		if err := s.playerRepo.UpdatePremium(ctx, sub.PlayerID, false, nil); err != nil {
@@ -97,7 +97,7 @@ func (s *SubscriptionService) HandleAppleNotification(ctx context.Context, signe
 	case appleNotifRevoke:
 		sub.Status = model.SubscriptionStatusRevoked
 		sub.UpdatedAt = time.Now()
-		if err := s.shopRepo.UpdateSubscription(ctx, sub); err != nil {
+		if err := s.subRepo.UpdateSubscription(ctx, sub); err != nil {
 			return fmt.Errorf("update subscription: %w", err)
 		}
 		if err := s.playerRepo.UpdatePremium(ctx, sub.PlayerID, false, nil); err != nil {
@@ -108,7 +108,7 @@ func (s *SubscriptionService) HandleAppleNotification(ctx context.Context, signe
 		if notif.Subtype == appleSubtypeAutoRenewDisabled {
 			sub.Status = model.SubscriptionStatusCancelled
 			sub.UpdatedAt = time.Now()
-			if err := s.shopRepo.UpdateSubscription(ctx, sub); err != nil {
+			if err := s.subRepo.UpdateSubscription(ctx, sub); err != nil {
 				return fmt.Errorf("update subscription: %w", err)
 			}
 			// Premium remains active until current_period_end
@@ -157,7 +157,7 @@ func (s *SubscriptionService) HandleGoogleNotification(ctx context.Context, msg 
 	}
 
 	notif := rtdn.SubscriptionNotification
-	sub, err := s.shopRepo.FindSubscriptionByToken(ctx, notif.PurchaseToken)
+	sub, err := s.subRepo.FindSubscriptionByToken(ctx, notif.PurchaseToken)
 	if err != nil {
 		return fmt.Errorf("find subscription: %w", err)
 	}
@@ -169,7 +169,7 @@ func (s *SubscriptionService) HandleGoogleNotification(ctx context.Context, msg 
 	case googleSubRenewed, googleSubRecovered:
 		sub.Status = model.SubscriptionStatusActive
 		sub.UpdatedAt = time.Now()
-		if err := s.shopRepo.UpdateSubscription(ctx, sub); err != nil {
+		if err := s.subRepo.UpdateSubscription(ctx, sub); err != nil {
 			return fmt.Errorf("update subscription: %w", err)
 		}
 		// For renewal, we should verify with Google API to get the new expiry.
@@ -182,7 +182,7 @@ func (s *SubscriptionService) HandleGoogleNotification(ctx context.Context, msg 
 	case googleSubExpired:
 		sub.Status = model.SubscriptionStatusExpired
 		sub.UpdatedAt = time.Now()
-		if err := s.shopRepo.UpdateSubscription(ctx, sub); err != nil {
+		if err := s.subRepo.UpdateSubscription(ctx, sub); err != nil {
 			return fmt.Errorf("update subscription: %w", err)
 		}
 		if err := s.playerRepo.UpdatePremium(ctx, sub.PlayerID, false, nil); err != nil {
@@ -192,7 +192,7 @@ func (s *SubscriptionService) HandleGoogleNotification(ctx context.Context, msg 
 	case googleSubRevoked:
 		sub.Status = model.SubscriptionStatusRevoked
 		sub.UpdatedAt = time.Now()
-		if err := s.shopRepo.UpdateSubscription(ctx, sub); err != nil {
+		if err := s.subRepo.UpdateSubscription(ctx, sub); err != nil {
 			return fmt.Errorf("update subscription: %w", err)
 		}
 		if err := s.playerRepo.UpdatePremium(ctx, sub.PlayerID, false, nil); err != nil {
@@ -202,7 +202,7 @@ func (s *SubscriptionService) HandleGoogleNotification(ctx context.Context, msg 
 	case googleSubCanceled:
 		sub.Status = model.SubscriptionStatusCancelled
 		sub.UpdatedAt = time.Now()
-		if err := s.shopRepo.UpdateSubscription(ctx, sub); err != nil {
+		if err := s.subRepo.UpdateSubscription(ctx, sub); err != nil {
 			return fmt.Errorf("update subscription: %w", err)
 		}
 		// Premium remains active until current_period_end

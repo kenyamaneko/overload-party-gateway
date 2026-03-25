@@ -8,7 +8,7 @@ import (
 	"cloud.google.com/go/civil"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
-	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 const (
@@ -23,11 +23,11 @@ const (
 )
 
 type PlayerService struct {
-	playerRepo     repository.PlayerRepo
-	gameConfigRepo repository.GameConfigRepo
+	playerRepo     port.PlayerRepo
+	gameConfigRepo port.GameConfigRepo
 }
 
-func NewPlayerService(playerRepo repository.PlayerRepo, gameConfigRepo repository.GameConfigRepo) *PlayerService {
+func NewPlayerService(playerRepo port.PlayerRepo, gameConfigRepo port.GameConfigRepo) *PlayerService {
 	return &PlayerService{playerRepo: playerRepo, gameConfigRepo: gameConfigRepo}
 }
 

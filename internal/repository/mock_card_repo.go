@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 // MockCardRepository is an in-memory implementation of CardRepo backed by a card map.
@@ -13,7 +14,7 @@ type MockCardRepository struct {
 	cards map[string]*model.CardDefinition
 }
 
-var _ CardRepo = (*MockCardRepository)(nil)
+var _ port.CardRepo = (*MockCardRepository)(nil)
 
 func NewMockCardRepository(cards map[string]*model.CardDefinition) *MockCardRepository {
 	return &MockCardRepository{cards: cards}

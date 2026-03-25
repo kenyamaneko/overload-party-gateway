@@ -8,10 +8,12 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 // Compile-time interface check.
-var _ GameConfigRepo = (*PgGameConfigRepository)(nil)
+var _ port.GameConfigRepo = (*PgGameConfigRepository)(nil)
 
 // PgGameConfigRepository implements GameConfigRepo backed by PostgreSQL.
 type PgGameConfigRepository struct {

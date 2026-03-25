@@ -5,9 +5,11 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
-var _ FactionRepo = (*PgFactionRepository)(nil)
+var _ port.FactionRepo = (*PgFactionRepository)(nil)
 
 type PgFactionRepository struct {
 	pool *pgxpool.Pool

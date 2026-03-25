@@ -28,10 +28,6 @@ func (r *stampTrackingShopRepo) InsertPlayerItems(ctx context.Context, items []*
 	return nil
 }
 
-func (r *stampTrackingShopRepo) InsertPlayerItemsWithTx(ctx context.Context, _ repository.DBTX, items []*model.PlayerItem) error {
-	return r.InsertPlayerItems(ctx, items)
-}
-
 // failingStampShopRepo wraps MockShopRepository but returns an error from InsertPlayerItems.
 type failingStampShopRepo struct {
 	*repository.MockShopRepository
@@ -39,10 +35,6 @@ type failingStampShopRepo struct {
 
 func (r *failingStampShopRepo) InsertPlayerItems(ctx context.Context, items []*model.PlayerItem) error {
 	return fmt.Errorf("database connection lost")
-}
-
-func (r *failingStampShopRepo) InsertPlayerItemsWithTx(ctx context.Context, _ repository.DBTX, items []*model.PlayerItem) error {
-	return r.InsertPlayerItems(ctx, items)
 }
 
 func TestRegister_Success(t *testing.T) {

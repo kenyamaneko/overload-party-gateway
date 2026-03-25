@@ -7,6 +7,7 @@ import (
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/constants"
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
@@ -22,11 +23,11 @@ type Manager struct {
 	battleClient  service.BattleClient
 	playerService *service.PlayerService
 	deckService   *service.DeckService
-	deckRepo      repository.DeckRepo
+	deckRepo      port.DeckRepo
 	queue         *repository.MatchmakingQueue
 }
 
-func NewManager(battleClient service.BattleClient, playerService *service.PlayerService, deckService *service.DeckService, deckRepo repository.DeckRepo) *Manager {
+func NewManager(battleClient service.BattleClient, playerService *service.PlayerService, deckService *service.DeckService, deckRepo port.DeckRepo) *Manager {
 	queue := repository.NewMatchmakingQueue()
 
 	m := &Manager{

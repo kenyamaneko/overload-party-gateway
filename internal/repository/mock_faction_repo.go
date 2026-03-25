@@ -3,9 +3,11 @@ package repository
 import (
 	"context"
 	"sync"
+
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
-var _ FactionRepo = (*MockFactionRepository)(nil)
+var _ port.FactionRepo = (*MockFactionRepository)(nil)
 
 type MockFactionRepository struct {
 	mu       sync.Mutex

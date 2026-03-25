@@ -9,7 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 // DevAuth returns a Gin middleware that accepts dev tokens without Firebase.
@@ -53,7 +53,7 @@ type DevRegisterFunc func(ctx context.Context, firebaseUID, username string) (pl
 // firebase_uid → playerID, auto-creating the player if needed.
 // Sets both "firebase_uid" and "player_id" context keys.
 // Optional onCreated callbacks run once after a new player is created.
-func DevAuthWithPlayerResolve(playerRepo repository.PlayerRepo, registerFn DevRegisterFunc, onCreated ...DevPlayerSetup) gin.HandlerFunc {
+func DevAuthWithPlayerResolve(playerRepo port.PlayerRepo, registerFn DevRegisterFunc, onCreated ...DevPlayerSetup) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -95,7 +95,7 @@ func DevAuthWithPlayerResolve(playerRepo repository.PlayerRepo, registerFn DevRe
 	}
 }
 
-func resolveOrCreateDevPlayer(c *gin.Context, playerRepo repository.PlayerRepo, registerFn DevRegisterFunc, firebaseUID string) (string, bool, error) {
+func resolveOrCreateDevPlayer(c *gin.Context, playerRepo port.PlayerRepo, registerFn DevRegisterFunc, firebaseUID string) (string, bool, error) {
 	ctx := c.Request.Context()
 
 	player, err := playerRepo.FindByFirebaseUID(ctx, firebaseUID)

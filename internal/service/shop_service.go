@@ -12,7 +12,7 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/constants"
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 	"github.com/kenyamaneko/overload-party-gateway/internal/platform"
-	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 var validFactions = map[string]bool{
@@ -38,24 +38,27 @@ func normalizeFaction(s string) (string, bool) {
 }
 
 type ShopService struct {
-	shopRepo       repository.ShopRepository
-	playerRepo     repository.PlayerRepo
-	factionRepo    repository.FactionRepo
+	shopRepo       port.ShopRepository
+	subRepo        port.SubscriptionRepo
+	playerRepo     port.PlayerRepo
+	factionRepo    port.FactionRepo
 	cardCache      *cache.CardCache
 	appleVerifier  platform.ReceiptVerifier
 	googleVerifier platform.ReceiptVerifier
 }
 
 func NewShopService(
-	shopRepo repository.ShopRepository,
-	playerRepo repository.PlayerRepo,
-	factionRepo repository.FactionRepo,
+	shopRepo port.ShopRepository,
+	subRepo port.SubscriptionRepo,
+	playerRepo port.PlayerRepo,
+	factionRepo port.FactionRepo,
 	cardCache *cache.CardCache,
 	appleVerifier platform.ReceiptVerifier,
 	googleVerifier platform.ReceiptVerifier,
 ) *ShopService {
 	return &ShopService{
 		shopRepo:       shopRepo,
+		subRepo:        subRepo,
 		playerRepo:     playerRepo,
 		factionRepo:    factionRepo,
 		cardCache:      cardCache,
@@ -121,7 +124,7 @@ func (s *ShopService) GetProducts(ctx context.Context, playerID string) ([]Produ
 		ownedFactionSet[f] = true
 	}
 
-	activeSub, err := s.shopRepo.GetActiveSubscription(ctx, playerID)
+	activeSub, err := s.subRepo.GetActiveSubscription(ctx, playerID)
 	if err != nil {
 		return nil, fmt.Errorf("get subscription: %w", err)
 	}
@@ -256,7 +259,7 @@ func (s *ShopService) Subscribe(ctx context.Context, playerID, productID, pf, pu
 		UpdatedAt:          time.Now(),
 	}
 
-	if err := s.shopRepo.CreateSubscription(ctx, sub); err != nil {
+	if err := s.subRepo.CreateSubscription(ctx, sub); err != nil {
 		return nil, fmt.Errorf("create subscription: %w", err)
 	}
 

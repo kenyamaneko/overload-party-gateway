@@ -9,7 +9,7 @@ import (
 	"sync"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
-	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 // CardCache provides in-memory access to card definitions.
@@ -41,7 +41,7 @@ func (c *CardCache) MustGet(cardID string) *model.CardDefinition {
 }
 
 // Load fetches all active cards via the CardRepo interface.
-func (c *CardCache) Load(ctx context.Context, repo repository.CardRepo) error {
+func (c *CardCache) Load(ctx context.Context, repo port.CardRepo) error {
 	cards, err := repo.FindAll(ctx)
 	if err != nil {
 		return fmt.Errorf("load card cache: %w", err)
@@ -60,7 +60,7 @@ func (c *CardCache) Load(ctx context.Context, repo repository.CardRepo) error {
 }
 
 // Refresh reloads all cards via the CardRepo interface.
-func (c *CardCache) Refresh(ctx context.Context, repo repository.CardRepo) error {
+func (c *CardCache) Refresh(ctx context.Context, repo port.CardRepo) error {
 	return c.Load(ctx, repo)
 }
 

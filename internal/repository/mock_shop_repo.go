@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 // MockShopRepository is an in-memory implementation of ShopRepository for testing.
@@ -24,8 +25,11 @@ type MockShopRepository struct {
 	onCardsInserted func(playerID string, cards []*model.PlayerCard)
 }
 
-// Compile-time interface check.
-var _ ShopRepository = (*MockShopRepository)(nil)
+// Compile-time interface checks.
+var (
+	_ port.ShopRepository  = (*MockShopRepository)(nil)
+	_ port.SubscriptionRepo = (*MockShopRepository)(nil)
+)
 
 func NewMockShopRepository() *MockShopRepository {
 	return &MockShopRepository{
@@ -172,10 +176,6 @@ func (r *MockShopRepository) mergePlayerCards(playerID string, cards []*model.Pl
 
 func (r *MockShopRepository) InsertPlayerItems(ctx context.Context, items []*model.PlayerItem) error {
 	return nil
-}
-
-func (r *MockShopRepository) InsertPlayerItemsWithTx(ctx context.Context, _ DBTX, items []*model.PlayerItem) error {
-	return r.InsertPlayerItems(ctx, items)
 }
 
 func (r *MockShopRepository) GetPlayerOwnedFactions(ctx context.Context, playerID string) ([]string, error) {

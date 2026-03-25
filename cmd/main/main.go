@@ -19,6 +19,7 @@ import (
 	ws "github.com/kenyamaneko/overload-party-gateway/internal/handler/ws"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
 	"github.com/kenyamaneko/overload-party-gateway/internal/platform"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
@@ -113,7 +114,7 @@ func main() {
 	playerService := service.NewPlayerService(playerRepo, gameConfigRepo)
 	cardService := service.NewCardService(cardRepo, playerCardRepo)
 	deckService := service.NewDeckService(deckRepo, playerCardRepo, cardCache)
-	shopService := service.NewShopService(shopRepo, playerRepo, factionRepo, cardCache, appleVerifier, googleVerifier)
+	shopService := service.NewShopService(shopRepo, shopRepo, playerRepo, factionRepo, cardCache, appleVerifier, googleVerifier)
 	storyService := service.NewStoryService(storyRepo, gcsClient, cfg.StoryBucket)
 	subscriptionService := service.NewSubscriptionService(shopRepo, playerRepo)
 
@@ -246,7 +247,7 @@ func main() {
 }
 
 // refreshCardCache periodically refreshes the card definition cache.
-func refreshCardCache(ctx context.Context, cc *cache.CardCache, repo repository.CardRepo) {
+func refreshCardCache(ctx context.Context, cc *cache.CardCache, repo port.CardRepo) {
 	ticker := time.NewTicker(cardCacheRefreshInterval)
 	defer ticker.Stop()
 

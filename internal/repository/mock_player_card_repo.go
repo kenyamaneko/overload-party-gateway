@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 // MockPlayerCardRepository is an in-memory implementation of PlayerCardRepo for local mode and testing.
@@ -13,7 +14,7 @@ type MockPlayerCardRepository struct {
 	playerCards map[string][]*model.PlayerCard // playerID → PlayerCards
 }
 
-var _ PlayerCardRepo = (*MockPlayerCardRepository)(nil)
+var _ port.PlayerCardRepo = (*MockPlayerCardRepository)(nil)
 
 func NewMockPlayerCardRepository() *MockPlayerCardRepository {
 	return &MockPlayerCardRepository{

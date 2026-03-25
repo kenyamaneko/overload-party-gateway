@@ -9,6 +9,7 @@ import (
 	"cloud.google.com/go/civil"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 // MockPlayerRepository is an in-memory implementation of PlayerRepo for local mode and testing.
@@ -19,7 +20,7 @@ type MockPlayerRepository struct {
 	byUID        map[string]string // firebaseUID → playerID
 }
 
-var _ PlayerRepo = (*MockPlayerRepository)(nil)
+var _ port.PlayerRepo = (*MockPlayerRepository)(nil)
 
 func NewMockPlayerRepository() *MockPlayerRepository {
 	return &MockPlayerRepository{
@@ -27,10 +28,6 @@ func NewMockPlayerRepository() *MockPlayerRepository {
 		dailyBattles: make(map[string]*model.PlayerDailyBattle),
 		byUID:        make(map[string]string),
 	}
-}
-
-func (r *MockPlayerRepository) CreateWithTx(ctx context.Context, _ DBTX, player *model.Player, dailyBattle *model.PlayerDailyBattle) error {
-	return r.Create(ctx, player, dailyBattle)
 }
 
 func (r *MockPlayerRepository) Create(ctx context.Context, player *model.Player, dailyBattle *model.PlayerDailyBattle) error {

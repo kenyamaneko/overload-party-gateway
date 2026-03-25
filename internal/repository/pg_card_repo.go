@@ -10,10 +10,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 // Compile-time interface check.
-var _ CardRepo = (*PgCardRepository)(nil)
+var _ port.CardRepo = (*PgCardRepository)(nil)
 
 // PgCardRepository implements CardRepo backed by PostgreSQL via pgxpool.
 type PgCardRepository struct {

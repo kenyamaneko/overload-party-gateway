@@ -9,9 +9,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
-var _ StoryRepo = (*PgStoryRepository)(nil)
+var _ port.StoryRepo = (*PgStoryRepository)(nil)
 
 type PgStoryRepository struct {
 	pool *pgxpool.Pool

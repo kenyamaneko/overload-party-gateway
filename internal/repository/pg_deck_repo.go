@@ -11,10 +11,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 // Compile-time interface check.
-var _ DeckRepo = (*PgDeckRepository)(nil)
+var _ port.DeckRepo = (*PgDeckRepository)(nil)
 
 // PgDeckRepository implements DeckRepo backed by PostgreSQL via pgxpool.
 type PgDeckRepository struct {

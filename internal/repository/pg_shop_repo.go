@@ -10,10 +10,14 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
-// Compile-time interface check.
-var _ ShopRepository = (*PgShopRepository)(nil)
+// Compile-time interface checks.
+var (
+	_ port.ShopRepository  = (*PgShopRepository)(nil)
+	_ port.SubscriptionRepo = (*PgShopRepository)(nil)
+)
 
 // PgShopRepository implements ShopRepository using PostgreSQL via pgxpool.
 type PgShopRepository struct {
@@ -214,8 +218,26 @@ func (r *PgShopRepository) InsertPlayerCards(ctx context.Context, cards []*model
 	return nil
 }
 
-// InsertPlayerItemsWithTx inserts player items using the given DBTX.
-func (r *PgShopRepository) InsertPlayerItemsWithTx(ctx context.Context, db DBTX, items []*model.PlayerItem) error {
+// InsertPlayerItems inserts player items atomically.
+// If a transaction is present in the context, it participates in that transaction.
+// Otherwise it wraps the inserts in its own transaction.
+func (r *PgShopRepository) InsertPlayerItems(ctx context.Context, items []*model.PlayerItem) error {
+	if txFromContext(ctx) != nil {
+		return r.insertPlayerItemsInner(ctx, connFrom(ctx, r.pool), items)
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := r.insertPlayerItemsInner(ctx, tx, items); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (r *PgShopRepository) insertPlayerItemsInner(ctx context.Context, db dbtx, items []*model.PlayerItem) error {
 	for _, item := range items {
 		_, err := db.Exec(ctx,
 			`INSERT INTO player_items (player_id, item_type, item_no, acquired_at)
@@ -227,19 +249,6 @@ func (r *PgShopRepository) InsertPlayerItemsWithTx(ctx context.Context, db DBTX,
 		}
 	}
 	return nil
-}
-
-func (r *PgShopRepository) InsertPlayerItems(ctx context.Context, items []*model.PlayerItem) error {
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin tx: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	if err := r.InsertPlayerItemsWithTx(ctx, tx, items); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
 }
 
 func (r *PgShopRepository) GetPlayerOwnedFactions(ctx context.Context, playerID string) ([]string, error) {

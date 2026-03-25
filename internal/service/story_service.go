@@ -11,7 +11,7 @@ import (
 	"cloud.google.com/go/storage"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
-	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 var (
@@ -20,14 +20,14 @@ var (
 )
 
 type StoryService struct {
-	storyRepo  repository.StoryRepo
+	storyRepo  port.StoryRepo
 	gcsClient  *storage.Client
 	bucketName string
 }
 
 // NewStoryService creates a new StoryService.
 func NewStoryService(
-	storyRepo repository.StoryRepo,
+	storyRepo port.StoryRepo,
 	gcsClient *storage.Client,
 	bucketName string,
 ) *StoryService {

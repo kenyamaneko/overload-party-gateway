@@ -49,7 +49,7 @@ func newTestShopEnv() *testShopEnv {
 	factionRepo := repository.NewMockFactionRepository()
 	verifier := &platform.MockReceiptVerifier{}
 
-	svc := NewShopService(shopRepo, playerRepo, factionRepo, cc, verifier, verifier)
+	svc := NewShopService(shopRepo, shopRepo, playerRepo, factionRepo, cc, verifier, verifier)
 
 	return &testShopEnv{svc: svc, shopRepo: shopRepo, playerRepo: playerRepo, cardCache: cc}
 }

@@ -11,10 +11,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 // Compile-time interface check.
-var _ PlayerRepo = (*PgPlayerRepository)(nil)
+var _ port.PlayerRepo = (*PgPlayerRepository)(nil)
 
 // PgPlayerRepository implements PlayerRepo backed by PostgreSQL via pgxpool.
 type PgPlayerRepository struct {
@@ -26,8 +27,26 @@ func NewPgPlayerRepository(pool *pgxpool.Pool) *PgPlayerRepository {
 	return &PgPlayerRepository{pool: pool}
 }
 
-// CreateWithTx inserts both a players row and a player_daily_battle row using the given DBTX.
-func (r *PgPlayerRepository) CreateWithTx(ctx context.Context, db DBTX, player *model.Player, dailyBattle *model.PlayerDailyBattle) error {
+// Create inserts both a players row and a player_daily_battle row atomically.
+// If a transaction is present in the context (via TxManager.RunInTx), it participates in that transaction.
+// Otherwise it wraps both INSERTs in its own transaction.
+func (r *PgPlayerRepository) Create(ctx context.Context, player *model.Player, dailyBattle *model.PlayerDailyBattle) error {
+	if txFromContext(ctx) != nil {
+		return r.createInner(ctx, connFrom(ctx, r.pool), player, dailyBattle)
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := r.createInner(ctx, tx, player, dailyBattle); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (r *PgPlayerRepository) createInner(ctx context.Context, db dbtx, player *model.Player, dailyBattle *model.PlayerDailyBattle) error {
 	_, err := db.Exec(ctx,
 		`INSERT INTO players (player_id, firebase_uid, username, level, exp, is_premium, equipped_icon_no, selected_faction, premium_expires_at, created_at, updated_at)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
@@ -60,20 +79,6 @@ func (r *PgPlayerRepository) CreateWithTx(ctx context.Context, db DBTX, player *
 	}
 
 	return nil
-}
-
-// Create inserts both a players row and a player_daily_battle row atomically.
-func (r *PgPlayerRepository) Create(ctx context.Context, player *model.Player, dailyBattle *model.PlayerDailyBattle) error {
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin tx: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	if err := r.CreateWithTx(ctx, tx, player, dailyBattle); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
 }
 
 // FindByID looks up a player by primary key.
@@ -134,15 +139,31 @@ func (r *PgPlayerRepository) GetDailyBattle(ctx context.Context, playerID string
 
 // IncrementDailyBattle atomically increments the daily battle count.
 // Resets the count if last_reset_date is before today. Returns the new count.
+// If a transaction is present in the context, it participates in that transaction
+// (the caller is responsible for the FOR UPDATE visibility window).
+// Otherwise it wraps the operation in its own transaction.
 func (r *PgPlayerRepository) IncrementDailyBattle(ctx context.Context, playerID string, today civil.Date) (int64, error) {
+	if txFromContext(ctx) != nil {
+		return r.incrementDailyBattleInner(ctx, connFrom(ctx, r.pool), playerID, today)
+	}
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("begin tx: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// Lock the row for the duration of the transaction.
-	row := tx.QueryRow(ctx,
+	count, err := r.incrementDailyBattleInner(ctx, tx, playerID, today)
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("commit tx: %w", err)
+	}
+	return count, nil
+}
+
+func (r *PgPlayerRepository) incrementDailyBattleInner(ctx context.Context, db dbtx, playerID string, today civil.Date) (int64, error) {
+	row := db.QueryRow(ctx,
 		`SELECT daily_battle_count, last_reset_date
 		 FROM player_daily_battle WHERE player_id = $1 FOR UPDATE`,
 		playerID,
@@ -156,14 +177,13 @@ func (r *PgPlayerRepository) IncrementDailyBattle(ctx context.Context, playerID 
 
 	lastReset := timeToCivilDate(lastResetTime)
 	if lastReset != today {
-		// New day: reset counter.
 		count = 1
 	} else {
 		count++
 	}
 
 	todayTime := civilDateToTime(today)
-	_, err = tx.Exec(ctx,
+	_, err := db.Exec(ctx,
 		`UPDATE player_daily_battle SET daily_battle_count = $1, last_reset_date = $2 WHERE player_id = $3`,
 		count, todayTime, playerID,
 	)
@@ -171,9 +191,6 @@ func (r *PgPlayerRepository) IncrementDailyBattle(ctx context.Context, playerID 
 		return 0, fmt.Errorf("update daily battle: %w", err)
 	}
 
-	if err := tx.Commit(ctx); err != nil {
-		return 0, fmt.Errorf("commit tx: %w", err)
-	}
 	return count, nil
 }
 
