@@ -29,6 +29,10 @@ func NewMockPlayerRepository() *MockPlayerRepository {
 	}
 }
 
+func (r *MockPlayerRepository) CreateWithTx(ctx context.Context, _ DBTX, player *model.Player, dailyBattle *model.PlayerDailyBattle) error {
+	return r.Create(ctx, player, dailyBattle)
+}
+
 func (r *MockPlayerRepository) Create(ctx context.Context, player *model.Player, dailyBattle *model.PlayerDailyBattle) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

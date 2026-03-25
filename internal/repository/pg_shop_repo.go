@@ -214,15 +214,10 @@ func (r *PgShopRepository) InsertPlayerCards(ctx context.Context, cards []*model
 	return nil
 }
 
-func (r *PgShopRepository) InsertPlayerItems(ctx context.Context, items []*model.PlayerItem) error {
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin tx: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
+// InsertPlayerItemsWithTx inserts player items using the given DBTX.
+func (r *PgShopRepository) InsertPlayerItemsWithTx(ctx context.Context, db DBTX, items []*model.PlayerItem) error {
 	for _, item := range items {
-		_, err = tx.Exec(ctx,
+		_, err := db.Exec(ctx,
 			`INSERT INTO player_items (player_id, item_type, item_no, acquired_at)
 			 VALUES ($1,$2,$3,$4)`,
 			item.PlayerID, item.ItemType, item.ItemNo, item.AcquiredAt,
@@ -231,11 +226,20 @@ func (r *PgShopRepository) InsertPlayerItems(ctx context.Context, items []*model
 			return fmt.Errorf("insert player item: %w", err)
 		}
 	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit insert player items: %w", err)
-	}
 	return nil
+}
+
+func (r *PgShopRepository) InsertPlayerItems(ctx context.Context, items []*model.PlayerItem) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := r.InsertPlayerItemsWithTx(ctx, tx, items); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func (r *PgShopRepository) GetPlayerOwnedFactions(ctx context.Context, playerID string) ([]string, error) {

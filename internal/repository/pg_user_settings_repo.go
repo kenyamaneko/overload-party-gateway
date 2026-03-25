@@ -44,10 +44,10 @@ func (r *PgUserSettingsRepository) Get(ctx context.Context, playerID string) (*m
 	return &s, nil
 }
 
-// Upsert inserts or updates user settings.
-func (r *PgUserSettingsRepository) Upsert(ctx context.Context, s *model.UserSettings) error {
+// UpsertWithTx inserts or updates user settings using the given DBTX.
+func (r *PgUserSettingsRepository) UpsertWithTx(ctx context.Context, db DBTX, s *model.UserSettings) error {
 	s.UpdatedAt = time.Now()
-	_, err := r.pool.Exec(ctx,
+	_, err := db.Exec(ctx,
 		`INSERT INTO user_settings (player_id, language, bgm_volume, se_volume, push_enabled, updated_at)
 		 VALUES ($1,$2,$3,$4,$5,$6)
 		 ON CONFLICT (player_id) DO UPDATE SET
@@ -62,4 +62,9 @@ func (r *PgUserSettingsRepository) Upsert(ctx context.Context, s *model.UserSett
 		return fmt.Errorf("upsert user settings: %w", err)
 	}
 	return nil
+}
+
+// Upsert inserts or updates user settings.
+func (r *PgUserSettingsRepository) Upsert(ctx context.Context, s *model.UserSettings) error {
+	return r.UpsertWithTx(ctx, r.pool, s)
 }

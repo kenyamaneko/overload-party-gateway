@@ -14,6 +14,7 @@ type ShopRepository interface {
 	CreatePurchaseWithItem(ctx context.Context, purchase *model.OneTimePurchase, item *model.PlayerItem) error
 	InsertPlayerCards(ctx context.Context, cards []*model.PlayerCard) error
 	InsertPlayerItems(ctx context.Context, items []*model.PlayerItem) error
+	InsertPlayerItemsWithTx(ctx context.Context, db DBTX, items []*model.PlayerItem) error
 	GetPlayerOwnedFactions(ctx context.Context, playerID string) ([]string, error)
 	CreateSubscription(ctx context.Context, sub *model.Subscription) error
 	GetActiveSubscription(ctx context.Context, playerID string) (*model.Subscription, error)

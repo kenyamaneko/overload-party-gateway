@@ -174,6 +174,10 @@ func (r *MockShopRepository) InsertPlayerItems(ctx context.Context, items []*mod
 	return nil
 }
 
+func (r *MockShopRepository) InsertPlayerItemsWithTx(ctx context.Context, _ DBTX, items []*model.PlayerItem) error {
+	return r.InsertPlayerItems(ctx, items)
+}
+
 func (r *MockShopRepository) GetPlayerOwnedFactions(ctx context.Context, playerID string) ([]string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

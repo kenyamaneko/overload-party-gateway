@@ -28,6 +28,10 @@ func (r *stampTrackingShopRepo) InsertPlayerItems(ctx context.Context, items []*
 	return nil
 }
 
+func (r *stampTrackingShopRepo) InsertPlayerItemsWithTx(ctx context.Context, _ repository.DBTX, items []*model.PlayerItem) error {
+	return r.InsertPlayerItems(ctx, items)
+}
+
 // failingStampShopRepo wraps MockShopRepository but returns an error from InsertPlayerItems.
 type failingStampShopRepo struct {
 	*repository.MockShopRepository
@@ -37,12 +41,16 @@ func (r *failingStampShopRepo) InsertPlayerItems(ctx context.Context, items []*m
 	return fmt.Errorf("database connection lost")
 }
 
+func (r *failingStampShopRepo) InsertPlayerItemsWithTx(ctx context.Context, _ repository.DBTX, items []*model.PlayerItem) error {
+	return r.InsertPlayerItems(ctx, items)
+}
+
 func TestRegister_Success(t *testing.T) {
 	playerRepo := repository.NewMockPlayerRepository()
 	shopRepo := newStampTrackingShopRepo()
 	userSettingsRepo := repository.NewMockUserSettingsRepository()
 
-	svc := NewAuthService(playerRepo, shopRepo, userSettingsRepo)
+	svc := NewAuthService(playerRepo, shopRepo, userSettingsRepo, &repository.MockTxRunner{})
 
 	player, err := svc.Register(context.Background(), "firebase-uid-1", "TestUser")
 	require.NoError(t, err)
@@ -95,7 +103,7 @@ func TestRegister_AlreadyRegistered(t *testing.T) {
 	shopRepo := newStampTrackingShopRepo()
 	userSettingsRepo := repository.NewMockUserSettingsRepository()
 
-	svc := NewAuthService(playerRepo, shopRepo, userSettingsRepo)
+	svc := NewAuthService(playerRepo, shopRepo, userSettingsRepo, &repository.MockTxRunner{})
 
 	_, err := svc.Register(context.Background(), "firebase-uid-dup", "FirstUser")
 	require.NoError(t, err)
@@ -105,32 +113,16 @@ func TestRegister_AlreadyRegistered(t *testing.T) {
 	assert.Contains(t, err.Error(), "player already registered")
 }
 
-func TestRegister_StampFailure_NotFatal(t *testing.T) {
+func TestRegister_StampFailure_Fatal(t *testing.T) {
 	playerRepo := repository.NewMockPlayerRepository()
 	shopRepo := &failingStampShopRepo{MockShopRepository: repository.NewMockShopRepository()}
 	userSettingsRepo := repository.NewMockUserSettingsRepository()
 
-	svc := NewAuthService(playerRepo, shopRepo, userSettingsRepo)
+	svc := NewAuthService(playerRepo, shopRepo, userSettingsRepo, &repository.MockTxRunner{})
 
-	player, err := svc.Register(context.Background(), "firebase-uid-stamp-fail", "StampFailUser")
-	require.NoError(t, err)
-
-	t.Run("returns player despite stamp failure", func(t *testing.T) {
-		assert.NotEmpty(t, player.PlayerID)
-		assert.Equal(t, "StampFailUser", player.Username)
-	})
-
-	t.Run("persists player to repository", func(t *testing.T) {
-		found, err := playerRepo.FindByFirebaseUID(context.Background(), "firebase-uid-stamp-fail")
-		require.NoError(t, err)
-		require.NotNil(t, found)
-	})
-
-	t.Run("creates default user settings", func(t *testing.T) {
-		settings, err := userSettingsRepo.Get(context.Background(), player.PlayerID)
-		require.NoError(t, err)
-		require.NotNil(t, settings)
-	})
+	_, err := svc.Register(context.Background(), "firebase-uid-stamp-fail", "StampFailUser")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "grant starter stamps")
 }
 
 func TestLogin_Success(t *testing.T) {
@@ -138,7 +130,7 @@ func TestLogin_Success(t *testing.T) {
 	shopRepo := repository.NewMockShopRepository()
 	userSettingsRepo := repository.NewMockUserSettingsRepository()
 
-	svc := NewAuthService(playerRepo, shopRepo, userSettingsRepo)
+	svc := NewAuthService(playerRepo, shopRepo, userSettingsRepo, &repository.MockTxRunner{})
 
 	registered, err := svc.Register(context.Background(), "firebase-uid-login", "LoginUser")
 	require.NoError(t, err)
@@ -154,7 +146,7 @@ func TestLogin_PlayerNotFound(t *testing.T) {
 	shopRepo := repository.NewMockShopRepository()
 	userSettingsRepo := repository.NewMockUserSettingsRepository()
 
-	svc := NewAuthService(playerRepo, shopRepo, userSettingsRepo)
+	svc := NewAuthService(playerRepo, shopRepo, userSettingsRepo, &repository.MockTxRunner{})
 
 	_, err := svc.Login(context.Background(), "nonexistent-uid")
 	require.Error(t, err)

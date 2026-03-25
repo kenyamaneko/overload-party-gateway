@@ -108,7 +108,8 @@ func main() {
 	}
 
 	// Services
-	authService := service.NewAuthService(playerRepo, shopRepo, userSettingsRepo)
+	txManager := repository.NewTxManager(pool)
+	authService := service.NewAuthService(playerRepo, shopRepo, userSettingsRepo, txManager)
 	playerService := service.NewPlayerService(playerRepo, gameConfigRepo)
 	cardService := service.NewCardService(cardRepo, playerCardRepo)
 	deckService := service.NewDeckService(deckRepo, playerCardRepo, cardCache)

@@ -45,6 +45,10 @@ func (r *errorCreatePlayerRepo) Create(_ context.Context, _ *model.Player, _ *mo
 	return errDB
 }
 
+func (r *errorCreatePlayerRepo) CreateWithTx(_ context.Context, _ repository.DBTX, _ *model.Player, _ *model.PlayerDailyBattle) error {
+	return errDB
+}
+
 type errorGetDailyBattlePlayerRepo struct {
 	*repository.MockPlayerRepository
 }
@@ -129,6 +133,10 @@ func (r *errorUpsertSettingsRepo) Upsert(_ context.Context, _ *model.UserSetting
 	return errDB
 }
 
+func (r *errorUpsertSettingsRepo) UpsertWithTx(_ context.Context, _ repository.DBTX, _ *model.UserSettings) error {
+	return errDB
+}
+
 // ===========================================================================
 // AuthService error path tests
 // ===========================================================================
@@ -137,7 +145,7 @@ func TestRegister_FindByFirebaseUID_Error(t *testing.T) {
 	playerRepo := &errorFindByUIDPlayerRepo{repository.NewMockPlayerRepository()}
 	shopRepo := repository.NewMockShopRepository()
 	userSettingsRepo := repository.NewMockUserSettingsRepository()
-	svc := NewAuthService(playerRepo, shopRepo, userSettingsRepo)
+	svc := NewAuthService(playerRepo, shopRepo, userSettingsRepo, &repository.MockTxRunner{})
 
 	_, err := svc.Register(context.Background(), "uid1", "User")
 	require.Error(t, err)
@@ -148,29 +156,29 @@ func TestRegister_Create_Error(t *testing.T) {
 	playerRepo := &errorCreatePlayerRepo{repository.NewMockPlayerRepository()}
 	shopRepo := repository.NewMockShopRepository()
 	userSettingsRepo := repository.NewMockUserSettingsRepository()
-	svc := NewAuthService(playerRepo, shopRepo, userSettingsRepo)
+	svc := NewAuthService(playerRepo, shopRepo, userSettingsRepo, &repository.MockTxRunner{})
 
 	_, err := svc.Register(context.Background(), "uid1", "User")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "create player")
 }
 
-func TestRegister_SettingsUpsert_Error_NonFatal(t *testing.T) {
+func TestRegister_SettingsUpsert_Error_Fatal(t *testing.T) {
 	playerRepo := repository.NewMockPlayerRepository()
 	shopRepo := newStampTrackingShopRepo()
 	userSettingsRepo := &errorUpsertSettingsRepo{repository.NewMockUserSettingsRepository()}
-	svc := NewAuthService(playerRepo, shopRepo, userSettingsRepo)
+	svc := NewAuthService(playerRepo, shopRepo, userSettingsRepo, &repository.MockTxRunner{})
 
-	player, err := svc.Register(context.Background(), "uid1", "User")
-	require.NoError(t, err, "settings upsert failure should not be fatal")
-	assert.NotEmpty(t, player.PlayerID)
+	_, err := svc.Register(context.Background(), "uid1", "User")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "create default user settings")
 }
 
 func TestLogin_FindByFirebaseUID_Error(t *testing.T) {
 	playerRepo := &errorFindByUIDPlayerRepo{repository.NewMockPlayerRepository()}
 	shopRepo := repository.NewMockShopRepository()
 	userSettingsRepo := repository.NewMockUserSettingsRepository()
-	svc := NewAuthService(playerRepo, shopRepo, userSettingsRepo)
+	svc := NewAuthService(playerRepo, shopRepo, userSettingsRepo, &repository.MockTxRunner{})
 
 	_, err := svc.Login(context.Background(), "uid1")
 	require.Error(t, err)

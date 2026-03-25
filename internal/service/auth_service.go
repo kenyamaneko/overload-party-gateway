@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"cloud.google.com/go/civil"
@@ -28,10 +27,11 @@ type AuthService struct {
 	playerRepo       repository.PlayerRepo
 	shopRepo         repository.ShopRepository
 	userSettingsRepo repository.UserSettingsRepo
+	txRunner         repository.TxRunner
 }
 
-func NewAuthService(playerRepo repository.PlayerRepo, shopRepo repository.ShopRepository, userSettingsRepo repository.UserSettingsRepo) *AuthService {
-	return &AuthService{playerRepo: playerRepo, shopRepo: shopRepo, userSettingsRepo: userSettingsRepo}
+func NewAuthService(playerRepo repository.PlayerRepo, shopRepo repository.ShopRepository, userSettingsRepo repository.UserSettingsRepo, txRunner repository.TxRunner) *AuthService {
+	return &AuthService{playerRepo: playerRepo, shopRepo: shopRepo, userSettingsRepo: userSettingsRepo, txRunner: txRunner}
 }
 
 func (s *AuthService) Register(ctx context.Context, firebaseUID, username string) (*model.Player, error) {
@@ -61,23 +61,13 @@ func (s *AuthService) Register(ctx context.Context, firebaseUID, username string
 		LastResetDate:    civil.DateOf(time.Now().UTC()),
 	}
 
-	// TODO: プレイヤー作成・設定・スタンプ付与を単一トランザクションにまとめる。
-	//       現状はリポジトリが個別に pool.Begin() しているため、途中で失敗すると
-	//       プレイヤー行だけ残る不整合が起きる。
-	if err := s.playerRepo.Create(ctx, player, dailyBattle); err != nil {
-		return nil, fmt.Errorf("create player: %w", err)
-	}
-
 	settings := &model.UserSettings{
 		PlayerID:    player.PlayerID,
 		Language:    DefaultLanguage,
 		BgmVolume:   DefaultBgmVolume,
 		SeVolume:    DefaultSeVolume,
 		PushEnabled: DefaultPushEnabled,
-		UpdatedAt:   time.Now(),
-	}
-	if err := s.userSettingsRepo.Upsert(ctx, settings); err != nil {
-		return nil, fmt.Errorf("create default user settings for player %s: %w", player.PlayerID, err)
+		UpdatedAt:   now,
 	}
 
 	var items []*model.PlayerItem
@@ -89,8 +79,20 @@ func (s *AuthService) Register(ctx context.Context, firebaseUID, username string
 			AcquiredAt: now,
 		})
 	}
-	if err := s.shopRepo.InsertPlayerItems(ctx, items); err != nil {
-		return nil, fmt.Errorf("grant starter stamps for player %s: %w", player.PlayerID, err)
+
+	if err := s.txRunner.RunInTx(ctx, func(tx repository.DBTX) error {
+		if err := s.playerRepo.CreateWithTx(ctx, tx, player, dailyBattle); err != nil {
+			return fmt.Errorf("create player: %w", err)
+		}
+		if err := s.userSettingsRepo.UpsertWithTx(ctx, tx, settings); err != nil {
+			return fmt.Errorf("create default user settings: %w", err)
+		}
+		if err := s.shopRepo.InsertPlayerItemsWithTx(ctx, tx, items); err != nil {
+			return fmt.Errorf("grant starter stamps: %w", err)
+		}
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 
 	return player, nil

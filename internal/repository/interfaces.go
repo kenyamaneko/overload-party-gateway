@@ -12,6 +12,7 @@ import (
 // PlayerRepo defines the data access contract for player operations.
 type PlayerRepo interface {
 	Create(ctx context.Context, player *model.Player, dailyBattle *model.PlayerDailyBattle) error
+	CreateWithTx(ctx context.Context, db DBTX, player *model.Player, dailyBattle *model.PlayerDailyBattle) error
 	FindByID(ctx context.Context, playerID string) (*model.Player, error)
 	FindByFirebaseUID(ctx context.Context, firebaseUID string) (*model.Player, error)
 	GetDailyBattle(ctx context.Context, playerID string) (*model.PlayerDailyBattle, error)
@@ -46,6 +47,7 @@ type CardRepo interface {
 type UserSettingsRepo interface {
 	Get(ctx context.Context, playerID string) (*model.UserSettings, error)
 	Upsert(ctx context.Context, s *model.UserSettings) error
+	UpsertWithTx(ctx context.Context, db DBTX, s *model.UserSettings) error
 }
 
 // GameConfigRepo defines the data access contract for server-side game configuration.

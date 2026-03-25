@@ -48,7 +48,7 @@ func main() {
 	gameConfigRepo := repository.NewMockGameConfigRepository()
 
 	// 3. Services
-	authService := service.NewAuthService(playerRepo, shopRepo, userSettingsRepo)
+	authService := service.NewAuthService(playerRepo, shopRepo, userSettingsRepo, &repository.MockTxRunner{})
 	playerService := service.NewPlayerService(playerRepo, gameConfigRepo)
 	cardService := service.NewCardService(cardRepo, playerCardRepo)
 	deckService := service.NewDeckService(deckRepo, playerCardRepo, cardCache)

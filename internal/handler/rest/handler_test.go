@@ -43,7 +43,7 @@ func setupAuthRouter() (*gin.Engine, *repository.MockPlayerRepository) {
 	playerRepo := repository.NewMockPlayerRepository()
 	shopRepo := repository.NewMockShopRepository()
 	userSettingsRepo := repository.NewMockUserSettingsRepository()
-	authService := service.NewAuthService(playerRepo, shopRepo, userSettingsRepo)
+	authService := service.NewAuthService(playerRepo, shopRepo, userSettingsRepo, &repository.MockTxRunner{})
 	handler := NewAuthHandler(authService)
 
 	r := gin.New()

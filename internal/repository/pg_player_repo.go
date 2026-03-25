@@ -26,15 +26,9 @@ func NewPgPlayerRepository(pool *pgxpool.Pool) *PgPlayerRepository {
 	return &PgPlayerRepository{pool: pool}
 }
 
-// Create inserts both a players row and a player_daily_battle row atomically.
-func (r *PgPlayerRepository) Create(ctx context.Context, player *model.Player, dailyBattle *model.PlayerDailyBattle) error {
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin tx: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	_, err = tx.Exec(ctx,
+// CreateWithTx inserts both a players row and a player_daily_battle row using the given DBTX.
+func (r *PgPlayerRepository) CreateWithTx(ctx context.Context, db DBTX, player *model.Player, dailyBattle *model.PlayerDailyBattle) error {
+	_, err := db.Exec(ctx,
 		`INSERT INTO players (player_id, firebase_uid, username, level, exp, is_premium, equipped_icon_no, selected_faction, premium_expires_at, created_at, updated_at)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
 		player.PlayerID,
@@ -54,7 +48,7 @@ func (r *PgPlayerRepository) Create(ctx context.Context, player *model.Player, d
 	}
 
 	lastResetTime := civilDateToTime(dailyBattle.LastResetDate)
-	_, err = tx.Exec(ctx,
+	_, err = db.Exec(ctx,
 		`INSERT INTO player_daily_battle (player_id, daily_battle_count, last_reset_date)
 		 VALUES ($1,$2,$3)`,
 		dailyBattle.PlayerID,
@@ -65,10 +59,21 @@ func (r *PgPlayerRepository) Create(ctx context.Context, player *model.Player, d
 		return fmt.Errorf("insert daily battle: %w", err)
 	}
 
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit tx: %w", err)
-	}
 	return nil
+}
+
+// Create inserts both a players row and a player_daily_battle row atomically.
+func (r *PgPlayerRepository) Create(ctx context.Context, player *model.Player, dailyBattle *model.PlayerDailyBattle) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := r.CreateWithTx(ctx, tx, player, dailyBattle); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // FindByID looks up a player by primary key.
