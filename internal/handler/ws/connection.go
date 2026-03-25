@@ -87,6 +87,7 @@ func (c *Connection) ReadPump(lifecycle ConnectionLifecycle, handler MessageHand
 	}()
 
 	c.conn.SetReadLimit(maxMsgSize)
+	// deadline 設定の失敗は接続が既に閉じている場合のみ。直後の ReadMessage でエラー検出される。
 	_ = c.conn.SetReadDeadline(time.Now().Add(pingInterval + pongTimeout))
 	c.conn.SetPongHandler(func(string) error {
 		_ = c.conn.SetReadDeadline(time.Now().Add(pingInterval + pongTimeout))
@@ -125,6 +126,7 @@ func (c *Connection) WritePump() {
 	for {
 		select {
 		case message, ok := <-c.send:
+			// deadline/close の失敗は接続が既に閉じている場合のみ。直後の WriteMessage または return → Close で処理される。
 			_ = c.conn.SetWriteDeadline(time.Now().Add(writeTimeout))
 			if !ok {
 				_ = c.conn.WriteMessage(websocket.CloseMessage, nil)
@@ -135,7 +137,7 @@ func (c *Connection) WritePump() {
 			}
 
 		case <-ticker.C:
-			_ = c.conn.SetWriteDeadline(time.Now().Add(writeTimeout))
+			_ = c.conn.SetWriteDeadline(time.Now().Add(writeTimeout)) // 失敗時は次の PingMessage で検出
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}

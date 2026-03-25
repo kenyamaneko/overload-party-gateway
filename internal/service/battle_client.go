@@ -214,7 +214,9 @@ func (c *battleClient) post(ctx context.Context, path string, body any, result a
 		var errResp struct {
 			Error string `json:"error"`
 		}
-		if json.Unmarshal(respBody, &errResp) == nil && errResp.Error != "" {
+		if err := json.Unmarshal(respBody, &errResp); err != nil {
+			log.Printf("failed to parse battle error response: %v", err)
+		} else if errResp.Error != "" {
 			return fmt.Errorf("%s", errResp.Error)
 		}
 		return fmt.Errorf("battle server returned %d: %s", resp.StatusCode, string(respBody))
@@ -253,7 +255,9 @@ func (c *battleClient) getRaw(ctx context.Context, path string) (json.RawMessage
 		var errResp struct {
 			Error string `json:"error"`
 		}
-		if json.Unmarshal(body, &errResp) == nil && errResp.Error != "" {
+		if err := json.Unmarshal(body, &errResp); err != nil {
+			log.Printf("failed to parse battle error response: %v", err)
+		} else if errResp.Error != "" {
 			return nil, fmt.Errorf("%s", errResp.Error)
 		}
 		return nil, fmt.Errorf("battle server returned %d: %s", resp.StatusCode, string(body))

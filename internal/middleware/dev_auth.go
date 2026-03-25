@@ -85,7 +85,8 @@ func DevAuthWithPlayerResolve(playerRepo repository.PlayerRepo, registerFn DevRe
 		if created {
 			for _, fn := range onCreated {
 				if err := fn(c.Request.Context(), playerID); err != nil {
-					log.Printf("dev player setup failed: %v", err)
+					c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("dev player setup: %v", err)})
+					return
 				}
 			}
 		}

@@ -131,9 +131,11 @@ func (s *ShopService) GetProducts(ctx context.Context, playerID string) ([]Produ
 		switch p.Type {
 		case model.ProductTypeFactionSet:
 			var content model.FactionSetContent
-			if err := json.Unmarshal(p.Content, &content); err == nil {
-				owned = ownedFactionSet[content.Faction]
+			if err := json.Unmarshal(p.Content, &content); err != nil {
+				log.Printf("failed to parse product content for %s: %v", p.ProductID, err)
+				return nil, fmt.Errorf("parse product content for %s: %w", p.ProductID, err)
 			}
+			owned = ownedFactionSet[content.Faction]
 		case model.ProductTypeSubscription:
 			owned = activeSub != nil
 		}

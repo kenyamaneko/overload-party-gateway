@@ -61,11 +61,13 @@ func (s *AuthService) Register(ctx context.Context, firebaseUID, username string
 		LastResetDate:    civil.DateOf(time.Now().UTC()),
 	}
 
+	// TODO: プレイヤー作成・設定・スタンプ付与を単一トランザクションにまとめる。
+	//       現状はリポジトリが個別に pool.Begin() しているため、途中で失敗すると
+	//       プレイヤー行だけ残る不整合が起きる。
 	if err := s.playerRepo.Create(ctx, player, dailyBattle); err != nil {
 		return nil, fmt.Errorf("create player: %w", err)
 	}
 
-	// Create default user settings. Failure does not roll back player creation.
 	settings := &model.UserSettings{
 		PlayerID:    player.PlayerID,
 		Language:    DefaultLanguage,
@@ -75,10 +77,9 @@ func (s *AuthService) Register(ctx context.Context, firebaseUID, username string
 		UpdatedAt:   time.Now(),
 	}
 	if err := s.userSettingsRepo.Upsert(ctx, settings); err != nil {
-		log.Printf("warn: failed to create default user settings for player %s: %v", player.PlayerID, err)
+		return nil, fmt.Errorf("create default user settings for player %s: %w", player.PlayerID, err)
 	}
 
-	// Grant starter stamps (1–7). Failure does not roll back player creation.
 	var items []*model.PlayerItem
 	for i := int64(1); i <= starterStampCount; i++ {
 		items = append(items, &model.PlayerItem{
@@ -89,7 +90,7 @@ func (s *AuthService) Register(ctx context.Context, firebaseUID, username string
 		})
 	}
 	if err := s.shopRepo.InsertPlayerItems(ctx, items); err != nil {
-		log.Printf("warn: failed to grant starter stamps for player %s: %v", player.PlayerID, err)
+		return nil, fmt.Errorf("grant starter stamps for player %s: %w", player.PlayerID, err)
 	}
 
 	return player, nil
