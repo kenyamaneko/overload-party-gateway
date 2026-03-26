@@ -115,8 +115,8 @@ func buildMinimalBattleState() battleGameState {
 				},
 				Backend: []*battleResourceInstance{},
 				Support: []*battleHiddenSupportInstance{
-					{InstanceID: "opp-s1", CardID: ptr("NT-0005"), FaceUp: true},
-					{InstanceID: "opp-s2", CardID: nil, FaceUp: false},
+					{InstanceID: "opp-s1", CardID: "NT-0005", FaceUp: true},
+					{InstanceID: "opp-s2", CardID: "NT-0006", FaceUp: false},
 				},
 			},
 			HandCount:  4,
@@ -232,7 +232,7 @@ func TestTransformGameState_OpponentView(t *testing.T) {
 
 	os1 := oppSupport[1].(map[string]interface{})
 	assert.Equal(t, "opp-s2", os1["instanceId"])
-	assert.Equal(t, "", os1["cardId"])
+	assert.Equal(t, "NT-0006", os1["cardId"])
 	assert.Equal(t, true, os1["faceDown"])
 }
 
@@ -387,8 +387,8 @@ func TestTransformField_NilSlots(t *testing.T) {
 
 func TestTransformHiddenSupportSlots(t *testing.T) {
 	slots := []*battleHiddenSupportInstance{
-		{InstanceID: "hs-1", CardID: ptr("NT-0042"), FaceUp: true},
-		{InstanceID: "hs-2", CardID: nil, FaceUp: false},
+		{InstanceID: "hs-1", CardID: "NT-0042", FaceUp: true},
+		{InstanceID: "hs-2", CardID: "NT-0043", FaceUp: false},
 		nil,
 	}
 
@@ -396,16 +396,14 @@ func TestTransformHiddenSupportSlots(t *testing.T) {
 
 	require.Len(t, out, 3)
 
-	// Non-nil cardID
 	require.NotNil(t, out[0])
 	assert.Equal(t, "hs-1", out[0].InstanceID)
 	assert.Equal(t, "NT-0042", out[0].CardID)
 	assert.Equal(t, false, out[0].FaceDown) // faceUp=true
 
-	// Nil cardID → ""
 	require.NotNil(t, out[1])
 	assert.Equal(t, "hs-2", out[1].InstanceID)
-	assert.Equal(t, "", out[1].CardID)
+	assert.Equal(t, "NT-0043", out[1].CardID)
 	assert.Equal(t, true, out[1].FaceDown) // faceUp=false
 
 	// Nil slot preserved

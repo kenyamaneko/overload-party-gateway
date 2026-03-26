@@ -133,9 +133,9 @@ type battleSupportInstance struct {
 }
 
 type battleHiddenSupportInstance struct {
-	InstanceID string  `json:"instanceID"`
-	CardID     *string `json:"cardID"`
-	FaceUp     bool    `json:"faceUp"`
+	InstanceID string `json:"instanceID"`
+	CardID     string `json:"cardID"`
+	FaceUp     bool   `json:"faceUp"`
 }
 
 type battleHandCard struct {
@@ -425,13 +425,9 @@ func transformHiddenSupportSlots(slots []*battleHiddenSupportInstance) []*client
 	out := make([]*clientHiddenSupportInstance, len(slots))
 	for i, s := range slots {
 		if s != nil {
-			cardID := ""
-			if s.CardID != nil {
-				cardID = *s.CardID
-			}
 			out[i] = &clientHiddenSupportInstance{
 				InstanceID: s.InstanceID,
-				CardID:     cardID,
+				CardID:     s.CardID,
 				FaceDown:   !s.FaceUp,
 			}
 		}
