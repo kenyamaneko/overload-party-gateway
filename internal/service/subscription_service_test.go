@@ -16,15 +16,15 @@ import (
 
 type testSubEnv struct {
 	svc        *SubscriptionService
-	shopRepo   *repository.MockShopRepository
+	subRepo    *repository.MockSubscriptionRepository
 	playerRepo *repository.MockPlayerRepository
 }
 
 func newTestSubscriptionService() *testSubEnv {
-	shopRepo := repository.NewMockShopRepository()
+	subRepo := repository.NewMockSubscriptionRepository()
 	playerRepo := repository.NewMockPlayerRepository()
-	svc := NewSubscriptionService(shopRepo, playerRepo)
-	return &testSubEnv{svc: svc, shopRepo: shopRepo, playerRepo: playerRepo}
+	svc := NewSubscriptionService(subRepo, playerRepo, &repository.MockTxRunner{})
+	return &testSubEnv{svc: svc, subRepo: subRepo, playerRepo: playerRepo}
 }
 
 func createTestSubscription(env *testSubEnv, playerID, purchaseToken string) *model.Subscription {
@@ -51,7 +51,7 @@ func createTestSubscription(env *testSubEnv, playerID, purchaseToken string) *mo
 		CreatedAt:          now,
 		UpdatedAt:          now,
 	}
-	_ = env.shopRepo.CreateSubscription(context.Background(), sub)
+	_ = env.subRepo.CreateSubscription(context.Background(), sub)
 	return sub
 }
 
@@ -90,7 +90,7 @@ func TestHandleAppleNotification(t *testing.T) {
 
 			if tt.preExpire {
 				sub.Status = model.SubscriptionStatusExpired
-				_ = env.shopRepo.UpdateSubscription(context.Background(), sub)
+				_ = env.subRepo.UpdateSubscription(context.Background(), sub)
 				_ = env.playerRepo.UpdatePremium(context.Background(), "p1", false, nil)
 			}
 
@@ -113,7 +113,7 @@ func TestHandleAppleNotification(t *testing.T) {
 			err := env.svc.HandleAppleNotification(context.Background(), notifPayload)
 			require.NoError(t, err)
 
-			updatedSub, _ := env.shopRepo.FindSubscriptionByToken(context.Background(), sub.PurchaseToken)
+			updatedSub, _ := env.subRepo.FindSubscriptionByToken(context.Background(), sub.PurchaseToken)
 			require.NotNil(t, updatedSub)
 			assert.Equal(t, tt.expectedStatus, updatedSub.Status)
 
@@ -147,7 +147,7 @@ func TestHandleGoogleNotification(t *testing.T) {
 
 			if tt.preExpire {
 				sub.Status = model.SubscriptionStatusExpired
-				_ = env.shopRepo.UpdateSubscription(context.Background(), sub)
+				_ = env.subRepo.UpdateSubscription(context.Background(), sub)
 				_ = env.playerRepo.UpdatePremium(context.Background(), "p1", false, nil)
 			}
 
@@ -165,7 +165,7 @@ func TestHandleGoogleNotification(t *testing.T) {
 			err := env.svc.HandleGoogleNotification(context.Background(), msg)
 			require.NoError(t, err)
 
-			updatedSub, _ := env.shopRepo.FindSubscriptionByToken(context.Background(), sub.PurchaseToken)
+			updatedSub, _ := env.subRepo.FindSubscriptionByToken(context.Background(), sub.PurchaseToken)
 			require.NotNil(t, updatedSub)
 			assert.Equal(t, tt.expectedStatus, updatedSub.Status)
 

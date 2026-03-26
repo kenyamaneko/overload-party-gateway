@@ -23,6 +23,7 @@ import (
 type testShopEnv struct {
 	svc        *ShopService
 	shopRepo   *repository.MockShopRepository
+	subRepo    *repository.MockSubscriptionRepository
 	playerRepo *repository.MockPlayerRepository
 	cardCache  *cache.CardCache
 }
@@ -49,9 +50,10 @@ func newTestShopEnv() *testShopEnv {
 	factionRepo := repository.NewMockFactionRepository()
 	verifier := &platform.MockReceiptVerifier{}
 
-	svc := NewShopService(shopRepo, shopRepo, playerRepo, factionRepo, cc, verifier, verifier)
+	subRepo := repository.NewMockSubscriptionRepository()
+	svc := NewShopService(shopRepo, subRepo, playerRepo, factionRepo, &repository.MockTxRunner{}, cc, verifier, verifier)
 
-	return &testShopEnv{svc: svc, shopRepo: shopRepo, playerRepo: playerRepo, cardCache: cc}
+	return &testShopEnv{svc: svc, shopRepo: shopRepo, subRepo: subRepo, playerRepo: playerRepo, cardCache: cc}
 }
 
 func createTestPlayer(env *testShopEnv, playerID string) {
@@ -360,7 +362,7 @@ func TestSubscribe_Success(t *testing.T) {
 	})
 
 	t.Run("creates active subscription record", func(t *testing.T) {
-		sub, _ := env.shopRepo.GetActiveSubscription(context.Background(), "p1")
+		sub, _ := env.subRepo.GetActiveSubscription(context.Background(), "p1")
 		require.NotNil(t, sub)
 		assert.Equal(t, model.SubscriptionStatusActive, sub.Status)
 	})
@@ -532,7 +534,7 @@ func TestGetProducts_SubscriptionOwnership(t *testing.T) {
 
 	// Create active subscription
 	now := time.Now()
-	_ = env.shopRepo.CreateSubscription(context.Background(), &model.Subscription{
+	_ = env.subRepo.CreateSubscription(context.Background(), &model.Subscription{
 		PlayerID:           "p1",
 		ProductID:          "premium_monthly",
 		Platform:           "ios",

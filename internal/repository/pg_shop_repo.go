@@ -13,13 +13,15 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
-// Compile-time interface checks.
-var (
-	_ port.ShopRepository  = (*PgShopRepository)(nil)
-	_ port.SubscriptionRepo = (*PgShopRepository)(nil)
-)
+// Compile-time interface check.
+var _ port.ShopRepository = (*PgShopRepository)(nil)
 
 // PgShopRepository implements ShopRepository using PostgreSQL via pgxpool.
+//
+// tx 方針:
+// - CreatePurchaseWithCards / CreatePurchaseWithItem / InsertPlayerCards は常に自前 tx を使う。
+//   呼び出し元 (ShopService.Purchase) が単独で呼ぶ前提のため ctx tx には参加しない。
+// - InsertPlayerItems は AuthService.Register の RunInTx から呼ばれるため ctx tx に参加する。
 type PgShopRepository struct {
 	pool *pgxpool.Pool
 }
@@ -275,91 +277,4 @@ func (r *PgShopRepository) GetPlayerOwnedFactions(ctx context.Context, playerID 
 		return nil, fmt.Errorf("iterate factions: %w", err)
 	}
 	return factions, nil
-}
-
-func (r *PgShopRepository) CreateSubscription(ctx context.Context, sub *model.Subscription) error {
-	err := r.pool.QueryRow(ctx,
-		`INSERT INTO subscriptions (player_id, product_id, platform, purchase_token, status, current_period_start, current_period_end, created_at, updated_at)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING subscription_id`,
-		sub.PlayerID, sub.ProductID,
-		sub.Platform, sub.PurchaseToken, sub.Status,
-		sub.CurrentPeriodStart, sub.CurrentPeriodEnd,
-		sub.CreatedAt, sub.UpdatedAt,
-	).Scan(&sub.SubscriptionID)
-	if err != nil {
-		return fmt.Errorf("create subscription: %w", err)
-	}
-	return nil
-}
-
-func (r *PgShopRepository) GetActiveSubscription(ctx context.Context, playerID string) (*model.Subscription, error) {
-	row := r.pool.QueryRow(ctx,
-		`SELECT player_id, subscription_id, product_id, platform, purchase_token, status, current_period_start, current_period_end, created_at, updated_at
-		 FROM subscriptions
-		 WHERE player_id = $1 AND status = $2
-		 ORDER BY created_at DESC
-		 LIMIT 1`,
-		playerID, model.SubscriptionStatusActive)
-
-	s, err := scanSubscription(row)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("query active subscription: %w", err)
-	}
-	return s, nil
-}
-
-func (r *PgShopRepository) FindSubscriptionByToken(ctx context.Context, purchaseToken string) (*model.Subscription, error) {
-	row := r.pool.QueryRow(ctx,
-		`SELECT player_id, subscription_id, product_id, platform, purchase_token, status, current_period_start, current_period_end, created_at, updated_at
-		 FROM subscriptions
-		 WHERE purchase_token = $1
-		 LIMIT 1`,
-		purchaseToken)
-
-	s, err := scanSubscription(row)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("query subscription by token: %w", err)
-	}
-	return s, nil
-}
-
-func (r *PgShopRepository) UpdateSubscription(ctx context.Context, sub *model.Subscription) error {
-	_, err := r.pool.Exec(ctx,
-		`UPDATE subscriptions SET
-			status = $1,
-			current_period_start = $2,
-			current_period_end = $3,
-			updated_at = $4
-		 WHERE player_id = $5 AND subscription_id = $6`,
-		sub.Status,
-		sub.CurrentPeriodStart, sub.CurrentPeriodEnd,
-		sub.UpdatedAt,
-		sub.PlayerID, sub.SubscriptionID,
-	)
-	if err != nil {
-		return fmt.Errorf("update subscription: %w", err)
-	}
-	return nil
-}
-
-
-// scanSubscription scans a single row into a model.Subscription.
-func scanSubscription(row pgx.Row) (*model.Subscription, error) {
-	var s model.Subscription
-	err := row.Scan(
-		&s.PlayerID, &s.SubscriptionID, &s.ProductID,
-		&s.Platform, &s.PurchaseToken, &s.Status,
-		&s.CurrentPeriodStart, &s.CurrentPeriodEnd,
-		&s.CreatedAt, &s.UpdatedAt,
-	)
-	if err != nil {
-		return nil, err
-	}
-	return &s, nil
 }

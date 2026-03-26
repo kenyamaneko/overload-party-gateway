@@ -42,6 +42,7 @@ type ShopService struct {
 	subRepo        port.SubscriptionRepo
 	playerRepo     port.PlayerRepo
 	factionRepo    port.FactionRepo
+	txRunner       port.TxRunner
 	cardCache      *cache.CardCache
 	appleVerifier  platform.ReceiptVerifier
 	googleVerifier platform.ReceiptVerifier
@@ -52,6 +53,7 @@ func NewShopService(
 	subRepo port.SubscriptionRepo,
 	playerRepo port.PlayerRepo,
 	factionRepo port.FactionRepo,
+	txRunner port.TxRunner,
 	cardCache *cache.CardCache,
 	appleVerifier platform.ReceiptVerifier,
 	googleVerifier platform.ReceiptVerifier,
@@ -61,6 +63,7 @@ func NewShopService(
 		subRepo:        subRepo,
 		playerRepo:     playerRepo,
 		factionRepo:    factionRepo,
+		txRunner:       txRunner,
 		cardCache:      cardCache,
 		appleVerifier:  appleVerifier,
 		googleVerifier: googleVerifier,
@@ -259,12 +262,16 @@ func (s *ShopService) Subscribe(ctx context.Context, playerID, productID, pf, pu
 		UpdatedAt:          time.Now(),
 	}
 
-	if err := s.subRepo.CreateSubscription(ctx, sub); err != nil {
-		return nil, fmt.Errorf("create subscription: %w", err)
-	}
-
-	if err := s.playerRepo.UpdatePremium(ctx, playerID, true, &info.ExpiresAt); err != nil {
-		return nil, fmt.Errorf("update player premium: %w", err)
+	if err := s.txRunner.RunInTx(ctx, func(ctx context.Context) error {
+		if err := s.subRepo.CreateSubscription(ctx, sub); err != nil {
+			return fmt.Errorf("create subscription: %w", err)
+		}
+		if err := s.playerRepo.UpdatePremium(ctx, playerID, true, &info.ExpiresAt); err != nil {
+			return fmt.Errorf("update player premium: %w", err)
+		}
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 
 	return &info.ExpiresAt, nil

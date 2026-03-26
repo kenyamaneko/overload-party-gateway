@@ -181,10 +181,24 @@ func (c *battleClient) GetGameLogText(ctx context.Context, gameID string) ([]byt
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("battle server returned %d: %s", resp.StatusCode, string(body))
+		return nil, parseBattleError(resp.StatusCode, body)
 	}
 
 	return body, nil
+}
+
+// parseBattleError attempts to extract a structured error message from the battle server response body.
+// Falls back to including the raw status code and body.
+func parseBattleError(statusCode int, body []byte) error {
+	var errResp struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(body, &errResp); err != nil {
+		log.Printf("failed to parse battle error response: %v", err)
+	} else if errResp.Error != "" {
+		return fmt.Errorf("%s", errResp.Error)
+	}
+	return fmt.Errorf("battle server returned %d: %s", statusCode, string(body))
 }
 
 // --- HTTP helpers ---
@@ -212,15 +226,7 @@ func (c *battleClient) post(ctx context.Context, path string, body any, result a
 		if err != nil {
 			return fmt.Errorf("read error response: %w", err)
 		}
-		var errResp struct {
-			Error string `json:"error"`
-		}
-		if err := json.Unmarshal(respBody, &errResp); err != nil {
-			log.Printf("failed to parse battle error response: %v", err)
-		} else if errResp.Error != "" {
-			return fmt.Errorf("%s", errResp.Error)
-		}
-		return fmt.Errorf("battle server returned %d: %s", resp.StatusCode, string(respBody))
+		return parseBattleError(resp.StatusCode, respBody)
 	}
 
 	// 成功時はストリームから直接デコードし、中間[]byteバッファの確保を省く。
@@ -253,15 +259,7 @@ func (c *battleClient) getRaw(ctx context.Context, path string) (json.RawMessage
 		return nil, nil
 	}
 	if resp.StatusCode != http.StatusOK {
-		var errResp struct {
-			Error string `json:"error"`
-		}
-		if err := json.Unmarshal(body, &errResp); err != nil {
-			log.Printf("failed to parse battle error response: %v", err)
-		} else if errResp.Error != "" {
-			return nil, fmt.Errorf("%s", errResp.Error)
-		}
-		return nil, fmt.Errorf("battle server returned %d: %s", resp.StatusCode, string(body))
+		return nil, parseBattleError(resp.StatusCode, body)
 	}
 
 	return json.RawMessage(body), nil

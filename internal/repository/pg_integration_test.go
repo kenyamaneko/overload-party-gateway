@@ -616,11 +616,11 @@ func TestPgShop_FindPurchaseByToken(t *testing.T) {
 	assert.Nil(t, notFound)
 }
 
-func TestPgShop_Subscription_CRUD(t *testing.T) {
+func TestPgSubscription_CRUD(t *testing.T) {
 	pool := setupPool(t)
 	pid := createTestPlayer(t, pool, "SubUser")
 	seedProducts(t, pool)
-	repo := NewPgShopRepository(pool)
+	repo := NewPgSubscriptionRepository(pool)
 	ctx := context.Background()
 	now := time.Now().Truncate(time.Second)
 

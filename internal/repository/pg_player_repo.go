@@ -210,7 +210,8 @@ func (r *PgPlayerRepository) UpdateUsername(ctx context.Context, playerID string
 }
 
 func (r *PgPlayerRepository) UpdatePremium(ctx context.Context, playerID string, isPremium bool, expiresAt *time.Time) error {
-	_, err := r.pool.Exec(ctx,
+	db := connFrom(ctx, r.pool)
+	_, err := db.Exec(ctx,
 		`UPDATE players SET is_premium = $1, premium_expires_at = $2, updated_at = $3
 		 WHERE player_id = $4`,
 		isPremium, expiresAt, time.Now(), playerID,

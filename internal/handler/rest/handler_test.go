@@ -571,11 +571,12 @@ func (m *mockReceiptVerifier) VerifySubscription(_ context.Context, _ string) (*
 
 func setupShopRouter() *gin.Engine {
 	shopRepo := repository.NewMockShopRepository()
+	subRepo := repository.NewMockSubscriptionRepository()
 	playerRepo := repository.NewMockPlayerRepository()
 	factionRepo := repository.NewMockFactionRepository()
 	cardCache := cache.NewCardCache()
 	verifier := &mockReceiptVerifier{}
-	shopService := service.NewShopService(shopRepo, shopRepo, playerRepo, factionRepo, cardCache, verifier, verifier)
+	shopService := service.NewShopService(shopRepo, subRepo, playerRepo, factionRepo, &repository.MockTxRunner{}, cardCache, verifier, verifier)
 	handler := NewShopHandler(shopService)
 
 	r := gin.New()
@@ -639,9 +640,9 @@ func TestShopHandler_Subscribe_MissingBody(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func setupWebhookRouter() *gin.Engine {
-	shopRepo := repository.NewMockShopRepository()
+	subRepo := repository.NewMockSubscriptionRepository()
 	playerRepo := repository.NewMockPlayerRepository()
-	subService := service.NewSubscriptionService(shopRepo, playerRepo)
+	subService := service.NewSubscriptionService(subRepo, playerRepo, &repository.MockTxRunner{})
 	handler := NewWebhookHandler(subService)
 
 	r := gin.New()

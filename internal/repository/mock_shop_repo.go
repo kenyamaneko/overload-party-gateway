@@ -12,32 +12,26 @@ import (
 
 // MockShopRepository is an in-memory implementation of ShopRepository for testing.
 type MockShopRepository struct {
-	mu                 sync.Mutex
-	nextPurchaseID     int64
-	nextSubscriptionID int64
-	products           map[string]*model.Product
-	purchases          map[string][]*model.OneTimePurchase // keyed by playerID
-	playerCards        map[string][]*model.PlayerCard      // keyed by playerID
-	playerItems        map[string][]*model.PlayerItem      // keyed by playerID
-	subscriptions      map[string][]*model.Subscription    // keyed by playerID
+	mu             sync.Mutex
+	nextPurchaseID int64
+	products       map[string]*model.Product
+	purchases      map[string][]*model.OneTimePurchase // keyed by playerID
+	playerCards    map[string][]*model.PlayerCard      // keyed by playerID
+	playerItems    map[string][]*model.PlayerItem      // keyed by playerID
 
 	// onCardsInserted is called after cards are inserted, allowing cross-repo sync.
 	onCardsInserted func(playerID string, cards []*model.PlayerCard)
 }
 
-// Compile-time interface checks.
-var (
-	_ port.ShopRepository  = (*MockShopRepository)(nil)
-	_ port.SubscriptionRepo = (*MockShopRepository)(nil)
-)
+// Compile-time interface check.
+var _ port.ShopRepository = (*MockShopRepository)(nil)
 
 func NewMockShopRepository() *MockShopRepository {
 	return &MockShopRepository{
-		products:      make(map[string]*model.Product),
-		purchases:     make(map[string][]*model.OneTimePurchase),
-		playerCards:   make(map[string][]*model.PlayerCard),
-		playerItems:   make(map[string][]*model.PlayerItem),
-		subscriptions: make(map[string][]*model.Subscription),
+		products:    make(map[string]*model.Product),
+		purchases:   make(map[string][]*model.OneTimePurchase),
+		playerCards: make(map[string][]*model.PlayerCard),
+		playerItems: make(map[string][]*model.PlayerItem),
 	}
 }
 
@@ -197,54 +191,6 @@ func (r *MockShopRepository) GetPlayerOwnedFactions(ctx context.Context, playerI
 	}
 	return factions, nil
 }
-
-func (r *MockShopRepository) CreateSubscription(ctx context.Context, sub *model.Subscription) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.nextSubscriptionID++
-	sub.SubscriptionID = r.nextSubscriptionID
-	r.subscriptions[sub.PlayerID] = append(r.subscriptions[sub.PlayerID], sub)
-	return nil
-}
-
-func (r *MockShopRepository) GetActiveSubscription(ctx context.Context, playerID string) (*model.Subscription, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	for _, s := range r.subscriptions[playerID] {
-		if s.Status == model.SubscriptionStatusActive {
-			return s, nil
-		}
-	}
-	return nil, nil
-}
-
-func (r *MockShopRepository) FindSubscriptionByToken(ctx context.Context, purchaseToken string) (*model.Subscription, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	for _, subs := range r.subscriptions {
-		for _, s := range subs {
-			if s.PurchaseToken == purchaseToken {
-				return s, nil
-			}
-		}
-	}
-	return nil, nil
-}
-
-func (r *MockShopRepository) UpdateSubscription(ctx context.Context, sub *model.Subscription) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	for _, subs := range r.subscriptions {
-		for i, s := range subs {
-			if s.SubscriptionID == sub.SubscriptionID {
-				subs[i] = sub
-				return nil
-			}
-		}
-	}
-	return fmt.Errorf("subscription %d not found", sub.SubscriptionID)
-}
-
 
 func parseJSON(data []byte, v interface{}) error {
 	return json.Unmarshal(data, v)

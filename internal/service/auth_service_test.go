@@ -105,6 +105,10 @@ func TestRegister_AlreadyRegistered(t *testing.T) {
 	assert.Contains(t, err.Error(), "player already registered")
 }
 
+// TODO: 結合テストで検証すべき観点:
+// InsertPlayerItems 失敗時に playerRepo.Create / userSettingsRepo.Upsert が
+// ロールバックされプレイヤーが永続化されないこと。
+// MockTxRunner は実トランザクションを持たないため unit test では担保できない。
 func TestRegister_StampFailure_Fatal(t *testing.T) {
 	playerRepo := repository.NewMockPlayerRepository()
 	shopRepo := &failingStampShopRepo{MockShopRepository: repository.NewMockShopRepository()}

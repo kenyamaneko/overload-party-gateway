@@ -9,7 +9,6 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -98,7 +97,7 @@ func (v *AppleReceiptVerifier) VerifyPurchase(ctx context.Context, purchaseToken
 	if resp.StatusCode != http.StatusOK {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
-			log.Printf("failed to read Apple API error response: %v", err)
+			return &VerifyResult{IsValid: false}, fmt.Errorf("Apple API returned %d (body read failed: %v)", resp.StatusCode, err)
 		}
 		return &VerifyResult{IsValid: false}, fmt.Errorf("Apple API returned %d: %s", resp.StatusCode, string(body))
 	}
@@ -145,7 +144,7 @@ func (v *AppleReceiptVerifier) VerifySubscription(ctx context.Context, purchaseT
 	if resp.StatusCode != http.StatusOK {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
-			log.Printf("failed to read Apple API error response: %v", err)
+			return &SubscriptionInfo{IsValid: false}, fmt.Errorf("Apple API returned %d (body read failed: %v)", resp.StatusCode, err)
 		}
 		return &SubscriptionInfo{IsValid: false}, fmt.Errorf("Apple API returned %d: %s", resp.StatusCode, string(body))
 	}
