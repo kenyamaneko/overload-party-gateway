@@ -762,6 +762,64 @@ func TestPgShop_InsertPlayerItems(t *testing.T) {
 // PgNewsRepository
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// TxManager — Register flow rollback
+// ---------------------------------------------------------------------------
+
+// TestTxManager_RegisterRollback verifies that when InsertPlayerItems fails
+// inside a TxManager transaction, player and user_settings rows are rolled back.
+func TestTxManager_RegisterRollback(t *testing.T) {
+	pool := setupPool(t)
+	playerRepo := NewPgPlayerRepository(pool)
+	settingsRepo := NewPgUserSettingsRepository(pool)
+	shopRepo := NewPgShopRepository(pool)
+	txMgr := NewTxManager(pool)
+	ctx := context.Background()
+	now := time.Now().Truncate(time.Second)
+	pid := newID()
+
+	player := &model.Player{
+		PlayerID: pid, FirebaseUID: newID(), Username: "RollbackUser",
+		Level: 1, CreatedAt: now, UpdatedAt: now,
+	}
+	daily := &model.PlayerDailyBattle{
+		PlayerID: pid, LastResetDate: civil.DateOf(now),
+	}
+	settings := &model.UserSettings{
+		PlayerID: pid, Language: "ja", BgmVolume: 50, SeVolume: 50,
+		PushEnabled: true, UpdatedAt: now,
+	}
+	// Use a duplicate item_no to trigger a unique constraint violation on the second insert.
+	badItems := []*model.PlayerItem{
+		{PlayerID: pid, ItemType: "stamp", ItemNo: 1, AcquiredAt: now},
+		{PlayerID: pid, ItemType: "stamp", ItemNo: 1, AcquiredAt: now}, // duplicate → error
+	}
+
+	err := txMgr.RunInTx(ctx, func(ctx context.Context) error {
+		if err := playerRepo.Create(ctx, player, daily); err != nil {
+			return fmt.Errorf("create player: %w", err)
+		}
+		if err := settingsRepo.Upsert(ctx, settings); err != nil {
+			return fmt.Errorf("upsert settings: %w", err)
+		}
+		if err := shopRepo.InsertPlayerItems(ctx, badItems); err != nil {
+			return fmt.Errorf("insert items: %w", err)
+		}
+		return nil
+	})
+	require.Error(t, err, "transaction should fail due to duplicate player_items")
+
+	// Verify player was NOT persisted (rolled back)
+	found, err := playerRepo.FindByID(ctx, pid)
+	require.NoError(t, err)
+	assert.Nil(t, found, "player should be rolled back")
+
+	// Verify user_settings was NOT persisted (rolled back)
+	gotSettings, err := settingsRepo.Get(ctx, pid)
+	require.NoError(t, err)
+	assert.Nil(t, gotSettings, "user_settings should be rolled back")
+}
+
 func TestPgNews_List(t *testing.T) {
 	pool := setupPool(t)
 	repo := NewPgNewsRepository(pool)
