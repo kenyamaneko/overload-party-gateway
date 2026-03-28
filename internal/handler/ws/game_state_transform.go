@@ -99,7 +99,7 @@ type battleResourceInstance struct {
 	ArtNo                int64                    `json:"artNo"`
 	Rank                 flexString               `json:"rank"`
 	InstanceFamily       flexString               `json:"instanceFamily"`
-	FaceUp               bool                     `json:"faceUp"`
+	FaceDown             bool                     `json:"faceDown"`
 	DeployingTurnsLeft   int64                    `json:"deployingTurnsLeft"`
 	CurrentAV            int64                    `json:"currentAV"`
 	MaxAV                int64                    `json:"maxAV"`
@@ -126,7 +126,7 @@ type battleSupportInstance struct {
 	InstanceID         string `json:"instanceID"`
 	CardID             string `json:"cardID"`
 	ArtNo              int64  `json:"artNo"`
-	FaceUp             bool   `json:"faceUp"`
+	FaceDown           bool   `json:"faceDown"`
 	DeployingTurnsLeft int64  `json:"deployingTurnsLeft"`
 	DeployOrder        int64  `json:"deployOrder"`
 	EffectUsedThisTurn bool   `json:"effectUsedThisTurn"`
@@ -135,7 +135,8 @@ type battleSupportInstance struct {
 type battleHiddenSupportInstance struct {
 	InstanceID string `json:"instanceID"`
 	CardID     string `json:"cardID"`
-	FaceUp     bool   `json:"faceUp"`
+	ArtNo      int64  `json:"artNo"`
+	FaceDown   bool   `json:"faceDown"`
 }
 
 type battleHandCard struct {
@@ -228,6 +229,7 @@ type clientOpponentField struct {
 type clientResourceInstance struct {
 	InstanceID         string                   `json:"instanceId"`
 	CardID             string                   `json:"cardId"`
+	ArtNo              int64                    `json:"artNo"`
 	Rank               *string                  `json:"rank"`
 	InstanceFamily     *string                  `json:"instanceFamily"`
 	CurrentAV          int64                    `json:"currentAV"`
@@ -251,6 +253,7 @@ type clientResourceInstance struct {
 type clientSupportInstance struct {
 	InstanceID         string `json:"instanceId"`
 	CardID             string `json:"cardId"`
+	ArtNo              int64  `json:"artNo"`
 	FaceDown           bool   `json:"faceDown"`
 	DeployOrder        int64  `json:"deployOrder"`
 	EffectUsedThisTurn bool   `json:"effectUsedThisTurn"`
@@ -259,17 +262,20 @@ type clientSupportInstance struct {
 type clientHiddenSupportInstance struct {
 	InstanceID string `json:"instanceId"`
 	CardID     string `json:"cardId"`
+	ArtNo      int64  `json:"artNo"`
 	FaceDown   bool   `json:"faceDown"`
 }
 
 type clientHandCard struct {
 	InstanceID string `json:"instanceId"`
 	CardID     string `json:"cardId"`
+	ArtNo      int64  `json:"artNo"`
 }
 
 type clientAttachmentRef struct {
 	InstanceID string `json:"instanceId"`
 	CardID     string `json:"cardId"`
+	ArtNo      int64  `json:"artNo"`
 }
 
 type clientTemporaryEffect struct {
@@ -288,8 +294,10 @@ type clientAvailableAction struct {
 	ValidTargets      []string `json:"valid_targets,omitempty"`
 	TargetRank        *string  `json:"target_rank,omitempty"`
 	InstanceFamily    *string  `json:"instance_family,omitempty"`
+	NeedsFamily       bool     `json:"needs_family"`
 	RemainingCapacity int64    `json:"remaining_capacity,omitempty"`
 	EffectTargetType  *string  `json:"effect_target_type,omitempty"`
+	RequiredCount     int      `json:"required_count"`
 	ChoiceOptions     []string `json:"choice_options,omitempty"`
 }
 
@@ -384,6 +392,7 @@ func transformResourceInstance(b *battleResourceInstance) *clientResourceInstanc
 	return &clientResourceInstance{
 		InstanceID:         b.InstanceID,
 		CardID:             b.CardID,
+		ArtNo:              b.ArtNo,
 		Rank:               b.Rank.Value,
 		InstanceFamily:     b.InstanceFamily.Value,
 		CurrentAV:          b.CurrentAV,
@@ -400,7 +409,7 @@ func transformResourceInstance(b *battleResourceInstance) *clientResourceInstanc
 		EffectUsedThisTurn: b.EffectUsedThisTurn,
 		DeployedOnTurn:     b.DeployedOnTurn,
 		DeployOrder:        b.DeployOrder,
-		FaceDown:           !b.FaceUp,
+		FaceDown:           b.FaceDown,
 		ElasticBonus:       b.ElasticBonus,
 	}
 }
@@ -412,7 +421,8 @@ func transformSupportSlots(slots []*battleSupportInstance) []*clientSupportInsta
 			out[i] = &clientSupportInstance{
 				InstanceID:         s.InstanceID,
 				CardID:             s.CardID,
-				FaceDown:           !s.FaceUp,
+				ArtNo:              s.ArtNo,
+				FaceDown:           s.FaceDown,
 				DeployOrder:        s.DeployOrder,
 				EffectUsedThisTurn: s.EffectUsedThisTurn,
 			}
@@ -428,7 +438,8 @@ func transformHiddenSupportSlots(slots []*battleHiddenSupportInstance) []*client
 			out[i] = &clientHiddenSupportInstance{
 				InstanceID: s.InstanceID,
 				CardID:     s.CardID,
-				FaceDown:   !s.FaceUp,
+				ArtNo:      s.ArtNo,
+				FaceDown:   s.FaceDown,
 			}
 		}
 	}
@@ -441,6 +452,7 @@ func transformHandCards(cards []battleHandCard) []clientHandCard {
 		out[i] = clientHandCard{
 			InstanceID: c.InstanceID,
 			CardID:     c.CardID,
+			ArtNo:      c.ArtNo,
 		}
 	}
 	return out
@@ -452,6 +464,7 @@ func transformAttachments(refs []battleAttachmentRef) []clientAttachmentRef {
 		out[i] = clientAttachmentRef{
 			InstanceID: r.InstanceID,
 			CardID:     r.CardID,
+			ArtNo:      r.ArtNo,
 		}
 	}
 	return out
@@ -477,8 +490,10 @@ func transformAvailableActions(actions []battleAvailableAction) []clientAvailabl
 			ValidTargets:      a.ValidTargets,
 			TargetRank:        a.TargetRank,
 			InstanceFamily:    a.InstanceFamily,
+			NeedsFamily:       a.NeedsFamily,
 			RemainingCapacity: a.RemainingCapacity,
 			EffectTargetType:  a.EffectTargetType,
+			RequiredCount:     a.RequiredCount,
 			ChoiceOptions:     a.ChoiceOptions,
 		}
 	}

@@ -31,7 +31,7 @@ func buildMinimalBattleState() battleGameState {
 						ArtNo:          1,
 						Rank:           flexString{ptr("S")},
 						InstanceFamily: flexString{ptr("familyA")},
-						FaceUp:         true,
+						FaceDown:       false,
 						CurrentAV:      3,
 						MaxAV:          5,
 						CurrentTP:      ptr(int64(2)),
@@ -63,7 +63,7 @@ func buildMinimalBattleState() battleGameState {
 						InstanceID:         "inst-s1",
 						CardID:             "NT-0001",
 						ArtNo:              3,
-						FaceUp:             false,
+						FaceDown:           true,
 						DeployingTurnsLeft: 0,
 						DeployOrder:        1,
 						EffectUsedThisTurn: false,
@@ -106,7 +106,7 @@ func buildMinimalBattleState() battleGameState {
 						InstanceID: "opp-f1",
 						CardID:     "TN-0001",
 						ArtNo:      1,
-						FaceUp:     false,
+						FaceDown:   true,
 						CurrentAV:  2,
 						MaxAV:      4,
 						Attachments:     []battleAttachmentRef{},
@@ -115,8 +115,8 @@ func buildMinimalBattleState() battleGameState {
 				},
 				Backend: []*battleResourceInstance{},
 				Support: []*battleHiddenSupportInstance{
-					{InstanceID: "opp-s1", CardID: "NT-0005", FaceUp: true},
-					{InstanceID: "opp-s2", CardID: "NT-0006", FaceUp: false},
+					{InstanceID: "opp-s1", CardID: "NT-0005", ArtNo: 9, FaceDown: false},
+					{InstanceID: "opp-s2", CardID: "NT-0006", ArtNo: 10, FaceDown: true},
 				},
 			},
 			HandCount:  4,
@@ -168,13 +168,13 @@ func TestTransformGameState_MyField(t *testing.T) {
 	my := m["my"].(map[string]interface{})
 	field := my["field"].(map[string]interface{})
 
-	t.Run("hand cards drop artNo", func(t *testing.T) {
+	t.Run("hand cards include artNo", func(t *testing.T) {
 		hand := my["hand"].([]interface{})
 		require.Len(t, hand, 2)
 		h0 := hand[0].(map[string]interface{})
 		assert.Equal(t, "hand-1", h0["instanceId"])
 		assert.Equal(t, "TK-0001", h0["cardId"])
-		assert.Nil(t, h0["artNo"], "artNo should be dropped from hand cards")
+		assert.Equal(t, float64(4), h0["artNo"], "artNo should be passed through")
 	})
 
 	t.Run("resource instance", func(t *testing.T) {
@@ -185,7 +185,7 @@ func TestTransformGameState_MyField(t *testing.T) {
 		assert.Nil(t, res["instanceID"], "old key instanceID should not appear")
 		assert.Equal(t, "SH-0001", res["cardId"])
 		assert.Nil(t, res["cardID"], "old key cardID should not appear")
-		assert.Nil(t, res["artNo"], "artNo should be dropped from resource instances")
+		assert.Equal(t, float64(1), res["artNo"], "artNo should be passed through")
 		assert.Equal(t, false, res["faceDown"])
 		assert.Nil(t, res["faceUp"], "faceUp should not appear in client output")
 
@@ -194,7 +194,7 @@ func TestTransformGameState_MyField(t *testing.T) {
 		att := attachments[0].(map[string]interface{})
 		assert.Equal(t, "att-1", att["instanceId"])
 		assert.Equal(t, "SH-0002", att["cardId"])
-		assert.Nil(t, att["artNo"], "artNo should be dropped from attachments")
+		assert.Equal(t, float64(2), att["artNo"], "artNo should be passed through")
 
 		effects := res["temporaryEffects"].([]interface{})
 		require.Len(t, effects, 1)
@@ -210,7 +210,7 @@ func TestTransformGameState_MyField(t *testing.T) {
 		assert.Equal(t, "inst-s1", sup["instanceId"])
 		assert.Equal(t, "NT-0001", sup["cardId"])
 		assert.Equal(t, true, sup["faceDown"])
-		assert.Nil(t, sup["artNo"], "artNo should be dropped from support instances")
+		assert.Equal(t, float64(3), sup["artNo"], "artNo should be passed through")
 	})
 }
 
@@ -222,17 +222,25 @@ func TestTransformGameState_OpponentView(t *testing.T) {
 	assert.Equal(t, float64(4), opp["handCount"])
 
 	oppField := opp["field"].(map[string]interface{})
+
+	oppFrontend := oppField["frontend"].([]interface{})
+	require.Len(t, oppFrontend, 1)
+	oppRes := oppFrontend[0].(map[string]interface{})
+	assert.Equal(t, true, oppRes["faceDown"])
+
 	oppSupport := oppField["support"].([]interface{})
 	require.Len(t, oppSupport, 2)
 
 	os0 := oppSupport[0].(map[string]interface{})
 	assert.Equal(t, "opp-s1", os0["instanceId"])
 	assert.Equal(t, "NT-0005", os0["cardId"])
+	assert.Equal(t, float64(9), os0["artNo"], "artNo should be passed through")
 	assert.Equal(t, false, os0["faceDown"])
 
 	os1 := oppSupport[1].(map[string]interface{})
 	assert.Equal(t, "opp-s2", os1["instanceId"])
 	assert.Equal(t, "NT-0006", os1["cardId"])
+	assert.Equal(t, float64(10), os1["artNo"], "artNo should be passed through")
 	assert.Equal(t, true, os1["faceDown"])
 }
 
@@ -248,6 +256,8 @@ func TestTransformGameState_AvailableActions(t *testing.T) {
 	assert.Equal(t, "TK-0001", act["card_id"])
 	zones := act["valid_zones"].([]interface{})
 	assert.Equal(t, []interface{}{"frontend", "backend"}, zones)
+	assert.Equal(t, true, act["needs_family"])
+	assert.Equal(t, float64(1), act["required_count"])
 }
 
 // --------------------------------------------------------------------------
@@ -304,7 +314,7 @@ func TestFlexString_MarshalJSON(t *testing.T) {
 
 func TestFlexString_RoundTripInBattleState(t *testing.T) {
 	// Simulate C# sending Rank as integer (JsonStringEnumConverter not applied)
-	raw := `{"instanceId":"ri-1","cardID":"SH-0001","artNo":1,"rank":1,"instanceFamily":"familyA","faceUp":true,"currentAV":0,"maxAV":0,"damage":0,"monetizedAmount":0,"hasAttacked":false,"effectUsedThisTurn":false,"scaleChangedThisTurn":false,"deployedOnTurn":0,"deployOrder":0,"migratingOnTurn":0,"elasticBonus":0,"attachments":[],"temporaryEffects":[]}`
+	raw := `{"instanceId":"ri-1","cardID":"SH-0001","artNo":1,"rank":1,"instanceFamily":"familyA","faceDown":false,"currentAV":0,"maxAV":0,"damage":0,"monetizedAmount":0,"hasAttacked":false,"effectUsedThisTurn":false,"scaleChangedThisTurn":false,"deployedOnTurn":0,"deployOrder":0,"migratingOnTurn":0,"elasticBonus":0,"attachments":[],"temporaryEffects":[]}`
 
 	var ri battleResourceInstance
 	require.NoError(t, json.Unmarshal([]byte(raw), &ri))
@@ -344,7 +354,7 @@ func TestTransformField_NilSlots(t *testing.T) {
 			{
 				InstanceID:       "f1",
 				CardID:           "SH-0010",
-				FaceUp:           true,
+				FaceDown:         false,
 				Attachments:      []battleAttachmentRef{},
 				TemporaryEffects: []battleTemporaryEffect{},
 			},
@@ -354,7 +364,7 @@ func TestTransformField_NilSlots(t *testing.T) {
 		Support: []*battleSupportInstance{nil, {
 			InstanceID: "s1",
 			CardID:     "NT-0020",
-			FaceUp:     false,
+			FaceDown:   true,
 		}},
 	}
 
@@ -365,7 +375,7 @@ func TestTransformField_NilSlots(t *testing.T) {
 	assert.Nil(t, c.Frontend[0])
 	require.NotNil(t, c.Frontend[1])
 	assert.Equal(t, "f1", c.Frontend[1].InstanceID)
-	assert.Equal(t, false, c.Frontend[1].FaceDown) // faceUp=true
+	assert.Equal(t, false, c.Frontend[1].FaceDown)
 	assert.Nil(t, c.Frontend[2])
 
 	// Backend: all nil
@@ -378,7 +388,7 @@ func TestTransformField_NilSlots(t *testing.T) {
 	assert.Nil(t, c.Support[0])
 	require.NotNil(t, c.Support[1])
 	assert.Equal(t, "s1", c.Support[1].InstanceID)
-	assert.Equal(t, true, c.Support[1].FaceDown) // faceUp=false
+	assert.Equal(t, true, c.Support[1].FaceDown)
 }
 
 // --------------------------------------------------------------------------
@@ -387,8 +397,8 @@ func TestTransformField_NilSlots(t *testing.T) {
 
 func TestTransformHiddenSupportSlots(t *testing.T) {
 	slots := []*battleHiddenSupportInstance{
-		{InstanceID: "hs-1", CardID: "NT-0042", FaceUp: true},
-		{InstanceID: "hs-2", CardID: "NT-0043", FaceUp: false},
+		{InstanceID: "hs-1", CardID: "NT-0042", ArtNo: 5, FaceDown: false},
+		{InstanceID: "hs-2", CardID: "NT-0043", ArtNo: 8, FaceDown: true},
 		nil,
 	}
 
@@ -399,29 +409,30 @@ func TestTransformHiddenSupportSlots(t *testing.T) {
 	require.NotNil(t, out[0])
 	assert.Equal(t, "hs-1", out[0].InstanceID)
 	assert.Equal(t, "NT-0042", out[0].CardID)
-	assert.Equal(t, false, out[0].FaceDown) // faceUp=true
+	assert.Equal(t, int64(5), out[0].ArtNo, "artNo should be passed through")
+	assert.Equal(t, false, out[0].FaceDown)
 
 	require.NotNil(t, out[1])
 	assert.Equal(t, "hs-2", out[1].InstanceID)
 	assert.Equal(t, "NT-0043", out[1].CardID)
-	assert.Equal(t, true, out[1].FaceDown) // faceUp=false
+	assert.Equal(t, int64(8), out[1].ArtNo, "artNo should be passed through")
+	assert.Equal(t, true, out[1].FaceDown)
 
 	// Nil slot preserved
 	assert.Nil(t, out[2])
 }
 
 // --------------------------------------------------------------------------
-// 5. FaceUp inversion — table-driven
+// 5. FaceDown passthrough — table-driven
 // --------------------------------------------------------------------------
 
-func TestTransformResourceInstance_FaceUpInversion(t *testing.T) {
+func TestTransformResourceInstance_FaceDownPassthrough(t *testing.T) {
 	tests := []struct {
-		name             string
-		faceUp           bool
-		expectedFaceDown bool
+		name     string
+		faceDown bool
 	}{
-		{"faceUp true becomes faceDown false", true, false},
-		{"faceUp false becomes faceDown true", false, true},
+		{"faceDown false passes through", false},
+		{"faceDown true passes through", true},
 	}
 
 	for _, tc := range tests {
@@ -429,12 +440,12 @@ func TestTransformResourceInstance_FaceUpInversion(t *testing.T) {
 			b := &battleResourceInstance{
 				InstanceID:       "ri-1",
 				CardID:           "SH-0099",
-				FaceUp:           tc.faceUp,
+				FaceDown:         tc.faceDown,
 				Attachments:      []battleAttachmentRef{},
 				TemporaryEffects: []battleTemporaryEffect{},
 			}
 			c := transformResourceInstance(b)
-			assert.Equal(t, tc.expectedFaceDown, c.FaceDown)
+			assert.Equal(t, tc.faceDown, c.FaceDown)
 		})
 	}
 }
@@ -490,6 +501,8 @@ func TestTransformAvailableActions(t *testing.T) {
 	assert.Equal(t, "src-inst", *out[0].SourceInstanceID)
 	assert.Equal(t, []string{"target-1", "target-2"}, out[0].ValidTargets)
 	assert.Nil(t, out[0].TargetRank)
+	assert.Equal(t, false, out[0].NeedsFamily)
+	assert.Equal(t, 2, out[0].RequiredCount)
 	require.NotNil(t, out[0].EffectTargetType)
 	assert.Equal(t, "resource", *out[0].EffectTargetType)
 
@@ -504,6 +517,7 @@ func TestTransformAvailableActions(t *testing.T) {
 	assert.Equal(t, "B", *out[1].TargetRank)
 	require.NotNil(t, out[1].InstanceFamily)
 	assert.Equal(t, "famC", *out[1].InstanceFamily)
+	assert.Equal(t, true, out[1].NeedsFamily)
 	assert.Equal(t, int64(3), out[1].RemainingCapacity)
 	assert.Nil(t, out[1].EffectTargetType)
 	assert.Equal(t, []string{"x"}, out[1].ChoiceOptions)
@@ -519,6 +533,7 @@ func TestTransformAvailableActions(t *testing.T) {
 	assert.NotNil(t, m["target_rank"], "should use snake_case key target_rank")
 	assert.NotNil(t, m["instance_family"], "should use snake_case key instance_family")
 	assert.NotNil(t, m["remaining_capacity"], "should use snake_case key remaining_capacity")
+	assert.NotNil(t, m["needs_family"], "should use snake_case key needs_family")
 	assert.NotNil(t, m["choice_options"], "should use snake_case key choice_options")
 	// Verify camelCase keys are absent
 	assert.Nil(t, m["handInstanceID"])
@@ -556,12 +571,11 @@ func TestTransformHandCards(t *testing.T) {
 		assert.Equal(t, "h2", out[1].InstanceID)
 		assert.Equal(t, "TK-0020", out[1].CardID)
 
-		// artNo must not appear in JSON
 		raw, err := json.Marshal(out[0])
 		require.NoError(t, err)
 		var m map[string]interface{}
 		require.NoError(t, json.Unmarshal(raw, &m))
-		assert.Nil(t, m["artNo"], "artNo should not be present in client hand card JSON")
+		assert.Equal(t, float64(1), m["artNo"], "artNo should be present in client hand card JSON")
 		assert.Equal(t, "h1", m["instanceId"])
 		assert.Equal(t, "SH-0010", m["cardId"])
 	})
