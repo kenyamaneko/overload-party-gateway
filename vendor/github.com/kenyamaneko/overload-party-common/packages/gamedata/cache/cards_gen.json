@@ -14,7 +14,19 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "自分のフロントエンドに装備できる。自分のフィールドにこのカードの装備先以外のフロントエンドリソースが 1体以上いる限り、相手はこのカードの装備先を攻撃対象に選択できない。"
+    "effect_text": "自分のフロントエンドに装備できる。自分のフィールドにこのカードの装備先以外のフロントエンドリソースが 1体以上いる限り、相手はこのカードの装備先を攻撃対象に選択できない。",
+    "effects": [
+      {
+        "trigger": "passive",
+        "custom": "target_shield",
+        "meta": {
+          "categories": [
+            "targeting"
+          ],
+          "target": "self"
+        }
+      }
+    ]
   },
   {
     "card_id": "NT-0002",
@@ -31,7 +43,21 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "自分の Elasticでない コンピュート系リソースに装備できる。装備先カードが相手の攻撃を受けた次のターン、装備先のカードのスループットを +300 する。"
+    "effect_text": "自分の Elasticでない コンピュート系リソースに装備できる。装備先カードが相手の攻撃を受けた次のターン、装備先のカードのスループットを +300 する。",
+    "effects": [
+      {
+        "trigger": "passive",
+        "custom": "buff_on_attacked",
+        "meta": {
+          "categories": [
+            "buff"
+          ],
+          "target": "self",
+          "buff": "tp",
+          "amount": 300
+        }
+      }
+    ]
   },
   {
     "card_id": "NT-0003",
@@ -48,7 +74,22 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "自分の コンピュート系リソース または DB系リソースに装備できる。装備先のカードはインシデントカードの効果の対象にならない"
+    "effect_text": "自分の コンピュート系リソース または DB系リソースに装備できる。装備先のカードはインシデントカードの効果の対象にならない",
+    "effects": [
+      {
+        "trigger": "passive",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": "source",
+              "buff": "incident_immune",
+              "amount": 1,
+              "duration": "permanent"
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "NT-0004",
@@ -66,13 +107,19 @@
     "restriction": "unlimited",
     "is_active": true,
     "effect_text": "自分のリソースに装備できる。装備先のカードの可用性を +500 する。",
-    "attachment_effects": [
+    "effects": [
       {
-        "type": "stat_bonus",
-        "params": {
-          "stat_type": "av",
-          "bonus": 500
-        }
+        "trigger": "passive",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": "source",
+              "buff": "av",
+              "amount": 500,
+              "duration": "permanent"
+            }
+          }
+        ]
       }
     ]
   },
@@ -91,7 +138,24 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "インシデントカードによる自分のリソースへのダメージを -200 する。"
+    "effect_text": "インシデントカードによる自分のリソースへのダメージを -200 する。",
+    "effects": [
+      {
+        "trigger": "passive",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": {
+                "owner": "self"
+              },
+              "buff": "incident_reduction",
+              "amount": 200,
+              "duration": "permanent"
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "NT-0006",
@@ -108,7 +172,24 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "自分のリソースのSLAペナルティを -100 する。"
+    "effect_text": "自分のリソースのSLAペナルティを -100 する。",
+    "effects": [
+      {
+        "trigger": "passive",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": {
+                "owner": "self"
+              },
+              "buff": "sla_penalty_reduction",
+              "amount": 100,
+              "duration": "permanent"
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "NT-0007",
@@ -125,7 +206,20 @@
     "stats": {},
     "restriction": "limited",
     "is_active": true,
-    "effect_text": "リポジトリから1枚ドローし手札に加える。ただし、引いたカードが 調律部 カードならトラッシュに送る"
+    "effect_text": "リポジトリから1枚ドローし手札に加える。ただし、引いたカードが 調律部 カードならトラッシュに送る",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "ops": [
+          {
+            "draw": {
+              "count": 1
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "NT-0008",
@@ -142,7 +236,20 @@
     "stats": {},
     "restriction": "limited",
     "is_active": true,
-    "effect_text": "リポジトリから2枚ドローし、選択した1枚を手札に加える。残り1枚はトラッシュに送る。ただし、引いた 調律部 カードは全てトラッシュに送る"
+    "effect_text": "リポジトリから2枚ドローし、選択した1枚を手札に加える。残り1枚はトラッシュに送る。ただし、引いた 調律部 カードは全てトラッシュに送る",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "ops": [
+          {
+            "draw": {
+              "count": 2
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "NT-0009",
@@ -159,7 +266,18 @@
     "stats": {},
     "restriction": "limited",
     "is_active": true,
-    "effect_text": "Budget 200 を払って発動できる。リポジトリからリソース1枚を選んで手札に加える"
+    "effect_text": "Budget 200 を払って発動できる。リポジトリからリソース1枚を選んで手札に加える",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "ops": [
+          {
+            "search_repo": {}
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "NT-0010",
@@ -176,7 +294,21 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "自分の Budget を +400 する。"
+    "effect_text": "自分の Budget を +400 する。",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "ops": [
+          {
+            "gain_budget": {
+              "target": "self",
+              "amount": 400
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "NT-0011",
@@ -193,7 +325,21 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "自分の最初のターンのみ発動できる。自分の Budget を +1000 する。"
+    "effect_text": "自分の最初のターンのみ発動できる。自分の Budget を +1000 する。",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "ops": [
+          {
+            "gain_budget": {
+              "target": "self",
+              "amount": 1000
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "NT-0012",
@@ -210,7 +356,18 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "Budget 300 を払って発動できる。相手フィールドのプラットフォーム1枚を破壊する。"
+    "effect_text": "Budget 300 を払って発動できる。相手フィールドのプラットフォーム1枚を破壊する。",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "ops": [
+          {
+            "destroy_platform": {}
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "NT-0013",
@@ -227,7 +384,30 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "Budget 400 を払って発動できる。相手のフロントエンドから選択した1体に 500 ダメージを与える"
+    "effect_text": "Budget 400 を払って発動できる。相手のフロントエンドから選択した1体に 500 ダメージを与える",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "ops": [
+          {
+            "deal_damage": {
+              "selector": {
+                "owner": "opponent",
+                "zone": "frontend",
+                "pick": "choice"
+              },
+              "amount": 500
+            }
+          },
+          {
+            "destroy_check": {
+              "target": "opponent"
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "NT-0014",
@@ -244,7 +424,31 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "Budget 600 を払って発動できる。相手のDB系リソースまたはオブジェクトストレージから選択した1体に 600 ダメージを与え、相手の Budget を -300 する"
+    "effect_text": "Budget 600 を払って発動できる。相手のDB系リソースまたはオブジェクトストレージから選択した1体に 600 ダメージを与え、相手の Budget を -300 する",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "ops": [
+          {
+            "deal_damage": {
+              "selector": {
+                "owner": "opponent",
+                "zone": "backend",
+                "pick": "choice"
+              },
+              "amount": 600,
+              "budget_damage": 300
+            }
+          },
+          {
+            "destroy_check": {
+              "target": "opponent"
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "NT-0015",
@@ -261,7 +465,27 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "Budget 200 を払って発動できる。相手のフロントエンドから選択した1体のスループットを次ターン終了まで 0 にする"
+    "effect_text": "Budget 200 を払って発動できる。相手のフロントエンドから選択した1体のスループットを次ターン終了まで 0 にする",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": {
+                "owner": "opponent",
+                "zone": "frontend",
+                "pick": "choice"
+              },
+              "buff": "tp_suppressed",
+              "amount": 1,
+              "duration": "until_next_turn_end"
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "NT-0016",
@@ -278,7 +502,31 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "Budget 300 を払って発動できる。相手の Insight を 600 吸収する。"
+    "effect_text": "Budget 300 を払って発動できる。相手の Insight を 600 吸収する。",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "guard": [
+          {
+            "count": {
+              "selector": {
+                "owner": "opponent",
+                "zone": "backend"
+              },
+              "min": 1
+            }
+          }
+        ],
+        "ops": [
+          {
+            "absorb_insight": {
+              "amount": 600
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "NT-0017",
@@ -295,7 +543,20 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "Budget 100 を払って発動できる。相手の Insight を 300 吸収する。"
+    "effect_text": "Budget 100 を払って発動できる。相手の Insight を 300 吸収する。",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "ops": [
+          {
+            "absorb_insight": {
+              "amount": 300
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "NT-0018",
@@ -312,7 +573,28 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "Budget 600 を払って発動できる。フィールドの全てのリソースに 500 ダメージを与える"
+    "effect_text": "Budget 600 を払って発動できる。フィールドの全てのリソースに 500 ダメージを与える",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "ops": [
+          {
+            "deal_damage": {
+              "selector": {
+                "owner": "both"
+              },
+              "amount": 500
+            }
+          },
+          {
+            "destroy_check": {
+              "target": "both"
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "NT-0019",
@@ -329,7 +611,36 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "Budget 200 を払って発動できる。相手のフロントエンドから選択した1体に 400 ダメージを与え、自分の Budget を +500 する"
+    "effect_text": "Budget 200 を払って発動できる。相手のフロントエンドから選択した1体に 400 ダメージを与え、自分の Budget を +500 する",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "ops": [
+          {
+            "deal_damage": {
+              "selector": {
+                "owner": "opponent",
+                "zone": "frontend",
+                "pick": "choice"
+              },
+              "amount": 400
+            }
+          },
+          {
+            "destroy_check": {
+              "target": "opponent"
+            }
+          },
+          {
+            "gain_budget": {
+              "target": "self",
+              "amount": 500
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "NT-0020",
@@ -346,7 +657,26 @@
     "stats": {},
     "restriction": "limited",
     "is_active": true,
-    "effect_text": "Budget 800 を払って発動できる。相手の Resource 1体を選択。次の相手ターン終了まで機能停止（Yield 0, スループット 0, 攻撃不可）"
+    "effect_text": "Budget 800 を払って発動できる。相手の Resource 1体を選択。次の相手ターン終了まで機能停止（Yield 0, スループット 0, 攻撃不可）",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": {
+                "owner": "opponent",
+                "pick": "choice"
+              },
+              "buff": "ransomware",
+              "amount": 1,
+              "duration": "until_next_turn_end"
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "NT-0021",
@@ -363,7 +693,65 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "Budget 200 を払って発動できる。相手の Budget を -400 する。相手のフィールドに「ISMS認証」または「SOC2認証」がなければ、相手のBudgetをさらに -400 する。"
+    "effect_text": "Budget 200 を払って発動できる。相手の Budget を -400 する。相手のフィールドに「ISMS認証」または「SOC2認証」がなければ、相手のBudgetをさらに -400 する。",
+    "effects": [
+      {
+        "id": "audit",
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "guard": [
+          {
+            "stat": {
+              "selector": "self",
+              "stat": "budget",
+              "min": 200
+            }
+          }
+        ],
+        "ops": [
+          {
+            "lose_budget": {
+              "target": "self",
+              "amount": 200
+            }
+          },
+          {
+            "lose_budget": {
+              "target": "opponent",
+              "amount": 400
+            }
+          }
+        ]
+      },
+      {
+        "trigger": "activate",
+        "after": "audit",
+        "guard": [
+          {
+            "count": {
+              "selector": {
+                "owner": "opponent",
+                "zone": "support",
+                "card_id": [
+                  "NT-0005",
+                  "NT-0006"
+                ]
+              },
+              "min": 1
+            },
+            "negate": true
+          }
+        ],
+        "ops": [
+          {
+            "lose_budget": {
+              "target": "opponent",
+              "amount": 400
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "NT-0022",
@@ -380,7 +768,20 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "相手がスループット 900 以上のコンピュート系/AI・ML系リソースをデプロイした時に自動発動する。そのリソースをこのターン機能停止にする。"
+    "effect_text": "相手がスループット 900 以上のコンピュート系/AI・ML系リソースをデプロイした時に自動発動する。そのリソースをこのターン機能停止にする。",
+    "effects": [
+      {
+        "trigger": "on_enemy_deploy",
+        "use_limit": "once_per_turn",
+        "custom": "disable_high_tp_deploy",
+        "meta": {
+          "categories": [
+            "debuff"
+          ],
+          "target": "all_opp"
+        }
+      }
+    ]
   },
   {
     "card_id": "NT-0023",
@@ -397,7 +798,18 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "自分のリソースが破壊された時に発動できる。手札から同じカード名のリソースをデプロイコストなしでデプロイできる。"
+    "effect_text": "自分のリソースが破壊された時に発動できる。手札から同じカード名のリソースをデプロイコストなしでデプロイできる。",
+    "effects": [
+      {
+        "trigger": "reactive",
+        "custom": "deploy_same_type_from_hand",
+        "meta": {
+          "categories": [
+            "deploy_free"
+          ]
+        }
+      }
+    ]
   },
   {
     "card_id": "NT-0024",
@@ -414,7 +826,23 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "相手が自分のリソースを攻撃した時に発動できる。その攻撃を無効にする。さらに、相手が選択した相手のフロントエンドに、攻撃したリソースのスループット分のダメージを与える（フロントエンドが1枚しかない場合は、攻撃したリソース自身が対象になる）"
+    "effect_text": "相手が自分のリソースを攻撃した時に発動できる。その攻撃を無効にする。さらに、相手が選択した相手のフロントエンドに、攻撃したリソースのスループット分のダメージを与える（フロントエンドが1枚しかない場合は、攻撃したリソース自身が対象になる）",
+    "effects": [
+      {
+        "trigger": "reactive",
+        "custom": "redirect_attack",
+        "meta": {
+          "categories": [
+            "cancel_action"
+          ]
+        },
+        "ops": [
+          {
+            "cancel_action": {}
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "NT-0025",
@@ -431,7 +859,33 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "自分の DB系リソースに装備できる。自分のフィールドにオブジェクトストレージがある場合、装備先への攻撃ダメージを -400 する。"
+    "effect_text": "自分の DB系リソースに装備できる。自分のフィールドにオブジェクトストレージがある場合、装備先への攻撃ダメージを -400 する。",
+    "effects": [
+      {
+        "trigger": "passive",
+        "guard": [
+          {
+            "count": {
+              "selector": {
+                "owner": "self",
+                "card_type": "ObjectStorage"
+              },
+              "min": 1
+            }
+          }
+        ],
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": "source",
+              "buff": "attack_damage_reduction",
+              "amount": 400,
+              "duration": "permanent"
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "NT-0026",
@@ -448,7 +902,30 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "自分の Budget が 1000 以下の時のみ使用できる。自分の Budget を +900 する。"
+    "effect_text": "自分の Budget が 1000 以下の時のみ使用できる。自分の Budget を +900 する。",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "guard": [
+          {
+            "stat": {
+              "selector": "self",
+              "stat": "budget",
+              "max": 1000
+            }
+          }
+        ],
+        "ops": [
+          {
+            "gain_budget": {
+              "target": "self",
+              "amount": 900
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "NT-0027",
@@ -465,7 +942,28 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "相手の 天気使い リソースが攻撃した時に発動できる。その攻撃を無効にする。次の相手のターン終了まで、全ての 天気使い リソースは攻撃できない。"
+    "effect_text": "相手の 天気使い リソースが攻撃した時に発動できる。その攻撃を無効にし、2ターンの間、全ての 天気使い リソースは攻撃できない。",
+    "effects": [
+      {
+        "trigger": "reactive",
+        "ops": [
+          {
+            "cancel_action": {}
+          },
+          {
+            "apply_buff": {
+              "selector": {
+                "owner": "both",
+                "faction": "Tenki"
+              },
+              "buff": "cannot_attack",
+              "amount": 1,
+              "duration": "until_next_turn_end"
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "NT-0028",
@@ -482,7 +980,28 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "相手が自分のリソースを攻撃した時に発動できる。フィールドの全ての 天気使い リソースに 400 ダメージを与える。"
+    "effect_text": "相手が自分のリソースを攻撃した時に発動できる。フィールドの全ての 天気使い リソースに 400 ダメージを与える。",
+    "effects": [
+      {
+        "trigger": "reactive",
+        "ops": [
+          {
+            "deal_damage": {
+              "selector": {
+                "owner": "both",
+                "faction": "Tenki"
+              },
+              "amount": 400
+            }
+          },
+          {
+            "destroy_check": {
+              "target": "both"
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "NT-0029",
@@ -499,7 +1018,20 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "Budget 200 を払って発動できる。リポジトリからストラテジーカード1枚を選択して手札に加える。"
+    "effect_text": "Budget 200 を払って発動できる。リポジトリからストラテジーカード1枚を選択して手札に加える。",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "ops": [
+          {
+            "search_repo": {
+              "card_type": "Strategy"
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "NT-0030",
@@ -565,7 +1097,25 @@
     },
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "**Cloud First:** このカードはスターティングリソースとしてのみデプロイできる。\n**Cloud Shift:** 手札から 天気使い コンピュート系リソースをデプロイコスト -500 でデプロイできる。その後、このカードをトラッシュに送る。"
+    "effect_text": "**Cloud First:** このカードはスターティングリソースとしてのみデプロイできる。\n**Cloud Shift:** 手札から 天気使い コンピュート系リソースをデプロイコスト -500 でデプロイできる。その後、このカードをトラッシュに送る。",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_game",
+        "custom": "cloud_shift",
+        "meta": {
+          "faction": "Tenki",
+          "card_type": [
+            "Compute",
+            "Container",
+            "Orchestrator",
+            "Serverless",
+            "AI/ML"
+          ],
+          "deploy_discount": 500
+        }
+      }
+    ]
   },
   {
     "card_id": "NT-0033",
@@ -587,7 +1137,22 @@
     },
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "**Cloud First:** このカードはスターティングリソースとしてのみデプロイできる。\n**Cloud Shift:** 手札から 調律部 DB系リソースをデプロイコスト -500 でデプロイできる。その後、このカードをトラッシュに送る。"
+    "effect_text": "**Cloud First:** このカードはスターティングリソースとしてのみデプロイできる。\n**Cloud Shift:** 手札から 調律部 DB系リソースをデプロイコスト -500 でデプロイできる。その後、このカードをトラッシュに送る。",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_game",
+        "custom": "cloud_shift",
+        "meta": {
+          "faction": "Tuners",
+          "card_type": [
+            "Database",
+            "CacheDB"
+          ],
+          "deploy_discount": 500
+        }
+      }
+    ]
   },
   {
     "card_id": "NT-0034",
@@ -604,7 +1169,20 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "相手が1ターンに3体目のリソースをデプロイした時に自動発動する。そのデプロイを無効にし、そのリソースを破壊する。この効果は1ターンに1回しか使用できない。"
+    "effect_text": "相手が1ターンに3体目のリソースをデプロイした時に自動発動する。そのデプロイを無効にし、そのリソースを破壊する。この効果は1ターンに1回しか使用できない。",
+    "effects": [
+      {
+        "trigger": "on_enemy_deploy",
+        "use_limit": "once_per_turn",
+        "custom": "cancel_nth_deploy",
+        "meta": {
+          "categories": [
+            "cancel_action"
+          ],
+          "target": "all_opp"
+        }
+      }
+    ]
   },
   {
     "card_id": "SH-0001",
@@ -715,16 +1293,31 @@
     "restriction": "unlimited",
     "is_active": true,
     "effect_text": "**えりり Trigger:** 自分のフィールドに「SHE Storage - えりり」がいる場合、このカードのスループットを +200 する",
-    "passive_effects": [
+    "effects": [
       {
-        "type": "tp_if_card_type_on_field",
-        "params": {
-          "faction": "SHE",
-          "card_types": [
-            "ObjectStorage"
-          ],
-          "flat_bonus": 200
-        }
+        "trigger": "passive",
+        "guard": [
+          {
+            "count": {
+              "selector": {
+                "owner": "self",
+                "faction": "SHE",
+                "card_type": "ObjectStorage"
+              },
+              "min": 1
+            }
+          }
+        ],
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": "source",
+              "buff": "tp",
+              "amount": 200,
+              "duration": "permanent"
+            }
+          }
+        ]
       }
     ]
   },
@@ -748,7 +1341,31 @@
     },
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "**予約契約:** このカードのデプロイ時に発動できる。デプロイ時のコストを -200 する。この効果を使用してデプロイした場合、他のリソースをデプロイするためにこのカードをトラッシュすることはできない。"
+    "effect_text": "**予約契約:** このカードのデプロイ時に発動できる。デプロイ時のコストを -200 する。この効果を使用してデプロイした場合、他のリソースをデプロイするためにこのカードをトラッシュすることはできない。",
+    "effects": [
+      {
+        "trigger": "deploy",
+        "choice": {
+          "use": [
+            {
+              "gain_budget": {
+                "target": "self",
+                "amount": 200
+              }
+            },
+            {
+              "apply_buff": {
+                "selector": "source",
+                "buff": "reserved_instance",
+                "amount": 1,
+                "duration": "permanent"
+              }
+            }
+          ],
+          "skip": []
+        }
+      }
+    ]
   },
   {
     "card_id": "SH-0007",
@@ -771,14 +1388,30 @@
     "restriction": "unlimited",
     "is_active": true,
     "effect_text": "**星の連鎖:** 自分のバックエンドのこのカード以外の SHEのDB系リソース1体につき、このカードの Yield を +200 する",
-    "passive_effects": [
+    "effects": [
       {
-        "type": "dv_per_other_db",
-        "params": {
-          "faction": "SHE",
-          "bonus_per_card": 200,
-          "exclude_self": true
-        }
+        "trigger": "passive",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": "source",
+              "buff": "yield",
+              "amount": {
+                "base": 0,
+                "per": {
+                  "count": {
+                    "owner": "self",
+                    "zone": "backend",
+                    "faction": "SHE",
+                    "card_type": "Database",
+                    "exclude": "source"
+                  },
+                  "value": 200
+                }
+              }
+            }
+          }
+        ]
       }
     ]
   },
@@ -802,7 +1435,28 @@
     },
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "**Versioning:** 自分のフィールドの SHEのDB系リソース が破壊された時に発動できる。そのカードを自分の手札に戻す。"
+    "effect_text": "**Versioning:** 自分のフィールドの SHEのDB系リソース が破壊された時に発動できる。そのカードを自分の手札に戻す。",
+    "effects": [
+      {
+        "trigger": "on_destroy",
+        "guard": [
+          {
+            "match": {
+              "selector": "target",
+              "faction": "SHE"
+            }
+          }
+        ],
+        "ops": [
+          {
+            "add_to_hand": {}
+          },
+          {
+            "cancel_action": {}
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "SH-0009",
@@ -825,15 +1479,62 @@
     "restriction": "unlimited",
     "is_active": true,
     "effect_text": "**On-Demand:** Budget 400 を払って発動できる。このターン、このカードの Yield を2倍にする。この効果は1ターン中に1回のみ使用できる",
-    "passive_effects": [
+    "effects": [
       {
-        "type": "dv_if_card_on_field",
-        "params": {
-          "specific_card_ids": [
-            "SH-0024"
-          ],
-          "flat_bonus": 200
-        }
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "guard": [
+          {
+            "stat": {
+              "selector": "self",
+              "stat": "budget",
+              "min": 400
+            }
+          }
+        ],
+        "ops": [
+          {
+            "lose_budget": {
+              "target": "self",
+              "amount": 400
+            }
+          },
+          {
+            "apply_buff": {
+              "selector": "source",
+              "buff": "yield",
+              "amount": {
+                "ref": "source.yield",
+                "multiply": 1
+              },
+              "duration": "this_turn"
+            }
+          }
+        ]
+      },
+      {
+        "trigger": "passive",
+        "guard": [
+          {
+            "count": {
+              "selector": {
+                "owner": "self",
+                "card_id": "SH-0024"
+              },
+              "min": 1
+            }
+          }
+        ],
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": "source",
+              "buff": "yield",
+              "amount": 200,
+              "duration": "permanent"
+            }
+          }
+        ]
       }
     ]
   },
@@ -857,7 +1558,32 @@
     },
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "**Cache Engine:** デプロイ時に選択以下のいずれかの効果を選択する。**Memcached:** Budget を +400 する。**Redis:** このカードの Yield を +200 する"
+    "effect_text": "**Cache Engine:** デプロイ時に選択以下のいずれかの効果を選択する。**Memcached:** Budget を +400 する。**Redis:** このカードの Yield を +200 する",
+    "effects": [
+      {
+        "trigger": "deploy",
+        "choice": {
+          "memcached": [
+            {
+              "gain_budget": {
+                "target": "self",
+                "amount": 400
+              }
+            }
+          ],
+          "redis": [
+            {
+              "apply_buff": {
+                "selector": "source",
+                "buff": "yield",
+                "amount": 200,
+                "duration": "permanent"
+              }
+            }
+          ]
+        }
+      }
+    ]
   },
   {
     "card_id": "SH-0011",
@@ -875,13 +1601,22 @@
     "restriction": "unlimited",
     "is_active": true,
     "effect_text": "自分のフィールドの SHE リソースのスケールアップのための開発コストを -200 する。",
-    "platform_effects": [
+    "effects": [
       {
-        "type": "scale_cost_reduction",
-        "params": {
-          "target_faction": "SHE",
-          "reduction": 200
-        }
+        "trigger": "passive",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": {
+                "owner": "self",
+                "faction": "SHE"
+              },
+              "buff": "scale_cost_reduction",
+              "amount": 200,
+              "duration": "permanent"
+            }
+          }
+        ]
       }
     ]
   },
@@ -901,20 +1636,29 @@
     "restriction": "unlimited",
     "is_active": true,
     "effect_text": "自分のフィールドの全ての SHE コンピュート系リソースのスループットを +200 する。",
-    "platform_effects": [
+    "effects": [
       {
-        "type": "tp_bonus",
-        "params": {
-          "target_faction": "SHE",
-          "target_card_types": [
-            "Compute",
-            "AI/ML",
-            "Orchestrator",
-            "Container",
-            "Serverless"
-          ],
-          "bonus": 200
-        }
+        "trigger": "passive",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": {
+                "owner": "self",
+                "faction": "SHE",
+                "card_type": [
+                  "Compute",
+                  "AI/ML",
+                  "Orchestrator",
+                  "Container",
+                  "Serverless"
+                ]
+              },
+              "buff": "tp",
+              "amount": 200,
+              "duration": "permanent"
+            }
+          }
+        ]
       }
     ]
   },
@@ -933,7 +1677,18 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "相手フィールドのサポートゾーンの裏側のカード 1枚を選択して確認する。"
+    "effect_text": "相手フィールドのサポートゾーンの裏側のカード 1枚を選択して確認する。",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "ops": [
+          {
+            "reveal_reactive": {}
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "SH-0014",
@@ -950,7 +1705,17 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "相手の DDoS Attack と Data Breach を無効化する。"
+    "effect_text": "相手の DDoS Attack と Data Breach を無効化する。",
+    "effects": [
+      {
+        "trigger": "reactive",
+        "ops": [
+          {
+            "cancel_action": {}
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "SH-0015",
@@ -967,7 +1732,23 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "フロントエンドリソースに装備できる。装備したリソースのスループットをメインフェーズのみ +600 する。この効果は1ターン中に1回のみ使用できる"
+    "effect_text": "フロントエンドリソースに装備できる。装備したリソースのスループットをメインフェーズのみ +600 する。この効果は1ターン中に1回のみ使用できる",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": "source",
+              "buff": "tp",
+              "amount": 600,
+              "duration": "this_turn"
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "SH-0016",
@@ -985,13 +1766,19 @@
     "restriction": "unlimited",
     "is_active": true,
     "effect_text": "フロントエンドリソースに装備できる。装備したリソースのスループットを +200 する。",
-    "attachment_effects": [
+    "effects": [
       {
-        "type": "stat_bonus",
-        "params": {
-          "stat_type": "tp",
-          "bonus": 200
-        }
+        "trigger": "passive",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": "source",
+              "buff": "tp",
+              "amount": 200,
+              "duration": "permanent"
+            }
+          }
+        ]
       }
     ]
   },
@@ -1010,7 +1797,17 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "バックエンドリソースに装備できる。装備したリソースは「データ流出」の効果を受けない。"
+    "effect_text": "バックエンドリソースに装備できる。装備したリソースは「データ流出」の効果を受けない。",
+    "effects": [
+      {
+        "trigger": "reactive",
+        "ops": [
+          {
+            "cancel_action": {}
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "SH-0018",
@@ -1027,7 +1824,20 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "Budget を 200 払って発動できる。リポジトリから SHE Resource カード1枚を選択して手札に加える。"
+    "effect_text": "Budget を 200 払って発動できる。リポジトリから SHE Resource カード1枚を選択して手札に加える。",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "ops": [
+          {
+            "search_repo": {
+              "faction": "SHE"
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "SH-0019",
@@ -1044,7 +1854,32 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "自分のフィールドに SHE カードが3枚以上ある時に発動できる。自分の Budget を +600 する。"
+    "effect_text": "自分のフィールドに SHE カードが3枚以上ある時に発動できる。自分の Budget を +600 する。",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "guard": [
+          {
+            "count": {
+              "selector": {
+                "owner": "self",
+                "faction": "SHE"
+              },
+              "min": 3
+            }
+          }
+        ],
+        "ops": [
+          {
+            "gain_budget": {
+              "target": "self",
+              "amount": 600
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "SH-0020",
@@ -1061,7 +1896,25 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "このターン、自分の全ての SHE カードの開発コストを -200 する。"
+    "effect_text": "このターン、自分の全ての SHE カードの開発コストを -200 する。",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": {
+                "owner": "self"
+              },
+              "buff": "deploy_discount",
+              "amount": 200,
+              "duration": "this_turn"
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "SH-0021",
@@ -1078,7 +1931,38 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "自分の SHE リソースの可用性が 400 以下になった時に発動できる。そのリソースの可用性を +500 する。"
+    "effect_text": "自分の SHE リソースの可用性が 400 以下になった時に発動できる。そのリソースの可用性を +500 する。",
+    "effects": [
+      {
+        "trigger": "reactive",
+        "guard": [
+          {
+            "match": {
+              "selector": "target",
+              "faction": "SHE"
+            }
+          },
+          {
+            "stat": {
+              "selector": "target",
+              "stat": "av",
+              "max": 400
+            }
+          }
+        ],
+        "ops": [
+          {
+            "heal_damage": {
+              "selector": "target",
+              "amount": 500
+            }
+          },
+          {
+            "cancel_action": {}
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "SH-0022",
@@ -1095,7 +1979,38 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "自分のフィールドに SHE カードが3枚以上ある時に使用できる。このターン、自分のフロントエンドの全ての SHE カードのスループットを +200 する。"
+    "effect_text": "自分のフィールドに SHE カードが3枚以上ある時に使用できる。このターン、自分のフロントエンドの全ての SHE カードのスループットを +200 する。",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "guard": [
+          {
+            "count": {
+              "selector": {
+                "owner": "self",
+                "faction": "SHE"
+              },
+              "min": 3
+            }
+          }
+        ],
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": {
+                "owner": "self",
+                "zone": "frontend",
+                "faction": "SHE"
+              },
+              "buff": "tp",
+              "amount": 200,
+              "duration": "this_turn"
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "SH-0023",
@@ -1112,7 +2027,18 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "Budget を 200 払って発動できる。手札の SHE リソースを1枚を選択し、デプロイコストを払わずにデプロイできる。"
+    "effect_text": "Budget を 200 払って発動できる。手札の SHE リソースを1枚を選択し、デプロイコストを払わずにデプロイできる。",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "ops": [
+          {
+            "deploy_from_hand": {}
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "SH-0024",
@@ -1134,7 +2060,25 @@
     },
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "**キャッシュブースト:** 自分のフィールドの全ての SHE NoSQL - ダイノの Yield を +200 する。"
+    "effect_text": "**キャッシュブースト:** 自分のフィールドの全ての SHE NoSQL - ダイノの Yield を +200 する。",
+    "effects": [
+      {
+        "trigger": "passive",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": {
+                "owner": "self",
+                "card_id": "SH-0009"
+              },
+              "buff": "yield",
+              "amount": 200,
+              "duration": "permanent"
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "SH-0025",
@@ -1151,7 +2095,22 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "自分の「SHE Compute - えくぼ」にのみ装備できる。装備先の可用性を +500 する。"
+    "effect_text": "自分の「SHE Compute - えくぼ」にのみ装備できる。装備先の可用性を +500 する。",
+    "effects": [
+      {
+        "trigger": "passive",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": "source",
+              "buff": "av",
+              "amount": 500,
+              "duration": "permanent"
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "SL-0001",
@@ -1195,7 +2154,19 @@
     },
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "**期間限定:** デプロイから2ターン後のエンドフェーズに発動する。このカードを破壊する（SLAペナルティは適用される）"
+    "effect_text": "**期間限定:** デプロイから2ターン後のエンドフェーズに発動する。このカードを破壊する（SLAペナルティは適用される）",
+    "effects": [
+      {
+        "trigger": "passive",
+        "custom": "spot_expiry",
+        "meta": {
+          "categories": [
+            "self_destruct"
+          ],
+          "turns": 2
+        }
+      }
+    ]
   },
   {
     "card_id": "SL-0003",
@@ -1217,7 +2188,20 @@
     },
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "**Scale to Zero:** 前のターン、このカードが攻撃していない場合に発動できる。このターン、このカードのリクエストコストは 0 になる。この効果は、このカードをデプロイしたターンは使用できない。"
+    "effect_text": "**Scale to Zero:** 前のターン、このカードが攻撃していない場合に発動できる。このターン、このカードのリクエストコストは 0 になる。この効果は、このカードをデプロイしたターンは使用できない。",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "custom": "scale_to_zero",
+        "meta": {
+          "categories": [
+            "cost_reduction"
+          ],
+          "target": "self"
+        }
+      }
+    ]
   },
   {
     "card_id": "SL-0004",
@@ -1239,7 +2223,30 @@
     },
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "**自動操縦:** このカードをデプロイした時に発動できる。開発コストなしで medium にスケールアップする。\n**大艦隊:** 自分のフィールドに他の「しゅがーらぼ Orchestrator - クーヘンバウムティス」がいる時に発動できる。手札からこのカードを、開発コストを払わずにデプロイする。この効果は1ターンに1回のみ使用できる。"
+    "effect_text": "**自動操縦:** このカードをデプロイした時に発動できる。開発コストなしで medium にスケールアップする。\n**大艦隊:** 自分のフィールドに他の「しゅがーらぼ Orchestrator - クーヘンバウムティス」がいる時に発動できる。手札からこのカードを、開発コストを払わずにデプロイする。この効果は1ターンに1回のみ使用できる。",
+    "effects": [
+      {
+        "trigger": "deploy",
+        "ops": [
+          {
+            "scale_to_rank": {
+              "rank": "medium"
+            }
+          }
+        ]
+      },
+      {
+        "trigger": "passive",
+        "use_limit": "once_per_turn",
+        "custom": "fleet_deploy",
+        "meta": {
+          "categories": [
+            "deploy_free"
+          ],
+          "card_id": "SL-0004"
+        }
+      }
+    ]
   },
   {
     "card_id": "SL-0005",
@@ -1283,7 +2290,19 @@
     },
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "**学習工程:** このカードが相手のバックエンドカードを攻撃した時に発動できる。攻撃対象のカードの Insight を 400 吸収する。"
+    "effect_text": "**学習工程:** このカードが相手のバックエンドカードを攻撃した時に発動できる。攻撃対象のカードの Insight を 400 吸収する。",
+    "effects": [
+      {
+        "trigger": "on_attack",
+        "ops": [
+          {
+            "absorb_insight": {
+              "amount": 400
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "SL-0007",
@@ -1305,7 +2324,38 @@
     },
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "**学習工程:** このカードが相手のバックエンドカードを攻撃した時に発動できる。攻撃対象のカードの Insight を 600 吸収する。\n**Cascade Failure:** このカードが破壊された時に発動する。自分の全てのバックエンドに 400 ダメージを与える。"
+    "effect_text": "**学習工程:** このカードが相手のバックエンドカードを攻撃した時に発動できる。攻撃対象のカードの Insight を 600 吸収する。\n**Cascade Failure:** このカードが破壊された時に発動する。自分の全てのバックエンドに 400 ダメージを与える。",
+    "effects": [
+      {
+        "trigger": "on_attack",
+        "ops": [
+          {
+            "absorb_insight": {
+              "amount": 600
+            }
+          }
+        ]
+      },
+      {
+        "trigger": "on_destroy",
+        "ops": [
+          {
+            "deal_damage": {
+              "selector": {
+                "owner": "self",
+                "zone": "backend"
+              },
+              "amount": 400
+            }
+          },
+          {
+            "destroy_check": {
+              "target": "self"
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "SL-0008",
@@ -1349,7 +2399,22 @@
     },
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "**完全同期:** このカードは Incident カードの効果を受けない。"
+    "effect_text": "**完全同期:** このカードは Incident カードの効果を受けない。",
+    "effects": [
+      {
+        "trigger": "passive",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": "source",
+              "buff": "incident_immune",
+              "amount": 1,
+              "duration": "permanent"
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "SL-0010",
@@ -1371,7 +2436,19 @@
     },
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "**即時反映:** 自分が しゅがーらぼ Resource をデプロイした時に発動できる。自分の Insight を +200 する。"
+    "effect_text": "**即時反映:** 自分が しゅがーらぼ Resource をデプロイした時に発動できる。自分の Insight を +200 する。",
+    "effects": [
+      {
+        "trigger": "deploy",
+        "ops": [
+          {
+            "gain_insight": {
+              "amount": 200
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "SL-0011",
@@ -1393,7 +2470,19 @@
     },
     "restriction": "semi_limited",
     "is_active": true,
-    "effect_text": "**データ収集:** 自分の しゅがーらぼ コンピュート系リソースが相手のカードを攻撃した時に発動できる。自分の Insight を +200 する。"
+    "effect_text": "**データ収集:** 自分の しゅがーらぼ コンピュート系リソースが相手のカードを攻撃した時に発動できる。自分の Insight を +200 する。",
+    "effects": [
+      {
+        "trigger": "on_attack",
+        "ops": [
+          {
+            "gain_insight": {
+              "amount": 200
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "SL-0012",
@@ -1415,7 +2504,32 @@
     },
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "**Cache Engine:** デプロイ時に、以下の効果のうち1つを選択して発動する。 — **Memcached:** 自分の Budget を +400 する / **Redis:** このカードの Yield を +200 する。"
+    "effect_text": "**Cache Engine:** デプロイ時に、以下の効果のうち1つを選択して発動する。 — **Memcached:** 自分の Budget を +400 する / **Redis:** このカードの Yield を +200 する。",
+    "effects": [
+      {
+        "trigger": "deploy",
+        "choice": {
+          "memcached": [
+            {
+              "gain_budget": {
+                "target": "self",
+                "amount": 400
+              }
+            }
+          ],
+          "redis": [
+            {
+              "apply_buff": {
+                "selector": "source",
+                "buff": "yield",
+                "amount": 200,
+                "duration": "permanent"
+              }
+            }
+          ]
+        }
+      }
+    ]
   },
   {
     "card_id": "SL-0013",
@@ -1455,13 +2569,22 @@
     "restriction": "unlimited",
     "is_active": true,
     "effect_text": "自分のフィールドの しゅがーらぼ リソースのスケールアップコストを -200 する。",
-    "platform_effects": [
+    "effects": [
       {
-        "type": "scale_cost_reduction",
-        "params": {
-          "target_faction": "Sugar",
-          "reduction": 200
-        }
+        "trigger": "passive",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": {
+                "owner": "self",
+                "faction": "Sugar"
+              },
+              "buff": "scale_cost_reduction",
+              "amount": 200,
+              "duration": "permanent"
+            }
+          }
+        ]
       }
     ]
   },
@@ -1481,20 +2604,29 @@
     "restriction": "unlimited",
     "is_active": true,
     "effect_text": "自分のフィールドの全ての しゅがーらぼ コンピュート系リソースのスループットを +200 する。",
-    "platform_effects": [
+    "effects": [
       {
-        "type": "tp_bonus",
-        "params": {
-          "target_faction": "Sugar",
-          "target_card_types": [
-            "Compute",
-            "AI/ML",
-            "Orchestrator",
-            "Container",
-            "Serverless"
-          ],
-          "bonus": 200
-        }
+        "trigger": "passive",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": {
+                "owner": "self",
+                "faction": "Sugar",
+                "card_type": [
+                  "Compute",
+                  "AI/ML",
+                  "Orchestrator",
+                  "Container",
+                  "Serverless"
+                ]
+              },
+              "buff": "tp",
+              "amount": 200,
+              "duration": "permanent"
+            }
+          }
+        ]
       }
     ]
   },
@@ -1513,7 +2645,19 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "毎ターン発動できる。相手の Insight を 300 吸収する。"
+    "effect_text": "毎ターン発動できる。相手の Insight を 300 吸収する。",
+    "effects": [
+      {
+        "trigger": "passive",
+        "ops": [
+          {
+            "absorb_insight": {
+              "amount": 300
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "SL-0017",
@@ -1531,13 +2675,19 @@
     "restriction": "unlimited",
     "is_active": true,
     "effect_text": "自分の しゅがーらぼ コンピュート系リソースに装備できる。装備先のスループットを +200 する。",
-    "attachment_effects": [
+    "effects": [
       {
-        "type": "stat_bonus",
-        "params": {
-          "stat_type": "tp",
-          "bonus": 200
-        }
+        "trigger": "passive",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": "source",
+              "buff": "tp",
+              "amount": 200,
+              "duration": "permanent"
+            }
+          }
+        ]
       }
     ]
   },
@@ -1556,7 +2706,19 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "自分の しゅがーらぼ コンピュート系リソースに装備できる。装備先が攻撃した時に発動できる。選択した他の自分の しゅがーらぼ コンピュート系リソース1体は、このターン、リクエストコストなしで攻撃できる。"
+    "effect_text": "自分の しゅがーらぼ コンピュート系リソースに装備できる。装備先が攻撃した時に発動できる。選択した他の自分の しゅがーらぼ コンピュート系リソース1体は、このターン、リクエストコストなしで攻撃できる。",
+    "effects": [
+      {
+        "trigger": "on_attack",
+        "custom": "chain_attack_bonus",
+        "meta": {
+          "categories": [
+            "single_damage"
+          ],
+          "target": "self"
+        }
+      }
+    ]
   },
   {
     "card_id": "SL-0019",
@@ -1574,20 +2736,27 @@
     "restriction": "unlimited",
     "is_active": true,
     "effect_text": "自分の しゅがーらぼ DB系リソースに装備できる。装備先の Yield を +400 する。装備先の SLAペナルティを +100 する。",
-    "attachment_effects": [
+    "effects": [
       {
-        "type": "stat_bonus",
-        "params": {
-          "stat_type": "yield",
-          "bonus": 300
-        }
-      },
-      {
-        "type": "stat_bonus",
-        "params": {
-          "stat_type": "av",
-          "bonus": -200
-        }
+        "trigger": "passive",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": "source",
+              "buff": "yield",
+              "amount": 300,
+              "duration": "permanent"
+            }
+          },
+          {
+            "apply_buff": {
+              "selector": "source",
+              "buff": "av",
+              "amount": -200,
+              "duration": "permanent"
+            }
+          }
+        ]
       }
     ]
   },
@@ -1606,7 +2775,33 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "自分の「しゅがーらぼ Compute - ジューシィ・いちご」にのみ装備できる。①装備先の可用性を +400 する。②自分のメインフェーズに発動できる。このカードを別の自分の「しゅがーらぼ Compute - ジューシィ・いちご」に付け替える。この効果は1ターン中に1回のみ使用できる。"
+    "effect_text": "自分の「しゅがーらぼ Compute - ジューシィ・いちご」にのみ装備できる。①装備先の可用性を +400 する。②自分のメインフェーズに発動できる。このカードを別の自分の「しゅがーらぼ Compute - ジューシィ・いちご」に付け替える。この効果は1ターン中に1回のみ使用できる。",
+    "effects": [
+      {
+        "trigger": "passive",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": "source",
+              "buff": "av",
+              "amount": 400,
+              "duration": "permanent"
+            }
+          }
+        ]
+      },
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "custom": "reattach",
+        "meta": {
+          "categories": [
+            "utility"
+          ],
+          "target": "self"
+        }
+      }
+    ]
   },
   {
     "card_id": "SL-0021",
@@ -1623,7 +2818,20 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "Budget 200 を払って発動できる。リポジトリから しゅがーらぼ リソース1枚を選択して手札に加える。"
+    "effect_text": "Budget 200 を払って発動できる。リポジトリから しゅがーらぼ リソース1枚を選択して手札に加える。",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "ops": [
+          {
+            "search_repo": {
+              "faction": "Sugar"
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "SL-0022",
@@ -1640,7 +2848,37 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "Budget 300 を払って発動できる。コンピュート系リソース1体を選択する。このターン、そのカードのスループットを2倍にする。"
+    "effect_text": "Budget 300 を払って発動できる。コンピュート系リソース1体を選択する。このターン、そのカードのスループットを2倍にする。",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": {
+                "owner": "self",
+                "zone": "frontend",
+                "card_type": [
+                  "Compute",
+                  "AI/ML",
+                  "Orchestrator",
+                  "Container",
+                  "Serverless"
+                ],
+                "pick": "choice"
+              },
+              "buff": "tp",
+              "amount": {
+                "ref": "target.tp",
+                "multiply": 1
+              },
+              "duration": "this_turn"
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "SL-0023",
@@ -1657,7 +2895,30 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "Budget 200 を払って発動できる。相手の Insight を 400 吸収する。さらに、相手のDB系リソースおよびオブジェクトストレージ1体につき相手の Insight を 200 吸収する。"
+    "effect_text": "Budget 200 を払って発動できる。相手の Insight を 400 吸収する。さらに、相手のDB系リソースおよびオブジェクトストレージ1体につき相手の Insight を 200 吸収する。",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "ops": [
+          {
+            "absorb_insight": {
+              "amount": {
+                "base": 400,
+                "per": {
+                  "count": {
+                    "owner": "self",
+                    "zone": "backend"
+                  },
+                  "value": 200
+                },
+                "max": 600
+              }
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "SL-0024",
@@ -1674,7 +2935,27 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "自分の しゅがーらぼ リソースが破壊される攻撃を受けた時に発動できる。その攻撃を無効化し、このターン中そのリソースは攻撃の対象にならない。ただし、次の自分のターン、そのリソースは攻撃できない。"
+    "effect_text": "自分の しゅがーらぼ リソースが破壊される攻撃を受けた時に発動できる。その攻撃を無効化し、このターン中そのリソースは攻撃の対象にならない。ただし、次の自分のターン、そのリソースは攻撃できない。",
+    "effects": [
+      {
+        "trigger": "reactive",
+        "guard": [
+          {
+            "match": {
+              "selector": "target",
+              "faction": "Sugar"
+            }
+          }
+        ],
+        "ops": [
+          {
+            "survive_destruction": {
+              "av": 200
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "TK-0001",
@@ -1718,7 +2999,19 @@
     },
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "**Auto Patch:** 相手がインシデントカードを使った時に発動できる。このカードが受けるダメージを半分にする。"
+    "effect_text": "**Auto Patch:** 相手がインシデントカードを使った時に発動できる。このカードが受けるダメージを半分にする。",
+    "effects": [
+      {
+        "trigger": "reactive",
+        "custom": "halve_incident_damage",
+        "meta": {
+          "categories": [
+            "defensive"
+          ],
+          "target": "self"
+        }
+      }
+    ]
   },
   {
     "card_id": "TK-0003",
@@ -1785,15 +3078,15 @@
     "restriction": "unlimited",
     "is_active": true,
     "effect_text": "**データの泉:** 自分のバックエンドの 天気使い DB系リソースおよびオブジェクトストレージ1体につき、このカードのスループットを +200 する。",
-    "passive_effects": [
+    "effects": [
       {
-        "type": "tp_per_backend_data",
-        "params": {
-          "faction": "Tenki",
-          "bonus_per_card": 200,
-          "multi_model_card_ids": [
-            "TK-0010"
-          ]
+        "trigger": "passive",
+        "custom": "tp_per_backend_data",
+        "meta": {
+          "categories": [
+            "buff"
+          ],
+          "target": "self"
         }
       }
     ]
@@ -1862,7 +3155,37 @@
     },
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "**嵐の後の虹:** 自分のバックエンドの他の 天気使い DB系リソースが破壊された時、2ターンの間、このカードの Yield を +400 する。"
+    "effect_text": "**嵐の後の虹:** 自分のバックエンドの他の 天気使い DB系リソースが破壊された時、2ターンの間、このカードの Yield を +400 する。",
+    "effects": [
+      {
+        "trigger": "on_destroy",
+        "guard": [
+          {
+            "match": {
+              "selector": "target",
+              "faction": "Tenki",
+              "card_type": "data"
+            }
+          },
+          {
+            "not_same": {
+              "a": "source",
+              "b": "target"
+            }
+          }
+        ],
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": "source",
+              "buff": "yield",
+              "amount": 400,
+              "duration": "until_next_own_turn_end"
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "TK-0009",
@@ -1906,7 +3229,22 @@
     },
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "**百花の形:** このカードが 天気使い DB系リソースとして効果の対象になる時、このカードは2枚分として数える。\n**百花繚乱:** このカードをデプロイした時に発動できる。リポジトリから「天気使い NoSQL - 秩序の蒼<コスモ>」1枚をコストなしでデプロイする。この効果は1ターン中に1回のみ使用できる"
+    "effect_text": "**百花の形:** このカードが 天気使い DB系リソースとして効果の対象になる時、このカードは2枚分として数える。\n**百花繚乱:** このカードをデプロイした時に発動できる。リポジトリから「天気使い NoSQL - 秩序の蒼<コスモ>」1枚をコストなしでデプロイする。この効果は1ターン中に1回のみ使用できる",
+    "effects": [
+      {
+        "trigger": "deploy",
+        "use_limit": "once_per_turn",
+        "ops": [
+          {
+            "deploy_from_repo": {
+              "filter": {
+                "card_id": "TK-0010"
+              }
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "TK-0011",
@@ -1946,13 +3284,22 @@
     "restriction": "unlimited",
     "is_active": true,
     "effect_text": "自分のフィールドの 天気使い リソースのスケールアップのコストを -200 する。",
-    "platform_effects": [
+    "effects": [
       {
-        "type": "scale_cost_reduction",
-        "params": {
-          "target_faction": "Tenki",
-          "reduction": 200
-        }
+        "trigger": "passive",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": {
+                "owner": "self",
+                "faction": "Tenki"
+              },
+              "buff": "scale_cost_reduction",
+              "amount": 200,
+              "duration": "permanent"
+            }
+          }
+        ]
       }
     ]
   },
@@ -1972,20 +3319,29 @@
     "restriction": "unlimited",
     "is_active": true,
     "effect_text": "自分のフィールドの全ての 天気使い コンピュート系リソースのスループットを +200 する。",
-    "platform_effects": [
+    "effects": [
       {
-        "type": "tp_bonus",
-        "params": {
-          "target_faction": "Tenki",
-          "target_card_types": [
-            "Compute",
-            "AI/ML",
-            "Orchestrator",
-            "Container",
-            "Serverless"
-          ],
-          "bonus": 200
-        }
+        "trigger": "passive",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": {
+                "owner": "self",
+                "faction": "Tenki",
+                "card_type": [
+                  "Compute",
+                  "AI/ML",
+                  "Orchestrator",
+                  "Container",
+                  "Serverless"
+                ]
+              },
+              "buff": "tp",
+              "amount": 200,
+              "duration": "permanent"
+            }
+          }
+        ]
       }
     ]
   },
@@ -2004,7 +3360,17 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "相手の「DDoS攻撃」と「データ流出」を無効化する。"
+    "effect_text": "相手の「DDoS攻撃」と「データ流出」を無効化する。",
+    "effects": [
+      {
+        "trigger": "reactive",
+        "ops": [
+          {
+            "cancel_action": {}
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "TK-0015",
@@ -2021,7 +3387,26 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "自分のリソースに装備できる。装備先が破壊された時に発動できる。次の自分のターンに、装備先のカードを可用性を半分にしてデプロイコストなしでデプロイする。この効果は1ゲーム中に1回のみ使用できる"
+    "effect_text": "自分のリソースに装備できる。装備先が破壊された時に発動できる。次の自分のターンに、装備先のカードを可用性を半分にしてデプロイコストなしでデプロイする。この効果は1ゲーム中に1回のみ使用できる",
+    "effects": [
+      {
+        "trigger": "on_destroy",
+        "use_limit": "once_per_game",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": "target",
+              "buff": "pending_revival",
+              "amount": {
+                "ref": "target.max_av",
+                "multiply": 0.5
+              },
+              "duration": "next_turn"
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "TK-0016",
@@ -2038,7 +3423,22 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "自分のリソースに装備できる。装備先へのインシデントカードによるダメージを -200 する。"
+    "effect_text": "自分のリソースに装備できる。装備先へのインシデントカードによるダメージを -200 する。",
+    "effects": [
+      {
+        "trigger": "passive",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": "source",
+              "buff": "incident_reduction",
+              "amount": 200,
+              "duration": "permanent"
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "TK-0017",
@@ -2055,7 +3455,17 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "自分のバックエンドリソースに装備できる。装備先は「データ流出」の効果を受けない。"
+    "effect_text": "自分のバックエンドリソースに装備できる。装備先は「データ流出」の効果を受けない。",
+    "effects": [
+      {
+        "trigger": "reactive",
+        "ops": [
+          {
+            "cancel_action": {}
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "TK-0018",
@@ -2072,7 +3482,20 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "自分のリソースに装備できる。装備先が破壊された時に発動できる。リポジトリから装備先と同名のカードを可用性 200 でデプロイコストなしでデプロイする。この効果は1ゲーム中に1回のみ使用できる"
+    "effect_text": "自分のリソースに装備できる。装備先が破壊された時に発動できる。リポジトリから装備先と同名のカードを可用性 200 でデプロイコストなしでデプロイする。この効果は1ゲーム中に1回のみ使用できる",
+    "effects": [
+      {
+        "trigger": "on_destroy",
+        "use_limit": "once_per_game",
+        "ops": [
+          {
+            "deploy_from_repo_same_card": {
+              "override_av": 200
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "TK-0019",
@@ -2089,7 +3512,30 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "自分の「天気使い VM - ソラ」にのみ装備できる。装備先の可用性を +300 し、スループットを +200 する。"
+    "effect_text": "自分の「天気使い VM - ソラ」にのみ装備できる。装備先の可用性を +300 し、スループットを +200 する。",
+    "effects": [
+      {
+        "trigger": "passive",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": "source",
+              "buff": "av",
+              "amount": 300,
+              "duration": "permanent"
+            }
+          },
+          {
+            "apply_buff": {
+              "selector": "source",
+              "buff": "tp",
+              "amount": 200,
+              "duration": "permanent"
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "TK-0020",
@@ -2106,7 +3552,20 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "Budget 200 を払って発動できる。リポジトリから 天気使い リソース1枚を選択して手札に加える。"
+    "effect_text": "Budget 200 を払って発動できる。リポジトリから 天気使い リソース1枚を選択して手札に加える。",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "ops": [
+          {
+            "search_repo": {
+              "faction": "Tenki"
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "TK-0021",
@@ -2123,7 +3582,18 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "Budget 100 を払って発動できる。トラッシュから 天気使い リソース1枚を選択して手札に加える。"
+    "effect_text": "Budget 100 を払って発動できる。トラッシュから 天気使い リソース1枚を選択して手札に加える。",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "ops": [
+          {
+            "trash_to_hand": {}
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "TK-0022",
@@ -2140,7 +3610,26 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "Budget 400 を払って発動できる。このターン、相手はインシデントカードを使用できない。"
+    "effect_text": "Budget 400 を払って発動できる。このターン、相手はインシデントカードを使用できない。",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": {
+                "owner": "opponent",
+                "zone": "frontend"
+              },
+              "buff": "incident_block",
+              "amount": 1,
+              "duration": "this_turn"
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "TK-0023",
@@ -2157,7 +3646,17 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "相手がインシデントカードを使用した時に発動できる。そのインシデントを無効化する。"
+    "effect_text": "相手がインシデントカードを使用した時に発動できる。そのインシデントを無効化する。",
+    "effects": [
+      {
+        "trigger": "reactive",
+        "ops": [
+          {
+            "cancel_action": {}
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "TK-0024",
@@ -2174,7 +3673,28 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "自分の 天気使い コンピュート系リソースが破壊された時に発動できる。手札から 天気使い コンピュート系リソース1枚をデプロイコストなしでデプロイする。"
+    "effect_text": "自分の 天気使い コンピュート系リソースが破壊された時に発動できる。手札から 天気使い コンピュート系リソース1枚をデプロイコストなしでデプロイする。",
+    "effects": [
+      {
+        "trigger": "reactive",
+        "ops": [
+          {
+            "deploy_from_hand": {
+              "filter": {
+                "faction": "Tenki",
+                "card_type": [
+                  "Compute",
+                  "Container",
+                  "Orchestrator",
+                  "Serverless",
+                  "AI/ML"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "TK-0025",
@@ -2191,7 +3711,28 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "相手が手札からインシデントカードを使用した時に発動できる。そのインシデントのリクエストコスト（Budget）を +500 する。"
+    "effect_text": "相手のインシデントカードによって自分のBudgetが減少する時に発動できる。そのインシデントによって発生する自分のBudgetの減少を-300する",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "ops": [
+          {
+            "reveal_reactive": {}
+          },
+          {
+            "apply_buff": {
+              "selector": {
+                "owner": "self"
+              },
+              "buff": "incident_reduction",
+              "amount": 300,
+              "duration": "this_turn"
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "TN-0001",
@@ -2235,7 +3776,20 @@
     },
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "**No Virtualization:** 攻撃時、このカードに 300 ダメージを与える"
+    "effect_text": "**No Virtualization:** 攻撃時、このカードに 300 ダメージを与える",
+    "effects": [
+      {
+        "trigger": "on_attack",
+        "ops": [
+          {
+            "deal_damage": {
+              "selector": "source",
+              "amount": 300
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "TN-0003",
@@ -2280,10 +3834,16 @@
     "restriction": "unlimited",
     "is_active": true,
     "effect_text": "**初回無料:** small → medium の Scale Cost 0",
-    "passive_effects": [
+    "effects": [
       {
-        "type": "scale_cost_free",
-        "params": {}
+        "trigger": "passive",
+        "custom": "free_first_scale",
+        "meta": {
+          "categories": [
+            "buff"
+          ],
+          "target": "self"
+        }
       }
     ]
   },
@@ -2330,17 +3890,34 @@
     "restriction": "semi_limited",
     "is_active": true,
     "effect_text": "**Low-Code:** 自分のフィールドに 調律部 DB がある時、このカードのスループットを +400 する。",
-    "passive_effects": [
+    "effects": [
       {
-        "type": "tp_if_card_type_on_field",
-        "params": {
-          "faction": "Tuners",
-          "card_types": [
-            "Database",
-            "CacheDB"
-          ],
-          "flat_bonus": 400
-        }
+        "trigger": "passive",
+        "guard": [
+          {
+            "count": {
+              "selector": {
+                "owner": "self",
+                "faction": "Tuners",
+                "card_type": [
+                  "Database",
+                  "CacheDB"
+                ]
+              },
+              "min": 1
+            }
+          }
+        ],
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": "source",
+              "buff": "tp",
+              "amount": 400,
+              "duration": "permanent"
+            }
+          }
+        ]
       }
     ]
   },
@@ -2448,13 +4025,22 @@
     "restriction": "unlimited",
     "is_active": true,
     "effect_text": "自分のフィールドの 調律部 リソースのスケールアップコストを -300 する。",
-    "platform_effects": [
+    "effects": [
       {
-        "type": "scale_cost_reduction",
-        "params": {
-          "target_faction": "Tuners",
-          "reduction": 300
-        }
+        "trigger": "passive",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": {
+                "owner": "self",
+                "faction": "Tuners"
+              },
+              "buff": "scale_cost_reduction",
+              "amount": 300,
+              "duration": "permanent"
+            }
+          }
+        ]
       }
     ]
   },
@@ -2473,7 +4059,45 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "インシデントカードによる自分の 調律部 リソースへのダメージを -200 する。"
+    "effect_text": "インシデントカードによる自分の 調律部 リソースへのダメージを -200 する。",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "ops": [
+          {
+            "reveal_reactive": {}
+          }
+        ]
+      },
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "guard": [
+          {
+            "count": {
+              "selector": {
+                "owner": "self",
+                "faction": "Tuners"
+              },
+              "min": 3
+            }
+          }
+        ],
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": {
+                "owner": "self"
+              },
+              "buff": "incident_reduction",
+              "amount": 200,
+              "duration": "this_turn"
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "TN-0013",
@@ -2490,7 +4114,17 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "自分のフィールドの 調律部 リソースは相手の「DDoS攻撃」と「データ流出」の効果を受けない。"
+    "effect_text": "自分のフィールドの 調律部 リソースは相手の「DDoS攻撃」と「データ流出」の効果を受けない。",
+    "effects": [
+      {
+        "trigger": "reactive",
+        "ops": [
+          {
+            "cancel_action": {}
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "TN-0014",
@@ -2507,7 +4141,24 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "自分の 調律部 DB系リソースに装備できる。装備先が破壊された時に発動できる。リポジトリから 調律部 DB系リソース1枚をデプロイコストなしでデプロイする。この効果は1ゲーム中に1回のみ使用できる。"
+    "effect_text": "自分の 調律部 DB系リソースに装備できる。装備先が破壊された時に発動できる。リポジトリから 調律部 DB系リソース1枚をデプロイコストなしでデプロイする。この効果は1ゲーム中に1回のみ使用できる。",
+    "effects": [
+      {
+        "trigger": "on_destroy",
+        "use_limit": "once_per_game",
+        "ops": [
+          {
+            "deploy_from_repo": {
+              "filter": {
+                "faction": "Tuners",
+                "card_type": "Database"
+              },
+              "override_av": 200
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "TN-0015",
@@ -2525,13 +4176,19 @@
     "restriction": "unlimited",
     "is_active": true,
     "effect_text": "自分の 調律部 DB系リソースに装備できる。装備先の可用性を +400 する。装備先へのインシデントカードによるダメージを -200 する。",
-    "attachment_effects": [
+    "effects": [
       {
-        "type": "stat_bonus",
-        "params": {
-          "stat_type": "av",
-          "bonus": 400
-        }
+        "trigger": "passive",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": "source",
+              "buff": "av",
+              "amount": 400,
+              "duration": "permanent"
+            }
+          }
+        ]
       }
     ]
   },
@@ -2550,7 +4207,30 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "自分の「調律部 Compute - コンタータ」または「調律部 Bare Metal - ベア太」にのみ装備できる。装備先の可用性を +800 する。装備先へのインシデントカードによるダメージを -100 する。"
+    "effect_text": "自分の「調律部 Compute - コンタータ」または「調律部 Bare Metal - ベア太」にのみ装備できる。装備先の可用性を +800 する。装備先へのインシデントカードによるダメージを -100 する。",
+    "effects": [
+      {
+        "trigger": "passive",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": "source",
+              "buff": "av",
+              "amount": 800,
+              "duration": "permanent"
+            }
+          },
+          {
+            "apply_buff": {
+              "selector": "source",
+              "buff": "incident_reduction",
+              "amount": 100,
+              "duration": "permanent"
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "TN-0017",
@@ -2567,7 +4247,30 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "Budget 100 を払って発動できる。自分の 調律部 DB系リソース1体の可用性を最大値まで回復する。"
+    "effect_text": "Budget 100 を払って発動できる。自分の 調律部 DB系リソース1体の可用性を最大値まで回復する。",
+    "effects": [
+      {
+        "trigger": "activate",
+        "use_limit": "once_per_turn",
+        "ops": [
+          {
+            "heal_damage": {
+              "selector": {
+                "owner": "self",
+                "zone": "backend",
+                "faction": "Tuners",
+                "card_type": "Database",
+                "pick": "choice"
+              },
+              "amount": {
+                "ref": "target.max_av",
+                "multiply": 1
+              }
+            }
+          }
+        ]
+      }
+    ]
   },
   {
     "card_id": "TN-0018",
@@ -2584,6 +4287,21 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "自分の 調律部 DB系リソースが破壊された時に発動できる。手札から 調律部 DB系リソース1枚をデプロイコストなしでデプロイする。"
+    "effect_text": "自分の 調律部 DB系リソースが破壊された時に発動できる。手札から 調律部 DB系リソース1枚をデプロイコストなしでデプロイする。",
+    "effects": [
+      {
+        "trigger": "reactive",
+        "ops": [
+          {
+            "deploy_from_hand": {
+              "filter": {
+                "faction": "Tuners",
+                "card_type": "Database"
+              }
+            }
+          }
+        ]
+      }
+    ]
   }
 ]

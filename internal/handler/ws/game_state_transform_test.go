@@ -457,7 +457,7 @@ func TestTransformResourceInstance_FaceDownPassthrough(t *testing.T) {
 func TestTransformAvailableActions(t *testing.T) {
 	actions := []battleAvailableAction{
 		{
-			Type:              "activate_effect",
+			Type:              "use_effect",
 			HandInstanceID:    nil,
 			CardID:            "",
 			ValidZones:        nil,
@@ -493,7 +493,7 @@ func TestTransformAvailableActions(t *testing.T) {
 	require.Len(t, out, 2)
 
 	// First action
-	assert.Equal(t, "activate_effect", out[0].Type)
+	assert.Equal(t, "use_effect", out[0].Type)
 	assert.Nil(t, out[0].HandInstanceID)
 	assert.Equal(t, "", out[0].CardID)
 	assert.Nil(t, out[0].ValidZones)
