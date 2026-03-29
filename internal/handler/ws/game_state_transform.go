@@ -137,6 +137,7 @@ type battleHiddenSupportInstance struct {
 	CardID     string `json:"cardID"`
 	ArtNo      int64  `json:"artNo"`
 	FaceDown   bool   `json:"faceDown"`
+	Peeked     bool   `json:"peeked"`
 }
 
 type battleHandCard struct {
@@ -264,6 +265,7 @@ type clientHiddenSupportInstance struct {
 	CardID     string `json:"cardId"`
 	ArtNo      int64  `json:"artNo"`
 	FaceDown   bool   `json:"faceDown"`
+	Peeked     bool   `json:"peeked"`
 }
 
 type clientHandCard struct {
@@ -287,18 +289,18 @@ type clientTemporaryEffect struct {
 
 type clientAvailableAction struct {
 	Type              string   `json:"type"`
-	HandInstanceID    *string  `json:"hand_instance_id,omitempty"`
-	CardID            string   `json:"card_id,omitempty"`
-	ValidZones        []string `json:"valid_zones,omitempty"`
-	SourceInstanceID  *string  `json:"source_instance_id,omitempty"`
-	ValidTargets      []string `json:"valid_targets,omitempty"`
-	TargetRank        *string  `json:"target_rank,omitempty"`
-	InstanceFamily    *string  `json:"instance_family,omitempty"`
+	HandInstanceID    *string  `json:"hand_instance_id"`
+	CardID            string   `json:"card_id"`
+	ValidZones        []string `json:"valid_zones"`
+	SourceInstanceID  *string  `json:"source_instance_id"`
+	ValidTargets      []string `json:"valid_targets"`
+	TargetRank        *string  `json:"target_rank"`
+	InstanceFamily    *string  `json:"instance_family"`
 	NeedsFamily       bool     `json:"needs_family"`
-	RemainingCapacity int64    `json:"remaining_capacity,omitempty"`
-	EffectTargetType  *string  `json:"effect_target_type,omitempty"`
+	RemainingCapacity int64    `json:"remaining_capacity"`
+	EffectTargetType  *string  `json:"effect_target_type"`
 	RequiredCount     int      `json:"required_count"`
-	ChoiceOptions     []string `json:"choice_options,omitempty"`
+	ChoiceOptions     []string `json:"choice_options"`
 }
 
 // ========================================================================
@@ -440,6 +442,7 @@ func transformHiddenSupportSlots(slots []*battleHiddenSupportInstance) []*client
 				CardID:     s.CardID,
 				ArtNo:      s.ArtNo,
 				FaceDown:   s.FaceDown,
+				Peeked:     s.Peeked,
 			}
 		}
 	}

@@ -397,8 +397,8 @@ func TestTransformField_NilSlots(t *testing.T) {
 
 func TestTransformHiddenSupportSlots(t *testing.T) {
 	slots := []*battleHiddenSupportInstance{
-		{InstanceID: "hs-1", CardID: "NT-0042", ArtNo: 5, FaceDown: false},
-		{InstanceID: "hs-2", CardID: "NT-0043", ArtNo: 8, FaceDown: true},
+		{InstanceID: "hs-1", CardID: "NT-0042", ArtNo: 5, FaceDown: false, Peeked: false},
+		{InstanceID: "hs-2", CardID: "NT-0043", ArtNo: 8, FaceDown: true, Peeked: true},
 		nil,
 	}
 
@@ -411,12 +411,14 @@ func TestTransformHiddenSupportSlots(t *testing.T) {
 	assert.Equal(t, "NT-0042", out[0].CardID)
 	assert.Equal(t, int64(5), out[0].ArtNo, "artNo should be passed through")
 	assert.Equal(t, false, out[0].FaceDown)
+	assert.Equal(t, false, out[0].Peeked)
 
 	require.NotNil(t, out[1])
 	assert.Equal(t, "hs-2", out[1].InstanceID)
 	assert.Equal(t, "NT-0043", out[1].CardID)
 	assert.Equal(t, int64(8), out[1].ArtNo, "artNo should be passed through")
 	assert.Equal(t, true, out[1].FaceDown)
+	assert.Equal(t, true, out[1].Peeked)
 
 	// Nil slot preserved
 	assert.Nil(t, out[2])
