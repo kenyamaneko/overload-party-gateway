@@ -105,6 +105,44 @@ func (s *PlayerService) IncrementBattleCount(ctx context.Context, playerID strin
 	return nil
 }
 
+// AwardExp adds experience points to a player and recalculates their level.
+func (s *PlayerService) AwardExp(ctx context.Context, playerID string, expGain int64) error {
+	if expGain <= 0 {
+		return nil
+	}
+	_, err := s.playerRepo.AddExp(ctx, playerID, expGain)
+	return err
+}
+
+// LevelProgress holds computed level progress fields derived from a player's
+// current level, exp, and the exp_formula_coefficient config value.
+type LevelProgress struct {
+	LevelExpCurrent  int64 `json:"level_exp_current"`
+	LevelExpRequired int64 `json:"level_exp_required"`
+}
+
+// GetLevelProgress returns the level progress for the given player.
+func (s *PlayerService) GetLevelProgress(ctx context.Context, level, exp int64) (*LevelProgress, error) {
+	coeff, err := s.gameConfigRepo.GetInt64(ctx, "exp_formula_coefficient", 0)
+	if err != nil {
+		return nil, fmt.Errorf("get exp_formula_coefficient: %w", err)
+	}
+	if coeff <= 0 {
+		return nil, fmt.Errorf("exp_formula_coefficient not configured in game_config")
+	}
+	return ComputeLevelProgress(level, exp, coeff), nil
+}
+
+// ComputeLevelProgress calculates experience progress within the current level.
+func ComputeLevelProgress(level, exp, coeff int64) *LevelProgress {
+	currentLevelExp := coeff * level * level
+	nextLevelExp := coeff * (level + 1) * (level + 1)
+	return &LevelProgress{
+		LevelExpCurrent:  max(0, exp-currentLevelExp),
+		LevelExpRequired: nextLevelExp - currentLevelExp,
+	}
+}
+
 func gameDay() civil.Date {
 	return civil.DateOf(time.Now().UTC().Add(gameDayOffset))
 }

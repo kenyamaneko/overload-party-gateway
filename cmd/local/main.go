@@ -61,7 +61,7 @@ func main() {
 	battleClient := service.NewBattleClient(cfg.BattleServerURL)
 
 	// 5. Handlers
-	wsManager := ws.NewManager(battleClient, playerService, deckService, deckRepo)
+	wsManager := ws.NewManager(battleClient, playerService, deckService, deckRepo, gameConfigRepo)
 	go wsManager.StartMatchmaking(ctx)
 	wsHandler := ws.NewHandler(wsManager, nil, playerRepo, nil)
 	authHandler := rest.NewAuthHandler(authService)

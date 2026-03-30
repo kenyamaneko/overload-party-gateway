@@ -20,22 +20,24 @@ type Manager struct {
 	Relay    *GameRelay
 	Spectate *SpectateRelay
 
-	battleClient  service.BattleClient
-	playerService *service.PlayerService
-	deckService   *service.DeckService
-	deckRepo      port.DeckRepo
-	queue         *repository.MatchmakingQueue
+	battleClient   service.BattleClient
+	playerService  *service.PlayerService
+	deckService    *service.DeckService
+	deckRepo       port.DeckRepo
+	gameConfigRepo port.GameConfigRepo
+	queue          *repository.MatchmakingQueue
 }
 
-func NewManager(battleClient service.BattleClient, playerService *service.PlayerService, deckService *service.DeckService, deckRepo port.DeckRepo) *Manager {
+func NewManager(battleClient service.BattleClient, playerService *service.PlayerService, deckService *service.DeckService, deckRepo port.DeckRepo, gameConfigRepo port.GameConfigRepo) *Manager {
 	queue := repository.NewMatchmakingQueue()
 
 	m := &Manager{
-		battleClient:  battleClient,
-		playerService: playerService,
-		deckService:   deckService,
-		deckRepo:      deckRepo,
-		queue:         queue,
+		battleClient:   battleClient,
+		playerService:  playerService,
+		deckService:    deckService,
+		deckRepo:       deckRepo,
+		gameConfigRepo: gameConfigRepo,
+		queue:          queue,
 	}
 
 	// Hub needs to query GameRelay for the player's gameID on disconnect,
@@ -54,6 +56,10 @@ func NewManager(battleClient service.BattleClient, playerService *service.Player
 
 	// Cross-wire: GameRelay notifies SpectateRelay on state updates and game over.
 	relay.spectateRelay = spectate
+
+	// Wire player service and game config repo for exp awarding on game over.
+	relay.playerService = playerService
+	relay.gameConfigRepo = m.gameConfigRepo
 
 	// Wire player lookup for battle_start banner data.
 	if playerService != nil {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/constants"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
@@ -38,6 +39,9 @@ type GameRelay struct {
 	spectateRelay *SpectateRelay
 	// playerLookup is wired in after construction by the Manager.
 	playerLookup PlayerLookupFunc
+	// playerService is wired in after construction for exp awarding.
+	playerService  *service.PlayerService
+	gameConfigRepo port.GameConfigRepo
 
 	mu          sync.RWMutex
 	gameMembers map[string][]string    // gameID → []playerID
@@ -46,6 +50,8 @@ type GameRelay struct {
 
 	timerMu    sync.Mutex
 	turnTimers map[string]*turnTimerInfo // gameID → active turn timer
+
+	expAwarded map[string]bool // gameID → already awarded
 }
 
 func NewGameRelay(hub *ConnectionHub, battleClient service.BattleClient) *GameRelay {
@@ -56,6 +62,7 @@ func NewGameRelay(hub *ConnectionHub, battleClient service.BattleClient) *GameRe
 		playerGames:  make(map[string]string),
 		gameMeta:     make(map[string]gameMetaInfo),
 		turnTimers:   make(map[string]*turnTimerInfo),
+		expAwarded:   make(map[string]bool),
 	}
 }
 
@@ -313,9 +320,70 @@ func (r *GameRelay) broadcastGameOver(gameID string, winnerNum int64, reason str
 		}),
 	})
 
+	r.awardGameExp(gameID, winnerNum, reason)
+
 	// Notify and clean up spectators.
 	if r.spectateRelay != nil {
 		r.spectateRelay.UnregisterGame(gameID, winnerNum, reason)
+	}
+}
+
+// awardGameExp grants experience points to players after a game ends.
+// Errors are logged but do not block the game-over flow.
+func (r *GameRelay) awardGameExp(gameID string, winnerNum int64, reason string) {
+	if r.playerService == nil || r.gameConfigRepo == nil {
+		return
+	}
+
+	r.mu.Lock()
+	if r.expAwarded[gameID] {
+		r.mu.Unlock()
+		return
+	}
+	r.expAwarded[gameID] = true
+	meta, hasMeta := r.gameMeta[gameID]
+	r.mu.Unlock()
+	if !hasMeta {
+		return
+	}
+
+	ctx := context.Background()
+
+	expWin, err := r.gameConfigRepo.GetInt64(ctx, "exp_win", 0)
+	if err != nil {
+		log.Printf("ERROR: failed to read exp_win from game_config: %v", err)
+		return
+	}
+	expLoss, err := r.gameConfigRepo.GetInt64(ctx, "exp_loss", 0)
+	if err != nil {
+		log.Printf("ERROR: failed to read exp_loss from game_config: %v", err)
+		return
+	}
+	expDraw, err := r.gameConfigRepo.GetInt64(ctx, "exp_draw", 0)
+	if err != nil {
+		log.Printf("ERROR: failed to read exp_draw from game_config: %v", err)
+		return
+	}
+
+	award := func(playerID string, exp int64) {
+		if isNpcPlayer(playerID) {
+			return
+		}
+		if err := r.playerService.AwardExp(ctx, playerID, exp); err != nil {
+			log.Printf("award exp to player %s: %v", playerID, err)
+		}
+	}
+
+	switch {
+	case reason == "draw" || winnerNum == 0:
+		award(meta.player1ID, expDraw)
+		award(meta.player2ID, expDraw)
+	case winnerNum == 1:
+		award(meta.player1ID, expWin)
+		award(meta.player2ID, expLoss)
+	case winnerNum == 2:
+		award(meta.player1ID, expLoss)
+		award(meta.player2ID, expWin)
 	}
 }
 
@@ -513,6 +581,10 @@ func (r *GameRelay) leaveAllPlayers(gameID string) {
 	for _, pid := range players {
 		r.LeaveGame(pid)
 	}
+
+	r.mu.Lock()
+	delete(r.expAwarded, gameID)
+	r.mu.Unlock()
 }
 
 // resetTurnTimer cancels any existing timer for the game and starts a new one.

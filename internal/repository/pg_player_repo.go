@@ -234,6 +234,29 @@ func (r *PgPlayerRepository) UpdateFaction(ctx context.Context, playerID, factio
 	return nil
 }
 
+// AddExp atomically awards experience and recalculates level in a single DB round-trip
+// to prevent race conditions between concurrent game completions.
+func (r *PgPlayerRepository) AddExp(ctx context.Context, playerID string, expGain int64) (*model.Player, error) {
+	row := r.pool.QueryRow(ctx,
+		`WITH cfg AS (
+		     SELECT value::int AS coeff FROM game_config WHERE key = 'exp_formula_coefficient'
+		 )
+		 UPDATE players SET
+		     exp = exp + $2,
+		     level = GREATEST(1, (SELECT FLOOR(SQRT((exp + $2)::float / c.coeff))::bigint FROM cfg c)),
+		     updated_at = NOW()
+		 WHERE player_id = $1
+		 RETURNING player_id, firebase_uid, username, level, exp, is_premium, equipped_icon_no, selected_faction, premium_expires_at, created_at, updated_at`,
+		playerID, expGain,
+	)
+
+	p, err := scanPlayer(row)
+	if err != nil {
+		return nil, fmt.Errorf("add exp: %w", err)
+	}
+	return p, nil
+}
+
 // scanPlayer scans a single row into a model.Player.
 func scanPlayer(row pgx.Row) (*model.Player, error) {
 	var p model.Player
