@@ -17,14 +17,8 @@
     "effect_text": "自分のフロントエンドに装備できる。自分のフィールドにこのカードの装備先以外のフロントエンドリソースが 1体以上いる限り、相手はこのカードの装備先を攻撃対象に選択できない。",
     "effects": [
       {
-        "trigger": "passive",
-        "custom": "target_shield",
-        "meta": {
-          "categories": [
-            "targeting"
-          ],
-          "target": "self"
-        }
+        "trigger": "deploy",
+        "custom": "target_shield"
       }
     ]
   },
@@ -43,19 +37,20 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "自分の Elasticでない コンピュート系リソースに装備できる。装備先カードが相手の攻撃を受けた次のターン、装備先のカードのスループットを +300 する。",
+    "effect_text": "装備先カードが相手の攻撃を受けた場合、次のターンの終了まで装備先のカードのスループットを +300 する。",
     "effects": [
       {
-        "trigger": "passive",
-        "custom": "buff_on_attacked",
-        "meta": {
-          "categories": [
-            "buff"
-          ],
-          "target": "self",
-          "buff": "tp",
-          "amount": 300
-        }
+        "trigger": "on_hit",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": "source",
+              "buff": "tp",
+              "amount": 300,
+              "duration": "until_next_own_turn_end"
+            }
+          }
+        ]
       }
     ]
   },
@@ -77,14 +72,14 @@
     "effect_text": "自分の コンピュート系リソース または DB系リソースに装備できる。装備先のカードはインシデントカードの効果の対象にならない",
     "effects": [
       {
-        "trigger": "passive",
+        "trigger": "deploy",
         "ops": [
           {
             "apply_buff": {
               "selector": "source",
               "buff": "incident_immune",
               "amount": 1,
-              "duration": "permanent"
+              "duration": "while_on_field"
             }
           }
         ]
@@ -109,14 +104,14 @@
     "effect_text": "自分のリソースに装備できる。装備先のカードの可用性を +500 する。",
     "effects": [
       {
-        "trigger": "passive",
+        "trigger": "deploy",
         "ops": [
           {
             "apply_buff": {
               "selector": "source",
               "buff": "av",
               "amount": 500,
-              "duration": "permanent"
+              "duration": "while_on_field"
             }
           }
         ]
@@ -141,7 +136,7 @@
     "effect_text": "インシデントカードによる自分のリソースへのダメージを -200 する。",
     "effects": [
       {
-        "trigger": "passive",
+        "trigger": "deploy",
         "ops": [
           {
             "apply_buff": {
@@ -150,7 +145,7 @@
               },
               "buff": "incident_reduction",
               "amount": 200,
-              "duration": "permanent"
+              "duration": "while_on_field"
             }
           }
         ]
@@ -175,7 +170,7 @@
     "effect_text": "自分のリソースのSLAペナルティを -100 する。",
     "effects": [
       {
-        "trigger": "passive",
+        "trigger": "deploy",
         "ops": [
           {
             "apply_buff": {
@@ -184,7 +179,7 @@
               },
               "buff": "sla_penalty_reduction",
               "amount": 100,
-              "duration": "permanent"
+              "duration": "while_on_field"
             }
           }
         ]
@@ -862,7 +857,7 @@
     "effect_text": "自分の DB系リソースに装備できる。自分のフィールドにオブジェクトストレージがある場合、装備先への攻撃ダメージを -400 する。",
     "effects": [
       {
-        "trigger": "passive",
+        "trigger": "on_field_change",
         "guard": [
           {
             "count": {
@@ -880,7 +875,7 @@
               "selector": "source",
               "buff": "attack_damage_reduction",
               "amount": 400,
-              "duration": "permanent"
+              "duration": "this_turn"
             }
           }
         ]
@@ -1295,7 +1290,7 @@
     "effect_text": "**えりり Trigger:** 自分のフィールドに「SHE Storage - えりり」がいる場合、このカードのスループットを +200 する",
     "effects": [
       {
-        "trigger": "passive",
+        "trigger": "on_field_change",
         "guard": [
           {
             "count": {
@@ -1314,7 +1309,7 @@
               "selector": "source",
               "buff": "tp",
               "amount": 200,
-              "duration": "permanent"
+              "duration": "this_turn"
             }
           }
         ]
@@ -1390,7 +1385,7 @@
     "effect_text": "**星の連鎖:** 自分のバックエンドのこのカード以外の SHEのDB系リソース1体につき、このカードの Yield を +200 する",
     "effects": [
       {
-        "trigger": "passive",
+        "trigger": "on_field_change",
         "ops": [
           {
             "apply_buff": {
@@ -1408,7 +1403,8 @@
                   },
                   "value": 200
                 }
-              }
+              },
+              "duration": "this_turn"
             }
           }
         ]
@@ -1511,30 +1507,6 @@
             }
           }
         ]
-      },
-      {
-        "trigger": "passive",
-        "guard": [
-          {
-            "count": {
-              "selector": {
-                "owner": "self",
-                "card_id": "SH-0024"
-              },
-              "min": 1
-            }
-          }
-        ],
-        "ops": [
-          {
-            "apply_buff": {
-              "selector": "source",
-              "buff": "yield",
-              "amount": 200,
-              "duration": "permanent"
-            }
-          }
-        ]
       }
     ]
   },
@@ -1603,7 +1575,7 @@
     "effect_text": "自分のフィールドの SHE リソースのスケールアップのための開発コストを -200 する。",
     "effects": [
       {
-        "trigger": "passive",
+        "trigger": "deploy",
         "ops": [
           {
             "apply_buff": {
@@ -1613,7 +1585,7 @@
               },
               "buff": "scale_cost_reduction",
               "amount": 200,
-              "duration": "permanent"
+              "duration": "while_on_field"
             }
           }
         ]
@@ -1638,7 +1610,7 @@
     "effect_text": "自分のフィールドの全ての SHE コンピュート系リソースのスループットを +200 する。",
     "effects": [
       {
-        "trigger": "passive",
+        "trigger": "deploy",
         "ops": [
           {
             "apply_buff": {
@@ -1655,7 +1627,7 @@
               },
               "buff": "tp",
               "amount": 200,
-              "duration": "permanent"
+              "duration": "while_on_field"
             }
           }
         ]
@@ -1768,14 +1740,14 @@
     "effect_text": "フロントエンドリソースに装備できる。装備したリソースのスループットを +200 する。",
     "effects": [
       {
-        "trigger": "passive",
+        "trigger": "deploy",
         "ops": [
           {
             "apply_buff": {
               "selector": "source",
               "buff": "tp",
               "amount": 200,
-              "duration": "permanent"
+              "duration": "while_on_field"
             }
           }
         ]
@@ -2063,7 +2035,7 @@
     "effect_text": "**キャッシュブースト:** 自分のフィールドの全ての SHE NoSQL - ダイノの Yield を +200 する。",
     "effects": [
       {
-        "trigger": "passive",
+        "trigger": "on_field_change",
         "ops": [
           {
             "apply_buff": {
@@ -2073,7 +2045,7 @@
               },
               "buff": "yield",
               "amount": 200,
-              "duration": "permanent"
+              "duration": "this_turn"
             }
           }
         ]
@@ -2098,14 +2070,14 @@
     "effect_text": "自分の「SHE Compute - えくぼ」にのみ装備できる。装備先の可用性を +500 する。",
     "effects": [
       {
-        "trigger": "passive",
+        "trigger": "deploy",
         "ops": [
           {
             "apply_buff": {
               "selector": "source",
               "buff": "av",
               "amount": 500,
-              "duration": "permanent"
+              "duration": "while_on_field"
             }
           }
         ]
@@ -2157,7 +2129,7 @@
     "effect_text": "**期間限定:** デプロイから2ターン後のエンドフェーズに発動する。このカードを破壊する（SLAペナルティは適用される）",
     "effects": [
       {
-        "trigger": "passive",
+        "trigger": "on_end_phase",
         "custom": "spot_expiry",
         "meta": {
           "categories": [
@@ -2223,27 +2195,28 @@
     },
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "**自動操縦:** このカードをデプロイした時に発動できる。開発コストなしで medium にスケールアップする。\n**大艦隊:** 自分のフィールドに他の「しゅがーらぼ Orchestrator - クーヘンバウムティス」がいる時に発動できる。手札からこのカードを、開発コストを払わずにデプロイする。この効果は1ターンに1回のみ使用できる。",
+    "effect_text": "デプロイ時に「自動操縦」か「標準」を選択する。自動操縦: デプロイターンを 1 短縮する。標準: 維持費を -200 する。",
     "effects": [
       {
         "trigger": "deploy",
-        "ops": [
-          {
-            "scale_to_rank": {
-              "rank": "medium"
+        "choice": {
+          "autopilot": [
+            {
+              "reduce_deploy_turns": {
+                "amount": 1
+              }
             }
-          }
-        ]
-      },
-      {
-        "trigger": "passive",
-        "use_limit": "once_per_turn",
-        "custom": "fleet_deploy",
-        "meta": {
-          "categories": [
-            "deploy_free"
           ],
-          "card_id": "SL-0004"
+          "standard": [
+            {
+              "apply_buff": {
+                "selector": "source",
+                "buff": "maintenance_reduction",
+                "amount": 200,
+                "duration": "while_on_field"
+              }
+            }
+          ]
         }
       }
     ]
@@ -2402,14 +2375,14 @@
     "effect_text": "**完全同期:** このカードは Incident カードの効果を受けない。",
     "effects": [
       {
-        "trigger": "passive",
+        "trigger": "deploy",
         "ops": [
           {
             "apply_buff": {
               "selector": "source",
               "buff": "incident_immune",
               "amount": 1,
-              "duration": "permanent"
+              "duration": "while_on_field"
             }
           }
         ]
@@ -2571,7 +2544,7 @@
     "effect_text": "自分のフィールドの しゅがーらぼ リソースのスケールアップコストを -200 する。",
     "effects": [
       {
-        "trigger": "passive",
+        "trigger": "deploy",
         "ops": [
           {
             "apply_buff": {
@@ -2581,7 +2554,7 @@
               },
               "buff": "scale_cost_reduction",
               "amount": 200,
-              "duration": "permanent"
+              "duration": "while_on_field"
             }
           }
         ]
@@ -2606,7 +2579,7 @@
     "effect_text": "自分のフィールドの全ての しゅがーらぼ コンピュート系リソースのスループットを +200 する。",
     "effects": [
       {
-        "trigger": "passive",
+        "trigger": "deploy",
         "ops": [
           {
             "apply_buff": {
@@ -2623,7 +2596,7 @@
               },
               "buff": "tp",
               "amount": 200,
-              "duration": "permanent"
+              "duration": "while_on_field"
             }
           }
         ]
@@ -2648,7 +2621,7 @@
     "effect_text": "毎ターン発動できる。相手の Insight を 300 吸収する。",
     "effects": [
       {
-        "trigger": "passive",
+        "trigger": "on_end_phase",
         "ops": [
           {
             "absorb_insight": {
@@ -2677,14 +2650,14 @@
     "effect_text": "自分の しゅがーらぼ コンピュート系リソースに装備できる。装備先のスループットを +200 する。",
     "effects": [
       {
-        "trigger": "passive",
+        "trigger": "deploy",
         "ops": [
           {
             "apply_buff": {
               "selector": "source",
               "buff": "tp",
               "amount": 200,
-              "duration": "permanent"
+              "duration": "while_on_field"
             }
           }
         ]
@@ -2738,22 +2711,22 @@
     "effect_text": "自分の しゅがーらぼ DB系リソースに装備できる。装備先の Yield を +400 する。装備先の SLAペナルティを +100 する。",
     "effects": [
       {
-        "trigger": "passive",
+        "trigger": "deploy",
         "ops": [
           {
             "apply_buff": {
               "selector": "source",
               "buff": "yield",
-              "amount": 300,
-              "duration": "permanent"
+              "amount": 400,
+              "duration": "while_on_field"
             }
           },
           {
             "apply_buff": {
               "selector": "source",
-              "buff": "av",
-              "amount": -200,
-              "duration": "permanent"
+              "buff": "sla_penalty",
+              "amount": 100,
+              "duration": "while_on_field"
             }
           }
         ]
@@ -2778,14 +2751,14 @@
     "effect_text": "自分の「しゅがーらぼ Compute - ジューシィ・いちご」にのみ装備できる。①装備先の可用性を +400 する。②自分のメインフェーズに発動できる。このカードを別の自分の「しゅがーらぼ Compute - ジューシィ・いちご」に付け替える。この効果は1ターン中に1回のみ使用できる。",
     "effects": [
       {
-        "trigger": "passive",
+        "trigger": "deploy",
         "ops": [
           {
             "apply_buff": {
               "selector": "source",
               "buff": "av",
               "amount": 400,
-              "duration": "permanent"
+              "duration": "while_on_field"
             }
           }
         ]
@@ -3080,14 +3053,28 @@
     "effect_text": "**データの泉:** 自分のバックエンドの 天気使い DB系リソースおよびオブジェクトストレージ1体につき、このカードのスループットを +200 する。",
     "effects": [
       {
-        "trigger": "passive",
-        "custom": "tp_per_backend_data",
-        "meta": {
-          "categories": [
-            "buff"
-          ],
-          "target": "self"
-        }
+        "trigger": "on_field_change",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": "source",
+              "buff": "tp",
+              "amount": {
+                "base": 0,
+                "per": {
+                  "count": {
+                    "owner": "self",
+                    "zone": "backend",
+                    "faction": "Tenki",
+                    "card_type": "data"
+                  },
+                  "value": 200
+                }
+              },
+              "duration": "this_turn"
+            }
+          }
+        ]
       }
     ]
   },
@@ -3233,6 +3220,19 @@
     "effects": [
       {
         "trigger": "deploy",
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": "source",
+              "buff": "count_multiplier",
+              "amount": 2,
+              "duration": "while_on_field"
+            }
+          }
+        ]
+      },
+      {
+        "trigger": "deploy",
         "use_limit": "once_per_turn",
         "ops": [
           {
@@ -3286,7 +3286,7 @@
     "effect_text": "自分のフィールドの 天気使い リソースのスケールアップのコストを -200 する。",
     "effects": [
       {
-        "trigger": "passive",
+        "trigger": "deploy",
         "ops": [
           {
             "apply_buff": {
@@ -3296,7 +3296,7 @@
               },
               "buff": "scale_cost_reduction",
               "amount": 200,
-              "duration": "permanent"
+              "duration": "while_on_field"
             }
           }
         ]
@@ -3321,7 +3321,7 @@
     "effect_text": "自分のフィールドの全ての 天気使い コンピュート系リソースのスループットを +200 する。",
     "effects": [
       {
-        "trigger": "passive",
+        "trigger": "deploy",
         "ops": [
           {
             "apply_buff": {
@@ -3338,7 +3338,7 @@
               },
               "buff": "tp",
               "amount": 200,
-              "duration": "permanent"
+              "duration": "while_on_field"
             }
           }
         ]
@@ -3426,14 +3426,14 @@
     "effect_text": "自分のリソースに装備できる。装備先へのインシデントカードによるダメージを -200 する。",
     "effects": [
       {
-        "trigger": "passive",
+        "trigger": "deploy",
         "ops": [
           {
             "apply_buff": {
               "selector": "source",
               "buff": "incident_reduction",
               "amount": 200,
-              "duration": "permanent"
+              "duration": "while_on_field"
             }
           }
         ]
@@ -3515,14 +3515,14 @@
     "effect_text": "自分の「天気使い VM - ソラ」にのみ装備できる。装備先の可用性を +300 し、スループットを +200 する。",
     "effects": [
       {
-        "trigger": "passive",
+        "trigger": "deploy",
         "ops": [
           {
             "apply_buff": {
               "selector": "source",
               "buff": "av",
               "amount": 300,
-              "duration": "permanent"
+              "duration": "while_on_field"
             }
           },
           {
@@ -3530,7 +3530,7 @@
               "selector": "source",
               "buff": "tp",
               "amount": 200,
-              "duration": "permanent"
+              "duration": "while_on_field"
             }
           }
         ]
@@ -3711,15 +3711,19 @@
     "stats": {},
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "相手のインシデントカードによって自分のBudgetが減少する時に発動できる。そのインシデントによって発生する自分のBudgetの減少を-300する",
+    "effect_text": "①デプロイ時、相手フィールドの裏向きリアクティブカードを1枚選び、確認する。②このカードがフィールドに存在する限り、インシデントカードによる自分のリソースへのダメージを300軽減する",
     "effects": [
       {
-        "trigger": "activate",
-        "use_limit": "once_per_turn",
+        "trigger": "deploy",
         "ops": [
           {
-            "reveal_reactive": {}
-          },
+            "peek_reactive": {}
+          }
+        ]
+      },
+      {
+        "trigger": "deploy",
+        "ops": [
           {
             "apply_buff": {
               "selector": {
@@ -3727,7 +3731,7 @@
               },
               "buff": "incident_reduction",
               "amount": 300,
-              "duration": "this_turn"
+              "duration": "while_on_field"
             }
           }
         ]
@@ -3833,17 +3837,31 @@
     },
     "restriction": "unlimited",
     "is_active": true,
-    "effect_text": "**初回無料:** small → medium の Scale Cost 0",
+    "effect_text": "自分のフィールドの調律部リソースが3体以下の場合、このカードの維持費を -100 する。",
     "effects": [
       {
-        "trigger": "passive",
-        "custom": "free_first_scale",
-        "meta": {
-          "categories": [
-            "buff"
-          ],
-          "target": "self"
-        }
+        "trigger": "on_field_change",
+        "guard": [
+          {
+            "count": {
+              "selector": {
+                "owner": "self",
+                "faction": "Tuners"
+              },
+              "max": 3
+            }
+          }
+        ],
+        "ops": [
+          {
+            "apply_buff": {
+              "selector": "source",
+              "buff": "maintenance_reduction",
+              "amount": 100,
+              "duration": "this_turn"
+            }
+          }
+        ]
       }
     ]
   },
@@ -3892,7 +3910,7 @@
     "effect_text": "**Low-Code:** 自分のフィールドに 調律部 DB がある時、このカードのスループットを +400 する。",
     "effects": [
       {
-        "trigger": "passive",
+        "trigger": "on_field_change",
         "guard": [
           {
             "count": {
@@ -3914,7 +3932,7 @@
               "selector": "source",
               "buff": "tp",
               "amount": 400,
-              "duration": "permanent"
+              "duration": "this_turn"
             }
           }
         ]
@@ -4027,7 +4045,7 @@
     "effect_text": "自分のフィールドの 調律部 リソースのスケールアップコストを -300 する。",
     "effects": [
       {
-        "trigger": "passive",
+        "trigger": "deploy",
         "ops": [
           {
             "apply_buff": {
@@ -4037,7 +4055,7 @@
               },
               "buff": "scale_cost_reduction",
               "amount": 300,
-              "duration": "permanent"
+              "duration": "while_on_field"
             }
           }
         ]
@@ -4062,37 +4080,17 @@
     "effect_text": "インシデントカードによる自分の 調律部 リソースへのダメージを -200 する。",
     "effects": [
       {
-        "trigger": "activate",
-        "use_limit": "once_per_turn",
-        "ops": [
-          {
-            "reveal_reactive": {}
-          }
-        ]
-      },
-      {
-        "trigger": "activate",
-        "use_limit": "once_per_turn",
-        "guard": [
-          {
-            "count": {
-              "selector": {
-                "owner": "self",
-                "faction": "Tuners"
-              },
-              "min": 3
-            }
-          }
-        ],
+        "trigger": "deploy",
         "ops": [
           {
             "apply_buff": {
               "selector": {
-                "owner": "self"
+                "owner": "self",
+                "faction": "Tuners"
               },
               "buff": "incident_reduction",
               "amount": 200,
-              "duration": "this_turn"
+              "duration": "while_on_field"
             }
           }
         ]
@@ -4178,14 +4176,22 @@
     "effect_text": "自分の 調律部 DB系リソースに装備できる。装備先の可用性を +400 する。装備先へのインシデントカードによるダメージを -200 する。",
     "effects": [
       {
-        "trigger": "passive",
+        "trigger": "deploy",
         "ops": [
           {
             "apply_buff": {
               "selector": "source",
               "buff": "av",
               "amount": 400,
-              "duration": "permanent"
+              "duration": "while_on_field"
+            }
+          },
+          {
+            "apply_buff": {
+              "selector": "source",
+              "buff": "incident_reduction",
+              "amount": 200,
+              "duration": "while_on_field"
             }
           }
         ]
@@ -4210,14 +4216,14 @@
     "effect_text": "自分の「調律部 Compute - コンタータ」または「調律部 Bare Metal - ベア太」にのみ装備できる。装備先の可用性を +800 する。装備先へのインシデントカードによるダメージを -100 する。",
     "effects": [
       {
-        "trigger": "passive",
+        "trigger": "deploy",
         "ops": [
           {
             "apply_buff": {
               "selector": "source",
               "buff": "av",
               "amount": 800,
-              "duration": "permanent"
+              "duration": "while_on_field"
             }
           },
           {
@@ -4225,7 +4231,7 @@
               "selector": "source",
               "buff": "incident_reduction",
               "amount": 100,
-              "duration": "permanent"
+              "duration": "while_on_field"
             }
           }
         ]
