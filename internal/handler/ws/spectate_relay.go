@@ -113,7 +113,8 @@ func (sr *SpectateRelay) HandleSpectateJoin(conn *Connection, data json.RawMessa
 	}
 
 	// Fetch current game state for player1 as a canonical observer view.
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	rawState, err := sr.battleClient.GetGameStateForPlayer(ctx, req.GameID, gi.player1ID)
 	if err != nil || rawState == nil {
 		sr.sendSpectateError(conn, "state_unavailable", "could not retrieve game state")

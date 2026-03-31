@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"time"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/constants"
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
@@ -42,11 +43,14 @@ func NewManager(battleClient service.BattleClient, playerService *service.Player
 
 	// Hub needs to query GameRelay for the player's gameID on disconnect,
 	// and GameRelay needs Hub for sending messages. We wire them up here.
-	hub := NewConnectionHub(
-		func(playerID string) (string, bool) { return m.Relay.GameIDForPlayer(playerID) },
-		func(playerID, gameID string) { m.Relay.HandleDisconnectTimeout(playerID, gameID) },
-		func(playerID string) { m.Spectate.RemoveSpectator(playerID) },
-	)
+	hub := NewConnectionHub(HubCallbacks{
+		GetGameID:             func(playerID string) (string, bool) { return m.Relay.GameIDForPlayer(playerID) },
+		OnDisconnectTimeout:   func(playerID, gameID string) { m.Relay.HandleDisconnectTimeout(playerID, gameID) },
+		OnSpectatorDisconnect: func(playerID string) { m.Spectate.RemoveSpectator(playerID) },
+		OnMatchmakingLeave:    func(playerID string) { m.queue.Leave(playerID) },
+		OnGameDisconnect:      func(playerID, gameID string) { m.Relay.NotifyOpponentDisconnected(playerID, gameID) },
+		OnGameReconnect:       func(playerID, gameID string) { m.Relay.NotifyOpponentReconnected(playerID, gameID) },
+	})
 	relay := NewGameRelay(hub, battleClient)
 	spectate := NewSpectateRelay(hub, battleClient)
 
@@ -120,13 +124,11 @@ func (m *Manager) StartMatchmaking(ctx context.Context) {
 }
 
 // HandleMessage routes an incoming WebSocket message to the appropriate handler.
-//
-// TODO: context.Background() means in-flight operations (DB queries, battle
-// server HTTP calls) continue even after the WebSocket disconnects. Ideally
-// Connection should carry a context that is cancelled on disconnect, and
-// HandleMessage should derive from it so resources are released promptly.
+// Each message gets a 30-second timeout to prevent goroutine leaks from slow
+// DB queries or battle server HTTP calls.
 func (m *Manager) HandleMessage(conn *Connection, msg *WSMessage) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	switch msg.Type {
 	case constants.WSMsgGameEnter:

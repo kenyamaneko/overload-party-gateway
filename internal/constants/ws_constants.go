@@ -16,7 +16,9 @@ const (
 	WSMsgMatchFound           = "match_found"
 	WSMsgActionPerformed      = "action_performed"
 	WSMsgTurnControls         = "turn_controls"
-	WSMsgNpcBattleCreated     = "npc_battle_created"
+	WSMsgNpcBattleCreated        = "npc_battle_created"
+	WSMsgOpponentDisconnected    = "opponent_disconnected"
+	WSMsgOpponentReconnected     = "opponent_reconnected"
 
 	// Spectate: Server → Client
 	WSMsgSpectateJoined         = "spectate_joined"
@@ -40,5 +42,6 @@ const (
 	WSMsgSpectateStamp = "spectate_stamp"
 
 	// Win reasons
-	WinReasonDisconnect = "disconnect"
+	WinReasonDisconnect  = "disconnect"
+	WinReasonTurnTimeout = "turn_timeout"
 )
