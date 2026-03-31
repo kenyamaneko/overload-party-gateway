@@ -219,6 +219,183 @@ func TestGetPlayer_NotFound_ReturnsNil(t *testing.T) {
 	assert.Nil(t, p)
 }
 
+// --- AwardExp / AwardGameExp tests ---
+
+// setupExpService creates a PlayerService pre-configured for exp tests.
+func setupExpService(t *testing.T, players ...*model.Player) (*PlayerService, *repository.MockPlayerRepository) {
+	t.Helper()
+	playerRepo := repository.NewMockPlayerRepository()
+	for _, p := range players {
+		require.NoError(t, playerRepo.Create(context.Background(), p, &model.PlayerDailyBattle{
+			PlayerID:         p.PlayerID,
+			DailyBattleCount: 0,
+			LastResetDate:    today(),
+		}))
+	}
+	configRepo := &mockGameConfigRepo{
+		values: map[string]int64{
+			configKeyFreeDailyBattleLimit: 10,
+			"exp_formula_coefficient":     60,
+			"exp_win":                     40,
+			"exp_loss":                    20,
+			"exp_draw":                    30,
+		},
+	}
+	return NewPlayerService(playerRepo, configRepo), playerRepo
+}
+
+func TestAwardExp_AddsExpAndLevel(t *testing.T) {
+	p := &model.Player{PlayerID: "p1", FirebaseUID: "uid1", Level: 1, Exp: 0}
+	svc, repo := setupExpService(t, p)
+	ctx := context.Background()
+
+	require.NoError(t, svc.AwardExp(ctx, "p1", 40))
+
+	got, _ := repo.FindByID(ctx, "p1")
+	assert.Equal(t, int64(40), got.Exp)
+	assert.Equal(t, int64(1), got.Level) // 60*2*2=240 needed for level 2
+}
+
+func TestAwardExp_LevelUp(t *testing.T) {
+	// Level 1 → 2 requires exp >= 60*2*2 = 240
+	p := &model.Player{PlayerID: "p1", FirebaseUID: "uid1", Level: 1, Exp: 200}
+	svc, repo := setupExpService(t, p)
+	ctx := context.Background()
+
+	require.NoError(t, svc.AwardExp(ctx, "p1", 40))
+
+	got, _ := repo.FindByID(ctx, "p1")
+	assert.Equal(t, int64(240), got.Exp)
+	assert.Equal(t, int64(2), got.Level)
+}
+
+func TestAwardExp_MultipleLevelUps(t *testing.T) {
+	// Level 1, exp=0, gain enough to reach level 3 (60*4*4=960)
+	p := &model.Player{PlayerID: "p1", FirebaseUID: "uid1", Level: 1, Exp: 0}
+	svc, repo := setupExpService(t, p)
+	ctx := context.Background()
+
+	require.NoError(t, svc.AwardExp(ctx, "p1", 960))
+
+	got, _ := repo.FindByID(ctx, "p1")
+	assert.Equal(t, int64(960), got.Exp)
+	assert.Equal(t, int64(4), got.Level) // 960 >= 60*4*4=960 → level 4
+}
+
+func TestAwardExp_ZeroOrNegative_Noop(t *testing.T) {
+	p := &model.Player{PlayerID: "p1", FirebaseUID: "uid1", Level: 1, Exp: 100}
+	svc, repo := setupExpService(t, p)
+	ctx := context.Background()
+
+	require.NoError(t, svc.AwardExp(ctx, "p1", 0))
+	require.NoError(t, svc.AwardExp(ctx, "p1", -10))
+
+	got, _ := repo.FindByID(ctx, "p1")
+	assert.Equal(t, int64(100), got.Exp)
+}
+
+func TestAwardExp_MissingCoefficient_ReturnsError(t *testing.T) {
+	playerRepo := repository.NewMockPlayerRepository()
+	require.NoError(t, playerRepo.Create(context.Background(), &model.Player{PlayerID: "p1", FirebaseUID: "uid1"}, &model.PlayerDailyBattle{PlayerID: "p1", LastResetDate: today()}))
+	configRepo := &mockGameConfigRepo{values: map[string]int64{}} // no exp_formula_coefficient
+	svc := NewPlayerService(playerRepo, configRepo)
+
+	err := svc.AwardExp(context.Background(), "p1", 40)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exp_formula_coefficient")
+}
+
+func TestAwardGameExp_Player1Wins(t *testing.T) {
+	p1 := &model.Player{PlayerID: "p1", FirebaseUID: "uid1", Level: 1, Exp: 0}
+	p2 := &model.Player{PlayerID: "p2", FirebaseUID: "uid2", Level: 1, Exp: 0}
+	svc, repo := setupExpService(t, p1, p2)
+	ctx := context.Background()
+
+	require.NoError(t, svc.AwardGameExp(ctx, "p1", "p2", 1, "system_down"))
+
+	got1, _ := repo.FindByID(ctx, "p1")
+	got2, _ := repo.FindByID(ctx, "p2")
+	assert.Equal(t, int64(40), got1.Exp) // win
+	assert.Equal(t, int64(20), got2.Exp) // loss
+}
+
+func TestAwardGameExp_Player2Wins(t *testing.T) {
+	p1 := &model.Player{PlayerID: "p1", FirebaseUID: "uid1", Level: 1, Exp: 0}
+	p2 := &model.Player{PlayerID: "p2", FirebaseUID: "uid2", Level: 1, Exp: 0}
+	svc, repo := setupExpService(t, p1, p2)
+	ctx := context.Background()
+
+	require.NoError(t, svc.AwardGameExp(ctx, "p1", "p2", 2, "budget_zero"))
+
+	got1, _ := repo.FindByID(ctx, "p1")
+	got2, _ := repo.FindByID(ctx, "p2")
+	assert.Equal(t, int64(20), got1.Exp) // loss
+	assert.Equal(t, int64(40), got2.Exp) // win
+}
+
+func TestAwardGameExp_Draw(t *testing.T) {
+	p1 := &model.Player{PlayerID: "p1", FirebaseUID: "uid1", Level: 1, Exp: 0}
+	p2 := &model.Player{PlayerID: "p2", FirebaseUID: "uid2", Level: 1, Exp: 0}
+	svc, repo := setupExpService(t, p1, p2)
+	ctx := context.Background()
+
+	require.NoError(t, svc.AwardGameExp(ctx, "p1", "p2", 0, "draw"))
+
+	got1, _ := repo.FindByID(ctx, "p1")
+	got2, _ := repo.FindByID(ctx, "p2")
+	assert.Equal(t, int64(30), got1.Exp)
+	assert.Equal(t, int64(30), got2.Exp)
+}
+
+func TestAwardGameExp_NpcSkipped(t *testing.T) {
+	p1 := &model.Player{PlayerID: "p1", FirebaseUID: "uid1", Level: 1, Exp: 0}
+	svc, repo := setupExpService(t, p1)
+	ctx := context.Background()
+
+	// NPC player doesn't exist in repo — should not error because it's skipped.
+	require.NoError(t, svc.AwardGameExp(ctx, "p1", "npc-easy", 1, "system_down"))
+
+	got1, _ := repo.FindByID(ctx, "p1")
+	assert.Equal(t, int64(40), got1.Exp) // winner
+}
+
+func TestAwardGameExp_NpcIsPlayer1(t *testing.T) {
+	p2 := &model.Player{PlayerID: "p2", FirebaseUID: "uid2", Level: 1, Exp: 0}
+	svc, repo := setupExpService(t, p2)
+	ctx := context.Background()
+
+	require.NoError(t, svc.AwardGameExp(ctx, "npc-hard", "p2", 2, "system_down"))
+
+	got2, _ := repo.FindByID(ctx, "p2")
+	assert.Equal(t, int64(40), got2.Exp) // winner
+}
+
+// --- ComputeLevel tests ---
+
+func TestComputeLevel(t *testing.T) {
+	tests := []struct {
+		name         string
+		newExp       int64
+		currentLevel int64
+		coeff        int64
+		wantLevel    int64
+	}{
+		{"no level up", 100, 1, 60, 1},                 // next=60*4=240
+		{"exact threshold", 240, 1, 60, 2},              // 240 >= 60*4=240 → level 2
+		{"just below", 239, 1, 60, 1},                   // 239 < 240
+		{"multiple level ups", 960, 1, 60, 4},            // 960 >= 60*4=240, >= 60*9=540, >= 60*16=960 → level 4
+		{"stays at current", 500, 3, 60, 3},              // next=60*16=960
+		{"level 0 corrected to 1", 0, 0, 60, 1},         // minimum level
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := repository.ComputeLevel(tt.newExp, tt.currentLevel, tt.coeff)
+			assert.Equal(t, tt.wantLevel, got)
+		})
+	}
+}
+
 func TestNotFound(t *testing.T) {
 	tests := []struct {
 		name string

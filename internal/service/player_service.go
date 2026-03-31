@@ -110,8 +110,63 @@ func (s *PlayerService) AwardExp(ctx context.Context, playerID string, expGain i
 	if expGain <= 0 {
 		return nil
 	}
-	_, err := s.playerRepo.AddExp(ctx, playerID, expGain)
+	coeff, err := s.gameConfigRepo.GetInt64(ctx, "exp_formula_coefficient", 0)
+	if err != nil {
+		return fmt.Errorf("get exp_formula_coefficient: %w", err)
+	}
+	if coeff <= 0 {
+		return fmt.Errorf("exp_formula_coefficient not configured in game_config")
+	}
+	_, err = s.playerRepo.AddExp(ctx, playerID, expGain, coeff)
 	return err
+}
+
+// AwardGameExp grants experience to both players after a game ends.
+// It reads exp_win/exp_loss/exp_draw from game_config and awards accordingly.
+// NPC players (prefixed with "npc-") are skipped.
+func (s *PlayerService) AwardGameExp(ctx context.Context, player1ID, player2ID string, winnerNum int64, reason string) error {
+	expWin, err := s.gameConfigRepo.GetInt64(ctx, "exp_win", 0)
+	if err != nil {
+		return fmt.Errorf("read exp_win: %w", err)
+	}
+	expLoss, err := s.gameConfigRepo.GetInt64(ctx, "exp_loss", 0)
+	if err != nil {
+		return fmt.Errorf("read exp_loss: %w", err)
+	}
+	expDraw, err := s.gameConfigRepo.GetInt64(ctx, "exp_draw", 0)
+	if err != nil {
+		return fmt.Errorf("read exp_draw: %w", err)
+	}
+
+	award := func(playerID string, exp int64) error {
+		if isNpcPlayer(playerID) {
+			return nil
+		}
+		return s.AwardExp(ctx, playerID, exp)
+	}
+
+	switch {
+	case reason == "draw" || winnerNum == 0:
+		if err := award(player1ID, expDraw); err != nil {
+			return err
+		}
+		return award(player2ID, expDraw)
+	case winnerNum == 1:
+		if err := award(player1ID, expWin); err != nil {
+			return err
+		}
+		return award(player2ID, expLoss)
+	case winnerNum == 2:
+		if err := award(player1ID, expLoss); err != nil {
+			return err
+		}
+		return award(player2ID, expWin)
+	}
+	return nil
+}
+
+func isNpcPlayer(playerID string) bool {
+	return len(playerID) > 4 && playerID[:4] == "npc-"
 }
 
 // LevelProgress holds computed level progress fields derived from a player's

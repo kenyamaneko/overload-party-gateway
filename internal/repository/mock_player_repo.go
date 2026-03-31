@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"fmt"
-	"math"
 	"sync"
 	"time"
 
@@ -18,11 +17,7 @@ type MockPlayerRepository struct {
 	mu           sync.Mutex
 	players      map[string]*model.Player // playerID → Player
 	dailyBattles map[string]*model.PlayerDailyBattle
-	byUID        map[string]string // firebaseUID → playerID
-
-	// ExpCoefficient mirrors exp_formula_coefficient from game_config.
-	// Defaults to 60 if not set.
-	ExpCoefficient int64
+	byUID map[string]string // firebaseUID → playerID
 }
 
 var _ port.PlayerRepo = (*MockPlayerRepository)(nil)
@@ -137,7 +132,7 @@ func (r *MockPlayerRepository) UpdateFaction(ctx context.Context, playerID, fact
 	return nil
 }
 
-func (r *MockPlayerRepository) AddExp(ctx context.Context, playerID string, expGain int64) (*model.Player, error) {
+func (r *MockPlayerRepository) AddExp(ctx context.Context, playerID string, expGain, coeff int64) (*model.Player, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -145,15 +140,7 @@ func (r *MockPlayerRepository) AddExp(ctx context.Context, playerID string, expG
 	if !ok {
 		return nil, fmt.Errorf("player %s not found", playerID)
 	}
-	coeff := r.ExpCoefficient
-	if coeff <= 0 {
-		coeff = 60
-	}
 	p.Exp += expGain
-	level := int64(math.Floor(math.Sqrt(float64(p.Exp) / float64(coeff))))
-	if level < 1 {
-		level = 1
-	}
-	p.Level = level
+	p.Level = ComputeLevel(p.Exp, p.Level, coeff)
 	return p, nil
 }

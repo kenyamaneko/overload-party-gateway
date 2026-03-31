@@ -234,27 +234,62 @@ func (r *PgPlayerRepository) UpdateFaction(ctx context.Context, playerID, factio
 	return nil
 }
 
-// AddExp atomically awards experience and recalculates level in a single DB round-trip
-// to prevent race conditions between concurrent game completions.
-func (r *PgPlayerRepository) AddExp(ctx context.Context, playerID string, expGain int64) (*model.Player, error) {
-	row := r.pool.QueryRow(ctx,
-		`WITH cfg AS (
-		     SELECT value::int AS coeff FROM game_config WHERE key = 'exp_formula_coefficient'
-		 )
-		 UPDATE players SET
-		     exp = exp + $2,
-		     level = GREATEST(1, (SELECT FLOOR(SQRT((exp + $2)::float / c.coeff))::bigint FROM cfg c)),
-		     updated_at = NOW()
+// AddExp atomically awards experience and recalculates level using SELECT FOR UPDATE.
+// Level is only incremented when the new exp crosses the next-level threshold,
+// so changing exp_formula_coefficient does not retroactively alter existing levels.
+func (r *PgPlayerRepository) AddExp(ctx context.Context, playerID string, expGain, coeff int64) (*model.Player, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("add exp begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var curExp, curLevel int64
+	err = tx.QueryRow(ctx,
+		`SELECT exp, level FROM players WHERE player_id = $1 FOR UPDATE`,
+		playerID,
+	).Scan(&curExp, &curLevel)
+	if err != nil {
+		return nil, fmt.Errorf("add exp select: %w", err)
+	}
+
+	newExp := curExp + expGain
+	newLevel := ComputeLevel(newExp, curLevel, coeff)
+
+	row := tx.QueryRow(ctx,
+		`UPDATE players SET exp = $2, level = $3, updated_at = NOW()
 		 WHERE player_id = $1
 		 RETURNING player_id, firebase_uid, username, level, exp, is_premium, equipped_icon_no, selected_faction, premium_expires_at, created_at, updated_at`,
-		playerID, expGain,
+		playerID, newExp, newLevel,
 	)
 
 	p, err := scanPlayer(row)
 	if err != nil {
-		return nil, fmt.Errorf("add exp: %w", err)
+		return nil, fmt.Errorf("add exp update: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("add exp commit: %w", err)
 	}
 	return p, nil
+}
+
+// ComputeLevel determines the new level after gaining exp.
+// It only increments from the current level — never decreases — so that
+// formula coefficient changes do not retroactively alter existing levels.
+func ComputeLevel(newExp, currentLevel, coeff int64) int64 {
+	level := currentLevel
+	if level < 1 {
+		level = 1
+	}
+	for {
+		nextLevelExp := coeff * (level + 1) * (level + 1)
+		if newExp < nextLevelExp {
+			break
+		}
+		level++
+	}
+	return level
 }
 
 // scanPlayer scans a single row into a model.Player.

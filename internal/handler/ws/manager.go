@@ -57,9 +57,8 @@ func NewManager(battleClient service.BattleClient, playerService *service.Player
 	// Cross-wire: GameRelay notifies SpectateRelay on state updates and game over.
 	relay.spectateRelay = spectate
 
-	// Wire player service and game config repo for exp awarding on game over.
+	// Wire player service for exp awarding on game over.
 	relay.playerService = playerService
-	relay.gameConfigRepo = m.gameConfigRepo
 
 	// Wire player lookup for battle_start banner data.
 	if playerService != nil {

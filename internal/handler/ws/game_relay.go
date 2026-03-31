@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/constants"
-	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
@@ -40,8 +39,7 @@ type GameRelay struct {
 	// playerLookup is wired in after construction by the Manager.
 	playerLookup PlayerLookupFunc
 	// playerService is wired in after construction for exp awarding.
-	playerService  *service.PlayerService
-	gameConfigRepo port.GameConfigRepo
+	playerService *service.PlayerService
 
 	mu          sync.RWMutex
 	gameMembers map[string][]string    // gameID → []playerID
@@ -329,9 +327,11 @@ func (r *GameRelay) broadcastGameOver(gameID string, winnerNum int64, reason str
 }
 
 // awardGameExp grants experience points to players after a game ends.
-// Errors are logged but do not block the game-over flow.
+// This runs after the game-over broadcast, so errors do not block the
+// game-over flow. If config retrieval or DB update fails, exp awarding
+// is skipped entirely and the error is logged.
 func (r *GameRelay) awardGameExp(gameID string, winnerNum int64, reason string) {
-	if r.playerService == nil || r.gameConfigRepo == nil {
+	if r.playerService == nil {
 		return
 	}
 
@@ -347,43 +347,11 @@ func (r *GameRelay) awardGameExp(gameID string, winnerNum int64, reason string) 
 		return
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
-	expWin, err := r.gameConfigRepo.GetInt64(ctx, "exp_win", 0)
-	if err != nil {
-		log.Printf("ERROR: failed to read exp_win from game_config: %v", err)
-		return
-	}
-	expLoss, err := r.gameConfigRepo.GetInt64(ctx, "exp_loss", 0)
-	if err != nil {
-		log.Printf("ERROR: failed to read exp_loss from game_config: %v", err)
-		return
-	}
-	expDraw, err := r.gameConfigRepo.GetInt64(ctx, "exp_draw", 0)
-	if err != nil {
-		log.Printf("ERROR: failed to read exp_draw from game_config: %v", err)
-		return
-	}
-
-	award := func(playerID string, exp int64) {
-		if isNpcPlayer(playerID) {
-			return
-		}
-		if err := r.playerService.AwardExp(ctx, playerID, exp); err != nil {
-			log.Printf("award exp to player %s: %v", playerID, err)
-		}
-	}
-
-	switch {
-	case reason == "draw" || winnerNum == 0:
-		award(meta.player1ID, expDraw)
-		award(meta.player2ID, expDraw)
-	case winnerNum == 1:
-		award(meta.player1ID, expWin)
-		award(meta.player2ID, expLoss)
-	case winnerNum == 2:
-		award(meta.player1ID, expLoss)
-		award(meta.player2ID, expWin)
+	if err := r.playerService.AwardGameExp(ctx, meta.player1ID, meta.player2ID, winnerNum, reason); err != nil {
+		log.Printf("ERROR: award game exp for game %s: %v", gameID, err)
 	}
 }
 
