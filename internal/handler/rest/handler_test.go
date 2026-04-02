@@ -53,34 +53,36 @@ func setupAuthRouter() (*gin.Engine, *repository.MockPlayerRepository) {
 	return r, playerRepo
 }
 
-func TestAuthHandler_Register_Success(t *testing.T) {
-	r, _ := setupAuthRouter()
+func TestAuthHandler_Register(t *testing.T) {
+	tests := []struct {
+		name       string
+		body       map[string]string
+		wantCode   int
+		wantName   string // empty means skip body check
+	}{
+		{"success", map[string]string{"username": "TestUser"}, http.StatusCreated, "TestUser"},
+		{"missing username", map[string]string{}, http.StatusBadRequest, ""},
+	}
 
-	body, _ := json.Marshal(map[string]string{"username": "TestUser"})
-	req := httptest.NewRequest("POST", "/auth/register", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r, _ := setupAuthRouter()
 
-	r.ServeHTTP(w, req)
+			body, _ := json.Marshal(tt.body)
+			req := httptest.NewRequest("POST", "/auth/register", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
 
-	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+			r.ServeHTTP(w, req)
 
-	var resp model.Player
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, "TestUser", resp.Username)
-}
-
-func TestAuthHandler_Register_MissingUsername(t *testing.T) {
-	r, _ := setupAuthRouter()
-
-	body, _ := json.Marshal(map[string]string{})
-	req := httptest.NewRequest("POST", "/auth/register", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+			require.Equal(t, tt.wantCode, w.Code, w.Body.String())
+			if tt.wantName != "" {
+				var resp model.Player
+				require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+				assert.Equal(t, tt.wantName, resp.Username)
+			}
+		})
+	}
 }
 
 func TestAuthHandler_Register_Duplicate(t *testing.T) {
@@ -221,9 +223,11 @@ func TestPlayerHandler_GetBattleLimit(t *testing.T) {
 
 	var resp service.BattleLimitResponse
 	_ = json.Unmarshal(w.Body.Bytes(), &resp)
-	assert.Equal(t, int64(10), resp.DailyBattleLimit)
-	assert.Equal(t, int64(3), resp.DailyBattleCount)
-	assert.True(t, resp.CanBattle)
+	assert.Equal(t, service.BattleLimitResponse{
+		DailyBattleLimit: 10,
+		DailyBattleCount: 3,
+		CanBattle:        true,
+	}, resp)
 }
 
 // ---------------------------------------------------------------------------
@@ -259,6 +263,7 @@ func TestUserSettingsHandler_GetSettings_Default(t *testing.T) {
 func TestUserSettingsHandler_UpdateSettings(t *testing.T) {
 	r := setupUserSettingsRouter()
 
+	// When: update settings
 	body, _ := json.Marshal(map[string]interface{}{
 		"language":     "en",
 		"bgm_volume":   80,
@@ -270,24 +275,43 @@ func TestUserSettingsHandler_UpdateSettings(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
+	// Then: response contains updated values
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var resp model.UserSettings
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.Equal(t, "en", resp.Language)
+	assert.Equal(t, int64(80), resp.BgmVolume)
+	assert.Equal(t, int64(30), resp.SeVolume)
+	assert.False(t, resp.PushEnabled)
+}
 
-	t.Run("returns updated settings", func(t *testing.T) {
-		var resp model.UserSettings
-		_ = json.Unmarshal(w.Body.Bytes(), &resp)
-		assert.Equal(t, "en", resp.Language)
-		assert.Equal(t, int64(80), resp.BgmVolume)
+func TestUserSettingsHandler_UpdateSettings_Persisted(t *testing.T) {
+	r := setupUserSettingsRouter()
+
+	// Given: settings have been updated
+	body, _ := json.Marshal(map[string]interface{}{
+		"language":     "en",
+		"bgm_volume":   80,
+		"se_volume":    30,
+		"push_enabled": false,
 	})
+	req := httptest.NewRequest("PUT", "/player/settings", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
 
-	t.Run("persists settings via GET", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/player/settings", nil)
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
+	// When: GET the settings
+	req = httptest.NewRequest("GET", "/player/settings", nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
 
-		var resp model.UserSettings
-		_ = json.Unmarshal(w.Body.Bytes(), &resp)
-		assert.Equal(t, "en", resp.Language)
-	})
+	// Then: persisted values match
+	require.Equal(t, http.StatusOK, w.Code)
+	var resp model.UserSettings
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.Equal(t, "en", resp.Language)
+	assert.Equal(t, int64(80), resp.BgmVolume)
 }
 
 func TestUserSettingsHandler_UpdateSettings_MissingLanguage(t *testing.T) {

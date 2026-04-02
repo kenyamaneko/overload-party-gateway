@@ -442,22 +442,20 @@ func TestGetPlayerCards_EnrichedWithDef(t *testing.T) {
 
 	cards, err := svc.GetPlayerCards(context.Background(), pid)
 	require.NoError(t, err)
-	require.Len(t, cards, 2)
 
-	// Build a map for easy lookup.
-	byID := map[string]*model.PlayerCardWithDef{}
-	for _, c := range cards {
-		byID[c.CardID] = c
+	want := []*model.PlayerCardWithDef{
+		{
+			CardID: "C-001", ArtNo: 0, Count: 3,
+			CardName: "Compute A", Faction: "SHE", CardType: "Compute",
+			Restriction: "unlimited", Stats: json.RawMessage(`{}`),
+		},
+		{
+			CardID: "C-050", ArtNo: 0, Count: 1,
+			CardName: "Limited Spell", Faction: "SHE", CardType: "Strategy",
+			Restriction: "limited", Stats: json.RawMessage(`{}`),
+		},
 	}
-
-	assert.Equal(t, "Compute A", byID["C-001"].CardName)
-	assert.Equal(t, "SHE", byID["C-001"].Faction)
-	assert.Equal(t, "unlimited", byID["C-001"].Restriction)
-	assert.Equal(t, 3, byID["C-001"].Count)
-
-	assert.Equal(t, "Limited Spell", byID["C-050"].CardName)
-	assert.Equal(t, "limited", byID["C-050"].Restriction)
-	assert.Equal(t, 1, byID["C-050"].Count)
+	assert.Equal(t, want, cards)
 }
 
 func TestGetPlayerCards_SkipsMissingDef(t *testing.T) {

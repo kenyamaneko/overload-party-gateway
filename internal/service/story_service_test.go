@@ -137,19 +137,17 @@ func TestListEpisodes_UnlockedAndLocked(t *testing.T) {
 
 	require.Len(t, episodes, 2)
 
-	t.Run("first episode is unlocked", func(t *testing.T) {
-		assert.Equal(t, "she_ep1", episodes[0].EpisodeID)
-		assert.True(t, episodes[0].IsUnlocked)
-		assert.Empty(t, episodes[0].LockReasons)
-		assert.Equal(t, "SHE 第1章", episodes[0].Title)
-	})
+	// First episode: unlocked
+	assert.Equal(t, "she_ep1", episodes[0].EpisodeID)
+	assert.True(t, episodes[0].IsUnlocked)
+	assert.Empty(t, episodes[0].LockReasons)
+	assert.Equal(t, "SHE 第1章", episodes[0].Title)
 
-	t.Run("second episode locked by level", func(t *testing.T) {
-		assert.Equal(t, "she_ep2", episodes[1].EpisodeID)
-		assert.False(t, episodes[1].IsUnlocked)
-		require.NotEmpty(t, episodes[1].LockReasons)
-		assert.NotNil(t, findReasonByType(episodes[1].LockReasons, "level"))
-	})
+	// Second episode: locked by level
+	assert.Equal(t, "she_ep2", episodes[1].EpisodeID)
+	assert.False(t, episodes[1].IsUnlocked)
+	require.NotEmpty(t, episodes[1].LockReasons)
+	assert.NotNil(t, findReasonByType(episodes[1].LockReasons, "level"))
 }
 
 func TestListEpisodes_LockedByFaction(t *testing.T) {

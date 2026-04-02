@@ -511,13 +511,13 @@ func TestGetProducts_WithOwnership(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, products, 2)
 
-	owned := 0
+	// Build map for easy lookup
+	byID := map[string]ProductWithOwnership{}
 	for _, p := range products {
-		if p.IsOwned {
-			owned++
-		}
+		byID[p.ProductID] = p
 	}
-	assert.Equal(t, 1, owned)
+	assert.True(t, byID["faction_she"].IsOwned)
+	assert.False(t, byID["faction_tenki"].IsOwned)
 }
 
 func TestGetProducts_SubscriptionOwnership(t *testing.T) {
