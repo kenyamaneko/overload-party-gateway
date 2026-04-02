@@ -309,9 +309,9 @@ func TestAwardGameExp(t *testing.T) {
 		{"player1 wins", 1, "system_down", "pvp", testExpWin, testExpLoss},
 		{"player2 wins", 2, "budget_zero", "pvp", testExpLoss, testExpWin},
 		{"draw", 0, "draw", "pvp", testExpDraw, testExpDraw},
-		{"npc match p1 wins", 1, "system_down", "npc", testExpWin, 0},
-		{"npc match p1 loses", 2, "system_down", "npc", testExpLoss, 0},
-		{"npc match draw", 0, "draw", "npc", testExpDraw, 0},
+		{"npc match p1 wins", 1, "system_down", "npc", testExpWin, 0},   // wantP2Exp: not asserted (NPC has no P2)
+		{"npc match p1 loses", 2, "system_down", "npc", testExpLoss, 0}, // wantP2Exp: not asserted (NPC has no P2)
+		{"npc match draw", 0, "draw", "npc", testExpDraw, 0},           // wantP2Exp: not asserted (NPC has no P2)
 	}
 
 	for _, tt := range tests {

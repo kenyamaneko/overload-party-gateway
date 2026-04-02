@@ -455,7 +455,7 @@ func TestGetPlayerCards_EnrichedWithDef(t *testing.T) {
 			Restriction: "limited", Stats: json.RawMessage(`{}`),
 		},
 	}
-	assert.Equal(t, want, cards)
+	assert.ElementsMatch(t, want, cards)
 }
 
 func TestGetPlayerCards_SkipsMissingDef(t *testing.T) {

@@ -71,6 +71,7 @@ const (
 	WSMsgSpectateUpdate       = genconstants.WSServerMsgSpectateUpdate
 	WSMsgSpectateEnded        = genconstants.WSServerMsgSpectateEnded
 	WSMsgSpectateStampBroadcast = genconstants.WSServerMsgSpectateStampBroadcast
+	WSMsgGameStateRestore       = genconstants.WSServerMsgGameStateRestore
 )
 
 // WS client message types.
