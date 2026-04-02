@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"log"
-	"strings"
 	"sync"
 	"time"
 
@@ -325,7 +324,7 @@ func (r *GameRelay) sendActionToPlayers(ctx context.Context, gameID string, pids
 // transformActionData converts battle-server event_data to the client format.
 // For turn_start events, it replaces activePlayer with is_my_turn.
 func (r *GameRelay) transformActionData(evt service.ActionEvent, rawState json.RawMessage) json.RawMessage {
-	if evt.EventType != "turn_start" {
+	if evt.EventType != constants.EventTypeTurnStart {
 		return mustMarshal(evt.EventData)
 	}
 
@@ -382,7 +381,7 @@ func (r *GameRelay) awardGameExp(gameID string, winnerNum int64, reason string) 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	if err := r.playerService.AwardGameExp(ctx, meta.player1ID, meta.player2ID, winnerNum, reason); err != nil {
+	if err := r.playerService.AwardGameExp(ctx, meta.player1ID, meta.player2ID, winnerNum, reason, meta.matchType); err != nil {
 		log.Printf("ERROR: award game exp for game %s: %v", gameID, err)
 	}
 }
@@ -418,7 +417,7 @@ func (r *GameRelay) advanceNpcIfNeeded(gameID, playerID string) {
 	meta, hasMeta := r.gameMeta[gameID]
 	r.mu.RUnlock()
 
-	if !hasMeta || meta.matchType != "npc" {
+	if !hasMeta || meta.matchType != constants.MatchTypeNpc {
 		return
 	}
 
@@ -467,17 +466,23 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 
 	// Build battle_start action_data
 	battleStartData := map[string]interface{}{
-		"match_type": "pvp",
+		"match_type": constants.MatchTypePvp,
 	}
 	if hasMeta {
 		battleStartData["match_type"] = meta.matchType
 
 		myName, myLevel := r.lookupPlayer(ctx, conn.playerID)
-		opponentID := meta.player2ID
-		if conn.playerID == meta.player2ID {
-			opponentID = meta.player1ID
+		var oppName string
+		var oppLevel int64
+		if meta.matchType == constants.MatchTypeNpc {
+			oppName, oppLevel = "NPC", 0
+		} else {
+			opponentID := meta.player2ID
+			if conn.playerID == meta.player2ID {
+				opponentID = meta.player1ID
+			}
+			oppName, oppLevel = r.lookupPlayer(ctx, opponentID)
 		}
-		oppName, oppLevel := r.lookupPlayer(ctx, opponentID)
 
 		battleStartData["my_name"] = myName
 		battleStartData["my_level"] = myLevel
@@ -492,7 +497,7 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 		Type: constants.WSMsgActionPerformed,
 		Data: mustMarshal(ActionPerformedMessage{
 			Sequence:   0,
-			ActionType: "battle_start",
+			ActionType: constants.EventTypeBattleStart,
 			ActionData: mustMarshal(battleStartData),
 			State:      transformed,
 		}),
@@ -509,7 +514,7 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 			Type: constants.WSMsgActionPerformed,
 			Data: mustMarshal(ActionPerformedMessage{
 				Sequence:   0,
-				ActionType: "turn_start",
+				ActionType: constants.EventTypeTurnStart,
 				ActionData: mustMarshal(turnStartData),
 				State:      transformed,
 			}),
@@ -518,11 +523,8 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 }
 
 // lookupPlayer resolves a player's display name and level.
-// Returns defaults for NPC or on error.
+// Returns defaults on error.
 func (r *GameRelay) lookupPlayer(ctx context.Context, playerID string) (string, int64) {
-	if strings.HasPrefix(playerID, "npc-") {
-		return "NPC", 0
-	}
 	if r.playerLookup == nil {
 		return "", 0
 	}
@@ -646,7 +648,7 @@ func (r *GameRelay) cancelTurnTimer(gameID string) {
 func (r *GameRelay) handleTurnTimeout(gameID, playerID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	result, err := r.battleClient.ProcessAction(ctx, gameID, playerID, "forfeit", nil)
+	result, err := r.battleClient.ProcessAction(ctx, gameID, playerID, constants.ActionTypeForfeit, nil)
 	if err != nil {
 		log.Printf("turn timeout forfeit error (game=%s, player=%s): %v", gameID, playerID, err)
 		return
@@ -681,7 +683,7 @@ func (r *GameRelay) HandleDisconnectTimeout(playerID, gameID string) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	result, err := r.battleClient.ProcessAction(ctx, gameID, playerID, "forfeit", nil)
+	result, err := r.battleClient.ProcessAction(ctx, gameID, playerID, constants.ActionTypeForfeit, nil)
 	if err != nil {
 		log.Printf("forfeit error: %v", err)
 		return

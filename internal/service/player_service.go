@@ -7,6 +7,7 @@ import (
 
 	"cloud.google.com/go/civil"
 
+	"github.com/kenyamaneko/overload-party-gateway/internal/constants"
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
@@ -117,14 +118,34 @@ func (s *PlayerService) AwardExp(ctx context.Context, playerID string, expGain i
 	if coeff <= 0 {
 		return fmt.Errorf("exp_formula_coefficient not configured in game_config")
 	}
-	_, err = s.playerRepo.AddExp(ctx, playerID, expGain, coeff)
+	_, err = s.playerRepo.AddExp(ctx, playerID, expGain, func(newExp, currentLevel int64) int64 {
+		return ComputeLevel(newExp, currentLevel, coeff)
+	})
 	return err
+}
+
+// ComputeLevel determines the new level after gaining exp.
+// It only increments from the current level — never decreases — so that
+// formula coefficient changes do not retroactively alter existing levels.
+func ComputeLevel(newExp, currentLevel, coeff int64) int64 {
+	level := currentLevel
+	if level < 1 {
+		level = 1
+	}
+	for {
+		nextLevelExp := coeff * (level + 1) * (level + 1)
+		if newExp < nextLevelExp {
+			break
+		}
+		level++
+	}
+	return level
 }
 
 // AwardGameExp grants experience to both players after a game ends.
 // It reads exp_win/exp_loss/exp_draw from game_config and awards accordingly.
-// NPC players (prefixed with "npc-") are skipped.
-func (s *PlayerService) AwardGameExp(ctx context.Context, player1ID, player2ID string, winnerNum int64, reason string) error {
+// For NPC matches (matchType == "npc"), only the human player (player1) receives exp.
+func (s *PlayerService) AwardGameExp(ctx context.Context, player1ID, player2ID string, winnerNum int64, reason, matchType string) error {
 	expWin, err := s.gameConfigRepo.GetInt64(ctx, "exp_win", 0)
 	if err != nil {
 		return fmt.Errorf("read exp_win: %w", err)
@@ -138,35 +159,33 @@ func (s *PlayerService) AwardGameExp(ctx context.Context, player1ID, player2ID s
 		return fmt.Errorf("read exp_draw: %w", err)
 	}
 
-	award := func(playerID string, exp int64) error {
-		if isNpcPlayer(playerID) {
+	isNpc := matchType == constants.MatchTypeNpc
+
+	award := func(playerID string, exp int64, isNpcSide bool) error {
+		if isNpcSide {
 			return nil
 		}
 		return s.AwardExp(ctx, playerID, exp)
 	}
 
 	switch {
-	case reason == "draw" || winnerNum == 0:
-		if err := award(player1ID, expDraw); err != nil {
+	case reason == constants.WinReasonDraw || winnerNum == 0:
+		if err := award(player1ID, expDraw, false); err != nil {
 			return err
 		}
-		return award(player2ID, expDraw)
+		return award(player2ID, expDraw, isNpc)
 	case winnerNum == 1:
-		if err := award(player1ID, expWin); err != nil {
+		if err := award(player1ID, expWin, false); err != nil {
 			return err
 		}
-		return award(player2ID, expLoss)
+		return award(player2ID, expLoss, isNpc)
 	case winnerNum == 2:
-		if err := award(player1ID, expLoss); err != nil {
+		if err := award(player1ID, expLoss, false); err != nil {
 			return err
 		}
-		return award(player2ID, expWin)
+		return award(player2ID, expWin, isNpc)
 	}
 	return nil
-}
-
-func isNpcPlayer(playerID string) bool {
-	return len(playerID) > 4 && playerID[:4] == "npc-"
 }
 
 // LevelProgress holds computed level progress fields derived from a player's

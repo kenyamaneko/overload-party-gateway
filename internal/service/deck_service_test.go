@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/cache"
+	"github.com/kenyamaneko/overload-party-gateway/internal/constants"
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -754,7 +755,7 @@ func TestRestrictionCopyCount(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.restriction, func(t *testing.T) {
-			assert.Equal(t, tt.want, restrictionCopyCount(tt.restriction))
+			assert.Equal(t, tt.want, constants.RestrictionCopyCount(tt.restriction))
 		})
 	}
 }

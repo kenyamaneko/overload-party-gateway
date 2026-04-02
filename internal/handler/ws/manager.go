@@ -116,7 +116,7 @@ func (m *Manager) StartMatchmaking(ctx context.Context) {
 			notifyError("failed to create game")
 			return
 		}
-		m.Relay.RegisterGameMeta(game.GameID, game.Player1ID, game.Player2ID, "pvp")
+		m.Relay.RegisterGameMeta(game.GameID, game.Player1ID, game.Player2ID, constants.MatchTypePvp)
 		m.Spectate.RegisterGame(game.GameID, game.Player1ID, game.Player2ID)
 		m.Relay.NotifyMatchFound(game.GameID, game.Player1ID, game.Player2ID)
 	})
@@ -231,7 +231,7 @@ func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, da
 		sendError(conn, "npc_battle_error", err.Error(), true)
 		return
 	}
-	m.Relay.RegisterGameMeta(game.GameID, game.Player1ID, game.Player2ID, "npc")
+	m.Relay.RegisterGameMeta(game.GameID, game.Player1ID, game.Player2ID, constants.MatchTypeNpc)
 	m.Spectate.RegisterGame(game.GameID, game.Player1ID, game.Player2ID)
 	conn.SendMessage(&WSMessage{
 		Type: constants.WSMsgNpcBattleCreated,

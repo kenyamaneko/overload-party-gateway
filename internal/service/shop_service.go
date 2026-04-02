@@ -15,11 +15,13 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
-var validFactions = map[string]bool{
-	constants.FactionSHE:    true,
-	constants.FactionTenki:  true,
-	constants.FactionSugar:  true,
-	constants.FactionTuners: true,
+func isSelectableFaction(faction string) bool {
+	for _, f := range constants.SelectableFactions {
+		if f == faction {
+			return true
+		}
+	}
+	return false
 }
 
 var normalizeFactionMap = map[string]string{
@@ -74,7 +76,7 @@ func NewShopService(
 // It grants all cards from the selected faction + Neutral to the player.
 func (s *ShopService) SelectFaction(ctx context.Context, playerID, faction string) (int, error) {
 	normalized, ok := normalizeFaction(faction)
-	if !ok || !validFactions[normalized] {
+	if !ok || !isSelectableFaction(normalized) {
 		return 0, fmt.Errorf("%w: %s", ErrInvalidFaction, faction)
 	}
 	faction = normalized

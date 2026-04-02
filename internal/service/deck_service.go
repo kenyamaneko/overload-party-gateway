@@ -287,7 +287,7 @@ func (s *DeckService) validateDeckCards(entries []DeckCardEntry, ownedCards []*m
 		if card == nil {
 			return fmt.Errorf("card %s not found in card definitions", cardID)
 		}
-		limit := restrictionCopyCount(card.Restriction)
+		limit := constants.RestrictionCopyCount(card.Restriction)
 		if total > limit {
 			return fmt.Errorf("card %s (%s): exceeds restriction limit (%d/%d)",
 				cardID, card.Restriction, total, limit)
@@ -315,13 +315,3 @@ func (s *DeckService) computeIsValid(deckCards []model.DeckCard, ownedCards []*m
 	return s.validateDeckCards(entries, ownedCards) == nil
 }
 
-func restrictionCopyCount(restriction string) int {
-	switch restriction {
-	case "semi_limited":
-		return 2
-	case "limited":
-		return 1
-	default:
-		return 3
-	}
-}

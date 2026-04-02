@@ -235,9 +235,9 @@ func (r *PgPlayerRepository) UpdateFaction(ctx context.Context, playerID, factio
 }
 
 // AddExp atomically awards experience and recalculates level using SELECT FOR UPDATE.
-// Level is only incremented when the new exp crosses the next-level threshold,
-// so changing exp_formula_coefficient does not retroactively alter existing levels.
-func (r *PgPlayerRepository) AddExp(ctx context.Context, playerID string, expGain, coeff int64) (*model.Player, error) {
+// The computeLevel function is provided by the service layer to determine the new
+// level from the updated exp and current level.
+func (r *PgPlayerRepository) AddExp(ctx context.Context, playerID string, expGain int64, computeLevel func(newExp, currentLevel int64) int64) (*model.Player, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("add exp begin tx: %w", err)
@@ -254,7 +254,7 @@ func (r *PgPlayerRepository) AddExp(ctx context.Context, playerID string, expGai
 	}
 
 	newExp := curExp + expGain
-	newLevel := ComputeLevel(newExp, curLevel, coeff)
+	newLevel := computeLevel(newExp, curLevel)
 
 	row := tx.QueryRow(ctx,
 		`UPDATE players SET exp = $2, level = $3, updated_at = NOW()
@@ -272,24 +272,6 @@ func (r *PgPlayerRepository) AddExp(ctx context.Context, playerID string, expGai
 		return nil, fmt.Errorf("add exp commit: %w", err)
 	}
 	return p, nil
-}
-
-// ComputeLevel determines the new level after gaining exp.
-// It only increments from the current level — never decreases — so that
-// formula coefficient changes do not retroactively alter existing levels.
-func ComputeLevel(newExp, currentLevel, coeff int64) int64 {
-	level := currentLevel
-	if level < 1 {
-		level = 1
-	}
-	for {
-		nextLevelExp := coeff * (level + 1) * (level + 1)
-		if newExp < nextLevelExp {
-			break
-		}
-		level++
-	}
-	return level
 }
 
 // scanPlayer scans a single row into a model.Player.

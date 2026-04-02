@@ -7,7 +7,7 @@ const (
 	DeckSize = 30
 )
 
-// Faction constants.
+// Factions.
 const (
 	FactionSHE = "SHE"
 	FactionTenki = "Tenki"
@@ -15,4 +15,373 @@ const (
 	FactionTuners = "Tuners"
 	FactionNeutral = "Neutral"
 )
+
+// SelectableFactions is the list of factions players can choose.
+var SelectableFactions = []string{
+	FactionSHE,
+	FactionTenki,
+	FactionSugar,
+	FactionTuners,
+}
+
+// Phases.
+const (
+	PhaseDraw = "draw"
+	PhaseMain = "main"
+	PhaseBattle = "battle"
+	PhaseEnd = "end"
+)
+
+// Zones.
+const (
+	ZoneFrontend = "frontend"
+	ZoneBackend = "backend"
+	ZoneSupport = "support"
+)
+
+// Ranks.
+const (
+	RankSmall = "small"
+	RankMedium = "medium"
+	RankLarge = "large"
+)
+
+// Instance families.
+const (
+	InstanceFamilyM = "M"
+	InstanceFamilyC = "C"
+	InstanceFamilyR = "R"
+)
+
+// Game status.
+const (
+	GameStatusWaiting = "waiting"
+	GameStatusPlaying = "playing"
+	GameStatusFinished = "finished"
+)
+
+// Win reasons.
+const (
+	WinReasonBudgetZero = "budget_zero"
+	WinReasonSystemDown = "system_down"
+	WinReasonRepositoryOut = "repository_out"
+	WinReasonTurnTimeout = "turn_timeout"
+	WinReasonDisconnect = "disconnect"
+	WinReasonTurnLimit = "turn_limit"
+	WinReasonDraw = "draw"
+	WinReasonLaunchFailure = "launch_failure"
+	WinReasonSurrender = "surrender"
+)
+
+// Action types.
+const (
+	ActionTypePlayCard = "play_card"
+	ActionTypeAttack = "attack"
+	ActionTypeScaleUp = "scale_up"
+	ActionTypeMonetize = "monetize"
+	ActionTypeDiscardHand = "discard_hand"
+	ActionTypeUseEffect = "use_effect"
+	ActionTypeSetReactive = "set_reactive"
+	ActionTypeMigrate = "migrate"
+	ActionTypeEndPhase = "end_phase"
+	ActionTypeForfeit = "forfeit"
+	ActionTypeSelectSlot = "select_slot"
+	ActionTypeReactive = "reactive"
+)
+
+// Event types.
+const (
+	EventTypePlayCard = "play_card"
+	EventTypeAttachCard = "attach_card"
+	EventTypeAttack = "attack"
+	EventTypeScaleUp = "scale_up"
+	EventTypeMonetize = "monetize"
+	EventTypeDiscardHand = "discard_hand"
+	EventTypeUseEffect = "use_effect"
+	EventTypeReactiveRevealed = "reactive_revealed"
+	EventTypeMigrate = "migrate"
+	EventTypeMigrationComplete = "migration_complete"
+	EventTypePhaseChange = "phase_change"
+	EventTypePhaseEnd = "phase_end"
+	EventTypeTurnEnd = "turn_end"
+	EventTypeTurnStart = "turn_start"
+	EventTypeGameOver = "game_over"
+	EventTypeBattleStart = "battle_start"
+)
+
+// Effect durations.
+const (
+	EffectDurationThisTurn = "this_turn"
+	EffectDurationUntilNextTurnEnd = "until_next_turn_end"
+	EffectDurationUntilNextOwnTurnEnd = "until_next_own_turn_end"
+	EffectDurationWhileOnField = "while_on_field"
+	EffectDurationPermanent = "permanent"
+	EffectDurationNextTurn = "next_turn"
+)
+
+// Restriction values.
+const (
+	RestrictionUnlimited = "unlimited"
+	RestrictionLimited = "limited"
+	RestrictionSemiLimited = "semi_limited"
+	RestrictionForbidden = "forbidden"
+)
+
+// Trigger types.
+const (
+	TriggerTypeDeploy = "deploy"
+	TriggerTypeActivate = "activate"
+	TriggerTypePassive = "passive"
+	TriggerTypeOnEndPhase = "on_end_phase"
+	TriggerTypeOnFieldChange = "on_field_change"
+	TriggerTypeOnScaleUp = "on_scale_up"
+	TriggerTypeOnAttack = "on_attack"
+	TriggerTypeOnHit = "on_hit"
+	TriggerTypeOnDestroy = "on_destroy"
+	TriggerTypeReactive = "reactive"
+	TriggerTypeOnEnemyDeploy = "on_enemy_deploy"
+)
+
+// Effect operations.
+const (
+	EffectOpGainBudget = "gain_budget"
+	EffectOpLoseBudget = "lose_budget"
+	EffectOpDealDamage = "deal_damage"
+	EffectOpHealDamage = "heal_damage"
+	EffectOpDestroyCheck = "destroy_check"
+	EffectOpSurviveDestruction = "survive_destruction"
+	EffectOpApplyBuff = "apply_buff"
+	EffectOpDraw = "draw"
+	EffectOpSearchRepo = "search_repo"
+	EffectOpAddToHand = "add_to_hand"
+	EffectOpTrashToHand = "trash_to_hand"
+	EffectOpDeployFromHand = "deploy_from_hand"
+	EffectOpDeployFromRepo = "deploy_from_repo"
+	EffectOpDeployFromRepoSameCard = "deploy_from_repo_same_card"
+	EffectOpDestroyPlatform = "destroy_platform"
+	EffectOpScaleToRank = "scale_to_rank"
+	EffectOpCancelAction = "cancel_action"
+	EffectOpRevealReactive = "reveal_reactive"
+	EffectOpPeekReactive = "peek_reactive"
+	EffectOpReduceDeployTurns = "reduce_deploy_turns"
+	EffectOpAbsorbInsight = "absorb_insight"
+	EffectOpGainInsight = "gain_insight"
+)
+
+// Buff types.
+const (
+	BuffTypeTp = "tp"
+	BuffTypeYield = "yield"
+	BuffTypeAv = "av"
+	BuffTypeCannotAttack = "cannot_attack"
+	BuffTypeIncidentImmune = "incident_immune"
+	BuffTypeIncidentBlock = "incident_block"
+	BuffTypeIncidentReduction = "incident_reduction"
+	BuffTypeRansomware = "ransomware"
+	BuffTypeReservedInstance = "reserved_instance"
+	BuffTypeScaleCostReduction = "scale_cost_reduction"
+	BuffTypeDeployDiscount = "deploy_discount"
+	BuffTypeMaintenanceReduction = "maintenance_reduction"
+	BuffTypePendingRevival = "pending_revival"
+	BuffTypeAttackDamageReduction = "attack_damage_reduction"
+	BuffTypeCountMultiplier = "count_multiplier"
+	BuffTypeSlaPenalty = "sla_penalty"
+	BuffTypeSlaPenaltyReduction = "sla_penalty_reduction"
+	BuffTypeTpSuppressed = "tp_suppressed"
+)
+
+// Custom effects.
+const (
+	CustomEffectCancelNthDeploy = "cancel_nth_deploy"
+	CustomEffectChainAttackBonus = "chain_attack_bonus"
+	CustomEffectCloudShift = "cloud_shift"
+	CustomEffectDeploySameTypeFromHand = "deploy_same_type_from_hand"
+	CustomEffectDisableHighTpDeploy = "disable_high_tp_deploy"
+	CustomEffectHalveIncidentDamage = "halve_incident_damage"
+	CustomEffectReattach = "reattach"
+	CustomEffectRedirectAttack = "redirect_attack"
+	CustomEffectScaleToZero = "scale_to_zero"
+	CustomEffectSpotExpiry = "spot_expiry"
+	CustomEffectTargetShield = "target_shield"
+)
+
+// Effect categories.
+const (
+	EffectCategoryBudgetGain = "budget_gain"
+	EffectCategoryBudgetPenalty = "budget_penalty"
+	EffectCategoryInsightAbsorb = "insight_absorb"
+	EffectCategoryInsightGain = "insight_gain"
+	EffectCategorySingleDamage = "single_damage"
+	EffectCategoryAoeDamage = "aoe_damage"
+	EffectCategoryBuff = "buff"
+	EffectCategoryDebuff = "debuff"
+	EffectCategoryHeal = "heal"
+	EffectCategoryDraw = "draw"
+	EffectCategorySearch = "search"
+	EffectCategoryDeployFree = "deploy_free"
+	EffectCategoryRecoverCard = "recover_card"
+	EffectCategoryRevealReactive = "reveal_reactive"
+	EffectCategoryDestroyPlatform = "destroy_platform"
+	EffectCategoryCancelAction = "cancel_action"
+	EffectCategorySurvive = "survive"
+)
+
+// Effect target types.
+const (
+	EffectTargetTypeNone = "none"
+	EffectTargetTypeChoice = "choice"
+	EffectTargetTypeAllOpp = "all_opp"
+	EffectTargetTypeSelf = "self"
+)
+
+// Player references.
+const (
+	PlayerRefSelf = "self"
+	PlayerRefOpponent = "opponent"
+	PlayerRefBoth = "both"
+)
+
+// Use limits.
+const (
+	UseLimitOncePerTurn = "once_per_turn"
+	UseLimitOncePerGame = "once_per_game"
+)
+
+// Match types.
+const (
+	MatchTypePvp = "pvp"
+	MatchTypeNpc = "npc"
+)
+
+// Stat types.
+const (
+	StatTypeTp = "tp"
+	StatTypeYield = "yield"
+	StatTypeAv = "av"
+)
+
+// Guard types.
+const (
+	GuardTypeCount = "count"
+	GuardTypeStat = "stat"
+	GuardTypeMatch = "match"
+	GuardTypeNotSame = "not_same"
+)
+
+// Selector pick modes.
+const (
+	SelectorPickModeAll = "all"
+	SelectorPickModeChoice = "choice"
+)
+
+// WS server message types.
+const (
+	WSServerMsgGameState = "game_state"
+	WSServerMsgGameOver = "game_over"
+	WSServerMsgError = "error"
+	WSServerMsgGameEntered = "game_entered"
+	WSServerMsgMatchmakingStarted = "matchmaking_started"
+	WSServerMsgMatchmakingCancelled = "matchmaking_cancelled"
+	WSServerMsgActionRejected = "action_rejected"
+	WSServerMsgStampUsed = "stamp_used"
+	WSServerMsgPong = "pong"
+	WSServerMsgMatchFound = "match_found"
+	WSServerMsgActionPerformed = "action_performed"
+	WSServerMsgTurnControls = "turn_controls"
+	WSServerMsgNpcBattleCreated = "npc_battle_created"
+	WSServerMsgOpponentDisconnected = "opponent_disconnected"
+	WSServerMsgOpponentReconnected = "opponent_reconnected"
+	WSServerMsgSpectateJoined = "spectate_joined"
+	WSServerMsgSpectateError = "spectate_error"
+	WSServerMsgSpectateUpdate = "spectate_update"
+	WSServerMsgSpectateEnded = "spectate_ended"
+	WSServerMsgSpectateStampBroadcast = "spectate_stamp_broadcast"
+	WSServerMsgGameStateRestore = "game_state_restore"
+)
+
+// WS client message types.
+const (
+	WSClientMsgGameEnter = "game_enter"
+	WSClientMsgMatchmakingStart = "matchmaking_start"
+	WSClientMsgMatchmakingCancel = "matchmaking_cancel"
+	WSClientMsgGameAction = "game_action"
+	WSClientMsgUseStamp = "use_stamp"
+	WSClientMsgPing = "ping"
+	WSClientMsgNpcBattleStart = "npc_battle_start"
+	WSClientMsgSpectateJoin = "spectate_join"
+	WSClientMsgSpectateLeave = "spectate_leave"
+	WSClientMsgSpectateStamp = "spectate_stamp"
+)
+
+// Card types.
+const (
+	CardTypeCompute = "Compute"
+	CardTypeContainer = "Container"
+	CardTypeOrchestrator = "Orchestrator"
+	CardTypeServerless = "Serverless"
+	CardTypeAIML = "AI/ML"
+	CardTypeDatabase = "Database"
+	CardTypeObjectStorage = "ObjectStorage"
+	CardTypeCacheDB = "CacheDB"
+	CardTypePlatform = "Platform"
+	CardTypeAttachment = "Attachment"
+	CardTypeStrategy = "Strategy"
+	CardTypeReactive = "Reactive"
+	CardTypeIncident = "Incident"
+)
+
+// IsResourceType returns true if the card type is a deployable resource (compute or data).
+func IsResourceType(cardType string) bool {
+	switch cardType {
+	case CardTypeCompute, CardTypeContainer, CardTypeOrchestrator, CardTypeServerless, CardTypeAIML, CardTypeDatabase, CardTypeObjectStorage, CardTypeCacheDB:
+		return true
+	}
+	return false
+}
+
+// IsFrontendEligible returns true if the card can be placed in the frontend zone.
+func IsFrontendEligible(cardType string) bool {
+	switch cardType {
+	case CardTypeCompute, CardTypeContainer, CardTypeOrchestrator, CardTypeServerless, CardTypeAIML, CardTypeObjectStorage:
+		return true
+	}
+	return false
+}
+
+// IsBackendEligible returns true if the card can be placed in the backend zone.
+func IsBackendEligible(cardType string) bool {
+	switch cardType {
+	case CardTypeDatabase, CardTypeObjectStorage, CardTypeCacheDB, CardTypeCompute, CardTypeContainer, CardTypeOrchestrator, CardTypeServerless, CardTypeAIML:
+		return true
+	}
+	return false
+}
+
+// IsSupportType returns true if the card goes in the support zone.
+func IsSupportType(cardType string) bool {
+	switch cardType {
+	case CardTypePlatform, CardTypeStrategy, CardTypeReactive, CardTypeIncident:
+		return true
+	}
+	return false
+}
+
+// IsAttachmentType returns true if the card is an Attachment.
+func IsAttachmentType(cardType string) bool {
+	return cardType == CardTypeAttachment
+}
+
+// RestrictionCopyCount returns the maximum number of copies allowed in a deck.
+func RestrictionCopyCount(restriction string) int {
+	switch restriction {
+	case RestrictionForbidden:
+		return 0
+	case RestrictionLimited:
+		return 1
+	case RestrictionSemiLimited:
+		return 2
+	default:
+		return 3
+	}
+}
 

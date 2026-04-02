@@ -19,7 +19,7 @@ type PlayerRepo interface {
 	UpdateUsername(ctx context.Context, playerID string, username string) (*model.Player, error)
 	UpdatePremium(ctx context.Context, playerID string, isPremium bool, expiresAt *time.Time) error
 	UpdateFaction(ctx context.Context, playerID, faction string) error
-	AddExp(ctx context.Context, playerID string, expGain, coeff int64) (*model.Player, error)
+	AddExp(ctx context.Context, playerID string, expGain int64, computeLevel func(newExp, currentLevel int64) int64) (*model.Player, error)
 }
 
 // DeckRepo defines the data access contract for deck operations.

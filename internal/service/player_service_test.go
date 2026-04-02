@@ -311,7 +311,7 @@ func TestAwardGameExp_Player1Wins(t *testing.T) {
 	svc, repo := setupExpService(t, p1, p2)
 	ctx := context.Background()
 
-	require.NoError(t, svc.AwardGameExp(ctx, "p1", "p2", 1, "system_down"))
+	require.NoError(t, svc.AwardGameExp(ctx, "p1", "p2", 1, "system_down", "pvp"))
 
 	got1, _ := repo.FindByID(ctx, "p1")
 	got2, _ := repo.FindByID(ctx, "p2")
@@ -325,7 +325,7 @@ func TestAwardGameExp_Player2Wins(t *testing.T) {
 	svc, repo := setupExpService(t, p1, p2)
 	ctx := context.Background()
 
-	require.NoError(t, svc.AwardGameExp(ctx, "p1", "p2", 2, "budget_zero"))
+	require.NoError(t, svc.AwardGameExp(ctx, "p1", "p2", 2, "budget_zero", "pvp"))
 
 	got1, _ := repo.FindByID(ctx, "p1")
 	got2, _ := repo.FindByID(ctx, "p2")
@@ -339,7 +339,7 @@ func TestAwardGameExp_Draw(t *testing.T) {
 	svc, repo := setupExpService(t, p1, p2)
 	ctx := context.Background()
 
-	require.NoError(t, svc.AwardGameExp(ctx, "p1", "p2", 0, "draw"))
+	require.NoError(t, svc.AwardGameExp(ctx, "p1", "p2", 0, "draw", "pvp"))
 
 	got1, _ := repo.FindByID(ctx, "p1")
 	got2, _ := repo.FindByID(ctx, "p2")
@@ -352,22 +352,23 @@ func TestAwardGameExp_NpcSkipped(t *testing.T) {
 	svc, repo := setupExpService(t, p1)
 	ctx := context.Background()
 
-	// NPC player doesn't exist in repo — should not error because it's skipped.
-	require.NoError(t, svc.AwardGameExp(ctx, "p1", "npc-easy", 1, "system_down"))
+	// NPC match: player2 (NPC side) is skipped, only player1 gets exp.
+	require.NoError(t, svc.AwardGameExp(ctx, "p1", "npc-easy", 1, "system_down", "npc"))
 
 	got1, _ := repo.FindByID(ctx, "p1")
 	assert.Equal(t, int64(40), got1.Exp) // winner
 }
 
-func TestAwardGameExp_NpcIsPlayer1(t *testing.T) {
-	p2 := &model.Player{PlayerID: "p2", FirebaseUID: "uid2", Level: 1, Exp: 0}
-	svc, repo := setupExpService(t, p2)
+func TestAwardGameExp_NpcLoses(t *testing.T) {
+	p1 := &model.Player{PlayerID: "p1", FirebaseUID: "uid1", Level: 1, Exp: 0}
+	svc, repo := setupExpService(t, p1)
 	ctx := context.Background()
 
-	require.NoError(t, svc.AwardGameExp(ctx, "npc-hard", "p2", 2, "system_down"))
+	// NPC match: player1 (human) loses, player2 (NPC) wins — only human gets loss exp.
+	require.NoError(t, svc.AwardGameExp(ctx, "p1", "npc-easy", 2, "system_down", "npc"))
 
-	got2, _ := repo.FindByID(ctx, "p2")
-	assert.Equal(t, int64(40), got2.Exp) // winner
+	got1, _ := repo.FindByID(ctx, "p1")
+	assert.Equal(t, int64(20), got1.Exp) // loss
 }
 
 // --- ComputeLevel tests ---
@@ -390,7 +391,7 @@ func TestComputeLevel(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := repository.ComputeLevel(tt.newExp, tt.currentLevel, tt.coeff)
+			got := ComputeLevel(tt.newExp, tt.currentLevel, tt.coeff)
 			assert.Equal(t, tt.wantLevel, got)
 		})
 	}

@@ -132,7 +132,7 @@ func (r *MockPlayerRepository) UpdateFaction(ctx context.Context, playerID, fact
 	return nil
 }
 
-func (r *MockPlayerRepository) AddExp(ctx context.Context, playerID string, expGain, coeff int64) (*model.Player, error) {
+func (r *MockPlayerRepository) AddExp(ctx context.Context, playerID string, expGain int64, computeLevel func(newExp, currentLevel int64) int64) (*model.Player, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -141,6 +141,6 @@ func (r *MockPlayerRepository) AddExp(ctx context.Context, playerID string, expG
 		return nil, fmt.Errorf("player %s not found", playerID)
 	}
 	p.Exp += expGain
-	p.Level = ComputeLevel(p.Exp, p.Level, coeff)
+	p.Level = computeLevel(p.Exp, p.Level)
 	return p, nil
 }
