@@ -167,9 +167,9 @@ func main() {
 			now := time.Now()
 			c.JSON(http.StatusOK, []model.NewsArticle{
 				{ArticleID: "dev-1", Source: "aws", Title: "Lambda が ARM64 対応を拡大、コスト最大34%削減", Tags: []string{"aws", "serverless"}, FetchedAt: now},
-				{ArticleID: "dev-2", Source: "gcp", Title: "Cloud Run に GPU サポートが GA、ML推論ワークロードに対応", Tags: []string{"gcp", "container"}, FetchedAt: now},
+				{ArticleID: "dev-2", Source: "google-cloud", Title: "Cloud Run に GPU サポートが GA、ML推論ワークロードに対応", Tags: []string{"google-cloud", "container"}, FetchedAt: now},
 				{ArticleID: "dev-3", Source: "azure", Title: "Cosmos DB の新プライシングモデルが発表", Tags: []string{"azure", "database"}, FetchedAt: now},
-				{ArticleID: "dev-4", Source: "oci", Title: "マルチクラウド戦略の落とし穴: 3つの失敗パターン", Tags: []string{"multi-cloud"}, FetchedAt: now},
+				{ArticleID: "dev-4", Source: "other", Title: "マルチクラウド戦略の落とし穴: 3つの失敗パターン", Tags: []string{"multi-cloud"}, FetchedAt: now},
 			})
 		})
 	}
