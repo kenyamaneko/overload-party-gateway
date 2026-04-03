@@ -12,4 +12,5 @@ var (
 	ErrUnsupportedPlatform       = errors.New("unsupported platform")
 	ErrProductNotActive          = errors.New("product is not active")
 	ErrProductNotSubscription    = errors.New("product is not a subscription")
+	ErrAlreadyOwned              = errors.New("product already owned")
 )

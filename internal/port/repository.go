@@ -75,6 +75,7 @@ type ShopRepository interface {
 	InsertPlayerCards(ctx context.Context, cards []*model.PlayerCard) error
 	InsertPlayerItems(ctx context.Context, items []*model.PlayerItem) error
 	GetPlayerOwnedFactions(ctx context.Context, playerID string) ([]string, error)
+	HasPlayerItem(ctx context.Context, playerID, itemType string, itemNo int64) (bool, error)
 }
 
 // SubscriptionRepo defines the data access contract for subscription lifecycle.

@@ -172,6 +172,17 @@ func (r *MockShopRepository) InsertPlayerItems(ctx context.Context, items []*mod
 	return nil
 }
 
+func (r *MockShopRepository) HasPlayerItem(ctx context.Context, playerID, itemType string, itemNo int64) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, item := range r.playerItems[playerID] {
+		if item.ItemType == itemType && item.ItemNo == itemNo {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (r *MockShopRepository) GetPlayerOwnedFactions(ctx context.Context, playerID string) ([]string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

@@ -291,6 +291,60 @@ func TestPurchase_CosmeticItem(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestPurchase_AlreadyOwned_FactionSet(t *testing.T) {
+	env := newTestShopEnv()
+
+	env.svc.appleVerifier = &platform.MockReceiptVerifier{
+		VerifyPurchaseFn: func(ctx context.Context, token string) (*platform.VerifyResult, error) {
+			return &platform.VerifyResult{IsValid: true, TransactionID: "txn-first"}, nil
+		},
+	}
+
+	env.shopRepo.AddProduct(&model.Product{
+		ProductID: "faction_tenki",
+		Name:      "Tenkiカードセット",
+		Type:      model.ProductTypeFactionSet,
+		Price:     980,
+		Content:   json.RawMessage(`{"faction":"Tenki"}`),
+		IsActive:  true,
+	})
+
+	// First purchase succeeds
+	err := env.svc.Purchase(context.Background(), "p1", "faction_tenki", "ios", "receipt-token-1")
+	require.NoError(t, err)
+
+	// Second purchase with a different token is rejected
+	err = env.svc.Purchase(context.Background(), "p1", "faction_tenki", "ios", "receipt-token-2")
+	assert.ErrorIs(t, err, ErrAlreadyOwned)
+}
+
+func TestPurchase_AlreadyOwned_Cosmetic(t *testing.T) {
+	env := newTestShopEnv()
+
+	env.svc.googleVerifier = &platform.MockReceiptVerifier{
+		VerifyPurchaseFn: func(ctx context.Context, token string) (*platform.VerifyResult, error) {
+			return &platform.VerifyResult{IsValid: true, TransactionID: "txn-cos"}, nil
+		},
+	}
+
+	env.shopRepo.AddProduct(&model.Product{
+		ProductID: "playmat_01",
+		Name:      "プレイマット: サイバー",
+		Type:      model.ProductTypeCosmetic,
+		Price:     320,
+		Content:   json.RawMessage(`{"item_type":"playmat","item_no":1}`),
+		IsActive:  true,
+	})
+
+	// First purchase succeeds
+	err := env.svc.Purchase(context.Background(), "p1", "playmat_01", "android", "cosmetic-receipt-1")
+	require.NoError(t, err)
+
+	// Second purchase with a different token is rejected
+	err = env.svc.Purchase(context.Background(), "p1", "playmat_01", "android", "cosmetic-receipt-2")
+	assert.ErrorIs(t, err, ErrAlreadyOwned)
+}
+
 func TestPurchase_InactiveProduct(t *testing.T) {
 	env := newTestShopEnv()
 
@@ -443,6 +497,39 @@ func TestSubscribe_Errors(t *testing.T) {
 			assert.ErrorIs(t, err, tt.wantErr)
 		})
 	}
+}
+
+func TestSubscribe_ResubscribeAfterExpiry(t *testing.T) {
+	env := newTestShopEnv()
+	createTestPlayer(env, "p1")
+
+	expiresAt := time.Now().Add(30 * 24 * time.Hour)
+	env.svc.appleVerifier = &platform.MockReceiptVerifier{
+		VerifySubscriptionFn: func(ctx context.Context, token string) (*platform.SubscriptionInfo, error) {
+			return &platform.SubscriptionInfo{
+				IsValid:   true,
+				ProductID: "premium_monthly",
+				ExpiresAt: expiresAt,
+			}, nil
+		},
+	}
+
+	env.shopRepo.AddProduct(&model.Product{
+		ProductID: "premium_monthly",
+		Name:      "プレミアム月額",
+		Type:      model.ProductTypeSubscription,
+		Price:     480,
+		Content:   json.RawMessage(`{}`),
+		IsActive:  true,
+	})
+
+	// First subscription
+	_, err := env.svc.Subscribe(context.Background(), "p1", "premium_monthly", "ios", "sub-token-1")
+	require.NoError(t, err)
+
+	// Second subscription with a different token — should succeed (premium pass is re-subscribable)
+	_, err = env.svc.Subscribe(context.Background(), "p1", "premium_monthly", "ios", "sub-token-2")
+	require.NoError(t, err)
 }
 
 func TestSubscribe_AndroidPlatform(t *testing.T) {

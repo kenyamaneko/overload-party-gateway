@@ -253,6 +253,21 @@ func (r *PgShopRepository) insertPlayerItemsInner(ctx context.Context, db dbtx, 
 	return nil
 }
 
+func (r *PgShopRepository) HasPlayerItem(ctx context.Context, playerID, itemType string, itemNo int64) (bool, error) {
+	var exists bool
+	err := r.pool.QueryRow(ctx,
+		`SELECT EXISTS(
+			SELECT 1 FROM player_items
+			WHERE player_id = $1 AND item_type = $2 AND item_no = $3
+		)`,
+		playerID, itemType, itemNo,
+	).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("check player item: %w", err)
+	}
+	return exists, nil
+}
+
 func (r *PgShopRepository) GetPlayerOwnedFactions(ctx context.Context, playerID string) ([]string, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT DISTINCT cd.faction

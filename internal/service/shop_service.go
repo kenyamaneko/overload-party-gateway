@@ -174,6 +174,37 @@ func (s *ShopService) Purchase(ctx context.Context, playerID, productID, pf, pur
 		return ErrProductNotActive
 	}
 
+	// Ownership guard: prevent re-purchasing already-owned items.
+	// Subscription (premium pass) is excluded — it uses Subscribe() instead.
+	switch product.Type {
+	case model.ProductTypeFactionSet:
+		var content model.FactionSetContent
+		if err := json.Unmarshal(product.Content, &content); err != nil {
+			return fmt.Errorf("parse faction set content: %w", err)
+		}
+		ownedFactions, err := s.shopRepo.GetPlayerOwnedFactions(ctx, playerID)
+		if err != nil {
+			return fmt.Errorf("check owned factions: %w", err)
+		}
+		for _, f := range ownedFactions {
+			if f == content.Faction {
+				return ErrAlreadyOwned
+			}
+		}
+	case model.ProductTypeCosmetic:
+		var content model.CosmeticContent
+		if err := json.Unmarshal(product.Content, &content); err != nil {
+			return fmt.Errorf("parse cosmetic content: %w", err)
+		}
+		owned, err := s.shopRepo.HasPlayerItem(ctx, playerID, content.ItemType, content.ItemNo)
+		if err != nil {
+			return fmt.Errorf("check owned item: %w", err)
+		}
+		if owned {
+			return ErrAlreadyOwned
+		}
+	}
+
 	verifier := s.getVerifier(pf)
 	if verifier == nil {
 		return fmt.Errorf("%w: %s", ErrUnsupportedPlatform, pf)
