@@ -11,7 +11,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/jackc/pgx/v5 v5.8.0
-	github.com/kenyamaneko/overload-party-common/packages/gamedata v0.1.15
+	github.com/kenyamaneko/overload-party-common/packages/gamedata v0.1.17
 	github.com/stretchr/testify v1.11.1
 	google.golang.org/api v0.267.0
 )

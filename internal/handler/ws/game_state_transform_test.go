@@ -51,9 +51,6 @@ func buildMinimalBattleState() battleGameState {
 						ScaleChangedThisTurn: false,
 						DeployedOnTurn:       1,
 						DeployOrder:          0,
-						MigratingFrom:        nil,
-						MigrationTarget:      nil,
-						MigratingOnTurn:      0,
 						ElasticBonus:         2,
 					},
 				},
@@ -314,7 +311,7 @@ func TestFlexString_MarshalJSON(t *testing.T) {
 
 func TestFlexString_RoundTripInBattleState(t *testing.T) {
 	// Simulate C# sending Rank as integer (JsonStringEnumConverter not applied)
-	raw := `{"instanceId":"ri-1","cardID":"SH-0001","artNo":1,"rank":1,"instanceFamily":"familyA","faceDown":false,"currentAV":0,"maxAV":0,"damage":0,"monetizedAmount":0,"hasAttacked":false,"effectUsedThisTurn":false,"scaleChangedThisTurn":false,"deployedOnTurn":0,"deployOrder":0,"migratingOnTurn":0,"elasticBonus":0,"attachments":[],"temporaryEffects":[]}`
+	raw := `{"instanceId":"ri-1","cardID":"SH-0001","artNo":1,"rank":1,"instanceFamily":"familyA","faceDown":false,"currentAV":0,"maxAV":0,"damage":0,"monetizedAmount":0,"hasAttacked":false,"effectUsedThisTurn":false,"scaleChangedThisTurn":false,"deployedOnTurn":0,"deployOrder":0,"elasticBonus":0,"attachments":[],"temporaryEffects":[]}`
 
 	var ri battleResourceInstance
 	require.NoError(t, json.Unmarshal([]byte(raw), &ri))

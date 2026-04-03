@@ -116,9 +116,6 @@ type battleResourceInstance struct {
 	ScaleChangedThisTurn bool                     `json:"scaleChangedThisTurn"`
 	DeployedOnTurn       int64                    `json:"deployedOnTurn"`
 	DeployOrder          int64                    `json:"deployOrder"`
-	MigratingFrom        *string                  `json:"migratingFrom"`
-	MigrationTarget      *string                  `json:"migrationTarget"`
-	MigratingOnTurn      int64                    `json:"migratingOnTurn"`
 	ElasticBonus         int64                    `json:"elasticBonus"`
 }
 

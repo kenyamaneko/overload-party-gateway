@@ -115,8 +115,14 @@ github.com/jackc/puddle/v2 v2.2.2 h1:PR8nw+E/1w0GLuRFSmiioY6UooMp6KJv0/61nB7icHo
 github.com/jackc/puddle/v2 v2.2.2/go.mod h1:vriiEXHvEE654aYKXXjOvZM39qJ0q+azkZFrfEOc3H4=
 github.com/json-iterator/go v1.1.12 h1:PV8peI4a0ysnczrg+LtxykD8LfKY9ML6u2jnxaEnrnM=
 github.com/json-iterator/go v1.1.12/go.mod h1:e30LSqwooZae/UwlEbR2852Gd8hjQvJoHmT4TnhNGBo=
+github.com/kenyamaneko/overload-party-common/packages/gamedata v0.1.14 h1:tqcJ3cjcFiXRzwscLNDPCTgwMGIToRZQvZpcHbMBtE8=
+github.com/kenyamaneko/overload-party-common/packages/gamedata v0.1.14/go.mod h1:ZgcrIYS+ZjYZBzxPTHCj5ah4p0x1waBqAXxDcoKtejI=
 github.com/kenyamaneko/overload-party-common/packages/gamedata v0.1.15 h1:RZF4suITmV2+m++MfwDq0Nny2kqPxtPPP/5cpBhhIdQ=
 github.com/kenyamaneko/overload-party-common/packages/gamedata v0.1.15/go.mod h1:ZgcrIYS+ZjYZBzxPTHCj5ah4p0x1waBqAXxDcoKtejI=
+github.com/kenyamaneko/overload-party-common/packages/gamedata v0.1.16 h1:1WNgtG6BgLZW+sEUETb8IXe/THR6DeWs2qnyoVzI6Vc=
+github.com/kenyamaneko/overload-party-common/packages/gamedata v0.1.16/go.mod h1:ZgcrIYS+ZjYZBzxPTHCj5ah4p0x1waBqAXxDcoKtejI=
+github.com/kenyamaneko/overload-party-common/packages/gamedata v0.1.17 h1:zdaTWVTBWQw3F/Ae/HVRDzj/qd00Jo8wycZjBrw4r+A=
+github.com/kenyamaneko/overload-party-common/packages/gamedata v0.1.17/go.mod h1:ZgcrIYS+ZjYZBzxPTHCj5ah4p0x1waBqAXxDcoKtejI=
 github.com/klauspost/cpuid/v2 v2.3.0 h1:S4CRMLnYUhGeDFDqkGriYKdfoFlDnMtqTiI/sFzhA9Y=
 github.com/klauspost/cpuid/v2 v2.3.0/go.mod h1:hqwkgyIinND0mEev00jJYCxPNVRVXFQeu1XKlok6oO0=
 github.com/kr/pretty v0.3.1 h1:flRD4NNwYAUpkphVc1HcthR4KEIFJ65n8Mw5qdRn3LE=
