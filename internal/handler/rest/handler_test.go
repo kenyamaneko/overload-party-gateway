@@ -158,7 +158,7 @@ func setupPlayerRouter() *gin.Engine {
 
 	configRepo := repository.NewMockGameConfigRepository()
 	configRepo.SetForTest("free_daily_battle_limit", 10)
-	configRepo.SetForTest("exp_formula_coefficient", 60)
+	configRepo.SetForTest(service.ConfigKeyExpFormulaCoefficient, 60)
 	playerService := service.NewPlayerService(playerRepo, configRepo)
 	handler := NewPlayerHandler(playerService)
 

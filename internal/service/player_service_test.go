@@ -244,7 +244,7 @@ func setupExpService(t *testing.T, players ...*model.Player) (*PlayerService, *r
 	configRepo := &mockGameConfigRepo{
 		values: map[string]int64{
 			configKeyFreeDailyBattleLimit: 10,
-			"exp_formula_coefficient":     testExpCoeff,
+			ConfigKeyExpFormulaCoefficient: testExpCoeff,
 			"exp_win":                     testExpWin,
 			"exp_loss":                    testExpLoss,
 			"exp_draw":                    testExpDraw,

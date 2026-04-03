@@ -13,7 +13,8 @@ import (
 )
 
 const (
-	configKeyFreeDailyBattleLimit = "free_daily_battle_limit"
+	configKeyFreeDailyBattleLimit  = "free_daily_battle_limit"
+	ConfigKeyExpFormulaCoefficient = "exp_formula_coefficient"
 
 	// gameDayOffset is the UTC offset used to calculate the "game day".
 	// The game day resets at JST 05:00 (= UTC 20:00 of the previous calendar day).
@@ -111,7 +112,7 @@ func (s *PlayerService) AwardExp(ctx context.Context, playerID string, expGain i
 	if expGain <= 0 {
 		return nil
 	}
-	coeff, err := s.gameConfigRepo.GetInt64(ctx, "exp_formula_coefficient", 0)
+	coeff, err := s.gameConfigRepo.GetInt64(ctx, ConfigKeyExpFormulaCoefficient, 0)
 	if err != nil {
 		return fmt.Errorf("get exp_formula_coefficient: %w", err)
 	}
@@ -197,7 +198,7 @@ type LevelProgress struct {
 
 // GetLevelProgress returns the level progress for the given player.
 func (s *PlayerService) GetLevelProgress(ctx context.Context, level, exp int64) (*LevelProgress, error) {
-	coeff, err := s.gameConfigRepo.GetInt64(ctx, "exp_formula_coefficient", 0)
+	coeff, err := s.gameConfigRepo.GetInt64(ctx, ConfigKeyExpFormulaCoefficient, 0)
 	if err != nil {
 		return nil, fmt.Errorf("get exp_formula_coefficient: %w", err)
 	}
