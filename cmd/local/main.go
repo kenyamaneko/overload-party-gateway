@@ -11,7 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	gencache "github.com/kenyamaneko/overload-party-common/packages/gamedata/cache"
+	gencache "github.com/kenyamaneko/overload-party-common/packages/devdata/cache"
 	"github.com/kenyamaneko/overload-party-gateway/internal/cache"
 	"github.com/kenyamaneko/overload-party-gateway/internal/config"
 	"github.com/kenyamaneko/overload-party-gateway/internal/handler/rest"
@@ -49,8 +49,8 @@ func main() {
 	userSettingsRepo := repository.NewMockUserSettingsRepository()
 	gameConfigRepo := repository.NewMockGameConfigRepository()
 
-	// 2b. Seed shop products
-	seedShopProducts(shopRepo)
+	// 2b. Seed shop products from embedded JSON
+	seedShopProductsFromJSON(shopRepo)
 
 	// 3. Services
 	authService := service.NewAuthService(playerRepo, shopRepo, userSettingsRepo, &repository.MockTxRunner{})
@@ -258,37 +258,13 @@ func main() {
 	log.Println("gateway local server exited")
 }
 
-func seedShopProducts(repo *repository.MockShopRepository) {
-	products := []*model.Product{
-		// カードパック (faction_set)
-		{ProductID: "pack-she", Name: "SHEカードパック", Type: model.ProductTypeFactionSet, Price: 480, Content: mustJSON(model.FactionSetContent{Faction: "SHE"}), IsActive: true},
-		{ProductID: "pack-tenki", Name: "天気使いカードパック", Type: model.ProductTypeFactionSet, Price: 480, Content: mustJSON(model.FactionSetContent{Faction: "Tenki"}), IsActive: true},
-		{ProductID: "pack-sugar", Name: "しゅがーらぼカードパック", Type: model.ProductTypeFactionSet, Price: 480, Content: mustJSON(model.FactionSetContent{Faction: "Sugar"}), IsActive: true},
-		{ProductID: "pack-tuners", Name: "調律部カードパック", Type: model.ProductTypeFactionSet, Price: 480, Content: mustJSON(model.FactionSetContent{Faction: "Tuners"}), IsActive: true},
-		// カードスリーブ (cosmetic/sleeve)
-		{ProductID: "sleeve-a", Name: "カードスリーブA", Type: model.ProductTypeCosmetic, Price: 300, Content: mustJSON(model.CosmeticContent{ItemType: model.ItemTypeSleeve, ItemNo: 1}), IsActive: true},
-		{ProductID: "sleeve-b", Name: "カードスリーブB", Type: model.ProductTypeCosmetic, Price: 300, Content: mustJSON(model.CosmeticContent{ItemType: model.ItemTypeSleeve, ItemNo: 2}), IsActive: true},
-		{ProductID: "sleeve-c", Name: "カードスリーブC", Type: model.ProductTypeCosmetic, Price: 300, Content: mustJSON(model.CosmeticContent{ItemType: model.ItemTypeSleeve, ItemNo: 3}), IsActive: true},
-		// プレイマット (cosmetic/playmat)
-		{ProductID: "playmat-a", Name: "プレイマットA", Type: model.ProductTypeCosmetic, Price: 500, Content: mustJSON(model.CosmeticContent{ItemType: model.ItemTypePlaymat, ItemNo: 1}), IsActive: true},
-		{ProductID: "playmat-b", Name: "プレイマットB", Type: model.ProductTypeCosmetic, Price: 500, Content: mustJSON(model.CosmeticContent{ItemType: model.ItemTypePlaymat, ItemNo: 2}), IsActive: true},
-		{ProductID: "playmat-c", Name: "プレイマットC", Type: model.ProductTypeCosmetic, Price: 500, Content: mustJSON(model.CosmeticContent{ItemType: model.ItemTypePlaymat, ItemNo: 3}), IsActive: true},
-		// スタンプセット (cosmetic/stamp)
-		{ProductID: "stamp-a", Name: "スタンプセットA", Type: model.ProductTypeCosmetic, Price: 200, Content: mustJSON(model.CosmeticContent{ItemType: model.ItemTypeStamp, ItemNo: 1}), IsActive: true},
-		{ProductID: "stamp-b", Name: "スタンプセットB", Type: model.ProductTypeCosmetic, Price: 200, Content: mustJSON(model.CosmeticContent{ItemType: model.ItemTypeStamp, ItemNo: 2}), IsActive: true},
-		// プレミアムパス (subscription)
-		{ProductID: "premium-pass", Name: "プレミアムパス", Type: model.ProductTypeSubscription, Price: 980, Content: mustJSON(struct{}{}), IsActive: true},
+func seedShopProductsFromJSON(repo *repository.MockShopRepository) {
+	var products []*model.Product
+	if err := json.Unmarshal(gencache.ProductsJSON, &products); err != nil {
+		log.Fatalf("failed to unmarshal products_gen.json: %v", err)
 	}
 	for _, p := range products {
 		repo.AddProduct(p)
 	}
-	log.Printf("seeded %d shop products", len(products))
-}
-
-func mustJSON(v interface{}) json.RawMessage {
-	b, err := json.Marshal(v)
-	if err != nil {
-		panic(err)
-	}
-	return b
+	log.Printf("seeded %d shop products from products_gen.json", len(products))
 }

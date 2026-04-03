@@ -33,7 +33,7 @@ func NewPgShopRepository(pool *pgxpool.Pool) *PgShopRepository {
 
 func (r *PgShopRepository) GetActiveProducts(ctx context.Context) ([]*model.Product, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT product_id, name, type, price, content, is_active
+		`SELECT product_id, name, type, price, content, description, image_url, is_active
 		 FROM products WHERE is_active = true`)
 	if err != nil {
 		return nil, fmt.Errorf("query products: %w", err)
@@ -44,7 +44,7 @@ func (r *PgShopRepository) GetActiveProducts(ctx context.Context) ([]*model.Prod
 	for rows.Next() {
 		var p model.Product
 		var content []byte
-		if err := rows.Scan(&p.ProductID, &p.Name, &p.Type, &p.Price, &content, &p.IsActive); err != nil {
+		if err := rows.Scan(&p.ProductID, &p.Name, &p.Type, &p.Price, &content, &p.Description, &p.ImageURL, &p.IsActive); err != nil {
 			return nil, fmt.Errorf("scan product: %w", err)
 		}
 		p.Content = json.RawMessage(content)
@@ -58,13 +58,13 @@ func (r *PgShopRepository) GetActiveProducts(ctx context.Context) ([]*model.Prod
 
 func (r *PgShopRepository) GetProductByID(ctx context.Context, productID string) (*model.Product, error) {
 	row := r.pool.QueryRow(ctx,
-		`SELECT product_id, name, type, price, content, is_active
+		`SELECT product_id, name, type, price, content, description, image_url, is_active
 		 FROM products WHERE product_id = $1`,
 		productID)
 
 	var p model.Product
 	var content []byte
-	err := row.Scan(&p.ProductID, &p.Name, &p.Type, &p.Price, &content, &p.IsActive)
+	err := row.Scan(&p.ProductID, &p.Name, &p.Type, &p.Price, &content, &p.Description, &p.ImageURL, &p.IsActive)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil

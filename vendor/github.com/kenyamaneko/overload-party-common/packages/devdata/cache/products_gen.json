@@ -1,0 +1,166 @@
+[
+  {
+    "product_id": "pack-she",
+    "name": "SHEカードパック",
+    "type": "faction_set",
+    "price": 480,
+    "content": {
+      "faction": "SHE"
+    },
+    "is_active": true,
+    "description": "SHEファクションの全カードが手に入るパック。",
+    "image_url": "/assets/shop/pack-she.webp"
+  },
+  {
+    "product_id": "pack-tenki",
+    "name": "天気使いカードパック",
+    "type": "faction_set",
+    "price": 480,
+    "content": {
+      "faction": "Tenki"
+    },
+    "is_active": true,
+    "description": "天気使いファクションの全カードが手に入るパック。",
+    "image_url": "/assets/shop/pack-tenki.webp"
+  },
+  {
+    "product_id": "pack-sugar",
+    "name": "しゅがーらぼカードパック",
+    "type": "faction_set",
+    "price": 480,
+    "content": {
+      "faction": "Sugar"
+    },
+    "is_active": true,
+    "description": "しゅがーらぼファクションの全カードが手に入るパック。",
+    "image_url": "/assets/shop/pack-sugar.webp"
+  },
+  {
+    "product_id": "pack-tuners",
+    "name": "調律部カードパック",
+    "type": "faction_set",
+    "price": 480,
+    "content": {
+      "faction": "Tuners"
+    },
+    "is_active": true,
+    "description": "調律部ファクションの全カードが手に入るパック。",
+    "image_url": "/assets/shop/pack-tuners.webp"
+  },
+  {
+    "product_id": "sleeve-a",
+    "name": "カードスリーブA",
+    "type": "cosmetic",
+    "price": 300,
+    "content": {
+      "item_type": "sleeve",
+      "item_no": 1
+    },
+    "is_active": true,
+    "description": "シンプルなデザインのカードスリーブ。",
+    "image_url": "/assets/shop/sleeve-a.webp"
+  },
+  {
+    "product_id": "sleeve-b",
+    "name": "カードスリーブB",
+    "type": "cosmetic",
+    "price": 300,
+    "content": {
+      "item_type": "sleeve",
+      "item_no": 2
+    },
+    "is_active": true,
+    "description": "メタリックなデザインのカードスリーブ。",
+    "image_url": "/assets/shop/sleeve-b.webp"
+  },
+  {
+    "product_id": "sleeve-c",
+    "name": "カードスリーブC",
+    "type": "cosmetic",
+    "price": 300,
+    "content": {
+      "item_type": "sleeve",
+      "item_no": 3
+    },
+    "is_active": true,
+    "description": "ホログラムデザインのカードスリーブ。",
+    "image_url": "/assets/shop/sleeve-c.webp"
+  },
+  {
+    "product_id": "playmat-a",
+    "name": "プレイマットA",
+    "type": "cosmetic",
+    "price": 500,
+    "content": {
+      "item_type": "playmat",
+      "item_no": 1
+    },
+    "is_active": true,
+    "description": "クラウドインフラをモチーフにしたプレイマット。",
+    "image_url": "/assets/shop/playmat-a.webp"
+  },
+  {
+    "product_id": "playmat-b",
+    "name": "プレイマットB",
+    "type": "cosmetic",
+    "price": 500,
+    "content": {
+      "item_type": "playmat",
+      "item_no": 2
+    },
+    "is_active": true,
+    "description": "サーバールームをモチーフにしたプレイマット。",
+    "image_url": "/assets/shop/playmat-b.webp"
+  },
+  {
+    "product_id": "playmat-c",
+    "name": "プレイマットC",
+    "type": "cosmetic",
+    "price": 500,
+    "content": {
+      "item_type": "playmat",
+      "item_no": 3
+    },
+    "is_active": true,
+    "description": "ネットワーク回路をモチーフにしたプレイマット。",
+    "image_url": "/assets/shop/playmat-c.webp"
+  },
+  {
+    "product_id": "stamp-a",
+    "name": "スタンプセットA",
+    "type": "cosmetic",
+    "price": 200,
+    "content": {
+      "item_type": "stamp",
+      "item_no": 1
+    },
+    "is_active": true,
+    "description": "基本の表情スタンプ8種セット。",
+    "image_url": "/assets/shop/stamp-a.webp"
+  },
+  {
+    "product_id": "stamp-b",
+    "name": "スタンプセットB",
+    "type": "cosmetic",
+    "price": 200,
+    "content": {
+      "item_type": "stamp",
+      "item_no": 2
+    },
+    "is_active": true,
+    "description": "クラウド用語スタンプ8種セット。",
+    "image_url": "/assets/shop/stamp-b.webp"
+  },
+  {
+    "product_id": "premium-pass",
+    "name": "プレミアムパス",
+    "type": "subscription",
+    "price": 980,
+    "content": {
+      "duration_days": 30
+    },
+    "is_active": true,
+    "description": "30日間のプレミアム特典。デイリーログインボーナス増量＋バトル回数無制限。",
+    "image_url": "/assets/shop/premium-pass.webp"
+  }
+]

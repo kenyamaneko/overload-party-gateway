@@ -37,12 +37,14 @@ const (
 
 // Product represents a purchasable item in the shop.
 type Product struct {
-	ProductID string          `json:"product_id" db:"product_id"`
-	Name      string          `json:"name" db:"name"`
-	Type      string          `json:"type" db:"type"`
-	Price     int64           `json:"price" db:"price"`
-	Content   json.RawMessage `json:"content" db:"content"`
-	IsActive  bool            `json:"is_active" db:"is_active"`
+	ProductID   string          `json:"product_id" db:"product_id"`
+	Name        string          `json:"name" db:"name"`
+	Type        string          `json:"type" db:"type"`
+	Price       int64           `json:"price" db:"price"`
+	Content     json.RawMessage `json:"content" db:"content"`
+	Description *string         `json:"description,omitempty" db:"description"`
+	ImageURL    *string         `json:"image_url,omitempty" db:"image_url"`
+	IsActive    bool            `json:"is_active" db:"is_active"`
 }
 
 // FactionSetContent is the parsed content for faction_set products.
