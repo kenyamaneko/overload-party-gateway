@@ -50,7 +50,7 @@ func (r *MockPlayerRepository) FindByID(ctx context.Context, playerID string) (*
 
 	p, ok := r.players[playerID]
 	if !ok {
-		return nil, nil // Match PgPlayerRepository behaviour: not-found is nil, nil
+		return nil, fmt.Errorf("player %s: %w", playerID, port.ErrNotFound)
 	}
 	return p, nil
 }
@@ -72,7 +72,7 @@ func (r *MockPlayerRepository) GetDailyBattle(ctx context.Context, playerID stri
 
 	db, ok := r.dailyBattles[playerID]
 	if !ok {
-		return nil, fmt.Errorf("daily battle data for player %s not found", playerID)
+		return nil, nil
 	}
 	return db, nil
 }

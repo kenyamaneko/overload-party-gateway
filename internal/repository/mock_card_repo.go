@@ -34,7 +34,7 @@ func (r *MockCardRepository) FindAll(ctx context.Context) ([]*model.CardDefiniti
 func (r *MockCardRepository) FindByCardID(ctx context.Context, cardID string) (*model.CardDefinition, error) {
 	c, ok := r.cards[cardID]
 	if !ok {
-		return nil, fmt.Errorf("card %s not found", cardID)
+		return nil, fmt.Errorf("card %s: %w", cardID, port.ErrNotFound)
 	}
 	return c, nil
 }

@@ -90,3 +90,36 @@ func splitGoogleToken(composite string) (string, string, error) {
 	}
 	return productID, token, nil
 }
+
+// GooglePlaySubVerifier fetches actual subscription expiry from Google Play Developer API.
+type GooglePlaySubVerifier struct {
+	service     *androidpublisher.Service
+	packageName string
+}
+
+// NewGooglePlaySubVerifier creates a verifier that queries Google Play for subscription expiry.
+// Uses Application Default Credentials (ADC) for authentication.
+func NewGooglePlaySubVerifier(ctx context.Context, packageName string, opts ...option.ClientOption) (*GooglePlaySubVerifier, error) {
+	svc, err := androidpublisher.NewService(ctx, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("create androidpublisher service: %w", err)
+	}
+	return &GooglePlaySubVerifier{
+		service:     svc,
+		packageName: packageName,
+	}, nil
+}
+
+func (v *GooglePlaySubVerifier) GetSubscriptionExpiry(ctx context.Context, purchaseToken string) (time.Time, error) {
+	subscriptionID, token, err := splitGoogleToken(purchaseToken)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	result, err := v.service.Purchases.Subscriptions.Get(v.packageName, subscriptionID, token).Context(ctx).Do()
+	if err != nil {
+		return time.Time{}, fmt.Errorf("Google Play API get subscription: %w", err)
+	}
+
+	return time.UnixMilli(result.ExpiryTimeMillis), nil
+}

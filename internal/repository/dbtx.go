@@ -1,3 +1,14 @@
+// Package repository implements data access for PostgreSQL.
+//
+// Transaction policy:
+// All repository methods participate in a context-carried transaction if one
+// exists (set by TxManager.RunInTx). Single-statement methods use
+// connFrom(ctx, pool) to transparently use either the transaction or the
+// connection pool. Multi-statement methods that require atomicity check for
+// an existing transaction first; if none is present, they begin their own.
+//
+// This ensures that service-layer RunInTx calls reliably wrap multiple
+// repository operations in a single transaction.
 package repository
 
 import (

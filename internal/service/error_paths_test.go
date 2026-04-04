@@ -157,7 +157,7 @@ func TestRegister_Create_Error(t *testing.T) {
 
 func TestRegister_SettingsUpsert_Error_Fatal(t *testing.T) {
 	playerRepo := repository.NewMockPlayerRepository()
-	shopRepo := newStampTrackingShopRepo()
+	shopRepo := repository.NewMockShopRepository()
 	userSettingsRepo := &errorUpsertSettingsRepo{repository.NewMockUserSettingsRepository()}
 	svc := NewAuthService(playerRepo, shopRepo, userSettingsRepo, &repository.MockTxRunner{})
 

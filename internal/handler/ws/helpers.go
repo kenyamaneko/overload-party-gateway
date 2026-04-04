@@ -2,14 +2,17 @@ package ws
 
 import (
 	"encoding/json"
+	"log"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/constants"
 )
 
-// mustMarshal marshals v to JSON, returning nil on error.
-// Safe to use for well-known struct types that cannot fail to marshal.
 func mustMarshal(v interface{}) json.RawMessage {
-	data, _ := json.Marshal(v)
+	data, err := json.Marshal(v)
+	if err != nil {
+		log.Printf("BUG: mustMarshal failed: %v (type: %T)", err, v)
+		return nil
+	}
 	return data
 }
 

@@ -22,7 +22,7 @@ func NewPgNewsRepository(pool *pgxpool.Pool) *PgNewsRepository {
 }
 
 func (r *PgNewsRepository) List(ctx context.Context, limit int, offset int) ([]*model.NewsArticle, error) {
-	rows, err := r.pool.Query(ctx, `
+	rows, err := connFrom(ctx, r.pool).Query(ctx, `
 		SELECT article_id, source, title, summary, tags, published_at, fetched_at
 		  FROM news_articles
 		 WHERE summary IS NOT NULL

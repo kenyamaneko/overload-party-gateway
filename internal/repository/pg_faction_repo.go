@@ -20,7 +20,7 @@ func NewPgFactionRepository(pool *pgxpool.Pool) *PgFactionRepository {
 }
 
 func (r *PgFactionRepository) AddPlayerFaction(ctx context.Context, playerID, faction, source string) error {
-	_, err := r.pool.Exec(ctx,
+	_, err := connFrom(ctx, r.pool).Exec(ctx,
 		`INSERT INTO player_factions (player_id, faction, source)
 		 VALUES ($1, $2, $3)
 		 ON CONFLICT (player_id, faction) DO NOTHING`,
@@ -33,7 +33,7 @@ func (r *PgFactionRepository) AddPlayerFaction(ctx context.Context, playerID, fa
 }
 
 func (r *PgFactionRepository) GetPlayerFactions(ctx context.Context, playerID string) ([]string, error) {
-	rows, err := r.pool.Query(ctx,
+	rows, err := connFrom(ctx, r.pool).Query(ctx,
 		`SELECT faction FROM player_factions WHERE player_id = $1`,
 		playerID)
 	if err != nil {

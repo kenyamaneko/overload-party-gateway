@@ -6,15 +6,15 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/kenyamaneko/overload-party-gateway/internal/port"
+	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
 type NewsHandler struct {
-	newsRepo port.NewsRepo
+	svc *service.NewsService
 }
 
-func NewNewsHandler(newsRepo port.NewsRepo) *NewsHandler {
-	return &NewsHandler{newsRepo: newsRepo}
+func NewNewsHandler(svc *service.NewsService) *NewsHandler {
+	return &NewsHandler{svc: svc}
 }
 
 func (h *NewsHandler) GetCloudNews(c *gin.Context) {
@@ -32,7 +32,7 @@ func (h *NewsHandler) GetCloudNews(c *gin.Context) {
 		}
 	}
 
-	articles, err := h.newsRepo.List(c.Request.Context(), limit, offset)
+	articles, err := h.svc.List(c.Request.Context(), limit, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch news"})
 		return

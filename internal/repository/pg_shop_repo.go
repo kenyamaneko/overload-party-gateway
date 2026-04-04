@@ -17,11 +17,6 @@ import (
 var _ port.ShopRepository = (*PgShopRepository)(nil)
 
 // PgShopRepository implements ShopRepository using PostgreSQL via pgxpool.
-//
-// tx 方針:
-// - CreatePurchaseWithCards / CreatePurchaseWithItem / InsertPlayerCards は常に自前 tx を使う。
-//   呼び出し元 (ShopService.Purchase) が単独で呼ぶ前提のため ctx tx には参加しない。
-// - InsertPlayerItems は AuthService.Register の RunInTx から呼ばれるため ctx tx に参加する。
 type PgShopRepository struct {
 	pool *pgxpool.Pool
 }
@@ -32,7 +27,7 @@ func NewPgShopRepository(pool *pgxpool.Pool) *PgShopRepository {
 }
 
 func (r *PgShopRepository) GetActiveProducts(ctx context.Context) ([]*model.Product, error) {
-	rows, err := r.pool.Query(ctx,
+	rows, err := connFrom(ctx, r.pool).Query(ctx,
 		`SELECT product_id, name, type, price, content, description, image_url, is_active
 		 FROM products WHERE is_active = true`)
 	if err != nil {
@@ -57,7 +52,7 @@ func (r *PgShopRepository) GetActiveProducts(ctx context.Context) ([]*model.Prod
 }
 
 func (r *PgShopRepository) GetProductByID(ctx context.Context, productID string) (*model.Product, error) {
-	row := r.pool.QueryRow(ctx,
+	row := connFrom(ctx, r.pool).QueryRow(ctx,
 		`SELECT product_id, name, type, price, content, description, image_url, is_active
 		 FROM products WHERE product_id = $1`,
 		productID)
@@ -67,7 +62,7 @@ func (r *PgShopRepository) GetProductByID(ctx context.Context, productID string)
 	err := row.Scan(&p.ProductID, &p.Name, &p.Type, &p.Price, &content, &p.Description, &p.ImageURL, &p.IsActive)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil
+			return nil, fmt.Errorf("product %s: %w", productID, port.ErrNotFound)
 		}
 		return nil, fmt.Errorf("read product: %w", err)
 	}
@@ -76,7 +71,7 @@ func (r *PgShopRepository) GetProductByID(ctx context.Context, productID string)
 }
 
 func (r *PgShopRepository) FindPurchaseByToken(ctx context.Context, playerID, purchaseToken string) (*model.OneTimePurchase, error) {
-	row := r.pool.QueryRow(ctx,
+	row := connFrom(ctx, r.pool).QueryRow(ctx,
 		`SELECT player_id, purchase_id, product_id, platform, purchase_token, purchased_at
 		 FROM one_time_purchases
 		 WHERE player_id = $1 AND purchase_token = $2
@@ -95,28 +90,37 @@ func (r *PgShopRepository) FindPurchaseByToken(ctx context.Context, playerID, pu
 }
 
 func (r *PgShopRepository) CreatePurchaseWithCards(ctx context.Context, purchase *model.OneTimePurchase, cards []*model.PlayerCard) error {
+	if txFromContext(ctx) != nil {
+		return r.createPurchaseWithCardsInner(ctx, connFrom(ctx, r.pool), purchase, cards)
+	}
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	if err := r.createPurchaseWithCardsInner(ctx, tx, purchase, cards); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (r *PgShopRepository) createPurchaseWithCardsInner(ctx context.Context, db dbtx, purchase *model.OneTimePurchase, cards []*model.PlayerCard) error {
 	// Idempotency check: if purchase_token already exists, skip.
 	var existingID int64
-	err = tx.QueryRow(ctx,
+	err := db.QueryRow(ctx,
 		`SELECT purchase_id FROM one_time_purchases
 		 WHERE player_id = $1 AND purchase_token = $2 LIMIT 1`,
 		purchase.PlayerID, purchase.PurchaseToken,
 	).Scan(&existingID)
 	if err == nil {
-		// Already exists — idempotent success.
 		return nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("check existing purchase: %w", err)
 	}
 
-	err = tx.QueryRow(ctx,
+	err = db.QueryRow(ctx,
 		`INSERT INTO one_time_purchases (player_id, product_id, platform, purchase_token, purchased_at)
 		 VALUES ($1,$2,$3,$4,$5) RETURNING purchase_id`,
 		purchase.PlayerID, purchase.ProductID,
@@ -127,7 +131,7 @@ func (r *PgShopRepository) CreatePurchaseWithCards(ctx context.Context, purchase
 	}
 
 	for _, card := range cards {
-		_, err = tx.Exec(ctx,
+		_, err = db.Exec(ctx,
 			`INSERT INTO player_cards (player_id, card_id, art_no, count)
 			 VALUES ($1,$2,$3,$4)
 			 ON CONFLICT (player_id, card_id, art_no)
@@ -139,36 +143,41 @@ func (r *PgShopRepository) CreatePurchaseWithCards(ctx context.Context, purchase
 			return fmt.Errorf("insert player card: %w", err)
 		}
 	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit create purchase with cards: %w", err)
-	}
 	return nil
 }
 
 func (r *PgShopRepository) CreatePurchaseWithItem(ctx context.Context, purchase *model.OneTimePurchase, item *model.PlayerItem) error {
+	if txFromContext(ctx) != nil {
+		return r.createPurchaseWithItemInner(ctx, connFrom(ctx, r.pool), purchase, item)
+	}
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	if err := r.createPurchaseWithItemInner(ctx, tx, purchase, item); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (r *PgShopRepository) createPurchaseWithItemInner(ctx context.Context, db dbtx, purchase *model.OneTimePurchase, item *model.PlayerItem) error {
 	// Idempotency check.
 	var existingID int64
-	err = tx.QueryRow(ctx,
+	err := db.QueryRow(ctx,
 		`SELECT purchase_id FROM one_time_purchases
 		 WHERE player_id = $1 AND purchase_token = $2 LIMIT 1`,
 		purchase.PlayerID, purchase.PurchaseToken,
 	).Scan(&existingID)
 	if err == nil {
-		// Already exists — idempotent success.
 		return nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("check existing purchase: %w", err)
 	}
 
-	err = tx.QueryRow(ctx,
+	err = db.QueryRow(ctx,
 		`INSERT INTO one_time_purchases (player_id, product_id, platform, purchase_token, purchased_at)
 		 VALUES ($1,$2,$3,$4,$5) RETURNING purchase_id`,
 		purchase.PlayerID, purchase.ProductID,
@@ -178,7 +187,7 @@ func (r *PgShopRepository) CreatePurchaseWithItem(ctx context.Context, purchase 
 		return fmt.Errorf("insert purchase: %w", err)
 	}
 
-	_, err = tx.Exec(ctx,
+	_, err = db.Exec(ctx,
 		`INSERT INTO player_items (player_id, item_type, item_no, acquired_at)
 		 VALUES ($1,$2,$3,$4)`,
 		item.PlayerID, item.ItemType, item.ItemNo, item.AcquiredAt,
@@ -186,22 +195,28 @@ func (r *PgShopRepository) CreatePurchaseWithItem(ctx context.Context, purchase 
 	if err != nil {
 		return fmt.Errorf("insert player item: %w", err)
 	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit create purchase with item: %w", err)
-	}
 	return nil
 }
 
 func (r *PgShopRepository) InsertPlayerCards(ctx context.Context, cards []*model.PlayerCard) error {
+	if txFromContext(ctx) != nil {
+		return r.insertPlayerCardsInner(ctx, connFrom(ctx, r.pool), cards)
+	}
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	if err := r.insertPlayerCardsInner(ctx, tx, cards); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (r *PgShopRepository) insertPlayerCardsInner(ctx context.Context, db dbtx, cards []*model.PlayerCard) error {
 	for _, card := range cards {
-		_, err = tx.Exec(ctx,
+		_, err := db.Exec(ctx,
 			`INSERT INTO player_cards (player_id, card_id, art_no, count)
 			 VALUES ($1,$2,$3,$4)
 			 ON CONFLICT (player_id, card_id, art_no)
@@ -212,10 +227,6 @@ func (r *PgShopRepository) InsertPlayerCards(ctx context.Context, cards []*model
 		if err != nil {
 			return fmt.Errorf("insert player card: %w", err)
 		}
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit insert player cards: %w", err)
 	}
 	return nil
 }
@@ -255,7 +266,7 @@ func (r *PgShopRepository) insertPlayerItemsInner(ctx context.Context, db dbtx, 
 
 func (r *PgShopRepository) HasPlayerItem(ctx context.Context, playerID, itemType string, itemNo int64) (bool, error) {
 	var exists bool
-	err := r.pool.QueryRow(ctx,
+	err := connFrom(ctx, r.pool).QueryRow(ctx,
 		`SELECT EXISTS(
 			SELECT 1 FROM player_items
 			WHERE player_id = $1 AND item_type = $2 AND item_no = $3
@@ -269,11 +280,11 @@ func (r *PgShopRepository) HasPlayerItem(ctx context.Context, playerID, itemType
 }
 
 func (r *PgShopRepository) GetPlayerOwnedFactions(ctx context.Context, playerID string) ([]string, error) {
-	rows, err := r.pool.Query(ctx,
+	rows, err := connFrom(ctx, r.pool).Query(ctx,
 		`SELECT DISTINCT cd.faction
 		 FROM player_cards pc
 		 JOIN card_definitions cd ON pc.card_id = cd.card_id
-		 WHERE pc.player_id = $1 AND cd.faction != 'Neutral'`,
+		 WHERE pc.player_id = $1`,
 		playerID)
 	if err != nil {
 		return nil, fmt.Errorf("query factions: %w", err)

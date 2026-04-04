@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
 )
 
@@ -209,14 +210,14 @@ func TestGetBattleLimit_FreeLimitZero_ReturnsError(t *testing.T) {
 
 // --- Error path tests ---
 
-func TestGetPlayer_NotFound_ReturnsNil(t *testing.T) {
+func TestGetPlayer_NotFound_ReturnsError(t *testing.T) {
 	player := &model.Player{PlayerID: "p1", FirebaseUID: "uid1"}
 	daily := &model.PlayerDailyBattle{PlayerID: "p1", DailyBattleCount: 0, LastResetDate: today()}
 	svc := setupPlayerService(t, player, daily)
 
-	p, err := svc.GetPlayer(context.Background(), "nonexistent")
-	require.NoError(t, err)
-	assert.Nil(t, p)
+	_, err := svc.GetPlayer(context.Background(), "nonexistent")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, port.ErrNotFound)
 }
 
 // --- AwardExp / AwardGameExp tests ---

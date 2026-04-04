@@ -78,7 +78,7 @@ func (r *MockShopRepository) GetProductByID(ctx context.Context, productID strin
 	defer r.mu.Unlock()
 	p, ok := r.products[productID]
 	if !ok {
-		return nil, fmt.Errorf("product %s not found", productID)
+		return nil, fmt.Errorf("product %s: %w", productID, port.ErrNotFound)
 	}
 	return p, nil
 }
@@ -169,6 +169,11 @@ func (r *MockShopRepository) mergePlayerCards(playerID string, cards []*model.Pl
 }
 
 func (r *MockShopRepository) InsertPlayerItems(ctx context.Context, items []*model.PlayerItem) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, item := range items {
+		r.playerItems[item.PlayerID] = append(r.playerItems[item.PlayerID], item)
+	}
 	return nil
 }
 

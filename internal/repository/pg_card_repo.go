@@ -28,7 +28,7 @@ func NewPgCardRepository(pool *pgxpool.Pool) *PgCardRepository {
 
 // FindAll returns all active card definitions ordered by card_id.
 func (r *PgCardRepository) FindAll(ctx context.Context) ([]*model.CardDefinition, error) {
-	rows, err := r.pool.Query(ctx,
+	rows, err := connFrom(ctx, r.pool).Query(ctx,
 		`SELECT card_id, card_name, resource_label, faction, card_type, resizable, elastic, stats, effect_text, effects, restriction, is_active, created_at, updated_at
 		 FROM card_definitions WHERE is_active = true ORDER BY card_id`,
 	)
@@ -54,7 +54,7 @@ func (r *PgCardRepository) FindAll(ctx context.Context) ([]*model.CardDefinition
 // FindByCardID returns a single card definition by its card ID.
 // Returns (nil, nil) when no matching row exists.
 func (r *PgCardRepository) FindByCardID(ctx context.Context, cardID string) (*model.CardDefinition, error) {
-	row := r.pool.QueryRow(ctx,
+	row := connFrom(ctx, r.pool).QueryRow(ctx,
 		`SELECT card_id, card_name, resource_label, faction, card_type, resizable, elastic, stats, effect_text, effects, restriction, is_active, created_at, updated_at
 		 FROM card_definitions WHERE card_id = $1`,
 		cardID,
@@ -63,7 +63,7 @@ func (r *PgCardRepository) FindByCardID(ctx context.Context, cardID string) (*mo
 	c, err := scanCardDefinition(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil
+			return nil, fmt.Errorf("card %s: %w", cardID, port.ErrNotFound)
 		}
 		return nil, fmt.Errorf("find card by card_id: %w", err)
 	}

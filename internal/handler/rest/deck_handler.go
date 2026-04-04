@@ -23,7 +23,7 @@ func (h *DeckHandler) GetDecks(c *gin.Context) {
 
 	decks, err := h.deckService.GetDecks(c.Request.Context(), playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondError(c, err)
 		return
 	}
 
@@ -40,7 +40,7 @@ func (h *DeckHandler) GetDeck(c *gin.Context) {
 
 	deck, cards, err := h.deckService.GetDeck(c.Request.Context(), playerID, deckID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		respondError(c, err)
 		return
 	}
 
@@ -58,7 +58,7 @@ func (h *DeckHandler) CreateDeck(c *gin.Context) {
 
 	deck, err := h.deckService.CreateDeck(c.Request.Context(), playerID, req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondError(c, err)
 		return
 	}
 
@@ -81,7 +81,7 @@ func (h *DeckHandler) UpdateDeck(c *gin.Context) {
 
 	deck, err := h.deckService.UpdateDeck(c.Request.Context(), playerID, deckID, req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondError(c, err)
 		return
 	}
 
@@ -97,7 +97,7 @@ func (h *DeckHandler) DeleteDeck(c *gin.Context) {
 	}
 
 	if err := h.deckService.DeleteDeck(c.Request.Context(), playerID, deckID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondError(c, err)
 		return
 	}
 

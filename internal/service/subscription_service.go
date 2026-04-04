@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
@@ -22,18 +21,25 @@ const (
 	appleSubtypeAutoRenewDisabled   = "AUTO_RENEW_DISABLED"
 )
 
-// Google サブスク更新時のデフォルト延長期間。
-// TODO: Google Play Developer API で実際の有効期限を取得して置き換える。
-const googleSubRenewalExtension = 30 * 24 * time.Hour
-
-type SubscriptionService struct {
-	subRepo    port.SubscriptionRepo
-	playerRepo port.PlayerRepo
-	txRunner   port.TxRunner
+// GoogleSubVerifier fetches actual subscription expiry from Google Play Developer API.
+type GoogleSubVerifier interface {
+	GetSubscriptionExpiry(ctx context.Context, purchaseToken string) (time.Time, error)
 }
 
-func NewSubscriptionService(subRepo port.SubscriptionRepo, playerRepo port.PlayerRepo, txRunner port.TxRunner) *SubscriptionService {
-	return &SubscriptionService{subRepo: subRepo, playerRepo: playerRepo, txRunner: txRunner}
+type SubscriptionService struct {
+	subRepo        port.SubscriptionRepo
+	playerRepo     port.PlayerRepo
+	txRunner       port.TxRunner
+	googleVerifier GoogleSubVerifier
+}
+
+func NewSubscriptionService(subRepo port.SubscriptionRepo, playerRepo port.PlayerRepo, txRunner port.TxRunner, googleVerifier GoogleSubVerifier) *SubscriptionService {
+	return &SubscriptionService{
+		subRepo:        subRepo,
+		playerRepo:     playerRepo,
+		txRunner:       txRunner,
+		googleVerifier: googleVerifier,
+	}
 }
 
 type AppleNotificationPayload struct {
@@ -67,12 +73,12 @@ func (s *SubscriptionService) updateSubAndPremium(ctx context.Context, sub *mode
 }
 
 func (s *SubscriptionService) HandleAppleNotification(ctx context.Context, signedPayload string) error {
-	notif, err := decodeJWSPayload[appleNotification](signedPayload)
+	notif, err := decodeVerifiedJWSPayload[appleNotification](signedPayload)
 	if err != nil {
 		return fmt.Errorf("decode notification: %w", err)
 	}
 
-	txnInfo, err := decodeJWSPayload[appleNotificationTxn](notif.Data.SignedTransactionInfo)
+	txnInfo, err := decodeVerifiedJWSPayload[appleNotificationTxn](notif.Data.SignedTransactionInfo)
 	if err != nil {
 		return fmt.Errorf("decode transaction info: %w", err)
 	}
@@ -172,11 +178,16 @@ func (s *SubscriptionService) HandleGoogleNotification(ctx context.Context, msg 
 
 	switch notif.NotificationType {
 	case googleSubRenewed, googleSubRecovered:
+		if s.googleVerifier == nil {
+			return fmt.Errorf("google subscription verifier not configured")
+		}
+		newExpiry, err := s.googleVerifier.GetSubscriptionExpiry(ctx, notif.PurchaseToken)
+		if err != nil {
+			return fmt.Errorf("get subscription expiry from Google: %w", err)
+		}
 		sub.Status = model.SubscriptionStatusActive
+		sub.CurrentPeriodEnd = newExpiry
 		sub.UpdatedAt = time.Now()
-		// For renewal, we should verify with Google API to get the new expiry.
-		// For now, extend by 30 days as a reasonable default.
-		newExpiry := time.Now().Add(googleSubRenewalExtension)
 		if err := s.updateSubAndPremium(ctx, sub, true, &newExpiry); err != nil {
 			return err
 		}
@@ -207,19 +218,3 @@ func (s *SubscriptionService) HandleGoogleNotification(ctx context.Context, msg 
 	return nil
 }
 
-// decodeJWSPayload extracts and unmarshals the payload section of a JWS token.
-func decodeJWSPayload[T any](jws string) (*T, error) {
-	parts := strings.Split(jws, ".")
-	if len(parts) != 3 {
-		return nil, fmt.Errorf("invalid JWS format")
-	}
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil {
-		return nil, fmt.Errorf("decode JWS payload: %w", err)
-	}
-	var v T
-	if err := json.Unmarshal(payload, &v); err != nil {
-		return nil, fmt.Errorf("unmarshal JWS payload: %w", err)
-	}
-	return &v, nil
-}

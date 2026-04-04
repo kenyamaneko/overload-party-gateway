@@ -1,8 +1,10 @@
 package repository
 
 import (
+	"cmp"
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
@@ -58,6 +60,9 @@ func (r *MockDeckRepository) FindByPlayerID(ctx context.Context, playerID string
 			result = append(result, d)
 		}
 	}
+	slices.SortFunc(result, func(a, b *model.Deck) int {
+		return cmp.Compare(b.UpdatedAt.UnixNano(), a.UpdatedAt.UnixNano())
+	})
 	return result, nil
 }
 
@@ -67,7 +72,7 @@ func (r *MockDeckRepository) FindByID(ctx context.Context, playerID string, deck
 
 	d, ok := r.decks[deckKey(playerID, deckID)]
 	if !ok {
-		return nil, fmt.Errorf("deck %d not found for player %s", deckID, playerID)
+		return nil, fmt.Errorf("deck %d for player %s: %w", deckID, playerID, port.ErrNotFound)
 	}
 	return d, nil
 }

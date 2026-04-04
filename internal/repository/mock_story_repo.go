@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
@@ -58,7 +59,7 @@ func (r *MockStoryRepository) FindEpisodeByID(_ context.Context, episodeID strin
 			return ep, nil
 		}
 	}
-	return nil, nil
+	return nil, fmt.Errorf("episode %s: %w", episodeID, port.ErrNotFound)
 }
 
 func (r *MockStoryRepository) GetCompletedEpisodeIDs(_ context.Context, playerID string) ([]string, error) {
@@ -79,9 +80,7 @@ func (r *MockStoryRepository) GetUnlockContext(ctx context.Context, playerID str
 		if err != nil {
 			return nil, err
 		}
-		if p != nil {
-			level = p.Level
-		}
+		level = p.Level
 	}
 
 	// Owned factions

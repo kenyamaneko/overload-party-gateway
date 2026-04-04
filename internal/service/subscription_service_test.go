@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -14,17 +15,45 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// skipJWSVerification replaces jwsVerifyFunc with a function that decodes
+// the payload without signature/certificate verification.
+// Returns a cleanup function that restores the original.
+func skipJWSVerification(t *testing.T) {
+	t.Helper()
+	orig := jwsVerifyFunc
+	jwsVerifyFunc = func(jws string) ([]byte, error) {
+		parts := strings.Split(jws, ".")
+		if len(parts) != 3 {
+			return nil, fmt.Errorf("invalid JWS format")
+		}
+		return base64.RawURLEncoding.DecodeString(parts[1])
+	}
+	t.Cleanup(func() { jwsVerifyFunc = orig })
+}
+
+// mockGoogleSubVerifier implements GoogleSubVerifier for tests.
+type mockGoogleSubVerifier struct {
+	expiry time.Time
+	err    error
+}
+
+func (m *mockGoogleSubVerifier) GetSubscriptionExpiry(_ context.Context, _ string) (time.Time, error) {
+	return m.expiry, m.err
+}
+
 type testSubEnv struct {
-	svc        *SubscriptionService
-	subRepo    *repository.MockSubscriptionRepository
-	playerRepo *repository.MockPlayerRepository
+	svc            *SubscriptionService
+	subRepo        *repository.MockSubscriptionRepository
+	playerRepo     *repository.MockPlayerRepository
+	googleVerifier *mockGoogleSubVerifier
 }
 
 func newTestSubscriptionService() *testSubEnv {
 	subRepo := repository.NewMockSubscriptionRepository()
 	playerRepo := repository.NewMockPlayerRepository()
-	svc := NewSubscriptionService(subRepo, playerRepo, &repository.MockTxRunner{})
-	return &testSubEnv{svc: svc, subRepo: subRepo, playerRepo: playerRepo}
+	gv := &mockGoogleSubVerifier{expiry: time.Now().Add(30 * 24 * time.Hour)}
+	svc := NewSubscriptionService(subRepo, playerRepo, &repository.MockTxRunner{}, gv)
+	return &testSubEnv{svc: svc, subRepo: subRepo, playerRepo: playerRepo, googleVerifier: gv}
 }
 
 func createTestSubscription(env *testSubEnv, playerID, purchaseToken string) *model.Subscription {
@@ -85,6 +114,7 @@ func TestHandleAppleNotification(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			skipJWSVerification(t)
 			env := newTestSubscriptionService()
 			sub := createTestSubscription(env, "p1", "apple-token-"+tt.name)
 
@@ -203,6 +233,7 @@ func TestHandleNotification_SubscriptionNotFound(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			skipJWSVerification(t)
 			env := newTestSubscriptionService()
 
 			var err error
@@ -275,6 +306,7 @@ func TestHandleNotification_DecodeErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			skipJWSVerification(t)
 			env := newTestSubscriptionService()
 
 			var err error

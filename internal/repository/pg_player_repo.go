@@ -83,7 +83,7 @@ func (r *PgPlayerRepository) createInner(ctx context.Context, db dbtx, player *m
 
 // FindByID looks up a player by primary key.
 func (r *PgPlayerRepository) FindByID(ctx context.Context, playerID string) (*model.Player, error) {
-	row := r.pool.QueryRow(ctx,
+	row := connFrom(ctx, r.pool).QueryRow(ctx,
 		`SELECT player_id, firebase_uid, username, level, exp, is_premium, equipped_icon_no, selected_faction, premium_expires_at, created_at, updated_at
 		 FROM players WHERE player_id = $1`,
 		playerID,
@@ -92,7 +92,7 @@ func (r *PgPlayerRepository) FindByID(ctx context.Context, playerID string) (*mo
 	p, err := scanPlayer(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil
+			return nil, fmt.Errorf("player %s: %w", playerID, port.ErrNotFound)
 		}
 		return nil, fmt.Errorf("find player by id: %w", err)
 	}
@@ -102,7 +102,7 @@ func (r *PgPlayerRepository) FindByID(ctx context.Context, playerID string) (*mo
 // FindByFirebaseUID looks up a player by their Firebase UID.
 // Returns (nil, nil) when no matching row exists.
 func (r *PgPlayerRepository) FindByFirebaseUID(ctx context.Context, firebaseUID string) (*model.Player, error) {
-	row := r.pool.QueryRow(ctx,
+	row := connFrom(ctx, r.pool).QueryRow(ctx,
 		`SELECT player_id, firebase_uid, username, level, exp, is_premium, equipped_icon_no, selected_faction, premium_expires_at, created_at, updated_at
 		 FROM players WHERE firebase_uid = $1 LIMIT 1`,
 		firebaseUID,
@@ -121,7 +121,7 @@ func (r *PgPlayerRepository) FindByFirebaseUID(ctx context.Context, firebaseUID 
 // GetDailyBattle returns the daily battle record for a player.
 // Returns (nil, nil) when no matching row exists.
 func (r *PgPlayerRepository) GetDailyBattle(ctx context.Context, playerID string) (*model.PlayerDailyBattle, error) {
-	row := r.pool.QueryRow(ctx,
+	row := connFrom(ctx, r.pool).QueryRow(ctx,
 		`SELECT player_id, daily_battle_count, last_reset_date
 		 FROM player_daily_battle WHERE player_id = $1`,
 		playerID,
@@ -195,7 +195,7 @@ func (r *PgPlayerRepository) incrementDailyBattleInner(ctx context.Context, db d
 }
 
 func (r *PgPlayerRepository) UpdateUsername(ctx context.Context, playerID string, username string) (*model.Player, error) {
-	row := r.pool.QueryRow(ctx,
+	row := connFrom(ctx, r.pool).QueryRow(ctx,
 		`UPDATE players SET username = $1, updated_at = NOW()
 		 WHERE player_id = $2
 		 RETURNING player_id, firebase_uid, username, level, exp, is_premium, equipped_icon_no, selected_faction, premium_expires_at, created_at, updated_at`,
@@ -223,7 +223,7 @@ func (r *PgPlayerRepository) UpdatePremium(ctx context.Context, playerID string,
 }
 
 func (r *PgPlayerRepository) UpdateFaction(ctx context.Context, playerID, faction string) error {
-	_, err := r.pool.Exec(ctx,
+	_, err := connFrom(ctx, r.pool).Exec(ctx,
 		`UPDATE players SET selected_faction = $1, updated_at = $2
 		 WHERE player_id = $3`,
 		faction, time.Now(), playerID,
@@ -238,14 +238,28 @@ func (r *PgPlayerRepository) UpdateFaction(ctx context.Context, playerID, factio
 // The computeLevel function is provided by the service layer to determine the new
 // level from the updated exp and current level.
 func (r *PgPlayerRepository) AddExp(ctx context.Context, playerID string, expGain int64, computeLevel func(newExp, currentLevel int64) int64) (*model.Player, error) {
+	if txFromContext(ctx) != nil {
+		return r.addExpInner(ctx, connFrom(ctx, r.pool), playerID, expGain, computeLevel)
+	}
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("add exp begin tx: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
+	p, err := r.addExpInner(ctx, tx, playerID, expGain, computeLevel)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("add exp commit: %w", err)
+	}
+	return p, nil
+}
+
+func (r *PgPlayerRepository) addExpInner(ctx context.Context, db dbtx, playerID string, expGain int64, computeLevel func(newExp, currentLevel int64) int64) (*model.Player, error) {
 	var curExp, curLevel int64
-	err = tx.QueryRow(ctx,
+	err := db.QueryRow(ctx,
 		`SELECT exp, level FROM players WHERE player_id = $1 FOR UPDATE`,
 		playerID,
 	).Scan(&curExp, &curLevel)
@@ -256,7 +270,7 @@ func (r *PgPlayerRepository) AddExp(ctx context.Context, playerID string, expGai
 	newExp := curExp + expGain
 	newLevel := computeLevel(newExp, curLevel)
 
-	row := tx.QueryRow(ctx,
+	row := db.QueryRow(ctx,
 		`UPDATE players SET exp = $2, level = $3, updated_at = NOW()
 		 WHERE player_id = $1
 		 RETURNING player_id, firebase_uid, username, level, exp, is_premium, equipped_icon_no, selected_faction, premium_expires_at, created_at, updated_at`,
@@ -266,10 +280,6 @@ func (r *PgPlayerRepository) AddExp(ctx context.Context, playerID string, expGai
 	p, err := scanPlayer(row)
 	if err != nil {
 		return nil, fmt.Errorf("add exp update: %w", err)
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("add exp commit: %w", err)
 	}
 	return p, nil
 }

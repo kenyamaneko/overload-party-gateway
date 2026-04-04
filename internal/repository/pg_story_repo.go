@@ -23,7 +23,7 @@ func NewPgStoryRepository(pool *pgxpool.Pool) *PgStoryRepository {
 }
 
 func (r *PgStoryRepository) ListActiveEpisodes(ctx context.Context) ([]*model.ScenarioEpisode, error) {
-	rows, err := r.pool.Query(ctx,
+	rows, err := connFrom(ctx, r.pool).Query(ctx,
 		`SELECT episode_id, faction, episode_number, title_ja, title_en,
 		        required_level, required_factions, required_episodes,
 		        script_path, thumbnail_path, sort_order, is_active, created_at
@@ -54,7 +54,7 @@ func (r *PgStoryRepository) ListActiveEpisodes(ctx context.Context) ([]*model.Sc
 }
 
 func (r *PgStoryRepository) FindEpisodeByID(ctx context.Context, episodeID string) (*model.ScenarioEpisode, error) {
-	row := r.pool.QueryRow(ctx,
+	row := connFrom(ctx, r.pool).QueryRow(ctx,
 		`SELECT episode_id, faction, episode_number, title_ja, title_en,
 		        required_level, required_factions, required_episodes,
 		        script_path, thumbnail_path, sort_order, is_active, created_at
@@ -70,7 +70,7 @@ func (r *PgStoryRepository) FindEpisodeByID(ctx context.Context, episodeID strin
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil
+			return nil, fmt.Errorf("episode %s: %w", episodeID, port.ErrNotFound)
 		}
 		return nil, fmt.Errorf("query episode by id: %w", err)
 	}
@@ -78,7 +78,7 @@ func (r *PgStoryRepository) FindEpisodeByID(ctx context.Context, episodeID strin
 }
 
 func (r *PgStoryRepository) GetCompletedEpisodeIDs(ctx context.Context, playerID string) ([]string, error) {
-	rows, err := r.pool.Query(ctx,
+	rows, err := connFrom(ctx, r.pool).Query(ctx,
 		`SELECT episode_id FROM player_story_progress WHERE player_id = $1`,
 		playerID)
 	if err != nil {
@@ -101,7 +101,7 @@ func (r *PgStoryRepository) GetCompletedEpisodeIDs(ctx context.Context, playerID
 }
 
 func (r *PgStoryRepository) GetUnlockContext(ctx context.Context, playerID string) (*model.StoryUnlockContext, error) {
-	row := r.pool.QueryRow(ctx,
+	row := connFrom(ctx, r.pool).QueryRow(ctx,
 		`SELECT
 		   p.level,
 		   COALESCE(ARRAY(SELECT faction FROM player_factions WHERE player_id = $1), '{}'),
@@ -134,7 +134,7 @@ func (r *PgStoryRepository) GetUnlockContext(ctx context.Context, playerID strin
 }
 
 func (r *PgStoryRepository) MarkComplete(ctx context.Context, playerID, episodeID string) error {
-	_, err := r.pool.Exec(ctx,
+	_, err := connFrom(ctx, r.pool).Exec(ctx,
 		`INSERT INTO player_story_progress (player_id, episode_id)
 		 VALUES ($1, $2)
 		 ON CONFLICT (player_id, episode_id) DO NOTHING`,

@@ -21,6 +21,9 @@ func TestLoad_Defaults(t *testing.T) {
 	assert.Equal(t, "", cfg.GooglePackageName)
 	assert.Nil(t, cfg.AllowedOrigins)
 	assert.Equal(t, "http://localhost:9002", cfg.BattleServerURL)
+	assert.Equal(t, "0.1.0", cfg.AppMinVersion)
+	assert.Equal(t, "0.1.0", cfg.AppLatestVersion)
+	assert.False(t, cfg.AppForceUpdate)
 }
 
 func TestLoad_CustomValues(t *testing.T) {
@@ -36,6 +39,9 @@ func TestLoad_CustomValues(t *testing.T) {
 	t.Setenv("GOOGLE_PACKAGE_NAME", "com.example.android")
 	t.Setenv("ALLOWED_ORIGINS", "http://localhost:3000")
 	t.Setenv("BATTLE_SERVER_URL", "http://battle:9002")
+	t.Setenv("APP_MIN_VERSION", "1.0.0")
+	t.Setenv("APP_LATEST_VERSION", "1.2.0")
+	t.Setenv("APP_FORCE_UPDATE", "true")
 
 	cfg := Load()
 
@@ -51,6 +57,9 @@ func TestLoad_CustomValues(t *testing.T) {
 	assert.Equal(t, "com.example.android", cfg.GooglePackageName)
 	assert.Equal(t, []string{"http://localhost:3000"}, cfg.AllowedOrigins)
 	assert.Equal(t, "http://battle:9002", cfg.BattleServerURL)
+	assert.Equal(t, "1.0.0", cfg.AppMinVersion)
+	assert.Equal(t, "1.2.0", cfg.AppLatestVersion)
+	assert.True(t, cfg.AppForceUpdate)
 }
 
 func TestSplitCSV(t *testing.T) {

@@ -18,6 +18,7 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/handler/rest"
 	ws "github.com/kenyamaneko/overload-party-gateway/internal/handler/ws"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
+	"github.com/kenyamaneko/overload-party-gateway/internal/router"
 	"github.com/kenyamaneko/overload-party-gateway/internal/platform"
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
@@ -117,25 +118,38 @@ func main() {
 	deckService := service.NewDeckService(deckRepo, playerCardRepo, cardCache)
 	shopService := service.NewShopService(shopRepo, subRepo, playerRepo, factionRepo, txManager, cardCache, appleVerifier, googleVerifier)
 	storyService := service.NewStoryService(storyRepo, gcsClient, cfg.StoryBucket)
-	subscriptionService := service.NewSubscriptionService(subRepo, playerRepo, txManager)
+	var googleSubVerifier service.GoogleSubVerifier
+	if cfg.GooglePackageName != "" {
+		gv, err := platform.NewGooglePlaySubVerifier(ctx, cfg.GooglePackageName)
+		if err != nil {
+			log.Fatalf("failed to create google sub verifier: %v", err)
+		}
+		googleSubVerifier = gv
+	}
+	subscriptionService := service.NewSubscriptionService(subRepo, playerRepo, txManager, googleSubVerifier)
+	newsService := service.NewNewsService(newsRepo)
+	userSettingsService := service.NewUserSettingsService(userSettingsRepo)
 
 	// Battle client (HTTP → battle server)
 	battleClient := service.NewBattleClient(cfg.BattleServerURL)
 	wsManager := ws.NewManager(battleClient, playerService, deckService, deckRepo, gameConfigRepo)
 	go wsManager.StartMatchmaking(ctx)
 	wsHandler := ws.NewHandler(wsManager, authClient, playerRepo, cfg.AllowedOrigins)
-	authHandler := rest.NewAuthHandler(authService)
-	playerHandler := rest.NewPlayerHandler(playerService)
-	spectateHandler := rest.NewSpectateHandler(wsManager)
-	cardHandler := rest.NewCardHandler(cardService)
-	deckHandler := rest.NewDeckHandler(deckService)
-	playerCardHandler := rest.NewPlayerCardHandler(deckService)
-	gameLogHandler := rest.NewGameLogHandler(battleClient)
-	shopHandler := rest.NewShopHandler(shopService)
-	storyHandler := rest.NewStoryHandler(storyService)
-	webhookHandler := rest.NewWebhookHandler(subscriptionService)
-	userSettingsHandler := rest.NewUserSettingsHandler(userSettingsRepo)
-	newsHandler := rest.NewNewsHandler(newsRepo)
+	handlers := &router.Handlers{
+		Auth:         rest.NewAuthHandler(authService),
+		Player:       rest.NewPlayerHandler(playerService),
+		Spectate:     rest.NewSpectateHandler(wsManager),
+		Card:         rest.NewCardHandler(cardService),
+		Deck:         rest.NewDeckHandler(deckService),
+		PlayerCard:   rest.NewPlayerCardHandler(deckService),
+		GameLog:      rest.NewGameLogHandler(battleClient),
+		NPC:          rest.NewNPCHandler(battleClient),
+		Shop:         rest.NewShopHandler(shopService),
+		Story:        rest.NewStoryHandler(storyService),
+		Webhook:      rest.NewWebhookHandler(subscriptionService),
+		UserSettings: rest.NewUserSettingsHandler(userSettingsService),
+		News:         rest.NewNewsHandler(newsService),
+	}
 
 	// Router
 	r := gin.Default()
@@ -154,67 +168,30 @@ func main() {
 		pub.GET("/health", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"status": "ok"})
 		})
-		staticHandler := rest.NewStaticHandler(cfg, "data")
+		staticSvc, err := service.NewStaticService("data")
+		if err != nil {
+			log.Fatalf("failed to create static service: %v", err)
+		}
+		staticHandler := rest.NewStaticHandler(cfg, staticSvc)
 		pub.GET("/version", staticHandler.GetVersion)
 		pub.GET("/announcements", staticHandler.GetAnnouncements)
 		pub.GET("/daily", staticHandler.GetDaily)
-		pub.GET("/cloud-news", newsHandler.GetCloudNews)
+		pub.GET("/cloud-news", handlers.News.GetCloudNews)
 	}
 
 	v1 := r.Group("/api/v1")
 	v1.Use(middleware.FirebaseAuth(authClient))
 
 	// Auth endpoints: only need firebase_uid (player may not exist yet)
-	{
-		v1.POST("/auth/register", authHandler.Register)
-		v1.POST("/auth/login", authHandler.Login)
-	}
+	router.RegisterAuthRoutes(v1, handlers)
 
 	// All other endpoints: need player_id resolved from firebase_uid
 	api := v1.Group("")
 	api.Use(middleware.PlayerResolve(playerRepo))
-	{
-		api.GET("/player", playerHandler.GetPlayer)
-		api.PUT("/player/name", playerHandler.UpdateName)
-		api.GET("/player/battle-limit", playerHandler.GetBattleLimit)
-		api.GET("/player/cards", playerCardHandler.GetPlayerCards)
-
-		api.GET("/player/decks", deckHandler.GetDecks)
-		api.GET("/player/decks/:deckId", deckHandler.GetDeck)
-		api.POST("/player/decks", deckHandler.CreateDeck)
-		api.PUT("/player/decks/:deckId", deckHandler.UpdateDeck)
-		api.DELETE("/player/decks/:deckId", deckHandler.DeleteDeck)
-
-		api.GET("/player/settings", userSettingsHandler.GetSettings)
-		api.PUT("/player/settings", userSettingsHandler.UpdateSettings)
-
-		api.GET("/cards", cardHandler.GetAllCards)
-
-		// Game log (proxied to battle server)
-		api.GET("/games/:gameId/log", gameLogHandler.GetGameLog)
-		api.GET("/games/:gameId/log/text", gameLogHandler.GetGameLogText)
-
-		// Spectate
-		api.GET("/spectate/games", spectateHandler.GetActiveGames)
-
-		// Shop
-		api.POST("/player/select-faction", shopHandler.SelectFaction)
-		api.GET("/shop/products", shopHandler.GetProducts)
-		api.POST("/shop/purchase", shopHandler.Purchase)
-		api.POST("/shop/subscribe", shopHandler.Subscribe)
-
-		// Story scenarios
-		api.GET("/scenarios", storyHandler.ListEpisodes)
-		api.GET("/scenarios/:episodeId/script", storyHandler.GetScript)
-		api.POST("/scenarios/:episodeId/complete", storyHandler.CompleteEpisode)
-	}
+	router.RegisterAPIRoutes(api, handlers)
 
 	// Webhooks (no Firebase auth -- authenticated by Apple/Google)
-	webhooks := r.Group("/api/v1/shop/webhook")
-	{
-		webhooks.POST("/apple", webhookHandler.HandleAppleWebhook)
-		webhooks.POST("/google", webhookHandler.HandleGoogleWebhook)
-	}
+	router.RegisterWebhookRoutes(r.Group("/api/v1/shop/webhook"), handlers)
 
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,

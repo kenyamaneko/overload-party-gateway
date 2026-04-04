@@ -25,7 +25,7 @@ func NewPgGameConfigRepository(pool *pgxpool.Pool) *PgGameConfigRepository {
 }
 
 func (r *PgGameConfigRepository) GetInt64(ctx context.Context, key string, fallback int64) (int64, error) {
-	row := r.pool.QueryRow(ctx, `SELECT value FROM game_config WHERE key = $1`, key)
+	row := connFrom(ctx, r.pool).QueryRow(ctx, `SELECT value FROM game_config WHERE key = $1`, key)
 
 	var raw json.RawMessage
 	if err := row.Scan(&raw); err != nil {

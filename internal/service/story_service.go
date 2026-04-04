@@ -70,9 +70,12 @@ func (s *StoryService) ListEpisodes(ctx context.Context, playerID, lang string) 
 func (s *StoryService) GetScript(ctx context.Context, playerID, episodeID, lang string) (string, error) {
 	ep, err := s.storyRepo.FindEpisodeByID(ctx, episodeID)
 	if err != nil {
+		if errors.Is(err, port.ErrNotFound) {
+			return "", ErrEpisodeNotFound
+		}
 		return "", fmt.Errorf("find episode: %w", err)
 	}
-	if ep == nil || !ep.IsActive {
+	if !ep.IsActive {
 		return "", ErrEpisodeNotFound
 	}
 
@@ -90,9 +93,12 @@ func (s *StoryService) GetScript(ctx context.Context, playerID, episodeID, lang 
 func (s *StoryService) CompleteEpisode(ctx context.Context, playerID, episodeID string) error {
 	ep, err := s.storyRepo.FindEpisodeByID(ctx, episodeID)
 	if err != nil {
+		if errors.Is(err, port.ErrNotFound) {
+			return ErrEpisodeNotFound
+		}
 		return fmt.Errorf("find episode: %w", err)
 	}
-	if ep == nil || !ep.IsActive {
+	if !ep.IsActive {
 		return ErrEpisodeNotFound
 	}
 

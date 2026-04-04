@@ -28,7 +28,7 @@ func NewPgUserSettingsRepository(pool *pgxpool.Pool) *PgUserSettingsRepository {
 // Get retrieves user settings for a player.
 // Returns (nil, nil) when no row exists.
 func (r *PgUserSettingsRepository) Get(ctx context.Context, playerID string) (*model.UserSettings, error) {
-	row := r.pool.QueryRow(ctx,
+	row := connFrom(ctx, r.pool).QueryRow(ctx,
 		`SELECT player_id, language, bgm_volume, se_volume, push_enabled, updated_at
 		 FROM user_settings WHERE player_id = $1`,
 		playerID,
