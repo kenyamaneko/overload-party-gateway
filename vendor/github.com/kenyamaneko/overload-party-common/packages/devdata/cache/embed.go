@@ -8,3 +8,9 @@ var CardsJSON []byte
 
 //go:embed products_gen.json
 var ProductsJSON []byte
+
+//go:embed starter_decks_gen.json
+var StarterDecksJSON []byte
+
+//go:embed news_mock.json
+var NewsMockJSON []byte

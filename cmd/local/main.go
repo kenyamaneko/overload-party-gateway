@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os/signal"
@@ -17,6 +18,7 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/handler/rest"
 	ws "github.com/kenyamaneko/overload-party-gateway/internal/handler/ws"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
+	"github.com/kenyamaneko/overload-party-gateway/internal/router"
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
@@ -68,17 +70,20 @@ func main() {
 	wsManager := ws.NewManager(battleClient, playerService, deckService, deckRepo, gameConfigRepo)
 	go wsManager.StartMatchmaking(ctx)
 	wsHandler := ws.NewHandler(wsManager, nil, playerRepo, nil)
-	authHandler := rest.NewAuthHandler(authService)
-	playerHandler := rest.NewPlayerHandler(playerService)
-	spectateHandler := rest.NewSpectateHandler(wsManager)
-	cardHandler := rest.NewCardHandler(cardService)
-	deckHandler := rest.NewDeckHandler(deckService)
-	playerCardHandler := rest.NewPlayerCardHandler(deckService)
-	gameLogHandler := rest.NewGameLogHandler(battleClient)
-	shopHandler := rest.NewShopHandler(shopService)
-	webhookHandler := rest.NewWebhookHandler(subscriptionService)
-	storyHandler := rest.NewStoryHandler(storyService)
-	userSettingsHandler := rest.NewUserSettingsHandler(userSettingsRepo)
+	handlers := &router.Handlers{
+		Auth:         rest.NewAuthHandler(authService),
+		Player:       rest.NewPlayerHandler(playerService),
+		Spectate:     rest.NewSpectateHandler(wsManager),
+		Card:         rest.NewCardHandler(cardService),
+		Deck:         rest.NewDeckHandler(deckService),
+		PlayerCard:   rest.NewPlayerCardHandler(deckService),
+		GameLog:      rest.NewGameLogHandler(battleClient),
+		NPC:          rest.NewNPCHandler(battleClient),
+		Shop:         rest.NewShopHandler(shopService),
+		Webhook:      rest.NewWebhookHandler(subscriptionService),
+		Story:        rest.NewStoryHandler(storyService),
+		UserSettings: rest.NewUserSettingsHandler(userSettingsRepo),
+	}
 
 	// 5. Dev player setup: give all active cards + starter decks on first request
 	devPlayerSetup := func(ctx context.Context, playerID string) error {
@@ -96,17 +101,18 @@ func main() {
 		}
 		playerCardRepo.SeedPlayerCards(playerID, playerCards)
 
-		// Create starter decks
-		starterDecks := map[string][]string{
-			"SHE Standard":    {"SH-0001", "SH-0001", "SH-0001", "SH-0002", "SH-0005", "SH-0005", "SH-0006", "SH-0006", "SH-0006", "SH-0007", "SH-0007", "SH-0007", "SH-0008", "SH-0008", "SH-0012", "SH-0012", "SH-0014", "SH-0016", "SH-0019", "SH-0019", "SH-0019", "NT-0007", "NT-0008", "NT-0009", "NT-0010", "NT-0010", "NT-0023", "SH-0022", "NT-0025", "SH-0023"},
-			"Tenki Standard":  {"TK-0001", "TK-0001", "TK-0004", "TK-0004", "TK-0004", "TK-0005", "TK-0005", "TK-0007", "TK-0007", "TK-0007", "TK-0009", "TK-0010", "TK-0010", "TK-0010", "TK-0013", "TK-0013", "TK-0014", "TK-0015", "TK-0015", "TK-0015", "TK-0018", "TK-0024", "TK-0024", "NT-0004", "NT-0007", "NT-0008", "NT-0009", "NT-0010", "NT-0010", "NT-0024"},
-			"Sugar Standard":  {"SL-0001", "SL-0001", "SL-0001", "SL-0002", "SL-0002", "SL-0002", "SL-0003", "SL-0003", "SL-0004", "SL-0004", "SL-0006", "SL-0006", "SL-0007", "SL-0009", "SL-0013", "SL-0011", "SL-0011", "SL-0015", "SL-0015", "SL-0016", "SL-0017", "SL-0017", "SL-0022", "NT-0007", "NT-0008", "NT-0009", "NT-0013", "NT-0013", "NT-0013", "NT-0015"},
-			"Tuners Standard": {"TN-0001", "TN-0001", "TN-0001", "TN-0002", "TN-0004", "TN-0004", "TN-0004", "TN-0006", "TN-0006", "TN-0007", "TN-0007", "TN-0007", "TN-0008", "TN-0009", "TN-0009", "TN-0010", "TN-0011", "TN-0013", "TN-0014", "TN-0015", "TN-0015", "TN-0015", "TN-0017", "TN-0017", "TN-0018", "TN-0018", "NT-0009", "NT-0010", "NT-0010", "NT-0010"},
+		// Create starter decks from embedded JSON
+		var starterDecks []struct {
+			DeckName string   `json:"deck_name"`
+			Cards    []string `json:"cards"`
+		}
+		if err := json.Unmarshal(gencache.StarterDecksJSON, &starterDecks); err != nil {
+			return fmt.Errorf("unmarshal starter_decks_gen.json: %w", err)
 		}
 
-		for deckName, cardIDs := range starterDecks {
+		for _, sd := range starterDecks {
 			cardCounts := make(map[string]int)
-			for _, cardID := range cardIDs {
+			for _, cardID := range sd.Cards {
 				cardCounts[cardID]++
 			}
 
@@ -122,14 +128,14 @@ func main() {
 
 			deck := &model.Deck{
 				PlayerID:  playerID,
-				DeckName:  deckName,
+				DeckName:  sd.DeckName,
 				CreatedAt: time.Now(),
 				UpdatedAt: time.Now(),
 			}
 			if err := deckRepo.Create(ctx, deck, deckCards); err != nil {
 				return err
 			}
-			log.Printf("auto-created starter deck %s for %s: %d cards, deckID=%d", deckName, playerID, len(cardIDs), deck.DeckID)
+			log.Printf("auto-created starter deck %s for %s: %d cards, deckID=%d", sd.DeckName, playerID, len(sd.Cards), deck.DeckID)
 		}
 
 		return nil
@@ -164,13 +170,16 @@ func main() {
 		pub.GET("/announcements", staticHandler.GetAnnouncements)
 		pub.GET("/daily", staticHandler.GetDaily)
 		pub.GET("/cloud-news", func(c *gin.Context) {
+			var articles []model.NewsArticle
+			if err := json.Unmarshal(gencache.NewsMockJSON, &articles); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load news mock"})
+				return
+			}
 			now := time.Now()
-			c.JSON(http.StatusOK, []model.NewsArticle{
-				{ArticleID: "dev-1", Source: "aws", Title: "Lambda が ARM64 対応を拡大、コスト最大34%削減", Tags: []string{"aws", "serverless"}, FetchedAt: now},
-				{ArticleID: "dev-2", Source: "google-cloud", Title: "Cloud Run に GPU サポートが GA、ML推論ワークロードに対応", Tags: []string{"google-cloud", "container"}, FetchedAt: now},
-				{ArticleID: "dev-3", Source: "azure", Title: "Cosmos DB の新プライシングモデルが発表", Tags: []string{"azure", "database"}, FetchedAt: now},
-				{ArticleID: "dev-4", Source: "other", Title: "マルチクラウド戦略の落とし穴: 3つの失敗パターン", Tags: []string{"multi-cloud"}, FetchedAt: now},
-			})
+			for i := range articles {
+				articles[i].FetchedAt = now
+			}
+			c.JSON(http.StatusOK, articles)
 		})
 	}
 
@@ -184,51 +193,11 @@ func main() {
 
 	api := r.Group("/api/v1")
 	api.Use(middleware.DevAuthWithPlayerResolve(playerRepo, devRegister, middleware.DevPlayerSetup(devPlayerSetup)))
-	{
-		api.POST("/auth/register", authHandler.Register)
-		api.POST("/auth/login", authHandler.Login)
-
-		api.GET("/player", playerHandler.GetPlayer)
-		api.PUT("/player/name", playerHandler.UpdateName)
-		api.GET("/player/battle-limit", playerHandler.GetBattleLimit)
-		api.GET("/player/cards", playerCardHandler.GetPlayerCards)
-
-		api.GET("/player/decks", deckHandler.GetDecks)
-		api.GET("/player/decks/:deckId", deckHandler.GetDeck)
-		api.POST("/player/decks", deckHandler.CreateDeck)
-		api.PUT("/player/decks/:deckId", deckHandler.UpdateDeck)
-		api.DELETE("/player/decks/:deckId", deckHandler.DeleteDeck)
-
-		api.GET("/player/settings", userSettingsHandler.GetSettings)
-		api.PUT("/player/settings", userSettingsHandler.UpdateSettings)
-
-		api.GET("/cards", cardHandler.GetAllCards)
-
-		// Game log (proxied to battle server)
-		api.GET("/games/:gameId/log", gameLogHandler.GetGameLog)
-		api.GET("/games/:gameId/log/text", gameLogHandler.GetGameLogText)
-
-		// Spectate
-		api.GET("/spectate/games", spectateHandler.GetActiveGames)
-
-		// Shop
-		api.POST("/player/select-faction", shopHandler.SelectFaction)
-		api.GET("/shop/products", shopHandler.GetProducts)
-		api.POST("/shop/purchase", shopHandler.Purchase)
-		api.POST("/shop/subscribe", shopHandler.Subscribe)
-
-		// Story scenarios
-		api.GET("/scenarios", storyHandler.ListEpisodes)
-		api.GET("/scenarios/:episodeId/script", storyHandler.GetScript)
-		api.POST("/scenarios/:episodeId/complete", storyHandler.CompleteEpisode)
-	}
+	router.RegisterAuthRoutes(api, handlers)
+	router.RegisterAPIRoutes(api, handlers)
 
 	// Webhooks (no auth)
-	webhooks := r.Group("/api/v1/shop/webhook")
-	{
-		webhooks.POST("/apple", webhookHandler.HandleAppleWebhook)
-		webhooks.POST("/google", webhookHandler.HandleGoogleWebhook)
-	}
+	router.RegisterWebhookRoutes(r.Group("/api/v1/shop/webhook"), handlers)
 
 	srv := &http.Server{
 		Addr:    ":9001",
