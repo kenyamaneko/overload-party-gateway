@@ -21,16 +21,18 @@ type BattleDeckCard struct {
 // BattleClient is the interface for communicating with the battle server REST API.
 // Gateway uses this to delegate game creation, action processing, and state retrieval.
 type BattleClient interface {
+	// GetNPCModels returns the list of available NPC models from the battle server.
+	GetNPCModels(ctx context.Context) (json.RawMessage, error)
 	// StartNPCBattle creates a new NPC game for the player.
-	StartNPCBattle(ctx context.Context, playerID string, deckID int64, cards []BattleDeckCard, npcFaction string) (*GameCreatedResult, error)
+	StartNPCBattle(ctx context.Context, playerID string, deckID int64, cards []BattleDeckCard, npcModel string) (*GameCreatedResult, error)
 	// CreatePvPGame creates a new PvP game (called after matchmaking completes).
 	CreatePvPGame(ctx context.Context, player1ID string, player1DeckID int64, player1Cards []BattleDeckCard, player2ID string, player2DeckID int64, player2Cards []BattleDeckCard) (*GameCreatedResult, error)
 	// ProcessAction processes a game action and returns the result.
 	ProcessAction(ctx context.Context, gameID, playerID, actionType string, data json.RawMessage) (*ActionResult, error)
 	// GetGameStateForPlayer returns the info-hidden game state for a specific player.
 	GetGameStateForPlayer(ctx context.Context, gameID, playerID string) (json.RawMessage, error)
-	// GetTurnControlsForPlayer returns the turn controls for a specific player, or nil if not their turn.
-	GetTurnControlsForPlayer(ctx context.Context, gameID, playerID string) (*TurnControls, error)
+	// GetTurnControlsForPlayer returns the turn controls JSON for a specific player, or nil if not their turn.
+	GetTurnControlsForPlayer(ctx context.Context, gameID, playerID string) (json.RawMessage, error)
 	// AdvanceNpcTurn runs the NPC turn if the active player is NPC.
 	// Returns action events so the gateway can relay them to the human player.
 	AdvanceNpcTurn(ctx context.Context, gameID, playerID string) (*ActionResult, error)
@@ -64,12 +66,6 @@ type ActionResult struct {
 	Events    []ActionEvent `json:"events"`
 }
 
-// TurnControls describes available in-game controls for the active player.
-type TurnControls struct {
-	CanEndPhase     bool `json:"can_end_phase"`
-	DiscardRequired int  `json:"discard_required"`
-}
-
 const battleClientTimeout = 30 * time.Second
 
 type battleClient struct {
@@ -84,12 +80,16 @@ func NewBattleClient(baseURL string) BattleClient {
 	}
 }
 
-func (c *battleClient) StartNPCBattle(ctx context.Context, playerID string, deckID int64, cards []BattleDeckCard, npcFaction string) (*GameCreatedResult, error) {
+func (c *battleClient) GetNPCModels(ctx context.Context) (json.RawMessage, error) {
+	return c.getRaw(ctx, "/api/v1/npc/models")
+}
+
+func (c *battleClient) StartNPCBattle(ctx context.Context, playerID string, deckID int64, cards []BattleDeckCard, npcModel string) (*GameCreatedResult, error) {
 	body := map[string]any{
-		"PlayerID":   playerID,
-		"DeckID":     deckID,
-		"Cards":      cards,
-		"NpcFaction": npcFaction,
+		"PlayerID": playerID,
+		"DeckID":   deckID,
+		"Cards":    cards,
+		"NpcModel": npcModel,
 	}
 	var result GameCreatedResult
 	if err := c.post(ctx, "/api/v1/games/npc", body, &result); err != nil {
@@ -143,7 +143,7 @@ func (c *battleClient) GetGameStateForPlayer(ctx context.Context, gameID, player
 	return c.getRaw(ctx, path)
 }
 
-func (c *battleClient) GetTurnControlsForPlayer(ctx context.Context, gameID, playerID string) (*TurnControls, error) {
+func (c *battleClient) GetTurnControlsForPlayer(ctx context.Context, gameID, playerID string) (json.RawMessage, error) {
 	path := fmt.Sprintf("/api/v1/games/%s/controls/%s", gameID, playerID)
 	raw, err := c.getRaw(ctx, path)
 	if err != nil {
@@ -152,11 +152,7 @@ func (c *battleClient) GetTurnControlsForPlayer(ctx context.Context, gameID, pla
 	if len(raw) == 0 || string(raw) == "null" {
 		return nil, nil
 	}
-	var tc TurnControls
-	if err := json.Unmarshal(raw, &tc); err != nil {
-		return nil, fmt.Errorf("unmarshal turn controls: %w", err)
-	}
-	return &tc, nil
+	return raw, nil
 }
 
 func (c *battleClient) GetGameLog(ctx context.Context, gameID string) (json.RawMessage, error) {

@@ -11,6 +11,17 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
+// battleStateMeta is a minimal projection of the battle server's game state
+// JSON, used only to extract turn-related metadata (timer, active player).
+// Gateway does NOT transform the full game state — it is passed through as-is.
+type battleStateMeta struct {
+	CurrentTurn int64 `json:"currentTurn"`
+	IsMyTurn    bool  `json:"isMyTurn"`
+	MyView      struct {
+		TimeBank int64 `json:"timeBank"`
+	} `json:"myView"`
+}
+
 // turnTimerInfo holds the state for an active turn timer.
 type turnTimerInfo struct {
 	timer          *time.Timer
@@ -174,28 +185,22 @@ func (r *GameRelay) SendGameStateToPlayers(gameID string) {
 		}
 
 		// Extract turn timer info from the raw battle state
-		var b battleGameState
-		if err := json.Unmarshal(state, &b); err != nil {
+		var meta battleStateMeta
+		if err := json.Unmarshal(state, &meta); err != nil {
 			log.Printf("failed to extract turn timer for player %s: %v", pid, err)
-		} else if b.IsMyTurn {
+		} else if meta.IsMyTurn {
 			activePlayerID = pid
-			activeTimeBank = b.MyView.TimeBank
+			activeTimeBank = meta.MyView.TimeBank
 		}
 
-		transformed, err := transformGameState(state)
-		if err != nil {
-			log.Printf("transform game state for player %s: %v", pid, err)
-			sendErrorToPlayer(r.hub, pid, "game_state_error", "failed to process game state", true)
-			continue
-		}
 		r.hub.SendToPlayer(pid, &WSMessage{
 			Type: constants.WSMsgGameState,
-			Data: transformed,
+			Data: state,
 		})
 
 		// Capture the first player's state for spectators.
 		if i == 0 {
-			spectateState = transformed
+			spectateState = state
 		}
 	}
 
@@ -218,21 +223,18 @@ func (r *GameRelay) SendTurnControlsToPlayers(gameID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	for _, pid := range players {
-		tc, err := r.battleClient.GetTurnControlsForPlayer(ctx, gameID, pid)
+		raw, err := r.battleClient.GetTurnControlsForPlayer(ctx, gameID, pid)
 		if err != nil {
 			log.Printf("get turn controls for player %s: %v", pid, err)
 			sendErrorToPlayer(r.hub, pid, "turn_controls_error", "failed to retrieve turn controls", true)
 			continue
 		}
-		if tc == nil {
+		if raw == nil {
 			continue
 		}
 		r.hub.SendToPlayer(pid, &WSMessage{
 			Type: constants.WSMsgTurnControls,
-			Data: mustMarshal(TurnControlsMessage{
-				CanEndPhase:     tc.CanEndPhase,
-				DiscardRequired: tc.DiscardRequired,
-			}),
+			Data: raw,
 		})
 	}
 }
@@ -271,13 +273,8 @@ func (r *GameRelay) sendActionPerformed(gameID, actingPlayerID string, result *s
 
 		default:
 			// Other player's action (NPC) → send to the acting player
-			// State snapshot is included from battle server; transform field names.
+			// State snapshot is passed through from the battle server as-is.
 			if len(evt.State) == 0 {
-				continue
-			}
-			transformed, err := transformGameState(evt.State)
-			if err != nil {
-				log.Printf("transform NPC action state for player %s: %v", actingPlayerID, err)
 				continue
 			}
 			actionData := r.transformActionData(evt, evt.State)
@@ -287,25 +284,21 @@ func (r *GameRelay) sendActionPerformed(gameID, actingPlayerID string, result *s
 					Sequence:   evt.Sequence,
 					ActionType: evt.EventType,
 					ActionData: actionData,
-					State:      transformed,
+					State:      evt.State,
 				}),
 			})
 		}
 	}
 }
 
-// sendActionToPlayers fetches each player's game state, transforms it,
-// and sends the action_performed message.
+// sendActionToPlayers fetches each player's game state and sends the
+// action_performed message. The state is passed through from the battle
+// server without transformation.
 func (r *GameRelay) sendActionToPlayers(ctx context.Context, gameID string, pids []string, evt service.ActionEvent) {
 	for _, pid := range pids {
 		state, err := r.battleClient.GetGameStateForPlayer(ctx, gameID, pid)
 		if err != nil {
 			log.Printf("get game state for action_performed (player %s): %v", pid, err)
-			continue
-		}
-		transformed, err := transformGameState(state)
-		if err != nil {
-			log.Printf("transform game state for action_performed (player %s): %v", pid, err)
 			continue
 		}
 		actionData := r.transformActionData(evt, state)
@@ -315,7 +308,7 @@ func (r *GameRelay) sendActionToPlayers(ctx context.Context, gameID string, pids
 				Sequence:   evt.Sequence,
 				ActionType: evt.EventType,
 				ActionData: actionData,
-				State:      transformed,
+				State:      state,
 			}),
 		})
 	}
@@ -328,14 +321,14 @@ func (r *GameRelay) transformActionData(evt service.ActionEvent, rawState json.R
 		return mustMarshal(evt.EventData)
 	}
 
-	var b battleGameState
-	if err := json.Unmarshal(rawState, &b); err != nil {
+	var meta battleStateMeta
+	if err := json.Unmarshal(rawState, &meta); err != nil {
 		return mustMarshal(evt.EventData)
 	}
 
 	return mustMarshal(map[string]interface{}{
 		"turn":       evt.EventData["turn"],
-		"is_my_turn": b.IsMyTurn,
+		"is_my_turn": meta.IsMyTurn,
 	})
 }
 
@@ -452,16 +445,10 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 		sendErrorToPlayer(r.hub, conn.playerID, "game_state_error", "failed to retrieve game state", true)
 		return
 	}
-	transformed, err := transformGameState(rawState)
-	if err != nil {
-		log.Printf("transform game state for battle_start (player %s): %v", conn.playerID, err)
-		sendErrorToPlayer(r.hub, conn.playerID, "game_state_error", "failed to process game state", true)
-		return
-	}
 
 	// Resolve game metadata
 	r.mu.RLock()
-	meta, hasMeta := r.gameMeta[gameID]
+	gameMeta, hasMeta := r.gameMeta[gameID]
 	r.mu.RUnlock()
 
 	// Build battle_start action_data
@@ -469,17 +456,17 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 		"match_type": constants.MatchTypePvp,
 	}
 	if hasMeta {
-		battleStartData["match_type"] = meta.matchType
+		battleStartData["match_type"] = gameMeta.matchType
 
 		myName, myLevel := r.lookupPlayer(ctx, conn.playerID)
 		var oppName string
 		var oppLevel int64
-		if meta.matchType == constants.MatchTypeNpc {
+		if gameMeta.matchType == constants.MatchTypeNpc {
 			oppName, oppLevel = "NPC", 0
 		} else {
-			opponentID := meta.player2ID
-			if conn.playerID == meta.player2ID {
-				opponentID = meta.player1ID
+			opponentID := gameMeta.player2ID
+			if conn.playerID == gameMeta.player2ID {
+				opponentID = gameMeta.player1ID
 			}
 			oppName, oppLevel = r.lookupPlayer(ctx, opponentID)
 		}
@@ -499,16 +486,16 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 			Sequence:   0,
 			ActionType: constants.EventTypeBattleStart,
 			ActionData: mustMarshal(battleStartData),
-			State:      transformed,
+			State:      rawState,
 		}),
 	})
 
 	// Build turn_start action_data from game state
-	var b battleGameState
-	if err := json.Unmarshal(rawState, &b); err == nil {
+	var stateMeta battleStateMeta
+	if err := json.Unmarshal(rawState, &stateMeta); err == nil {
 		turnStartData := map[string]interface{}{
-			"turn":      b.CurrentTurn,
-			"is_my_turn": b.IsMyTurn,
+			"turn":       stateMeta.CurrentTurn,
+			"is_my_turn": stateMeta.IsMyTurn,
 		}
 		conn.SendMessage(&WSMessage{
 			Type: constants.WSMsgActionPerformed,
@@ -516,7 +503,7 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 				Sequence:   0,
 				ActionType: constants.EventTypeTurnStart,
 				ActionData: mustMarshal(turnStartData),
-				State:      transformed,
+				State:      rawState,
 			}),
 		})
 	}
@@ -609,6 +596,10 @@ func (r *GameRelay) resetTurnTimer(gameID, activePlayerID string, timeBankSecond
 	// real elapsed time and may still allow the action.
 	duration := time.Duration(timeBankSeconds+2) * time.Second
 
+	// TODO: コールバックは作成時の activePlayerID をキャプチャする。
+	// Timer.Stop() が false を返す（発火開始済み）場合、ターン交代後に
+	// 旧プレイヤーへ forfeit が送信されうる。turnTimers[gameID].activePlayerID
+	// と照合して不一致時は skip する対策を検討する。
 	timer := time.AfterFunc(duration, func() {
 		r.timerMu.Lock()
 		delete(r.turnTimers, gameID)

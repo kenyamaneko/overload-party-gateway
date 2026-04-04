@@ -27,7 +27,6 @@ type MatchFoundMessage = genmodel.MatchFoundMessage
 type GameOverMessage = genmodel.GameOverMessage
 type ActionRejectedMessage = genmodel.ActionRejectedMessage
 type ActionPerformedMessage = genmodel.ActionPerformedMessage
-type TurnControlsMessage = genmodel.TurnControlsMessage
 type StampUsedMessage = genmodel.StampUsedMessage
 type NPCBattleCreatedMessage = genmodel.NPCBattleCreatedMessage
 
