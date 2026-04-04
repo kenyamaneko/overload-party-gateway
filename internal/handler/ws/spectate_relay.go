@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/constants"
+	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
@@ -22,14 +23,6 @@ type gameInfo struct {
 	player1ID string
 	player2ID string
 	startedAt time.Time
-}
-
-// ActiveGameInfo is the public view of an active game, used for the REST API.
-type ActiveGameInfo struct {
-	GameID    string    `json:"game_id"`
-	Player1ID string    `json:"player1_id"`
-	Player2ID string    `json:"player2_id"`
-	StartedAt time.Time `json:"started_at"`
 }
 
 // SpectateRelay manages spectator connections for active games.
@@ -121,12 +114,6 @@ func (sr *SpectateRelay) HandleSpectateJoin(conn *Connection, data json.RawMessa
 		return
 	}
 
-	transformed, err := transformGameState(rawState)
-	if err != nil {
-		sr.sendSpectateError(conn, "state_unavailable", "could not transform game state")
-		return
-	}
-
 	// Register spectator
 	sr.mu.Lock()
 	if sr.spectators[req.GameID] == nil {
@@ -144,7 +131,7 @@ func (sr *SpectateRelay) HandleSpectateJoin(conn *Connection, data json.RawMessa
 			GameID:    req.GameID,
 			Player1ID: gi.player1ID,
 			Player2ID: gi.player2ID,
-			State:     transformed,
+			State:     rawState,
 		}),
 	})
 
@@ -252,13 +239,13 @@ func (sr *SpectateRelay) broadcastToSpectators(gameID string, msg *WSMessage) {
 }
 
 // ActiveGames returns a snapshot of all currently registered games.
-func (sr *SpectateRelay) ActiveGames() []ActiveGameInfo {
+func (sr *SpectateRelay) ActiveGames() []model.SpectateGameInfo {
 	sr.mu.RLock()
 	defer sr.mu.RUnlock()
 
-	result := make([]ActiveGameInfo, 0, len(sr.games))
+	result := make([]model.SpectateGameInfo, 0, len(sr.games))
 	for gameID, gi := range sr.games {
-		result = append(result, ActiveGameInfo{
+		result = append(result, model.SpectateGameInfo{
 			GameID:    gameID,
 			Player1ID: gi.player1ID,
 			Player2ID: gi.player2ID,

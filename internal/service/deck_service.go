@@ -55,19 +55,8 @@ func (s *DeckService) GetDeck(ctx context.Context, playerID string, deckID int64
 	return deck, cards, nil
 }
 
-// DeckCardEntry represents a card entry in a deck create/update request.
-type DeckCardEntry struct {
-	CardID string `json:"card_id"`
-	ArtNo  int64  `json:"art_no"`
-	Count  int    `json:"count"`
-}
-
-type CreateDeckRequest struct {
-	DeckName  string          `json:"deck_name" binding:"required"`
-	Cards     []DeckCardEntry `json:"cards" binding:"required"`
-	PlaymatNo *int64          `json:"playmat_no,omitempty"`
-	SleeveNo  *int64          `json:"sleeve_no,omitempty"`
-}
+// CreateDeckRequest is an alias for the shared api contract type.
+type CreateDeckRequest = model.DeckCreateRequest
 
 func (s *DeckService) CreateDeck(ctx context.Context, playerID string, req CreateDeckRequest) (*model.Deck, error) {
 	ownedCards, err := s.playerCardRepo.GetPlayerCards(ctx, playerID)
@@ -116,12 +105,8 @@ func (s *DeckService) CreateDeck(ctx context.Context, playerID string, req Creat
 	return deck, nil
 }
 
-type UpdateDeckRequest struct {
-	DeckName  string          `json:"deck_name" binding:"required"`
-	Cards     []DeckCardEntry `json:"cards" binding:"required"`
-	PlaymatNo *int64          `json:"playmat_no,omitempty"`
-	SleeveNo  *int64          `json:"sleeve_no,omitempty"`
-}
+// UpdateDeckRequest is an alias for the shared api contract type.
+type UpdateDeckRequest = model.DeckUpdateRequest
 
 func (s *DeckService) UpdateDeck(ctx context.Context, playerID string, deckID int64, req UpdateDeckRequest) (*model.Deck, error) {
 	ownedCards, err := s.playerCardRepo.GetPlayerCards(ctx, playerID)
@@ -177,10 +162,10 @@ func (s *DeckService) ValidateDeckForBattle(ctx context.Context, playerID string
 		return fmt.Errorf("get deck cards: %w", err)
 	}
 
-	// Convert DeckCard → DeckCardEntry for reuse of validateDeckCards.
-	entries := make([]DeckCardEntry, len(deckCards))
+	// Convert DeckCard → model.DeckCardEntry for reuse of validateDeckCards.
+	entries := make([]model.DeckCardEntry, len(deckCards))
 	for i, dc := range deckCards {
-		entries[i] = DeckCardEntry{CardID: dc.CardID, ArtNo: dc.ArtNo, Count: dc.Count}
+		entries[i] = model.DeckCardEntry{CardID: dc.CardID, ArtNo: dc.ArtNo, Count: dc.Count}
 	}
 
 	// Check total card count is exactly DeckSize.
@@ -249,7 +234,7 @@ type ownedKey struct {
 	variant int64
 }
 
-func (s *DeckService) validateDeckCards(entries []DeckCardEntry, ownedCards []*model.PlayerCard) error {
+func (s *DeckService) validateDeckCards(entries []model.DeckCardEntry, ownedCards []*model.PlayerCard) error {
 	// Total card count check.
 	totalCards := 0
 	for _, e := range entries {
@@ -308,9 +293,9 @@ func (s *DeckService) computeIsValid(deckCards []model.DeckCard, ownedCards []*m
 		return false
 	}
 
-	entries := make([]DeckCardEntry, len(deckCards))
+	entries := make([]model.DeckCardEntry, len(deckCards))
 	for i, dc := range deckCards {
-		entries[i] = DeckCardEntry{CardID: dc.CardID, ArtNo: dc.ArtNo, Count: dc.Count}
+		entries[i] = model.DeckCardEntry{CardID: dc.CardID, ArtNo: dc.ArtNo, Count: dc.Count}
 	}
 	return s.validateDeckCards(entries, ownedCards) == nil
 }

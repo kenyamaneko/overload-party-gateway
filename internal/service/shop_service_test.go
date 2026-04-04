@@ -599,7 +599,7 @@ func TestGetProducts_WithOwnership(t *testing.T) {
 	require.Len(t, products, 2)
 
 	// Build map for easy lookup
-	byID := map[string]ProductWithOwnership{}
+	byID := map[string]model.ProductResponse{}
 	for _, p := range products {
 		byID[p.ProductID] = p
 	}

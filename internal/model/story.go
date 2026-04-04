@@ -36,25 +36,6 @@ type PlayerFaction struct {
 	AcquiredAt time.Time `json:"acquired_at" db:"acquired_at"`
 }
 
-// EpisodeWithStatus is the API response for a single episode with unlock status.
-type EpisodeWithStatus struct {
-	EpisodeID     string       `json:"episode_id"`
-	Faction       *string      `json:"faction"`
-	EpisodeNumber int64        `json:"episode_number"`
-	Title         string       `json:"title"`
-	ThumbnailURL  *string      `json:"thumbnail_url"`
-	IsUnlocked    bool         `json:"is_unlocked"`
-	IsCompleted   bool         `json:"is_completed"`
-	LockReasons   []LockReason `json:"lock_reasons"`
-}
-
-// LockReason describes a single unmet unlock condition for an episode.
-type LockReason struct {
-	Type     string `json:"type"`               // "level" | "faction" | "episode"
-	Required any    `json:"required"`           // int64 for level, string for faction/episode
-	Current  any    `json:"current,omitempty"`  // int64 for level, omitted otherwise
-}
-
 // StoryUnlockContext holds pre-fetched data needed for episode unlock checks.
 type StoryUnlockContext struct {
 	PlayerLevel       int64

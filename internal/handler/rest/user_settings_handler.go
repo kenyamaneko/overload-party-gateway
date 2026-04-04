@@ -2,41 +2,29 @@ package rest
 
 import (
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
 	"github.com/kenyamaneko/overload-party-gateway/internal/model"
-	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
 type UserSettingsHandler struct {
-	repo port.UserSettingsRepo
+	svc *service.UserSettingsService
 }
 
-func NewUserSettingsHandler(repo port.UserSettingsRepo) *UserSettingsHandler {
-	return &UserSettingsHandler{repo: repo}
+func NewUserSettingsHandler(svc *service.UserSettingsService) *UserSettingsHandler {
+	return &UserSettingsHandler{svc: svc}
 }
 
 func (h *UserSettingsHandler) GetSettings(c *gin.Context) {
 	playerID := middleware.GetPlayerID(c)
 
-	s, err := h.repo.Get(c.Request.Context(), playerID)
+	s, err := h.svc.Get(c.Request.Context(), playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
-	}
-	if s == nil {
-		s = &model.UserSettings{
-			PlayerID:    playerID,
-			Language:    service.DefaultLanguage,
-			BgmVolume:   service.DefaultBgmVolume,
-			SeVolume:    service.DefaultSeVolume,
-			PushEnabled: service.DefaultPushEnabled,
-			UpdatedAt:   time.Now(),
-		}
 	}
 
 	c.JSON(http.StatusOK, s)
@@ -45,14 +33,13 @@ func (h *UserSettingsHandler) GetSettings(c *gin.Context) {
 func (h *UserSettingsHandler) UpdateSettings(c *gin.Context) {
 	playerID := middleware.GetPlayerID(c)
 
-	var req struct {
-		Language    string `json:"language" binding:"required"`
-		BgmVolume   int64  `json:"bgm_volume"`
-		SeVolume    int64  `json:"se_volume"`
-		PushEnabled bool   `json:"push_enabled"`
-	}
+	var req model.UpdateSettingsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if req.Language == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "language is required"})
 		return
 	}
 
@@ -64,7 +51,7 @@ func (h *UserSettingsHandler) UpdateSettings(c *gin.Context) {
 		PushEnabled: req.PushEnabled,
 	}
 
-	if err := h.repo.Upsert(c.Request.Context(), s); err != nil {
+	if err := h.svc.Update(c.Request.Context(), s); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

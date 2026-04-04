@@ -45,23 +45,14 @@ func (s *PlayerService) GetPlayer(ctx context.Context, playerID string) (*model.
 	return player, nil
 }
 
-type BattleLimitResponse struct {
-	DailyBattleCount int64 `json:"daily_battle_count"`
-	DailyBattleLimit int64 `json:"daily_battle_limit"` // -1 = unlimited
-	CanBattle        bool  `json:"can_battle"`
-}
-
-func (s *PlayerService) GetBattleLimit(ctx context.Context, playerID string) (*BattleLimitResponse, error) {
+func (s *PlayerService) GetBattleLimit(ctx context.Context, playerID string) (*model.BattleLimitResponse, error) {
 	player, err := s.playerRepo.FindByID(ctx, playerID)
 	if err != nil {
 		return nil, fmt.Errorf("find player: %w", err)
 	}
-	if player == nil {
-		return nil, fmt.Errorf("player %s not found", playerID)
-	}
 
 	if player.IsPremium {
-		return &BattleLimitResponse{
+		return &model.BattleLimitResponse{
 			DailyBattleCount: 0,
 			DailyBattleLimit: -1,
 			CanBattle:        true,
@@ -87,7 +78,7 @@ func (s *PlayerService) GetBattleLimit(ctx context.Context, playerID string) (*B
 		return nil, fmt.Errorf("game config %q is not set", configKeyFreeDailyBattleLimit)
 	}
 
-	return &BattleLimitResponse{
+	return &model.BattleLimitResponse{
 		DailyBattleCount: count,
 		DailyBattleLimit: freeLimit,
 		CanBattle:        count < freeLimit,
@@ -194,6 +185,33 @@ func (s *PlayerService) AwardGameExp(ctx context.Context, player1ID, player2ID s
 type LevelProgress struct {
 	LevelExpCurrent  int64 `json:"level_exp_current"`
 	LevelExpRequired int64 `json:"level_exp_required"`
+}
+
+// GetPlayerResponse returns a player with computed level progress fields.
+func (s *PlayerService) GetPlayerResponse(ctx context.Context, playerID string) (*model.PlayerResponse, error) {
+	player, err := s.GetPlayer(ctx, playerID)
+	if err != nil {
+		return nil, err
+	}
+	progress, err := s.GetLevelProgress(ctx, player.Level, player.Exp)
+	if err != nil {
+		return nil, err
+	}
+	return &model.PlayerResponse{
+		PlayerID:         player.PlayerID,
+		FirebaseUID:      player.FirebaseUID,
+		Username:         player.Username,
+		Level:            player.Level,
+		Exp:              player.Exp,
+		IsPremium:        player.IsPremium,
+		EquippedIconNo:   player.EquippedIconNo,
+		SelectedFaction:  player.SelectedFaction,
+		PremiumExpiresAt: player.PremiumExpiresAt,
+		CreatedAt:        player.CreatedAt,
+		UpdatedAt:        player.UpdatedAt,
+		LevelExpCurrent:  progress.LevelExpCurrent,
+		LevelExpRequired: progress.LevelExpRequired,
+	}, nil
 }
 
 // GetLevelProgress returns the level progress for the given player.

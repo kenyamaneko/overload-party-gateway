@@ -85,9 +85,6 @@ func (s *ShopService) SelectFaction(ctx context.Context, playerID, faction strin
 	if err != nil {
 		return 0, fmt.Errorf("find player: %w", err)
 	}
-	if player == nil {
-		return 0, fmt.Errorf("player %s not found", playerID)
-	}
 	if player.SelectedFaction != nil {
 		return 0, ErrFactionAlreadySelected
 	}
@@ -96,37 +93,39 @@ func (s *ShopService) SelectFaction(ctx context.Context, playerID, faction strin
 	neutralCards := s.buildFactionCards(playerID, constants.FactionNeutral)
 	allCards := append(factionCards, neutralCards...)
 
-	if err := s.shopRepo.InsertPlayerCards(ctx, allCards); err != nil {
-		return 0, fmt.Errorf("insert player cards: %w", err)
-	}
-	if err := s.playerRepo.UpdateFaction(ctx, playerID, faction); err != nil {
-		return 0, fmt.Errorf("update player faction: %w", err)
-	}
-	if err := s.factionRepo.AddPlayerFaction(ctx, playerID, faction, "initial_selection"); err != nil {
-		return 0, fmt.Errorf("add player faction: %w", err)
+	if err := s.txRunner.RunInTx(ctx, func(ctx context.Context) error {
+		if err := s.shopRepo.InsertPlayerCards(ctx, allCards); err != nil {
+			return fmt.Errorf("insert player cards: %w", err)
+		}
+		if err := s.playerRepo.UpdateFaction(ctx, playerID, faction); err != nil {
+			return fmt.Errorf("update player faction: %w", err)
+		}
+		if err := s.factionRepo.AddPlayerFaction(ctx, playerID, faction, "initial_selection"); err != nil {
+			return fmt.Errorf("add player faction: %w", err)
+		}
+		return nil
+	}); err != nil {
+		return 0, err
 	}
 
 	return len(allCards), nil
 }
 
-type ProductWithOwnership struct {
-	model.Product
-	IsOwned bool `json:"is_owned"`
-}
-
-func (s *ShopService) GetProducts(ctx context.Context, playerID string) ([]ProductWithOwnership, error) {
+func (s *ShopService) GetProducts(ctx context.Context, playerID string) ([]model.ProductResponse, error) {
 	products, err := s.shopRepo.GetActiveProducts(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("get products: %w", err)
 	}
 
-	ownedFactions, err := s.shopRepo.GetPlayerOwnedFactions(ctx, playerID)
+	allFactions, err := s.shopRepo.GetPlayerOwnedFactions(ctx, playerID)
 	if err != nil {
 		return nil, fmt.Errorf("get owned factions: %w", err)
 	}
 	ownedFactionSet := make(map[string]bool)
-	for _, f := range ownedFactions {
-		ownedFactionSet[f] = true
+	for _, f := range allFactions {
+		if f != constants.FactionNeutral {
+			ownedFactionSet[f] = true
+		}
 	}
 
 	activeSub, err := s.subRepo.GetActiveSubscription(ctx, playerID)
@@ -134,7 +133,7 @@ func (s *ShopService) GetProducts(ctx context.Context, playerID string) ([]Produ
 		return nil, fmt.Errorf("get subscription: %w", err)
 	}
 
-	result := make([]ProductWithOwnership, 0, len(products))
+	result := make([]model.ProductResponse, 0, len(products))
 	for _, p := range products {
 		owned := false
 		switch p.Type {
@@ -148,9 +147,16 @@ func (s *ShopService) GetProducts(ctx context.Context, playerID string) ([]Produ
 		case model.ProductTypeSubscription:
 			owned = activeSub != nil
 		}
-		result = append(result, ProductWithOwnership{
-			Product: *p,
-			IsOwned: owned,
+		result = append(result, model.ProductResponse{
+			ProductID:   p.ProductID,
+			Name:        p.Name,
+			Type:        p.Type,
+			Price:       p.Price,
+			Content:     p.Content,
+			Description: p.Description,
+			ImageURL:    p.ImageURL,
+			IsActive:    p.IsActive,
+			IsOwned:     owned,
 		})
 	}
 	return result, nil
@@ -225,43 +231,57 @@ func (s *ShopService) Purchase(ctx context.Context, playerID, productID, pf, pur
 		PurchasedAt:   time.Now(),
 	}
 
-	switch product.Type {
-	case model.ProductTypeFactionSet:
-		var content model.FactionSetContent
-		if err := json.Unmarshal(product.Content, &content); err != nil {
-			return fmt.Errorf("parse faction set content: %w", err)
-		}
-		cards := s.buildFactionCards(playerID, content.Faction)
-		if err := s.shopRepo.CreatePurchaseWithCards(ctx, purchase, cards); err != nil {
-			return fmt.Errorf("create purchase with cards: %w", err)
-		}
-		if err := s.factionRepo.AddPlayerFaction(ctx, playerID, content.Faction, "shop_purchase"); err != nil {
-			return fmt.Errorf("add player faction: %w", err)
-		}
+	if err := s.txRunner.RunInTx(ctx, func(ctx context.Context) error {
+		switch product.Type {
+		case model.ProductTypeFactionSet:
+			var content model.FactionSetContent
+			if err := json.Unmarshal(product.Content, &content); err != nil {
+				return fmt.Errorf("parse faction set content: %w", err)
+			}
+			cards := s.buildFactionCards(playerID, content.Faction)
+			if err := s.shopRepo.CreatePurchaseWithCards(ctx, purchase, cards); err != nil {
+				return fmt.Errorf("create purchase with cards: %w", err)
+			}
+			if err := s.factionRepo.AddPlayerFaction(ctx, playerID, content.Faction, "shop_purchase"); err != nil {
+				return fmt.Errorf("add player faction: %w", err)
+			}
 
-	case model.ProductTypeCosmetic:
-		var content model.CosmeticContent
-		if err := json.Unmarshal(product.Content, &content); err != nil {
-			return fmt.Errorf("parse cosmetic content: %w", err)
-		}
-		item := &model.PlayerItem{
-			PlayerID:   playerID,
-			ItemType:   content.ItemType,
-			ItemNo:     content.ItemNo,
-			AcquiredAt: time.Now(),
-		}
-		if err := s.shopRepo.CreatePurchaseWithItem(ctx, purchase, item); err != nil {
-			return fmt.Errorf("create purchase with item: %w", err)
-		}
+		case model.ProductTypeCosmetic:
+			var content model.CosmeticContent
+			if err := json.Unmarshal(product.Content, &content); err != nil {
+				return fmt.Errorf("parse cosmetic content: %w", err)
+			}
+			item := &model.PlayerItem{
+				PlayerID:   playerID,
+				ItemType:   content.ItemType,
+				ItemNo:     content.ItemNo,
+				AcquiredAt: time.Now(),
+			}
+			if err := s.shopRepo.CreatePurchaseWithItem(ctx, purchase, item); err != nil {
+				return fmt.Errorf("create purchase with item: %w", err)
+			}
 
-	default:
-		return fmt.Errorf("unsupported product type for purchase: %s", product.Type)
+		default:
+			return fmt.Errorf("unsupported product type for purchase: %s", product.Type)
+		}
+		return nil
+	}); err != nil {
+		return err
 	}
 
 	return nil
 }
 
 func (s *ShopService) Subscribe(ctx context.Context, playerID, productID, pf, purchaseToken string) (*time.Time, error) {
+	// Idempotency check
+	existing, err := s.subRepo.FindSubscriptionByToken(ctx, purchaseToken)
+	if err != nil {
+		return nil, fmt.Errorf("check existing subscription: %w", err)
+	}
+	if existing != nil {
+		return &existing.CurrentPeriodEnd, nil
+	}
+
 	product, err := s.shopRepo.GetProductByID(ctx, productID)
 	if err != nil {
 		return nil, fmt.Errorf("get product: %w", err)

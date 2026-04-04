@@ -63,11 +63,6 @@ type ActionPerformedMessage struct {
 	State      json.RawMessage `json:"state"`
 }
 
-type TurnControlsMessage struct {
-	CanEndPhase     bool `json:"can_end_phase"`
-	DiscardRequired int  `json:"discard_required"`
-}
-
 type StampUsedMessage struct {
 	GameID   string `json:"game_id"`
 	PlayerID string `json:"player_id"`

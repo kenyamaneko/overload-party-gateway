@@ -226,7 +226,7 @@ func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, da
 		return
 	}
 
-	game, err := m.battleClient.StartNPCBattle(ctx, conn.playerID, req.DeckID, cards, req.NPCFaction)
+	game, err := m.battleClient.StartNPCBattle(ctx, conn.playerID, req.DeckID, cards, req.NPCModel)
 	if err != nil {
 		sendError(conn, "npc_battle_error", err.Error(), true)
 		return
@@ -264,7 +264,7 @@ func (m *Manager) resolveDeckCards(ctx context.Context, playerID string, deckID 
 }
 
 // ActiveSpectateGames returns the list of currently active games available for spectating.
-func (m *Manager) ActiveSpectateGames() []ActiveGameInfo {
+func (m *Manager) ActiveSpectateGames() []model.SpectateGameInfo {
 	return m.Spectate.ActiveGames()
 }
 

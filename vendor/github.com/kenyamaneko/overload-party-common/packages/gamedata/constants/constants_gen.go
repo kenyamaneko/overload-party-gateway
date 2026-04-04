@@ -271,6 +271,22 @@ const (
 	SelectorPickModeChoice = "choice"
 )
 
+// Cloud news sources.
+const (
+	CloudNewsSourceAws = "aws"
+	CloudNewsSourceGoogleCloud = "google-cloud"
+	CloudNewsSourceAzure = "azure"
+	CloudNewsSourceOci = "oci"
+	CloudNewsSourceOther = "other"
+)
+
+// Product types.
+const (
+	ProductTypeFactionSet = "faction_set"
+	ProductTypeCosmetic = "cosmetic"
+	ProductTypeSubscription = "subscription"
+)
+
 // WS server message types.
 const (
 	WSServerMsgGameState = "game_state"

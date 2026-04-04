@@ -158,11 +158,11 @@ func grantCards(repo *mockPlayerCardRepo, playerID string, cards ...*model.Playe
 	repo.playerCards[playerID] = append(repo.playerCards[playerID], cards...)
 }
 
-// makeEntries builds DeckCardEntry slice from (cardID, count) pairs.
-func makeEntries(pairs ...interface{}) []DeckCardEntry {
-	var entries []DeckCardEntry
+// makeEntries builds model.DeckCardEntry slice from (cardID, count) pairs.
+func makeEntries(pairs ...interface{}) []model.DeckCardEntry {
+	var entries []model.DeckCardEntry
 	for i := 0; i < len(pairs); i += 2 {
-		entries = append(entries, DeckCardEntry{
+		entries = append(entries, model.DeckCardEntry{
 			CardID: pairs[i].(string),
 			ArtNo:  0,
 			Count:  pairs[i+1].(int),
@@ -182,7 +182,7 @@ func grantUnlimited(repo *mockPlayerCardRepo, playerID string, cardIDs ...string
 var allTenCards = []string{"C-001", "C-002", "C-003", "C-004", "C-005", "C-006", "C-007", "C-008", "C-009", "C-010"}
 
 // full30Entries returns entries for a valid 30-card deck (3 copies x 10 cards).
-func full30Entries() []DeckCardEntry {
+func full30Entries() []model.DeckCardEntry {
 	return makeEntries(
 		"C-001", 3, "C-002", 3, "C-003", 3, "C-004", 3, "C-005", 3,
 		"C-006", 3, "C-007", 3, "C-008", 3, "C-009", 3, "C-010", 3,
@@ -200,7 +200,7 @@ func TestCreateDeck_Validity(t *testing.T) {
 		name      string
 		deckName  string
 		grant     func(pcRepo *mockPlayerCardRepo, pid string)
-		entries   []DeckCardEntry
+		entries   []model.DeckCardEntry
 		wantValid bool
 	}{
 		{
@@ -229,7 +229,7 @@ func TestCreateDeck_Validity(t *testing.T) {
 			name:     "0 cards → invalid",
 			deckName: "Empty Deck",
 			grant:    func(pcRepo *mockPlayerCardRepo, pid string) {},
-			entries:  []DeckCardEntry{},
+			entries:  []model.DeckCardEntry{},
 			wantValid: false,
 		},
 	}
@@ -260,7 +260,7 @@ func TestCreateDeck_ValidationErrors(t *testing.T) {
 	tests := []struct {
 		name       string
 		grant      func(pcRepo *mockPlayerCardRepo, pid string)
-		entries    []DeckCardEntry
+		entries    []model.DeckCardEntry
 		wantErrMsg string
 	}{
 		{
@@ -313,7 +313,7 @@ func TestCreateDeck_ValidationErrors(t *testing.T) {
 			grant: func(pcRepo *mockPlayerCardRepo, pid string) {
 				grantCards(pcRepo, pid, &model.PlayerCard{CardID: "C-001", ArtNo: 0, Count: 3})
 			},
-			entries:    []DeckCardEntry{{CardID: "C-001", ArtNo: 0, Count: 0}},
+			entries:    []model.DeckCardEntry{{CardID: "C-001", ArtNo: 0, Count: 0}},
 			wantErrMsg: "count must be positive",
 		},
 		{
@@ -321,7 +321,7 @@ func TestCreateDeck_ValidationErrors(t *testing.T) {
 			grant: func(pcRepo *mockPlayerCardRepo, pid string) {
 				grantCards(pcRepo, pid, &model.PlayerCard{CardID: "C-001", ArtNo: 0, Count: 3})
 			},
-			entries:    []DeckCardEntry{{CardID: "C-001", ArtNo: 0, Count: -1}},
+			entries:    []model.DeckCardEntry{{CardID: "C-001", ArtNo: 0, Count: -1}},
 			wantErrMsg: "count must be positive",
 		},
 		{
@@ -340,7 +340,7 @@ func TestCreateDeck_ValidationErrors(t *testing.T) {
 					&model.PlayerCard{CardID: "C-001", ArtNo: 1, Count: 3},
 				)
 			},
-			entries: []DeckCardEntry{
+			entries: []model.DeckCardEntry{
 				{CardID: "C-001", ArtNo: 0, Count: 3},
 				{CardID: "C-001", ArtNo: 1, Count: 1}, // total 4, max 3
 			},

@@ -221,9 +221,9 @@ func TestPlayerHandler_GetBattleLimit(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
-	var resp service.BattleLimitResponse
+	var resp model.BattleLimitResponse
 	_ = json.Unmarshal(w.Body.Bytes(), &resp)
-	assert.Equal(t, service.BattleLimitResponse{
+	assert.Equal(t, model.BattleLimitResponse{
 		DailyBattleLimit: 10,
 		DailyBattleCount: 3,
 		CanBattle:        true,
@@ -236,7 +236,8 @@ func TestPlayerHandler_GetBattleLimit(t *testing.T) {
 
 func setupUserSettingsRouter() *gin.Engine {
 	repo := repository.NewMockUserSettingsRepository()
-	handler := NewUserSettingsHandler(repo)
+	svc := service.NewUserSettingsService(repo)
+	handler := NewUserSettingsHandler(svc)
 
 	r := gin.New()
 	r.Use(setPlayerID("p1"))
@@ -380,9 +381,9 @@ func TestDeckHandler_GetDecks_Empty(t *testing.T) {
 func TestDeckHandler_CreateDeck_Success(t *testing.T) {
 	r := setupDeckRouter()
 
-	entries := make([]service.DeckCardEntry, 10)
+	entries := make([]model.DeckCardEntry, 10)
 	for i := 1; i <= 10; i++ {
-		entries[i-1] = service.DeckCardEntry{CardID: fmt.Sprintf("C-%03d", i), ArtNo: 1, Count: 3}
+		entries[i-1] = model.DeckCardEntry{CardID: fmt.Sprintf("C-%03d", i), ArtNo: 1, Count: 3}
 	}
 	body, _ := json.Marshal(service.CreateDeckRequest{
 		DeckName: "MyDeck",
@@ -452,7 +453,8 @@ func (m *mockNewsRepo) List(_ context.Context, limit, offset int) ([]*model.News
 
 func TestNewsHandler_GetCloudNews_Empty(t *testing.T) {
 	repo := &mockNewsRepo{}
-	handler := NewNewsHandler(repo)
+	svc := service.NewNewsService(repo)
+	handler := NewNewsHandler(svc)
 
 	r := gin.New()
 	r.GET("/news", handler.GetCloudNews)
@@ -485,7 +487,8 @@ func TestNewsHandler_GetCloudNews_WithArticles(t *testing.T) {
 			},
 		},
 	}
-	handler := NewNewsHandler(repo)
+	svc := service.NewNewsService(repo)
+	handler := NewNewsHandler(svc)
 
 	r := gin.New()
 	r.GET("/news", handler.GetCloudNews)
@@ -667,7 +670,7 @@ func TestShopHandler_Subscribe_MissingBody(t *testing.T) {
 func setupWebhookRouter() *gin.Engine {
 	subRepo := repository.NewMockSubscriptionRepository()
 	playerRepo := repository.NewMockPlayerRepository()
-	subService := service.NewSubscriptionService(subRepo, playerRepo, &repository.MockTxRunner{})
+	subService := service.NewSubscriptionService(subRepo, playerRepo, &repository.MockTxRunner{}, nil)
 	handler := NewWebhookHandler(subService)
 
 	r := gin.New()
