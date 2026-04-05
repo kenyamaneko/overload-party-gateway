@@ -249,9 +249,10 @@ func (r *GameRelay) SendTurnControlsToPlayers(gameID string) {
 
 // sendActionPerformed dispatches action_performed messages for each event.
 //
-// Routing is based on who performed the action (event.PlayerID):
-//   - Player's own action  → sent to opponents (gateway fetches their info-hidden state)
-//   - Other player's action (NPC) → sent to the acting player (state included from battle server)
+// Routing is based on the event metadata:
+//   - System event (IsSystem=true) → sent to ALL players (state fetched per-player)
+//   - Player's own action          → sent to opponents (gateway fetches their info-hidden state)
+//   - Other player's action (NPC)  → sent to the acting player (state included from battle server)
 func (r *GameRelay) sendActionPerformed(gameID, actingPlayerID string, result *service.ActionResult) {
 	if result == nil || len(result.Events) == 0 {
 		return
@@ -265,7 +266,7 @@ func (r *GameRelay) sendActionPerformed(gameID, actingPlayerID string, result *s
 	defer cancel()
 	for _, evt := range result.Events {
 		switch {
-		case evt.PlayerID == "":
+		case evt.IsSystem:
 			// System event (turn_start etc.) → send to ALL players
 			r.sendActionToPlayers(ctx, gameID, players, evt)
 

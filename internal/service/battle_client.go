@@ -51,11 +51,12 @@ type GameCreatedResult struct {
 
 // ActionEvent represents a single game event returned by the battle server.
 type ActionEvent struct {
-	Sequence  int64                  `json:"sequence"`
-	EventType string                 `json:"event_type"`
-	PlayerID  string                 `json:"player_id"`
-	EventData json.RawMessage        `json:"event_data"`
-	State     json.RawMessage        `json:"state"`
+	Sequence  int64           `json:"sequence"`
+	EventType string          `json:"event_type"`
+	PlayerID  string          `json:"player_id"`
+	IsSystem  bool            `json:"is_system"`
+	EventData json.RawMessage `json:"event_data"`
+	State     json.RawMessage `json:"state"`
 }
 
 // ActionResult is returned after a game action is processed.
