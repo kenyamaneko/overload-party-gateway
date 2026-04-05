@@ -18,14 +18,13 @@ func NewShopHandler(shopService *service.ShopService) *ShopHandler {
 	return &ShopHandler{shopService: shopService}
 }
 
-type selectFactionRequest struct {
-	Faction string `json:"faction" binding:"required"`
-}
-
 func (h *ShopHandler) SelectFaction(c *gin.Context) {
 	playerID := middleware.GetPlayerID(c)
 
-	var req selectFactionRequest
+	// Empty or unknown faction values are rejected by shopService.SelectFaction
+	// (via normalizeFaction / isSelectableFaction), so no binding:"required"
+	// check is needed at this layer.
+	var req model.SelectFactionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

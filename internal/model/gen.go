@@ -63,6 +63,8 @@ type DeckCreateRequest = apimodel.DeckCreateRequest
 type DeckUpdateRequest = apimodel.DeckUpdateRequest
 type UpdateSettingsRequest = apimodel.UpdateSettingsRequest
 type PurchaseRequest = apimodel.PurchaseRequest
+type RegisterRequest = apimodel.RegisterRequest
+type SelectFactionRequest = apimodel.SelectFactionRequest
 
 // ── DB models (locally defined) ──
 // Player, PlayerDailyBattle, PlayerCard, GameConfig are in player.go.
