@@ -12,5 +12,5 @@ var ProductsJSON []byte
 //go:embed starter_decks_gen.json
 var StarterDecksJSON []byte
 
-//go:embed news.json
-var NewsJSON []byte
+//go:embed news_mock.json
+var NewsMockJSON []byte
