@@ -54,7 +54,7 @@ type ActionEvent struct {
 	Sequence  int64                  `json:"sequence"`
 	EventType string                 `json:"event_type"`
 	PlayerID  string                 `json:"player_id"`
-	EventData map[string]interface{} `json:"event_data"`
+	EventData json.RawMessage        `json:"event_data"`
 	State     json.RawMessage        `json:"state"`
 }
 

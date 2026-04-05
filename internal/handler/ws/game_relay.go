@@ -285,13 +285,12 @@ func (r *GameRelay) sendActionPerformed(gameID, actingPlayerID string, result *s
 			if len(evt.State) == 0 {
 				continue
 			}
-			actionData := r.transformActionData(evt, evt.State)
 			r.hub.SendToPlayer(actingPlayerID, &WSMessage{
 				Type: constants.WSMsgActionPerformed,
 				Data: mustMarshal(ActionPerformedMessage{
 					Sequence:   evt.Sequence,
 					ActionType: evt.EventType,
-					ActionData: actionData,
+					ActionData: evt.EventData,
 					State:      evt.State,
 				}),
 			})
@@ -309,36 +308,18 @@ func (r *GameRelay) sendActionToPlayers(ctx context.Context, gameID string, pids
 			log.Printf("get game state for action_performed (player %s): %v", pid, err)
 			continue
 		}
-		actionData := r.transformActionData(evt, state)
 		r.hub.SendToPlayer(pid, &WSMessage{
 			Type: constants.WSMsgActionPerformed,
 			Data: mustMarshal(ActionPerformedMessage{
 				Sequence:   evt.Sequence,
 				ActionType: evt.EventType,
-				ActionData: actionData,
+				ActionData: evt.EventData,
 				State:      state,
 			}),
 		})
 	}
 }
 
-// transformActionData converts battle-server event_data to the client format.
-// For turn_start events, it replaces activePlayer with is_my_turn.
-func (r *GameRelay) transformActionData(evt service.ActionEvent, rawState json.RawMessage) json.RawMessage {
-	if evt.EventType != constants.EventTypeTurnStart {
-		return mustMarshal(evt.EventData)
-	}
-
-	var meta battleStateMeta
-	if err := json.Unmarshal(rawState, &meta); err != nil {
-		return mustMarshal(evt.EventData)
-	}
-
-	return mustMarshal(map[string]interface{}{
-		"turn":       evt.EventData["turn"],
-		"is_my_turn": meta.IsMyTurn,
-	})
-}
 
 func (r *GameRelay) broadcastGameOver(gameID string, winnerNum int64, reason string) {
 	r.BroadcastToGame(gameID, &WSMessage{
@@ -638,18 +619,14 @@ func (r *GameRelay) cancelTurnTimer(gameID string) {
 
 // handleTurnTimeout sends a forfeit action when the turn timer expires.
 //
-// タイムアウト系の敗北理由は gateway が決定する。Battle Server には汎用の
-// forfeit アクションを送り、返却された WinReason を gateway 側で上書きする。
-// これはターンタイマーと切断タイマーが gateway の責務であり、Battle Server は
-// タイムアウトの種別（ターン／切断）を区別できないため。
-// なお Battle Server のゲームログ DB には Battle Server 自身の WinReason が
-// 記録されるため、ログ分析時は gateway のアクセスログと突合する必要がある。
-// TODO: Battle Server の forfeit API に reason パラメータを追加し、DB 側にも
-// 正確な WinReason を記録できるようにする。
+// forfeit reason は本来バトルのドメイン知識だが、ターンタイマーと切断タイマーは
+// gateway の責務であり、Battle Server はタイムアウトの種別を区別できないため、
+// 例外的に gateway が reason を指定して Battle Server に送る。
+// broadcastGameOver でも gateway 側の WinReason で上書きしている。
 func (r *GameRelay) handleTurnTimeout(gameID, playerID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	result, err := r.battleClient.ProcessAction(ctx, gameID, playerID, constants.ActionTypeForfeit, nil)
+	result, err := r.battleClient.ProcessAction(ctx, gameID, playerID, constants.ActionTypeForfeit, forfeitReason(constants.WinReasonTurnTimeout))
 	if err != nil {
 		log.Printf("turn timeout forfeit error (game=%s, player=%s): %v", gameID, playerID, err)
 		return
@@ -678,13 +655,13 @@ func (r *GameRelay) HandleUseStamp(conn *Connection, data json.RawMessage) {
 }
 
 // HandleDisconnectTimeout processes a forfeit after disconnect timeout.
-// WinReason の上書き方針については handleTurnTimeout のコメントを参照。
+// forfeit reason の方針については handleTurnTimeout のコメントを参照。
 func (r *GameRelay) HandleDisconnectTimeout(playerID, gameID string) {
 	r.cancelTurnTimer(gameID)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	result, err := r.battleClient.ProcessAction(ctx, gameID, playerID, constants.ActionTypeForfeit, nil)
+	result, err := r.battleClient.ProcessAction(ctx, gameID, playerID, constants.ActionTypeForfeit, forfeitReason(constants.WinReasonDisconnect))
 	if err != nil {
 		log.Printf("forfeit error: %v", err)
 		return
@@ -716,6 +693,11 @@ func appendUnique(slice []string, s string) []string {
 		}
 	}
 	return append(slice, s)
+}
+
+// forfeitReason builds the action data for a forfeit request.
+func forfeitReason(reason string) json.RawMessage {
+	return mustMarshal(map[string]string{"Reason": reason})
 }
 
 func removeString(slice []string, s string) []string {
