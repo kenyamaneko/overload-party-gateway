@@ -8,6 +8,14 @@ import (
 	"encoding/json"
 )
 
+// VersionResponse is the API response for GET /version.
+type VersionResponse struct {
+	MinimumVersion string `json:"minimumVersion"`
+	LatestVersion  string `json:"latestVersion"`
+	ForceUpdate    bool   `json:"forceUpdate"`
+	StoreUrl       string `json:"storeUrl"`
+}
+
 // PlayerResponse is the API response for GET /player.
 type PlayerResponse struct {
 	PlayerID         string     `json:"player_id"`
@@ -145,5 +153,57 @@ type PurchaseRequest struct {
 	ProductID     string `json:"product_id"`
 	Platform      string `json:"platform"`
 	PurchaseToken string `json:"purchase_token"`
+}
+
+// RegisterRequest is the request body for POST /auth/register.
+type RegisterRequest struct {
+	Username string `json:"username"`
+}
+
+// PlayerNameRequest is the request body for PUT /player/name.
+type PlayerNameRequest struct {
+	Name string `json:"name"`
+}
+
+// SelectFactionRequest is the request body for POST /player/select-faction.
+type SelectFactionRequest struct {
+	Faction string `json:"faction"`
+}
+
+// DeckDetailResponse is the API response for GET /player/decks/{deckId}.
+type DeckDetailResponse struct {
+	Deck  Deck       `json:"deck"`
+	Cards []DeckCard `json:"cards"`
+}
+
+// ScenarioScriptResponse is the API response for GET /scenarios/{episodeId}/script.
+type ScenarioScriptResponse struct {
+	EpisodeID string `json:"episode_id"`
+	Script    string `json:"script"`
+}
+
+// ScenarioCompleteResponse is the API response for POST /scenarios/{episodeId}/complete.
+type ScenarioCompleteResponse struct {
+	Message   string `json:"message"`
+	EpisodeID string `json:"episode_id"`
+}
+
+// SelectFactionResponse is the API response for POST /player/select-faction.
+type SelectFactionResponse struct {
+	Message      string `json:"message"`
+	Faction      string `json:"faction"`
+	CardsGranted int64  `json:"cards_granted"`
+}
+
+// PurchaseResponse is the API response for POST /shop/purchase.
+type PurchaseResponse struct {
+	Message   string `json:"message"`
+	ProductID string `json:"product_id"`
+}
+
+// SubscribeResponse is the API response for POST /shop/subscribe.
+type SubscribeResponse struct {
+	Message   string    `json:"message"`
+	ExpiresAt time.Time `json:"expires_at"`
 }
 
