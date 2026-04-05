@@ -299,6 +299,31 @@ func (r *GameRelay) sendActionPerformed(gameID, actingPlayerID string, result *s
 	}
 }
 
+// runNpcTurns repeatedly calls AdvanceNpcTurn while the battle server signals
+// NpcPending=true. Each iteration's events are relayed via sendActionPerformed,
+// so the human player sees every NPC action in order with its post-action state.
+// Returns the final ActionResult so the caller can handle GameOver.
+//
+// Guards against infinite loops in case the battle server never clears NpcPending
+// (e.g. buggy NPC strategy stuck in a phase). maxNpcTurnIterations caps the loop.
+func (r *GameRelay) runNpcTurns(ctx context.Context, gameID, playerID string, current *service.ActionResult) *service.ActionResult {
+	const maxNpcTurnIterations = 200
+	for i := 0; current != nil && current.NpcPending && !current.GameOver; i++ {
+		if i >= maxNpcTurnIterations {
+			log.Printf("runNpcTurns: iteration cap reached (game=%s, player=%s)", gameID, playerID)
+			return current
+		}
+		next, err := r.battleClient.AdvanceNpcTurn(ctx, gameID, playerID)
+		if err != nil {
+			log.Printf("advance NPC turn loop (game=%s, player=%s): %v", gameID, playerID, err)
+			return current
+		}
+		r.sendActionPerformed(gameID, playerID, next)
+		current = next
+	}
+	return current
+}
+
 // sendActionToPlayers fetches each player's game state and sends the
 // action_performed message. The state is passed through from the battle
 // server without transformation.
@@ -413,6 +438,7 @@ func (r *GameRelay) advanceNpcIfNeeded(gameID, playerID string) {
 	}
 
 	r.sendActionPerformed(gameID, playerID, result)
+	result = r.runNpcTurns(ctx, gameID, playerID, result)
 
 	if result != nil && result.GameOver {
 		r.cancelTurnTimer(gameID)
@@ -538,6 +564,9 @@ func (r *GameRelay) HandleGameAction(ctx context.Context, conn *Connection, data
 	// SendGameStateToPlayers follows to deliver the authoritative final state
 	// and reset the turn timer. Clients use the two messages for different purposes.
 	r.sendActionPerformed(action.GameID, conn.playerID, result)
+	// If the human's action passes the turn to an NPC, drain pending NPC actions
+	// so the client sees every NPC event before the authoritative state.
+	result = r.runNpcTurns(ctx, action.GameID, conn.playerID, result)
 	r.SendGameStateToPlayers(action.GameID)
 	r.SendTurnControlsToPlayers(action.GameID)
 

@@ -3,6 +3,7 @@ package ws
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,6 +12,8 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/constants"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
+
+var errFake = errors.New("fake battle error")
 
 // --- Mock BattleClient ---
 
@@ -26,6 +29,10 @@ type mockBattleClient struct {
 	// advanceNpcResult is returned by AdvanceNpcTurn.
 	advanceNpcResult *service.ActionResult
 	advanceNpcErr    error
+	// advanceNpcQueue, if non-nil, is popped from on each AdvanceNpcTurn call
+	// (overrides advanceNpcResult). Enables tests that need successive results.
+	advanceNpcQueue []*service.ActionResult
+	advanceNpcCalls int
 }
 
 func newMockBattleClient() *mockBattleClient {
@@ -69,6 +76,15 @@ func (m *mockBattleClient) GetTurnControlsForPlayer(_ context.Context, _, _ stri
 }
 
 func (m *mockBattleClient) AdvanceNpcTurn(_ context.Context, _, _ string) (*service.ActionResult, error) {
+	m.advanceNpcCalls++
+	if m.advanceNpcQueue != nil {
+		if len(m.advanceNpcQueue) == 0 {
+			return nil, m.advanceNpcErr
+		}
+		r := m.advanceNpcQueue[0]
+		m.advanceNpcQueue = m.advanceNpcQueue[1:]
+		return r, m.advanceNpcErr
+	}
 	return m.advanceNpcResult, m.advanceNpcErr
 }
 
@@ -155,6 +171,87 @@ func TestGameState_PassthroughAsRawMessage(t *testing.T) {
 
 	// The raw bytes should be identical -- no transformation.
 	assert.JSONEq(t, string(originalState), string(state))
+}
+
+// ========================================================================
+// runNpcTurns: NPC action loop
+// ========================================================================
+
+func TestRunNpcTurns_NilInitialResult(t *testing.T) {
+	relay, bc := newTestRelay()
+	ctx := context.Background()
+
+	result := relay.runNpcTurns(ctx, "g1", "p1", nil)
+
+	assert.Nil(t, result)
+	assert.Equal(t, 0, bc.advanceNpcCalls, "should not call AdvanceNpcTurn when initial result is nil")
+}
+
+func TestRunNpcTurns_InitialNotPending(t *testing.T) {
+	relay, bc := newTestRelay()
+	ctx := context.Background()
+	initial := &service.ActionResult{NpcPending: false}
+
+	result := relay.runNpcTurns(ctx, "g1", "p1", initial)
+
+	assert.Same(t, initial, result)
+	assert.Equal(t, 0, bc.advanceNpcCalls, "should not loop when initial NpcPending=false")
+}
+
+func TestRunNpcTurns_InitialGameOver(t *testing.T) {
+	relay, bc := newTestRelay()
+	ctx := context.Background()
+	initial := &service.ActionResult{NpcPending: true, GameOver: true}
+
+	result := relay.runNpcTurns(ctx, "g1", "p1", initial)
+
+	assert.Same(t, initial, result)
+	assert.Equal(t, 0, bc.advanceNpcCalls, "should not loop when initial GameOver=true")
+}
+
+func TestRunNpcTurns_LoopsUntilNotPending(t *testing.T) {
+	relay, bc := newTestRelay()
+	ctx := context.Background()
+	bc.advanceNpcQueue = []*service.ActionResult{
+		{NpcPending: true},  // second NPC action, still pending
+		{NpcPending: false}, // third call resolves — control back to human
+	}
+	initial := &service.ActionResult{NpcPending: true}
+
+	result := relay.runNpcTurns(ctx, "g1", "p1", initial)
+
+	require.NotNil(t, result)
+	assert.False(t, result.NpcPending)
+	assert.False(t, result.GameOver)
+	assert.Equal(t, 2, bc.advanceNpcCalls)
+}
+
+func TestRunNpcTurns_StopsOnGameOver(t *testing.T) {
+	relay, bc := newTestRelay()
+	ctx := context.Background()
+	bc.advanceNpcQueue = []*service.ActionResult{
+		{NpcPending: true, GameOver: true, WinnerNum: 2, WinReason: "lp_zero"},
+	}
+	initial := &service.ActionResult{NpcPending: true}
+
+	result := relay.runNpcTurns(ctx, "g1", "p1", initial)
+
+	require.NotNil(t, result)
+	assert.True(t, result.GameOver)
+	assert.Equal(t, int64(2), result.WinnerNum)
+	assert.Equal(t, 1, bc.advanceNpcCalls, "should stop immediately on GameOver")
+}
+
+func TestRunNpcTurns_StopsOnError(t *testing.T) {
+	relay, bc := newTestRelay()
+	ctx := context.Background()
+	bc.advanceNpcErr = errFake
+	initial := &service.ActionResult{NpcPending: true}
+
+	result := relay.runNpcTurns(ctx, "g1", "p1", initial)
+
+	assert.Same(t, initial, result, "returns last good result on error")
+	assert.Equal(t, 1, bc.advanceNpcCalls)
 }
 
 // ========================================================================
