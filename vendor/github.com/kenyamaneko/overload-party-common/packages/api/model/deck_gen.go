@@ -3,9 +3,8 @@
 package model
 
 import (
-	"time"
-
 	"encoding/json"
+	"time"
 )
 
 // PlayerCardWithDef is a PlayerCard enriched with card definition fields for API responses.

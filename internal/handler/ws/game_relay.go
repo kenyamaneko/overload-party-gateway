@@ -698,7 +698,7 @@ func appendUnique(slice []string, s string) []string {
 
 // forfeitReason builds the action data for a forfeit request.
 func forfeitReason(reason string) json.RawMessage {
-	return mustMarshal(map[string]string{"Reason": reason})
+	return mustMarshal(map[string]string{"reason": reason})
 }
 
 func removeString(slice []string, s string) []string {

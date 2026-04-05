@@ -10,13 +10,18 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	apimodel "github.com/kenyamaneko/overload-party-common/packages/api/model"
 )
 
-// BattleDeckCard represents a card in a deck snapshot sent to the battle server.
-type BattleDeckCard struct {
-	CardID string `json:"CardId"`
-	ArtNo  int64  `json:"ArtNo"`
-}
+// Type aliases expose the generated battle RPC types under the service package
+// so callers can keep using service.ActionResult etc. without edit churn.
+type (
+	BattleDeckCard    = apimodel.BattleDeckCard
+	GameCreatedResult = apimodel.GameCreatedResult
+	ActionEvent       = apimodel.ActionEvent
+	ActionResult      = apimodel.ActionResult
+)
 
 // BattleClient is the interface for communicating with the battle server REST API.
 // Gateway uses this to delegate game creation, action processing, and state retrieval.
@@ -42,31 +47,6 @@ type BattleClient interface {
 	GetGameLogText(ctx context.Context, gameID string) ([]byte, error)
 }
 
-// GameCreatedResult is returned when a new game is created.
-type GameCreatedResult struct {
-	GameID    string `json:"game_id"`
-	Player1ID string `json:"player1_id"`
-	Player2ID string `json:"player2_id"`
-}
-
-// ActionEvent represents a single game event returned by the battle server.
-type ActionEvent struct {
-	Sequence  int64           `json:"sequence"`
-	EventType string          `json:"event_type"`
-	PlayerID  string          `json:"player_id"`
-	IsSystem  bool            `json:"is_system"`
-	EventData json.RawMessage `json:"event_data"`
-	State     json.RawMessage `json:"state"`
-}
-
-// ActionResult is returned after a game action is processed.
-type ActionResult struct {
-	GameOver  bool          `json:"game_over"`
-	WinnerNum int64         `json:"winner_num"`
-	WinReason string        `json:"win_reason"`
-	Events    []ActionEvent `json:"events"`
-}
-
 const battleClientTimeout = 30 * time.Second
 
 type battleClient struct {
@@ -86,11 +66,11 @@ func (c *battleClient) GetNPCModels(ctx context.Context) (json.RawMessage, error
 }
 
 func (c *battleClient) StartNPCBattle(ctx context.Context, playerID string, deckID int64, cards []BattleDeckCard, npcModel string) (*GameCreatedResult, error) {
-	body := map[string]any{
-		"PlayerID": playerID,
-		"DeckID":   deckID,
-		"Cards":    cards,
-		"NpcModel": npcModel,
+	body := &apimodel.NpcBattleRequest{
+		PlayerID: playerID,
+		DeckID:   deckID,
+		Cards:    cards,
+		NpcModel: npcModel,
 	}
 	var result GameCreatedResult
 	if err := c.post(ctx, "/api/v1/games/npc", body, &result); err != nil {
@@ -100,13 +80,13 @@ func (c *battleClient) StartNPCBattle(ctx context.Context, playerID string, deck
 }
 
 func (c *battleClient) CreatePvPGame(ctx context.Context, player1ID string, player1DeckID int64, player1Cards []BattleDeckCard, player2ID string, player2DeckID int64, player2Cards []BattleDeckCard) (*GameCreatedResult, error) {
-	body := map[string]any{
-		"Player1ID":     player1ID,
-		"Player1DeckID": player1DeckID,
-		"Player1Cards":  player1Cards,
-		"Player2ID":     player2ID,
-		"Player2DeckID": player2DeckID,
-		"Player2Cards":  player2Cards,
+	body := &apimodel.PvpBattleRequest{
+		Player1ID:     player1ID,
+		Player1DeckID: player1DeckID,
+		Player1Cards:  player1Cards,
+		Player2ID:     player2ID,
+		Player2DeckID: player2DeckID,
+		Player2Cards:  player2Cards,
 	}
 	var result GameCreatedResult
 	if err := c.post(ctx, "/api/v1/games/pvp", body, &result); err != nil {
@@ -116,10 +96,10 @@ func (c *battleClient) CreatePvPGame(ctx context.Context, player1ID string, play
 }
 
 func (c *battleClient) ProcessAction(ctx context.Context, gameID, playerID, actionType string, data json.RawMessage) (*ActionResult, error) {
-	body := map[string]any{
-		"PlayerID":   playerID,
-		"ActionType": actionType,
-		"Data":       data,
+	body := &apimodel.GameActionRequest{
+		PlayerID:   playerID,
+		ActionType: actionType,
+		Data:       data,
 	}
 	var result ActionResult
 	if err := c.post(ctx, fmt.Sprintf("/api/v1/games/%s/actions", gameID), body, &result); err != nil {
@@ -129,8 +109,8 @@ func (c *battleClient) ProcessAction(ctx context.Context, gameID, playerID, acti
 }
 
 func (c *battleClient) AdvanceNpcTurn(ctx context.Context, gameID, playerID string) (*ActionResult, error) {
-	body := map[string]any{
-		"PlayerID": playerID,
+	body := &apimodel.NpcAdvanceRequest{
+		PlayerID: playerID,
 	}
 	var result ActionResult
 	if err := c.post(ctx, fmt.Sprintf("/api/v1/games/%s/advance-npc", gameID), body, &result); err != nil {

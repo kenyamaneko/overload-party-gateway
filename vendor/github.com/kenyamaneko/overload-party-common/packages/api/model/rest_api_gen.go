@@ -3,9 +3,8 @@
 package model
 
 import (
-	"time"
-
 	"encoding/json"
+	"time"
 )
 
 // VersionResponse is the API response for GET /version.

@@ -99,3 +99,5 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/kenyamaneko/overload-party-common/packages/api => /Users/kenyamamoto/Documents/key_and_notes/overload-party-common/packages/api
