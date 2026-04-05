@@ -86,7 +86,7 @@ func seedStarterDecks(ctx context.Context, playerID string, deckRepo *repository
 // seedNewsMock populates the mock news repository from embedded JSON.
 func seedNewsMock(repo *repository.MockNewsRepository) {
 	var articles []*model.NewsArticle
-	if err := json.Unmarshal(gencache.NewsJSON, &articles); err != nil {
+	if err := json.Unmarshal(gencache.NewsMockJSON, &articles); err != nil {
 		log.Fatalf("failed to unmarshal news mock: %v", err)
 	}
 	now := time.Now()
