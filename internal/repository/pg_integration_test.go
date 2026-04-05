@@ -689,31 +689,6 @@ func TestPgShop_InsertPlayerCards(t *testing.T) {
 	assert.Equal(t, 5, pc[0].Count) // 2 + 3
 }
 
-func TestPgShop_GetPlayerOwnedFactions(t *testing.T) {
-	pool := setupPool(t)
-	pid := createTestPlayer(t, pool, "FactionUser")
-	ctx := context.Background()
-
-	// Insert card definitions with different factions
-	_, _ = pool.Exec(ctx,
-		`INSERT INTO card_definitions (card_id, card_name, resource_label, faction, card_type, resizable, elastic, stats, restriction, is_active, created_at, updated_at) VALUES
-		 ('CF-001', 'CF Card', 'res', 'CloudForge', 'resource', false, false, '{}', 'unlimited', true, NOW(), NOW()),
-		 ('NX-001', 'NX Card', 'res', 'NetX', 'resource', false, false, '{}', 'unlimited', true, NOW(), NOW()),
-		 ('NT-001', 'Neutral Card', 'res', 'Neutral', 'resource', false, false, '{}', 'unlimited', true, NOW(), NOW())
-		 ON CONFLICT (card_id) DO NOTHING`)
-
-	seedPlayerCards(t, pool, pid, []model.PlayerCard{
-		{PlayerID: pid, CardID: "CF-001", ArtNo: 1, Count: 1},
-		{PlayerID: pid, CardID: "NX-001", ArtNo: 1, Count: 1},
-		{PlayerID: pid, CardID: "NT-001", ArtNo: 1, Count: 1},
-	})
-
-	repo := NewPgShopRepository(pool)
-	factions, err := repo.GetPlayerOwnedFactions(ctx, pid)
-	require.NoError(t, err)
-	assert.Len(t, factions, 2) // CloudForge and NetX, not Neutral
-}
-
 func TestPgShop_CreatePurchaseWithItem(t *testing.T) {
 	pool := setupPool(t)
 	pid := createTestPlayer(t, pool, "ItemUser")

@@ -127,6 +127,14 @@ func (r *GameRelay) JoinGame(playerID, gameID string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	if oldGameID, ok := r.playerGames[playerID]; ok && oldGameID != gameID {
+		r.gameMembers[oldGameID] = removeString(r.gameMembers[oldGameID], playerID)
+		if len(r.gameMembers[oldGameID]) == 0 {
+			delete(r.gameMembers, oldGameID)
+			delete(r.gameMeta, oldGameID)
+		}
+	}
+
 	r.playerGames[playerID] = gameID
 	r.gameMembers[gameID] = appendUnique(r.gameMembers[gameID], playerID)
 }
@@ -596,12 +604,14 @@ func (r *GameRelay) resetTurnTimer(gameID, activePlayerID string, timeBankSecond
 	// real elapsed time and may still allow the action.
 	duration := time.Duration(timeBankSeconds+2) * time.Second
 
-	// TODO: コールバックは作成時の activePlayerID をキャプチャする。
-	// Timer.Stop() が false を返す（発火開始済み）場合、ターン交代後に
-	// 旧プレイヤーへ forfeit が送信されうる。turnTimers[gameID].activePlayerID
-	// と照合して不一致時は skip する対策を検討する。
 	timer := time.AfterFunc(duration, func() {
 		r.timerMu.Lock()
+		info, ok := r.turnTimers[gameID]
+		if !ok || info.activePlayerID != activePlayerID {
+			// ターン交代済み — 旧プレイヤーへの誤 forfeit を防止
+			r.timerMu.Unlock()
+			return
+		}
 		delete(r.turnTimers, gameID)
 		r.timerMu.Unlock()
 

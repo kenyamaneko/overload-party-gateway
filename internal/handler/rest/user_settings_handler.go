@@ -23,7 +23,7 @@ func (h *UserSettingsHandler) GetSettings(c *gin.Context) {
 
 	s, err := h.svc.Get(c.Request.Context(), playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondError(c, err)
 		return
 	}
 
@@ -52,7 +52,7 @@ func (h *UserSettingsHandler) UpdateSettings(c *gin.Context) {
 	}
 
 	if err := h.svc.Update(c.Request.Context(), s); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondError(c, err)
 		return
 	}
 

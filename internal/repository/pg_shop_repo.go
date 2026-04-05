@@ -279,28 +279,3 @@ func (r *PgShopRepository) HasPlayerItem(ctx context.Context, playerID, itemType
 	return exists, nil
 }
 
-func (r *PgShopRepository) GetPlayerOwnedFactions(ctx context.Context, playerID string) ([]string, error) {
-	rows, err := connFrom(ctx, r.pool).Query(ctx,
-		`SELECT DISTINCT cd.faction
-		 FROM player_cards pc
-		 JOIN card_definitions cd ON pc.card_id = cd.card_id
-		 WHERE pc.player_id = $1`,
-		playerID)
-	if err != nil {
-		return nil, fmt.Errorf("query factions: %w", err)
-	}
-	defer rows.Close()
-
-	var factions []string
-	for rows.Next() {
-		var faction string
-		if err := rows.Scan(&faction); err != nil {
-			return nil, fmt.Errorf("scan faction: %w", err)
-		}
-		factions = append(factions, faction)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate factions: %w", err)
-	}
-	return factions, nil
-}

@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 
@@ -188,26 +187,3 @@ func (r *MockShopRepository) HasPlayerItem(ctx context.Context, playerID, itemTy
 	return false, nil
 }
 
-func (r *MockShopRepository) GetPlayerOwnedFactions(ctx context.Context, playerID string) ([]string, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	factionSet := make(map[string]bool)
-	for _, purchase := range r.purchases[playerID] {
-		product, ok := r.products[purchase.ProductID]
-		if ok && product.Type == model.ProductTypeFactionSet {
-			var content model.FactionSetContent
-			if err := parseJSON(product.Content, &content); err == nil {
-				factionSet[content.Faction] = true
-			}
-		}
-	}
-	var factions []string
-	for f := range factionSet {
-		factions = append(factions, f)
-	}
-	return factions, nil
-}
-
-func parseJSON(data []byte, v interface{}) error {
-	return json.Unmarshal(data, v)
-}

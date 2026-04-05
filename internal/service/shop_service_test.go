@@ -21,11 +21,12 @@ import (
 // ---------------------------------------------------------------------------
 
 type testShopEnv struct {
-	svc        *ShopService
-	shopRepo   *repository.MockShopRepository
-	subRepo    *repository.MockSubscriptionRepository
-	playerRepo *repository.MockPlayerRepository
-	cardCache  *cache.CardCache
+	svc         *ShopService
+	shopRepo    *repository.MockShopRepository
+	subRepo     *repository.MockSubscriptionRepository
+	playerRepo  *repository.MockPlayerRepository
+	factionRepo *repository.MockFactionRepository
+	cardCache   *cache.CardCache
 }
 
 func newTestShopEnv() *testShopEnv {
@@ -53,7 +54,7 @@ func newTestShopEnv() *testShopEnv {
 	subRepo := repository.NewMockSubscriptionRepository()
 	svc := NewShopService(shopRepo, subRepo, playerRepo, factionRepo, &repository.MockTxRunner{}, cc, verifier, verifier)
 
-	return &testShopEnv{svc: svc, shopRepo: shopRepo, subRepo: subRepo, playerRepo: playerRepo, cardCache: cc}
+	return &testShopEnv{svc: svc, shopRepo: shopRepo, subRepo: subRepo, playerRepo: playerRepo, factionRepo: factionRepo, cardCache: cc}
 }
 
 func createTestPlayer(env *testShopEnv, playerID string) {
@@ -585,14 +586,8 @@ func TestGetProducts_WithOwnership(t *testing.T) {
 		IsActive:  true,
 	})
 
-	// Simulate player owning SD faction via purchase
-	_ = env.shopRepo.CreatePurchaseWithCards(context.Background(), &model.OneTimePurchase{
-		PlayerID:      "p1",
-		ProductID:     "faction_she",
-		Platform:      "ios",
-		PurchaseToken: "test-token-sd",
-		PurchasedAt:   time.Now(),
-	}, nil)
+	// Simulate player owning SHE faction via purchase
+	_ = env.factionRepo.AddPlayerFaction(context.Background(), "p1", "SHE", "shop_purchase")
 
 	products, err := env.svc.GetProducts(context.Background(), "p1")
 	require.NoError(t, err)

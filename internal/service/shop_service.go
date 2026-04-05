@@ -117,15 +117,13 @@ func (s *ShopService) GetProducts(ctx context.Context, playerID string) ([]model
 		return nil, fmt.Errorf("get products: %w", err)
 	}
 
-	allFactions, err := s.shopRepo.GetPlayerOwnedFactions(ctx, playerID)
+	allFactions, err := s.factionRepo.GetPlayerFactions(ctx, playerID)
 	if err != nil {
 		return nil, fmt.Errorf("get owned factions: %w", err)
 	}
 	ownedFactionSet := make(map[string]bool)
 	for _, f := range allFactions {
-		if f != constants.FactionNeutral {
-			ownedFactionSet[f] = true
-		}
+		ownedFactionSet[f] = true
 	}
 
 	activeSub, err := s.subRepo.GetActiveSubscription(ctx, playerID)
@@ -188,7 +186,7 @@ func (s *ShopService) Purchase(ctx context.Context, playerID, productID, pf, pur
 		if err := json.Unmarshal(product.Content, &content); err != nil {
 			return fmt.Errorf("parse faction set content: %w", err)
 		}
-		ownedFactions, err := s.shopRepo.GetPlayerOwnedFactions(ctx, playerID)
+		ownedFactions, err := s.factionRepo.GetPlayerFactions(ctx, playerID)
 		if err != nil {
 			return fmt.Errorf("check owned factions: %w", err)
 		}

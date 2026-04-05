@@ -566,8 +566,12 @@ func TestJoinGame_SwitchGame(t *testing.T) {
 	// p1 should be in game_2's members
 	relay.mu.RLock()
 	members2 := relay.gameMembers["game_2"]
+	members1 := relay.gameMembers["game_1"]
 	relay.mu.RUnlock()
 	assert.Contains(t, members2, "p1")
+
+	// p1 should be removed from game_1's members
+	assert.NotContains(t, members1, "p1")
 }
 
 // ========================================================================
