@@ -60,6 +60,7 @@ fmt:  ## Format code
 run: run-local  ## Run gateway server (alias)
 
 run-local:  ## Run local gateway server (no DB/Firebase, in-memory mock repos)
+	-@lsof -ti:9001 | xargs kill 2>/dev/null; true
 	go run ./cmd/local
 
 run-gateway:  ## Run gateway server (PostgreSQL mode)
