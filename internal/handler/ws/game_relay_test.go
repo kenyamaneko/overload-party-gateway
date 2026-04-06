@@ -79,7 +79,10 @@ func (m *mockBattleClient) AdvanceNpcTurn(_ context.Context, _, _ string) (*serv
 	m.advanceNpcCalls++
 	if m.advanceNpcQueue != nil {
 		if len(m.advanceNpcQueue) == 0 {
-			return nil, m.advanceNpcErr
+			if m.advanceNpcErr != nil {
+				return nil, m.advanceNpcErr
+			}
+			panic("mockBattleClient: advanceNpcQueue exhausted — test setup has fewer results than AdvanceNpcTurn calls")
 		}
 		r := m.advanceNpcQueue[0]
 		m.advanceNpcQueue = m.advanceNpcQueue[1:]
@@ -252,6 +255,27 @@ func TestRunNpcTurns_StopsOnError(t *testing.T) {
 
 	assert.Same(t, initial, result, "returns last good result on error")
 	assert.Equal(t, 1, bc.advanceNpcCalls)
+}
+
+func TestRunNpcTurns_IterationCapReached(t *testing.T) {
+	relay, bc := newTestRelay()
+	ctx := context.Background()
+
+	// Build a queue that exceeds the 200 iteration cap.
+	// The loop consumes one per iteration, so 201 entries means the cap
+	// fires at i==200 before popping the 201st element.
+	queue := make([]*service.ActionResult, 201)
+	for i := range queue {
+		queue[i] = &service.ActionResult{NpcPending: true}
+	}
+	bc.advanceNpcQueue = queue
+	initial := &service.ActionResult{NpcPending: true}
+
+	result := relay.runNpcTurns(ctx, "g1", "p1", initial)
+
+	require.NotNil(t, result)
+	assert.True(t, result.NpcPending, "cap interrupts the loop so NpcPending remains true")
+	assert.Equal(t, 200, bc.advanceNpcCalls, "should stop after exactly maxNpcTurnIterations calls")
 }
 
 // ========================================================================
@@ -565,6 +589,7 @@ func TestMustMarshal(t *testing.T) {
 func TestJoinGame_SwitchGame(t *testing.T) {
 	relay, _ := newTestRelay()
 
+	relay.RegisterGameMeta("game_1", "p1", "p2", constants.MatchTypePvp)
 	relay.JoinGame("p1", "game_1")
 	relay.JoinGame("p1", "game_2")
 
@@ -577,11 +602,15 @@ func TestJoinGame_SwitchGame(t *testing.T) {
 	relay.mu.RLock()
 	members2 := relay.gameMembers["game_2"]
 	members1 := relay.gameMembers["game_1"]
+	_, game1MetaExists := relay.gameMeta["game_1"]
 	relay.mu.RUnlock()
 	assert.Contains(t, members2, "p1")
 
 	// p1 should be removed from game_1's members
 	assert.NotContains(t, members1, "p1")
+
+	// game_1 has no members left, so gameMeta should be cleaned up
+	assert.False(t, game1MetaExists, "gameMeta for game_1 should be cleaned up when last member leaves")
 }
 
 // ========================================================================

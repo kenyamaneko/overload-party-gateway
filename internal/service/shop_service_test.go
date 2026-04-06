@@ -500,7 +500,7 @@ func TestSubscribe_Errors(t *testing.T) {
 	}
 }
 
-func TestSubscribe_ResubscribeAfterExpiry(t *testing.T) {
+func TestSubscribe_AllowsDuplicateSubscription(t *testing.T) {
 	env := newTestShopEnv()
 	createTestPlayer(env, "p1")
 

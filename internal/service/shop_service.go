@@ -144,6 +144,7 @@ func (s *ShopService) GetProducts(ctx context.Context, playerID string) ([]model
 			owned = ownedFactionSet[content.Faction]
 		case model.ProductTypeSubscription:
 			owned = activeSub != nil
+		// cosmetic and other types are not uniquely owned — always show as available
 		}
 		result = append(result, model.ProductResponse{
 			ProductID:   p.ProductID,
@@ -179,7 +180,8 @@ func (s *ShopService) Purchase(ctx context.Context, playerID, productID, pf, pur
 	}
 
 	// Ownership guard: prevent re-purchasing already-owned items.
-	// Subscription (premium pass) is excluded — it uses Subscribe() instead.
+	// Subscription uses Subscribe(), not Purchase().
+	// Cosmetics and other types (e.g. currency) are consumable, so no ownership check.
 	switch product.Type {
 	case model.ProductTypeFactionSet:
 		var content model.FactionSetContent
