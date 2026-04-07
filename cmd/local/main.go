@@ -65,12 +65,14 @@ func main() {
 	seedNewsMock(newsRepo)
 	newsService := service.NewNewsService(newsRepo)
 	userSettingsService := service.NewUserSettingsService(userSettingsRepo)
+	gamePlayerRepo := repository.NewMockGamePlayerRepository()
+
 	// 4. Battle client (uses cfg.BattleServerURL, default http://localhost:9002)
 	log.Printf("battle client: %s", cfg.BattleServerURL)
 	battleClient := service.NewBattleClient(cfg.BattleServerURL)
 
 	// 5. Handlers
-	wsManager := ws.NewManager(battleClient, playerService, deckService, deckRepo, gameConfigRepo)
+	wsManager := ws.NewManager(battleClient, playerService, deckService, deckRepo, gameConfigRepo, gamePlayerRepo)
 	go wsManager.StartMatchmaking(ctx)
 	wsHandler := ws.NewHandler(wsManager, nil, playerRepo, nil)
 	handlers := &router.Handlers{

@@ -3,7 +3,8 @@ package ws
 import (
 	"encoding/json"
 
-	genmodel "github.com/kenyamaneko/overload-party-common/packages/gamedata/model"
+	apimodel "github.com/kenyamaneko/overload-party-common/packages/api/model"
+	gamedatamodel "github.com/kenyamaneko/overload-party-common/packages/gamedata/model"
 )
 
 // WSMessage is the envelope for all WebSocket messages.
@@ -13,32 +14,34 @@ type WSMessage struct {
 }
 
 // --- Client → Server ---
+// These types are unchanged between packages; use gamedata for stability.
 
-type MatchmakingStartMessage = genmodel.MatchmakingStartMessage
-type GameEnterMessage = genmodel.GameEnterMessage
-type NPCBattleStartMessage = genmodel.NPCBattleStartMessage
-type GameActionMessage = genmodel.GameActionMessage
-type UseStampMessage = genmodel.UseStampMessage
+type MatchmakingStartMessage = gamedatamodel.MatchmakingStartMessage
+type GameEnterMessage = gamedatamodel.GameEnterMessage
+type NPCBattleStartMessage = gamedatamodel.NPCBattleStartMessage
+type GameActionMessage = gamedatamodel.GameActionMessage
+type UseStampMessage = gamedatamodel.UseStampMessage
 
 // --- Server → Client ---
+// Updated types (WinningPlayerNum, PlayerNum) come from api/model.
 
-type ErrorMessage = genmodel.ErrorMessage
-type MatchFoundMessage = genmodel.MatchFoundMessage
-type GameOverMessage = genmodel.GameOverMessage
-type ActionRejectedMessage = genmodel.ActionRejectedMessage
-type ActionPerformedMessage = genmodel.ActionPerformedMessage
-type StampUsedMessage = genmodel.StampUsedMessage
-type NPCBattleCreatedMessage = genmodel.NPCBattleCreatedMessage
+type ErrorMessage = gamedatamodel.ErrorMessage
+type MatchFoundMessage = apimodel.MatchFoundMessage
+type GameOverMessage = apimodel.GameOverMessage
+type ActionRejectedMessage = gamedatamodel.ActionRejectedMessage
+type ActionPerformedMessage = gamedatamodel.ActionPerformedMessage
+type StampUsedMessage = apimodel.StampUsedMessage
+type NPCBattleCreatedMessage = apimodel.NPCBattleCreatedMessage
 
 // --- Spectate: Client → Server ---
 
-type SpectateJoinMessage = genmodel.SpectateJoinMessage
-type SpectateLeaveMessage = genmodel.SpectateLeaveMessage
-type SpectateStampMessage = genmodel.SpectateStampMessage
+type SpectateJoinMessage = gamedatamodel.SpectateJoinMessage
+type SpectateLeaveMessage = gamedatamodel.SpectateLeaveMessage
+type SpectateStampMessage = gamedatamodel.SpectateStampMessage
 
 // --- Spectate: Server → Client ---
 
-type SpectateJoinedMessage = genmodel.SpectateJoinedMessage
-type SpectateErrorMessage = genmodel.SpectateErrorMessage
-type SpectateEndedMessage = genmodel.SpectateEndedMessage
-type SpectateStampBroadcastMessage = genmodel.SpectateStampBroadcastMessage
+type SpectateJoinedMessage = apimodel.SpectateJoinedMessage
+type SpectateErrorMessage = gamedatamodel.SpectateErrorMessage
+type SpectateEndedMessage = apimodel.SpectateEndedMessage
+type SpectateStampBroadcastMessage = gamedatamodel.SpectateStampBroadcastMessage

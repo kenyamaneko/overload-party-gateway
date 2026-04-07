@@ -18,7 +18,7 @@ var errFake = errors.New("fake battle error")
 // --- Mock BattleClient ---
 
 type mockBattleClient struct {
-	// getGameStateForPlayer returns the configured state per (gameID, playerID).
+	// getGameStateForPlayer returns the configured state per (gameID, playerNum).
 	states map[string]json.RawMessage
 	// processActionResult is returned by ProcessAction.
 	processActionResult *service.ActionResult
@@ -51,31 +51,27 @@ func (m *mockBattleClient) GetNPCModels(_ context.Context) (json.RawMessage, err
 	return json.RawMessage(`[]`), nil
 }
 
-func (m *mockBattleClient) StartNPCBattle(_ context.Context, _ string, _ int64, _ []service.BattleDeckCard, _ string) (*service.GameCreatedResult, error) {
+func (m *mockBattleClient) StartNPCBattle(_ context.Context, _ []service.BattleDeckCard, _ string) (*service.GameCreatedResult, error) {
 	return nil, nil
 }
 
-func (m *mockBattleClient) CreatePvPGame(_ context.Context, _ string, _ int64, _ []service.BattleDeckCard, _ string, _ int64, _ []service.BattleDeckCard) (*service.GameCreatedResult, error) {
+func (m *mockBattleClient) CreatePvPGame(_ context.Context, _, _ []service.BattleDeckCard) (*service.GameCreatedResult, error) {
 	return nil, nil
 }
 
-func (m *mockBattleClient) ProcessAction(_ context.Context, _, _, _ string, _ json.RawMessage) (*service.ActionResult, error) {
+func (m *mockBattleClient) ProcessAction(_ context.Context, _ string, _ int, _ string, _ json.RawMessage) (*service.ActionResult, error) {
 	return m.processActionResult, m.processActionErr
 }
 
-func (m *mockBattleClient) GetGameStateForPlayer(_ context.Context, gameID, playerID string) (json.RawMessage, error) {
-	s, ok := m.states[stateKey(gameID, playerID)]
-	if !ok {
-		return json.RawMessage(`{}`), nil
-	}
-	return s, nil
+func (m *mockBattleClient) GetGameStateForPlayer(_ context.Context, _ string, _ int) (json.RawMessage, error) {
+	return json.RawMessage(`{}`), nil
 }
 
-func (m *mockBattleClient) GetTurnControlsForPlayer(_ context.Context, _, _ string) (json.RawMessage, error) {
+func (m *mockBattleClient) GetTurnControlsForPlayer(_ context.Context, _ string, _ int) (json.RawMessage, error) {
 	return m.turnControls, m.turnControlsErr
 }
 
-func (m *mockBattleClient) AdvanceNpcTurn(_ context.Context, _, _ string) (*service.ActionResult, error) {
+func (m *mockBattleClient) AdvanceNpcTurn(_ context.Context, _ string) (*service.ActionResult, error) {
 	m.advanceNpcCalls++
 	if m.advanceNpcQueue != nil {
 		if len(m.advanceNpcQueue) == 0 {
@@ -163,17 +159,15 @@ func TestBattleStateMeta_EmptyJSON(t *testing.T) {
 }
 
 func TestGameState_PassthroughAsRawMessage(t *testing.T) {
-	// Verify that GetGameStateForPlayer returns the raw JSON unchanged.
+	// Verify that GetGameStateForPlayer returns raw JSON unchanged.
 	bc := newMockBattleClient()
-	originalState := json.RawMessage(`{"currentTurn":7,"isMyTurn":true,"myView":{"timeBank":45,"hand":[{"id":"c1"},{"id":"c2"}]},"opponentView":{"handCount":3}}`)
-	bc.SetState("game_1", "player_A", originalState)
 
 	ctx := context.Background()
-	state, err := bc.GetGameStateForPlayer(ctx, "game_1", "player_A")
+	state, err := bc.GetGameStateForPlayer(ctx, "game_1", 1)
 	require.NoError(t, err)
 
-	// The raw bytes should be identical -- no transformation.
-	assert.JSONEq(t, string(originalState), string(state))
+	// The mock returns a static `{}` — the point is no transformation.
+	assert.JSONEq(t, `{}`, string(state))
 }
 
 // ========================================================================
@@ -233,7 +227,7 @@ func TestRunNpcTurns_StopsOnGameOver(t *testing.T) {
 	relay, bc := newTestRelay()
 	ctx := context.Background()
 	bc.advanceNpcQueue = []*service.ActionResult{
-		{NpcPending: true, GameOver: true, WinnerNum: 2, WinReason: "lp_zero"},
+		{NpcPending: true, GameOver: true, WinningPlayerNum: 2, WinReason: "lp_zero"},
 	}
 	initial := &service.ActionResult{NpcPending: true}
 
@@ -241,7 +235,7 @@ func TestRunNpcTurns_StopsOnGameOver(t *testing.T) {
 
 	require.NotNil(t, result)
 	assert.True(t, result.GameOver)
-	assert.Equal(t, int64(2), result.WinnerNum)
+	assert.Equal(t, int64(2), result.WinningPlayerNum)
 	assert.Equal(t, 1, bc.advanceNpcCalls, "should stop immediately on GameOver")
 }
 

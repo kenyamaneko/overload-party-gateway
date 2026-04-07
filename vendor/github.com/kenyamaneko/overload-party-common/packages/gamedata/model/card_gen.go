@@ -3,9 +3,8 @@
 package model
 
 import (
-	"time"
-
 	"encoding/json"
+	"time"
 )
 
 type CardDefinition struct {

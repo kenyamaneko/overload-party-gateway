@@ -130,9 +130,12 @@ func main() {
 	newsService := service.NewNewsService(newsRepo)
 	userSettingsService := service.NewUserSettingsService(userSettingsRepo)
 
+	// Game player repository (gateway-owned game_players table)
+	gamePlayerRepo := repository.NewPgGamePlayerRepository(pool)
+
 	// Battle client (HTTP → battle server)
 	battleClient := service.NewBattleClient(cfg.BattleServerURL)
-	wsManager := ws.NewManager(battleClient, playerService, deckService, deckRepo, gameConfigRepo)
+	wsManager := ws.NewManager(battleClient, playerService, deckService, deckRepo, gameConfigRepo, gamePlayerRepo)
 	go wsManager.StartMatchmaking(ctx)
 	wsHandler := ws.NewHandler(wsManager, authClient, playerRepo, cfg.AllowedOrigins)
 	handlers := &router.Handlers{

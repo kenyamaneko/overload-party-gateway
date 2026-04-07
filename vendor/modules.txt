@@ -335,13 +335,13 @@ github.com/jackc/puddle/v2/internal/genstack
 # github.com/json-iterator/go v1.1.12
 ## explicit; go 1.12
 github.com/json-iterator/go
-# github.com/kenyamaneko/overload-party-common/packages/api v0.1.6
+# github.com/kenyamaneko/overload-party-common/packages/api v0.1.8
 ## explicit; go 1.25.1
 github.com/kenyamaneko/overload-party-common/packages/api/model
 # github.com/kenyamaneko/overload-party-common/packages/devdata v0.1.1
 ## explicit; go 1.25.1
 github.com/kenyamaneko/overload-party-common/packages/devdata/cache
-# github.com/kenyamaneko/overload-party-common/packages/gamedata v0.1.26
+# github.com/kenyamaneko/overload-party-common/packages/gamedata v0.1.31
 ## explicit; go 1.25.1
 github.com/kenyamaneko/overload-party-common/packages/gamedata/constants
 github.com/kenyamaneko/overload-party-common/packages/gamedata/model

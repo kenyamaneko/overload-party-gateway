@@ -14,59 +14,43 @@ type BattleDeckCard struct {
 
 // GameCreatedResult is returned when a new game (NPC or PvP) is created on the battle server.
 type GameCreatedResult struct {
-	GameID    string  `json:"game_id"`
-	Player1ID string  `json:"player1_id"`
-	Player2ID string  `json:"player2_id"`
-	Npc1Model *string `json:"npc1_model,omitempty"`
-	Npc2Model *string `json:"npc2_model,omitempty"`
+	GameID string `json:"game_id"`
 }
 
 // ActionEvent is a single game event emitted by the battle server after an action.
 type ActionEvent struct {
 	Sequence  int64           `json:"sequence"`
 	EventType string          `json:"event_type"`
-	PlayerID  string          `json:"player_id"`
-	IsSystem  bool            `json:"is_system"`
+	PlayerNum *int64          `json:"player_num"`
 	EventData json.RawMessage `json:"event_data"`
 	State     json.RawMessage `json:"state"`
 }
 
 // ActionResult is returned after a game action is processed by the battle server.
 type ActionResult struct {
-	GameOver   bool          `json:"game_over"`
-	WinnerNum  int64         `json:"winner_num"`
-	WinReason  string        `json:"win_reason"`
-	NpcPending bool          `json:"npc_pending"`
-	Events     []ActionEvent `json:"events"`
+	GameOver         bool          `json:"game_over"`
+	WinningPlayerNum int64         `json:"winning_player_num"`
+	WinReason        string        `json:"win_reason"`
+	NpcPending       bool          `json:"npc_pending"`
+	Events           []ActionEvent `json:"events"`
 }
 
 // NpcBattleRequest is the request body for POST /api/v1/games/npc.
 type NpcBattleRequest struct {
-	PlayerID string           `json:"player_id"`
-	DeckID   int64            `json:"deck_id"`
-	Cards    []BattleDeckCard `json:"cards"`
-	NpcModel string           `json:"npc_model"`
+	DeckCards []BattleDeckCard `json:"deck_cards"`
+	NpcModel  string           `json:"npc_model"`
 }
 
 // PvpBattleRequest is the request body for POST /api/v1/games/pvp.
 type PvpBattleRequest struct {
-	Player1ID     string           `json:"player1_id"`
-	Player1DeckID int64            `json:"player1_deck_id"`
-	Player1Cards  []BattleDeckCard `json:"player1_cards"`
-	Player2ID     string           `json:"player2_id"`
-	Player2DeckID int64            `json:"player2_deck_id"`
-	Player2Cards  []BattleDeckCard `json:"player2_cards"`
+	Deck1Cards []BattleDeckCard `json:"deck1_cards"`
+	Deck2Cards []BattleDeckCard `json:"deck2_cards"`
 }
 
-// GameActionRequest is the request body for POST /api/v1/games/{gameId}/action.
+// GameActionRequest is the request body for POST /api/v1/games/{gameId}/actions.
 type GameActionRequest struct {
-	PlayerID   string          `json:"player_id"`
+	PlayerNum  int64           `json:"player_num"`
 	ActionType string          `json:"action_type"`
 	Data       json.RawMessage `json:"data"`
-}
-
-// NpcAdvanceRequest is the request body for POST /api/v1/games/{gameId}/npc-advance.
-type NpcAdvanceRequest struct {
-	PlayerID string `json:"player_id"`
 }
 

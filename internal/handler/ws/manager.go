@@ -26,10 +26,11 @@ type Manager struct {
 	deckService    *service.DeckService
 	deckRepo       port.DeckRepo
 	gameConfigRepo port.GameConfigRepo
+	gamePlayerRepo port.GamePlayerRepo
 	queue          *repository.MatchmakingQueue
 }
 
-func NewManager(battleClient service.BattleClient, playerService *service.PlayerService, deckService *service.DeckService, deckRepo port.DeckRepo, gameConfigRepo port.GameConfigRepo) *Manager {
+func NewManager(battleClient service.BattleClient, playerService *service.PlayerService, deckService *service.DeckService, deckRepo port.DeckRepo, gameConfigRepo port.GameConfigRepo, gamePlayerRepo port.GamePlayerRepo) *Manager {
 	queue := repository.NewMatchmakingQueue()
 
 	m := &Manager{
@@ -38,6 +39,7 @@ func NewManager(battleClient service.BattleClient, playerService *service.Player
 		deckService:    deckService,
 		deckRepo:       deckRepo,
 		gameConfigRepo: gameConfigRepo,
+		gamePlayerRepo: gamePlayerRepo,
 		queue:          queue,
 	}
 
@@ -66,7 +68,7 @@ func NewManager(battleClient service.BattleClient, playerService *service.Player
 
 	// Wire player lookup for battle_start banner data.
 	if playerService != nil {
-		relay.playerLookup = func(ctx context.Context, playerID string) (string, int64, error) {
+		lookupFn := PlayerLookupFunc(func(ctx context.Context, playerID string) (string, int64, error) {
 			p, err := playerService.GetPlayer(ctx, playerID)
 			if err != nil {
 				return "", 0, err
@@ -75,7 +77,9 @@ func NewManager(battleClient service.BattleClient, playerService *service.Player
 				return "", 0, nil
 			}
 			return p.Username, p.Level, nil
-		}
+		})
+		relay.playerLookup = lookupFn
+		spectate.playerLookup = lookupFn
 	}
 
 	return m
@@ -106,19 +110,24 @@ func (m *Manager) StartMatchmaking(ctx context.Context) {
 			notifyError("failed to create game")
 			return
 		}
-		game, err := m.battleClient.CreatePvPGame(
-			ctx,
-			result.Player1ID, result.Player1Deck, p1Cards,
-			result.Player2ID, result.Player2Deck, p2Cards,
-		)
+		game, err := m.battleClient.CreatePvPGame(ctx, p1Cards, p2Cards)
 		if err != nil {
 			log.Printf("matchmaking: create pvp game failed: %v", err)
 			notifyError("failed to create game")
 			return
 		}
-		m.Relay.RegisterGameMeta(game.GameID, game.Player1ID, game.Player2ID, constants.MatchTypePvp)
-		m.Spectate.RegisterGame(game.GameID, game.Player1ID, game.Player2ID)
-		m.Relay.NotifyMatchFound(game.GameID, game.Player1ID, game.Player2ID)
+		// game_players: ゲートウェイ管轄のプレイヤー ID マッピングを永続化
+		if m.gamePlayerRepo != nil {
+			if err := m.gamePlayerRepo.InsertGamePlayer(ctx, game.GameID, 1, result.Player1ID); err != nil {
+				log.Printf("matchmaking: insert game_player p1: %v", err)
+			}
+			if err := m.gamePlayerRepo.InsertGamePlayer(ctx, game.GameID, 2, result.Player2ID); err != nil {
+				log.Printf("matchmaking: insert game_player p2: %v", err)
+			}
+		}
+		m.Relay.RegisterGameMeta(game.GameID, result.Player1ID, result.Player2ID, constants.MatchTypePvp)
+		m.Spectate.RegisterGame(game.GameID, result.Player1ID, result.Player2ID)
+		m.Relay.NotifyMatchFound(game.GameID, result.Player1ID, result.Player2ID)
 	})
 	matcher.Run(ctx)
 }
@@ -226,19 +235,23 @@ func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, da
 		return
 	}
 
-	game, err := m.battleClient.StartNPCBattle(ctx, conn.playerID, req.DeckID, cards, req.NPCModel)
+	game, err := m.battleClient.StartNPCBattle(ctx, cards, req.NPCModel)
 	if err != nil {
 		sendError(conn, "npc_battle_error", err.Error(), true)
 		return
 	}
-	m.Relay.RegisterGameMeta(game.GameID, game.Player1ID, game.Player2ID, constants.MatchTypeNpc)
-	m.Spectate.RegisterGame(game.GameID, game.Player1ID, game.Player2ID)
+	// NPC 戦では人間は常に player_num=1。NPC 側（player_num=2）は game_players に書かない。
+	if m.gamePlayerRepo != nil {
+		if err := m.gamePlayerRepo.InsertGamePlayer(ctx, game.GameID, 1, conn.playerID); err != nil {
+			log.Printf("npc battle: insert game_player: %v", err)
+		}
+	}
+	m.Relay.RegisterGameMeta(game.GameID, conn.playerID, "", constants.MatchTypeNpc)
+	m.Spectate.RegisterGame(game.GameID, conn.playerID, "")
 	conn.SendMessage(&WSMessage{
 		Type: constants.WSMsgNpcBattleCreated,
 		Data: mustMarshal(NPCBattleCreatedMessage{
-			GameID:    game.GameID,
-			Player1ID: game.Player1ID,
-			Player2ID: game.Player2ID,
+			GameID: game.GameID,
 		}),
 	})
 }

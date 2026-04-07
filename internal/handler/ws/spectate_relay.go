@@ -31,6 +31,8 @@ type gameInfo struct {
 type SpectateRelay struct {
 	hub          *ConnectionHub
 	battleClient service.BattleClient
+	// playerLookup is wired in after construction for spectate_joined banner data.
+	playerLookup PlayerLookupFunc
 
 	mu         sync.RWMutex
 	// gameID → spectatorID → spectatorInfo
@@ -62,7 +64,7 @@ func (sr *SpectateRelay) RegisterGame(gameID, player1ID, player2ID string) {
 
 // UnregisterGame cleans up all spectator state for a finished game.
 // It also sends spectate_ended to all current spectators.
-func (sr *SpectateRelay) UnregisterGame(gameID string, winnerNum int64, winReason string) {
+func (sr *SpectateRelay) UnregisterGame(gameID string, winningPlayerNum int64, winReason string) {
 	sr.mu.Lock()
 	spectatorMap := sr.spectators[gameID]
 	delete(sr.spectators, gameID)
@@ -76,9 +78,9 @@ func (sr *SpectateRelay) UnregisterGame(gameID string, winnerNum int64, winReaso
 	msg := &WSMessage{
 		Type: constants.WSMsgSpectateEnded,
 		Data: mustMarshal(SpectateEndedMessage{
-			GameID:    gameID,
-			WinnerNum: winnerNum,
-			WinReason: winReason,
+			GameID:           gameID,
+			WinningPlayerNum: winningPlayerNum,
+			WinReason:        winReason,
 		}),
 	}
 	for _, info := range spectatorMap {
@@ -105,13 +107,27 @@ func (sr *SpectateRelay) HandleSpectateJoin(conn *Connection, data json.RawMessa
 		return
 	}
 
-	// Fetch current game state for player1 as a canonical observer view.
+	// Fetch current game state for player1 (num=1) as a canonical observer view.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	rawState, err := sr.battleClient.GetGameStateForPlayer(ctx, req.GameID, gi.player1ID)
+	rawState, err := sr.battleClient.GetGameStateForPlayer(ctx, req.GameID, 1)
 	if err != nil || rawState == nil {
 		sr.sendSpectateError(conn, "state_unavailable", "could not retrieve game state")
 		return
+	}
+
+	// Resolve player names/levels for the spectate banner.
+	var p1Name, p2Name string
+	var p1Level, p2Level int64
+	if sr.playerLookup != nil {
+		if gi.player1ID != "" {
+			p1Name, p1Level, _ = sr.playerLookup(ctx, gi.player1ID)
+		}
+		if gi.player2ID != "" {
+			p2Name, p2Level, _ = sr.playerLookup(ctx, gi.player2ID)
+		} else {
+			p2Name = "NPC"
+		}
 	}
 
 	// Register spectator
@@ -128,10 +144,12 @@ func (sr *SpectateRelay) HandleSpectateJoin(conn *Connection, data json.RawMessa
 	conn.SendMessage(&WSMessage{
 		Type: constants.WSMsgSpectateJoined,
 		Data: mustMarshal(SpectateJoinedMessage{
-			GameID:    req.GameID,
-			Player1ID: gi.player1ID,
-			Player2ID: gi.player2ID,
-			State:     rawState,
+			GameID:       req.GameID,
+			Player1Name:  p1Name,
+			Player1Level: p1Level,
+			Player2Name:  p2Name,
+			Player2Level: p2Level,
+			State:        rawState,
 		}),
 	})
 

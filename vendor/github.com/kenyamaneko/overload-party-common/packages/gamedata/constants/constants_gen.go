@@ -187,6 +187,12 @@ const (
 	BuffTypeTpSuppressed = "tp_suppressed"
 )
 
+// Buff modes.
+const (
+	BuffModeFlat = "flat"
+	BuffModePercent = "percent"
+)
+
 // Custom effects.
 const (
 	CustomEffectCancelNthDeploy = "cancel_nth_deploy"
@@ -194,7 +200,6 @@ const (
 	CustomEffectCloudShift = "cloud_shift"
 	CustomEffectDeploySameTypeFromHand = "deploy_same_type_from_hand"
 	CustomEffectDisableHighTpDeploy = "disable_high_tp_deploy"
-	CustomEffectHalveIncidentDamage = "halve_incident_damage"
 	CustomEffectReattach = "reattach"
 	CustomEffectRedirectAttack = "redirect_attack"
 	CustomEffectScaleToZero = "scale_to_zero"

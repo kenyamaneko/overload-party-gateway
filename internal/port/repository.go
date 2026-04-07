@@ -94,6 +94,13 @@ type StoryRepo interface {
 	MarkComplete(ctx context.Context, playerID, episodeID string) error
 }
 
+// GamePlayerRepo writes human-player → game slot mappings.
+// The game_players table is owned by the gateway; the battle server
+// never reads or writes it.
+type GamePlayerRepo interface {
+	InsertGamePlayer(ctx context.Context, gameID string, playerNum int, playerID string) error
+}
+
 // TxRunner provides service-level transaction control.
 // The callback receives a context carrying the transaction;
 // repository implementations extract it transparently.
