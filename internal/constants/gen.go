@@ -2,91 +2,95 @@
 // This allows all existing code to continue importing "internal/constants" unchanged.
 package constants
 
-import genconstants "github.com/kenyamaneko/overload-party-common/packages/gamedata/constants"
+import (
+	gamedesign "github.com/kenyamaneko/overload-party-common/packages/gamedata/constants/game_design"
+	gamelogic "github.com/kenyamaneko/overload-party-common/packages/gamedata/constants/game_logic"
+	genws "github.com/kenyamaneko/overload-party-common/packages/gamedata/constants/ws"
+)
 
 // Initial values.
-const DeckSize = genconstants.DeckSize
+const DeckSize = gamedesign.DeckSize
 
 // Factions.
 const (
-	FactionSHE     = genconstants.FactionSHE
-	FactionTenki   = genconstants.FactionTenki
-	FactionSugar   = genconstants.FactionSugar
-	FactionTuners  = genconstants.FactionTuners
-	FactionNeutral = genconstants.FactionNeutral
+	FactionSHE     = gamedesign.FactionSHE
+	FactionTenki   = gamedesign.FactionTenki
+	FactionSugar   = gamedesign.FactionSugar
+	FactionTuners  = gamedesign.FactionTuners
+	FactionNeutral = gamedesign.FactionNeutral
 )
 
 // SelectableFactions is the list of factions players can choose.
-var SelectableFactions = genconstants.SelectableFactions
+var SelectableFactions = gamedesign.SelectableFactions
 
 // Win reasons.
 const (
-	WinReasonBudgetZero    = genconstants.WinReasonBudgetZero
-	WinReasonSystemDown    = genconstants.WinReasonSystemDown
-	WinReasonRepositoryOut = genconstants.WinReasonRepositoryOut
-	WinReasonTurnTimeout   = genconstants.WinReasonTurnTimeout
-	WinReasonDisconnect    = genconstants.WinReasonDisconnect
-	WinReasonTurnLimit     = genconstants.WinReasonTurnLimit
-	WinReasonDraw          = genconstants.WinReasonDraw
-	WinReasonLaunchFailure = genconstants.WinReasonLaunchFailure
-	WinReasonSurrender     = genconstants.WinReasonSurrender
+	WinReasonBudgetZero    = gamelogic.WinReasonBudgetZero
+	WinReasonSystemDown    = gamelogic.WinReasonSystemDown
+	WinReasonRepositoryOut = gamelogic.WinReasonRepositoryOut
+	WinReasonTurnTimeout   = gamelogic.WinReasonTurnTimeout
+	WinReasonDisconnect    = gamelogic.WinReasonDisconnect
+	WinReasonTurnLimit     = gamelogic.WinReasonTurnLimit
+	WinReasonDraw          = gamelogic.WinReasonDraw
+	WinReasonLaunchFailure = gamelogic.WinReasonLaunchFailure
+	WinReasonSurrender     = gamelogic.WinReasonSurrender
 )
 
 // Action types.
 const (
-	ActionTypeForfeit = genconstants.ActionTypeForfeit
+	ActionTypeForfeit = gamelogic.ActionTypeForfeit
 )
 
 // Event types.
 const (
-	EventTypeTurnStart   = genconstants.EventTypeTurnStart
-	EventTypeBattleStart = genconstants.EventTypeBattleStart
+	EventTypeTurnStart   = gamelogic.EventTypeTurnStart
+	EventTypeBattleStart = gamelogic.EventTypeBattleStart
 )
 
 // Match types.
 const (
-	MatchTypePvp = genconstants.MatchTypePvp
-	MatchTypeNpc = genconstants.MatchTypeNpc
+	MatchTypePvp = gamedesign.MatchTypePvp
+	MatchTypeNpc = gamedesign.MatchTypeNpc
 )
 
 // WS server message types.
 const (
-	WSMsgGameState            = genconstants.WSServerMsgGameState
-	WSMsgGameOver             = genconstants.WSServerMsgGameOver
-	WSMsgError                = genconstants.WSServerMsgError
-	WSMsgGameEntered          = genconstants.WSServerMsgGameEntered
-	WSMsgMatchmakingStarted   = genconstants.WSServerMsgMatchmakingStarted
-	WSMsgMatchmakingCancelled = genconstants.WSServerMsgMatchmakingCancelled
-	WSMsgActionRejected       = genconstants.WSServerMsgActionRejected
-	WSMsgStampUsed            = genconstants.WSServerMsgStampUsed
-	WSMsgPong                 = genconstants.WSServerMsgPong
-	WSMsgMatchFound           = genconstants.WSServerMsgMatchFound
-	WSMsgActionPerformed      = genconstants.WSServerMsgActionPerformed
-	WSMsgTurnControls         = genconstants.WSServerMsgTurnControls
-	WSMsgNpcBattleCreated     = genconstants.WSServerMsgNpcBattleCreated
-	WSMsgOpponentDisconnected = genconstants.WSServerMsgOpponentDisconnected
-	WSMsgOpponentReconnected  = genconstants.WSServerMsgOpponentReconnected
-	WSMsgSpectateJoined       = genconstants.WSServerMsgSpectateJoined
-	WSMsgSpectateError        = genconstants.WSServerMsgSpectateError
-	WSMsgSpectateUpdate       = genconstants.WSServerMsgSpectateUpdate
-	WSMsgSpectateEnded        = genconstants.WSServerMsgSpectateEnded
-	WSMsgSpectateStampBroadcast = genconstants.WSServerMsgSpectateStampBroadcast
-	WSMsgGameStateRestore       = genconstants.WSServerMsgGameStateRestore
+	WSMsgGameState              = genws.WSServerMsgGameState
+	WSMsgGameOver               = genws.WSServerMsgGameOver
+	WSMsgError                  = genws.WSServerMsgError
+	WSMsgGameEntered            = genws.WSServerMsgGameEntered
+	WSMsgMatchmakingStarted     = genws.WSServerMsgMatchmakingStarted
+	WSMsgMatchmakingCancelled   = genws.WSServerMsgMatchmakingCancelled
+	WSMsgActionRejected         = genws.WSServerMsgActionRejected
+	WSMsgStampUsed              = genws.WSServerMsgStampUsed
+	WSMsgPong                   = genws.WSServerMsgPong
+	WSMsgMatchFound             = genws.WSServerMsgMatchFound
+	WSMsgActionPerformed        = genws.WSServerMsgActionPerformed
+	WSMsgTurnControls           = genws.WSServerMsgTurnControls
+	WSMsgNpcBattleCreated       = genws.WSServerMsgNpcBattleCreated
+	WSMsgOpponentDisconnected   = genws.WSServerMsgOpponentDisconnected
+	WSMsgOpponentReconnected    = genws.WSServerMsgOpponentReconnected
+	WSMsgSpectateJoined         = genws.WSServerMsgSpectateJoined
+	WSMsgSpectateError          = genws.WSServerMsgSpectateError
+	WSMsgSpectateUpdate         = genws.WSServerMsgSpectateUpdate
+	WSMsgSpectateEnded          = genws.WSServerMsgSpectateEnded
+	WSMsgSpectateStampBroadcast = genws.WSServerMsgSpectateStampBroadcast
+	WSMsgGameStateRestore       = genws.WSServerMsgGameStateRestore
 )
 
 // WS client message types.
 const (
-	WSMsgGameEnter         = genconstants.WSClientMsgGameEnter
-	WSMsgMatchmakingStart  = genconstants.WSClientMsgMatchmakingStart
-	WSMsgMatchmakingCancel = genconstants.WSClientMsgMatchmakingCancel
-	WSMsgGameAction        = genconstants.WSClientMsgGameAction
-	WSMsgUseStamp          = genconstants.WSClientMsgUseStamp
-	WSMsgPing              = genconstants.WSClientMsgPing
-	WSMsgNpcBattleStart    = genconstants.WSClientMsgNpcBattleStart
-	WSMsgSpectateJoin      = genconstants.WSClientMsgSpectateJoin
-	WSMsgSpectateLeave     = genconstants.WSClientMsgSpectateLeave
-	WSMsgSpectateStamp     = genconstants.WSClientMsgSpectateStamp
+	WSMsgGameEnter         = genws.WSClientMsgGameEnter
+	WSMsgMatchmakingStart  = genws.WSClientMsgMatchmakingStart
+	WSMsgMatchmakingCancel = genws.WSClientMsgMatchmakingCancel
+	WSMsgGameAction        = genws.WSClientMsgGameAction
+	WSMsgUseStamp          = genws.WSClientMsgUseStamp
+	WSMsgPing              = genws.WSClientMsgPing
+	WSMsgNpcBattleStart    = genws.WSClientMsgNpcBattleStart
+	WSMsgSpectateJoin      = genws.WSClientMsgSpectateJoin
+	WSMsgSpectateLeave     = genws.WSClientMsgSpectateLeave
+	WSMsgSpectateStamp     = genws.WSClientMsgSpectateStamp
 )
 
 // Restriction helpers.
-var RestrictionCopyCount = genconstants.RestrictionCopyCount
+var RestrictionCopyCount = gamedesign.RestrictionCopyCount
