@@ -3,9 +3,9 @@
 package constants
 
 import (
-	gamedesign "github.com/kenyamaneko/overload-party-common/packages/gamedata/constants/game_design"
-	gamelogic "github.com/kenyamaneko/overload-party-common/packages/gamedata/constants/game_logic"
-	genws "github.com/kenyamaneko/overload-party-common/packages/gamedata/constants/ws"
+	gamedesign "github.com/kenyamaneko/overload-party-common/packages/game-design-constants"
+	gamelogic "github.com/kenyamaneko/overload-party-common/packages/game-logic-constants"
+	genws "github.com/kenyamaneko/overload-party-common/packages/ws-constants"
 )
 
 // Initial values.

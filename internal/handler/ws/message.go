@@ -3,8 +3,7 @@ package ws
 import (
 	"encoding/json"
 
-	apimodel "github.com/kenyamaneko/overload-party-common/packages/api/model"
-	gamedatamodel "github.com/kenyamaneko/overload-party-common/packages/gamedata/model"
+	apiclient "github.com/kenyamaneko/overload-party-common/packages/api-client"
 )
 
 // WSMessage is the envelope for all WebSocket messages.
@@ -14,34 +13,32 @@ type WSMessage struct {
 }
 
 // --- Client → Server ---
-// These types are unchanged between packages; use gamedata for stability.
 
-type MatchmakingStartMessage = gamedatamodel.MatchmakingStartMessage
-type GameEnterMessage = gamedatamodel.GameEnterMessage
-type NPCBattleStartMessage = gamedatamodel.NPCBattleStartMessage
-type GameActionMessage = gamedatamodel.GameActionMessage
-type UseStampMessage = gamedatamodel.UseStampMessage
+type MatchmakingStartMessage = apiclient.MatchmakingStartMessage
+type GameEnterMessage = apiclient.GameEnterMessage
+type NPCBattleStartMessage = apiclient.NPCBattleStartMessage
+type GameActionMessage = apiclient.GameActionMessage
+type UseStampMessage = apiclient.UseStampMessage
 
 // --- Server → Client ---
-// Updated types (WinningPlayerNum, PlayerNum) come from api/model.
 
-type ErrorMessage = gamedatamodel.ErrorMessage
-type MatchFoundMessage = apimodel.MatchFoundMessage
-type GameOverMessage = apimodel.GameOverMessage
-type ActionRejectedMessage = gamedatamodel.ActionRejectedMessage
-type ActionPerformedMessage = gamedatamodel.ActionPerformedMessage
-type StampUsedMessage = apimodel.StampUsedMessage
-type NPCBattleCreatedMessage = apimodel.NPCBattleCreatedMessage
+type ErrorMessage = apiclient.ErrorMessage
+type MatchFoundMessage = apiclient.MatchFoundMessage
+type GameOverMessage = apiclient.GameOverMessage
+type ActionRejectedMessage = apiclient.ActionRejectedMessage
+type ActionPerformedMessage = apiclient.ActionPerformedMessage
+type StampUsedMessage = apiclient.StampUsedMessage
+type NPCBattleCreatedMessage = apiclient.NPCBattleCreatedMessage
 
 // --- Spectate: Client → Server ---
 
-type SpectateJoinMessage = gamedatamodel.SpectateJoinMessage
-type SpectateLeaveMessage = gamedatamodel.SpectateLeaveMessage
-type SpectateStampMessage = gamedatamodel.SpectateStampMessage
+type SpectateJoinMessage = apiclient.SpectateJoinMessage
+type SpectateLeaveMessage = apiclient.SpectateLeaveMessage
+type SpectateStampMessage = apiclient.SpectateStampMessage
 
 // --- Spectate: Server → Client ---
 
-type SpectateJoinedMessage = apimodel.SpectateJoinedMessage
-type SpectateErrorMessage = gamedatamodel.SpectateErrorMessage
-type SpectateEndedMessage = apimodel.SpectateEndedMessage
-type SpectateStampBroadcastMessage = gamedatamodel.SpectateStampBroadcastMessage
+type SpectateJoinedMessage = apiclient.SpectateJoinedMessage
+type SpectateErrorMessage = apiclient.SpectateErrorMessage
+type SpectateEndedMessage = apiclient.SpectateEndedMessage
+type SpectateStampBroadcastMessage = apiclient.SpectateStampBroadcastMessage

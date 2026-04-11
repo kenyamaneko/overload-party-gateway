@@ -16,10 +16,18 @@ MODULE := github.com/kenyamaneko/$(APP)
 COMMON_DIR  ?= $(CURDIR)/../overload-party-common
 
 # ─── Dependency ──────────────────────────────────────────
-COMMON_PKG := github.com/kenyamaneko/overload-party-common/packages/gamedata
+# Gateway depends on multiple common sub-modules since ADR-015 Phase 3.
+COMMON_PKGS := \
+	github.com/kenyamaneko/overload-party-common/packages/game-design-constants \
+	github.com/kenyamaneko/overload-party-common/packages/game-logic-constants \
+	github.com/kenyamaneko/overload-party-common/packages/ws-constants \
+	github.com/kenyamaneko/overload-party-common/packages/card-types \
+	github.com/kenyamaneko/overload-party-common/packages/api-client \
+	github.com/kenyamaneko/overload-party-common/packages/api-battle-rpc \
+	github.com/kenyamaneko/overload-party-common/packages/devdata
 
-update-common:  ## Update common package to latest and re-vendor
-	GOPRIVATE=github.com/kenyamaneko/* go get -u $(COMMON_PKG)@latest
+update-common:  ## Update common packages to latest and re-vendor
+	GOPRIVATE=github.com/kenyamaneko/* go get -u $(addsuffix @latest,$(COMMON_PKGS))
 	go mod tidy
 	go mod vendor
 	@echo "vendor/ updated — don't forget to commit the changes"

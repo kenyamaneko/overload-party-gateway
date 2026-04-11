@@ -11,9 +11,13 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/jackc/pgx/v5 v5.8.0
-	github.com/kenyamaneko/overload-party-common/packages/api v0.1.9
+	github.com/kenyamaneko/overload-party-common/packages/api-battle-rpc v0.1.0
+	github.com/kenyamaneko/overload-party-common/packages/api-client v0.1.0
+	github.com/kenyamaneko/overload-party-common/packages/card-types v0.1.0
 	github.com/kenyamaneko/overload-party-common/packages/devdata v0.1.1
-	github.com/kenyamaneko/overload-party-common/packages/gamedata v0.1.34
+	github.com/kenyamaneko/overload-party-common/packages/game-design-constants v0.1.0
+	github.com/kenyamaneko/overload-party-common/packages/game-logic-constants v0.1.0
+	github.com/kenyamaneko/overload-party-common/packages/ws-constants v0.1.0
 	github.com/stretchr/testify v1.11.1
 	google.golang.org/api v0.267.0
 )

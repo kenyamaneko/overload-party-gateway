@@ -3,68 +3,66 @@
 package model
 
 import (
-	genmodel "github.com/kenyamaneko/overload-party-common/packages/gamedata/model"
-
-	apimodel "github.com/kenyamaneko/overload-party-common/packages/api/model"
+	apiclient "github.com/kenyamaneko/overload-party-common/packages/api-client"
+	cardtypes "github.com/kenyamaneko/overload-party-common/packages/card-types"
 )
 
-// ── API contract types (remain in common) ──
+// ── Card / deck types ──
 
-// Type aliases for card / deck types.
-type CardDefinition = genmodel.CardDefinition
-type ComputeStats = genmodel.ComputeStats
-type DataStats = genmodel.DataStats
-type PlayerCardWithDef = genmodel.PlayerCardWithDef
-type Deck = genmodel.Deck
-type DeckCard = genmodel.DeckCard
+type CardDefinition = cardtypes.CardDefinition
+type ComputeStats = cardtypes.ComputeStats
+type DataStats = cardtypes.DataStats
+type PlayerCardWithDef = apiclient.PlayerCardWithDef
+type Deck = apiclient.Deck
+type DeckCard = apiclient.DeckCard
 
 // Type aliases for effect types.
-type PassiveEffect = genmodel.PassiveEffect
-type PlatformEffect = genmodel.PlatformEffect
-type AttachmentEffect = genmodel.AttachmentEffect
-type PassiveEffectConfig = genmodel.PassiveEffectConfig
-type PlatformEffectConfig = genmodel.PlatformEffectConfig
-type AttachmentEffectConfig = genmodel.AttachmentEffectConfig
+type PassiveEffect = cardtypes.PassiveEffect
+type PlatformEffect = cardtypes.PlatformEffect
+type AttachmentEffect = cardtypes.AttachmentEffect
+type PassiveEffectConfig = cardtypes.PassiveEffectConfig
+type PlatformEffectConfig = cardtypes.PlatformEffectConfig
+type AttachmentEffectConfig = cardtypes.AttachmentEffectConfig
 
 // Type aliases for effect named types.
-type PassiveEffectType = genmodel.PassiveEffectType
-type PlatformEffectType = genmodel.PlatformEffectType
-type AttachmentEffectType = genmodel.AttachmentEffectType
+type PassiveEffectType = cardtypes.PassiveEffectType
+type PlatformEffectType = cardtypes.PlatformEffectType
+type AttachmentEffectType = cardtypes.AttachmentEffectType
 
 // Re-export effect constants.
 const (
-	PassiveTPPerBackendDB      = genmodel.PassiveTPPerBackendDB
-	PassiveTPPerBackendData    = genmodel.PassiveTPPerBackendData
-	PassiveTPIfCardTypeOnField = genmodel.PassiveTPIfCardTypeOnField
-	PassiveYieldPerOtherDB     = genmodel.PassiveYieldPerOtherDB
-	PassiveYieldIfCardOnField  = genmodel.PassiveYieldIfCardOnField
-	PassiveAVBonus             = genmodel.PassiveAVBonus
-	PassiveScaleCostFree       = genmodel.PassiveScaleCostFree
-	PlatformTPBonus            = genmodel.PlatformTPBonus
-	PlatformYieldBonus         = genmodel.PlatformYieldBonus
-	PlatformAVBonus            = genmodel.PlatformAVBonus
-	AttachmentStatBonus        = genmodel.AttachmentStatBonus
+	PassiveTPPerBackendDB      = cardtypes.PassiveTPPerBackendDB
+	PassiveTPPerBackendData    = cardtypes.PassiveTPPerBackendData
+	PassiveTPIfCardTypeOnField = cardtypes.PassiveTPIfCardTypeOnField
+	PassiveYieldPerOtherDB     = cardtypes.PassiveYieldPerOtherDB
+	PassiveYieldIfCardOnField  = cardtypes.PassiveYieldIfCardOnField
+	PassiveAVBonus             = cardtypes.PassiveAVBonus
+	PassiveScaleCostFree       = cardtypes.PassiveScaleCostFree
+	PlatformTPBonus            = cardtypes.PlatformTPBonus
+	PlatformYieldBonus         = cardtypes.PlatformYieldBonus
+	PlatformAVBonus            = cardtypes.PlatformAVBonus
+	AttachmentStatBonus        = cardtypes.AttachmentStatBonus
 )
 
-// ── REST API contract types (from api package) ──
+// ── REST API contract types (from api-client) ──
 
-type PlayerResponse = apimodel.PlayerResponse
-type BattleLimitResponse = apimodel.BattleLimitResponse
-type ProductResponse = apimodel.ProductResponse
-type UserSettings = apimodel.UserSettings
-type EpisodeWithStatus = apimodel.EpisodeWithStatus
-type LockReason = apimodel.LockReason
-type NewsArticle = apimodel.NewsArticle
-type Announcement = apimodel.Announcement
-type DailyTip = apimodel.DailyTip
-type SpectateGameInfo = apimodel.SpectateGameInfo
-type DeckCardEntry = apimodel.DeckCardEntry
-type DeckCreateRequest = apimodel.DeckCreateRequest
-type DeckUpdateRequest = apimodel.DeckUpdateRequest
-type UpdateSettingsRequest = apimodel.UpdateSettingsRequest
-type PurchaseRequest = apimodel.PurchaseRequest
-type RegisterRequest = apimodel.RegisterRequest
-type SelectFactionRequest = apimodel.SelectFactionRequest
+type PlayerResponse = apiclient.PlayerResponse
+type BattleLimitResponse = apiclient.BattleLimitResponse
+type ProductResponse = apiclient.ProductResponse
+type UserSettings = apiclient.UserSettings
+type EpisodeWithStatus = apiclient.EpisodeWithStatus
+type LockReason = apiclient.LockReason
+type NewsArticle = apiclient.NewsArticle
+type Announcement = apiclient.Announcement
+type DailyTip = apiclient.DailyTip
+type SpectateGameInfo = apiclient.SpectateGameInfo
+type DeckCardEntry = apiclient.DeckCardEntry
+type DeckCreateRequest = apiclient.DeckCreateRequest
+type DeckUpdateRequest = apiclient.DeckUpdateRequest
+type UpdateSettingsRequest = apiclient.UpdateSettingsRequest
+type PurchaseRequest = apiclient.PurchaseRequest
+type RegisterRequest = apiclient.RegisterRequest
+type SelectFactionRequest = apiclient.SelectFactionRequest
 
 // ── DB models (locally defined) ──
 // Player, PlayerDailyBattle, PlayerCard, GameConfig are in player.go.

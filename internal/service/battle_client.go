@@ -11,16 +11,16 @@ import (
 	"net/http"
 	"time"
 
-	apimodel "github.com/kenyamaneko/overload-party-common/packages/api/model"
+	apibattle "github.com/kenyamaneko/overload-party-common/packages/api-battle-rpc"
 )
 
 // Type aliases expose the generated battle RPC types under the service package
 // so callers can keep using service.ActionResult etc. without edit churn.
 type (
-	BattleDeckCard    = apimodel.BattleDeckCard
-	GameCreatedResult = apimodel.GameCreatedResult
-	ActionEvent       = apimodel.ActionEvent
-	ActionResult      = apimodel.ActionResult
+	BattleDeckCard    = apibattle.BattleDeckCard
+	GameCreatedResult = apibattle.GameCreatedResult
+	ActionEvent       = apibattle.ActionEvent
+	ActionResult      = apibattle.ActionResult
 )
 
 // BattleClient is the interface for communicating with the battle server REST API.
@@ -58,7 +58,7 @@ func (c *battleClient) GetNPCModels(ctx context.Context) (json.RawMessage, error
 }
 
 func (c *battleClient) StartNPCBattle(ctx context.Context, deckCards []BattleDeckCard, npcModel string) (*GameCreatedResult, error) {
-	body := &apimodel.NpcBattleRequest{
+	body := &apibattle.NpcBattleRequest{
 		DeckCards: deckCards,
 		NpcModel:  npcModel,
 	}
@@ -70,7 +70,7 @@ func (c *battleClient) StartNPCBattle(ctx context.Context, deckCards []BattleDec
 }
 
 func (c *battleClient) CreatePvPGame(ctx context.Context, deck1Cards, deck2Cards []BattleDeckCard) (*GameCreatedResult, error) {
-	body := &apimodel.PvpBattleRequest{
+	body := &apibattle.PvpBattleRequest{
 		Deck1Cards: deck1Cards,
 		Deck2Cards: deck2Cards,
 	}
@@ -82,7 +82,7 @@ func (c *battleClient) CreatePvPGame(ctx context.Context, deck1Cards, deck2Cards
 }
 
 func (c *battleClient) ProcessAction(ctx context.Context, gameID string, playerNum int, actionType string, data json.RawMessage) (*ActionResult, error) {
-	body := &apimodel.GameActionRequest{
+	body := &apibattle.GameActionRequest{
 		PlayerNum:  int64(playerNum),
 		ActionType: actionType,
 		Data:       data,
