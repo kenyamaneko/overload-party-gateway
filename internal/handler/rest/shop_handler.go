@@ -1,97 +1,99 @@
 package rest
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 
+	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
+	"github.com/kenyamaneko/overload-party-gateway/internal/client/shopclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
-	"github.com/kenyamaneko/overload-party-gateway/internal/model"
-	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
+// ShopHandler はショップ関連の REST エンドポイントを処理します
 type ShopHandler struct {
-	shopService *service.ShopService
+	shop *shopclient.Client
 }
 
-func NewShopHandler(shopService *service.ShopService) *ShopHandler {
-	return &ShopHandler{shopService: shopService}
+// NewShopHandler は ShopHandler を生成します
+func NewShopHandler(shop *shopclient.Client) *ShopHandler {
+	return &ShopHandler{shop: shop}
 }
 
+// SelectFaction はファクション選択を処理します
 func (h *ShopHandler) SelectFaction(c *gin.Context) {
 	playerID := middleware.GetPlayerID(c)
-
-	// Empty or unknown faction values are rejected by shopService.SelectFaction
-	// (via normalizeFaction / isSelectableFaction), so no binding:"required"
-	// check is needed at this layer.
-	var req model.SelectFactionRequest
+	var req apigateway.SelectFactionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	count, err := h.shopService.SelectFaction(c.Request.Context(), playerID, req.Faction)
+	resp, err := h.shop.SelectFaction(c.Request.Context(), playerID, req.Faction)
 	if err != nil {
-		respondError(c, err)
+		respondShopErr(c, err)
 		return
 	}
-
 	c.JSON(http.StatusOK, gin.H{
-		"message":       "faction selected",
-		"faction":       req.Faction,
-		"cards_granted": count,
+		"message":       resp.Message,
+		"faction":       resp.Faction,
+		"cards_granted": resp.CardsGranted,
 	})
 }
 
+// GetProducts は商品一覧を返します
 func (h *ShopHandler) GetProducts(c *gin.Context) {
 	playerID := middleware.GetPlayerID(c)
-
-	products, err := h.shopService.GetProducts(c.Request.Context(), playerID)
+	products, err := h.shop.GetProducts(c.Request.Context(), playerID)
 	if err != nil {
-		respondError(c, err)
+		respondShopErr(c, err)
 		return
 	}
-
 	c.JSON(http.StatusOK, gin.H{"products": products})
 }
 
+// Purchase は商品購入を処理します
 func (h *ShopHandler) Purchase(c *gin.Context) {
-	var req model.PurchaseRequest
+	playerID := middleware.GetPlayerID(c)
+	var req apigateway.PurchaseRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	playerID := middleware.GetPlayerID(c)
-
-	if err := h.shopService.Purchase(c.Request.Context(), playerID, req.ProductID, req.Platform, req.PurchaseToken); err != nil {
-		respondError(c, err)
+	if err := h.shop.Purchase(c.Request.Context(), playerID, req); err != nil {
+		respondShopErr(c, err)
 		return
 	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message":    "purchase completed",
-		"product_id": req.ProductID,
-	})
+	c.JSON(http.StatusOK, gin.H{"message": "purchase completed", "product_id": req.ProductID})
 }
 
+// Subscribe はサブスクリプション登録を処理します
 func (h *ShopHandler) Subscribe(c *gin.Context) {
-	var req model.PurchaseRequest
+	playerID := middleware.GetPlayerID(c)
+	var req apigateway.PurchaseRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	playerID := middleware.GetPlayerID(c)
-
-	expiresAt, err := h.shopService.Subscribe(c.Request.Context(), playerID, req.ProductID, req.Platform, req.PurchaseToken)
+	expiresAt, err := h.shop.Subscribe(c.Request.Context(), playerID, req)
 	if err != nil {
-		respondError(c, err)
+		respondShopErr(c, err)
 		return
 	}
+	c.JSON(http.StatusOK, gin.H{"message": "subscription activated", "expires_at": expiresAt})
+}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message":    "subscription activated",
-		"expires_at": expiresAt,
-	})
+func respondShopErr(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, shopclient.ErrNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+	case errors.Is(err, shopclient.ErrAlreadyOwned), errors.Is(err, shopclient.ErrFactionAlreadySelected):
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+	case errors.Is(err, shopclient.ErrInvalidFaction):
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	case errors.Is(err, shopclient.ErrReceiptInvalid):
+		c.JSON(http.StatusPaymentRequired, gin.H{"error": err.Error()})
+	default:
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
 }

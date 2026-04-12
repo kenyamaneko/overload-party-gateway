@@ -13,24 +13,23 @@ type disconnectInfo struct {
 	timer  *time.Timer
 }
 
-// HubCallbacks groups the callback functions that ConnectionHub invokes
-// in response to connection lifecycle events.
+// HubCallbacks は ConnectionHub が接続ライフサイクルイベント時に呼び出すコールバック群です
 type HubCallbacks struct {
-	// GetGameID resolves the gameID for a player, used during disconnect.
+	// GetGameID は切断時にプレイヤーの gameID を解決する
 	GetGameID func(playerID string) (string, bool)
-	// OnDisconnectTimeout is called when a disconnect timer fires (forfeit).
+	// OnDisconnectTimeout は切断タイマー発火時（forfeit）に呼ばれる
 	OnDisconnectTimeout func(playerID, gameID string)
-	// OnSpectatorDisconnect cleans up spectator state when a connection closes.
+	// OnSpectatorDisconnect は接続終了時に観戦状態をクリーンアップする
 	OnSpectatorDisconnect func(playerID string)
-	// OnMatchmakingLeave removes a player from the matchmaking queue on disconnect.
+	// OnMatchmakingLeave は切断時にマッチメイキングキューからプレイヤーを除去する
 	OnMatchmakingLeave func(playerID string)
-	// OnGameDisconnect notifies the opponent that a player has disconnected.
+	// OnGameDisconnect は対戦相手に切断を通知する
 	OnGameDisconnect func(playerID, gameID string)
-	// OnGameReconnect notifies the opponent that a disconnected player has returned.
+	// OnGameReconnect は切断していたプレイヤーの復帰を対戦相手に通知する
 	OnGameReconnect func(playerID, gameID string)
 }
 
-// ConnectionHub manages WebSocket connections and disconnect timers.
+// ConnectionHub は WebSocket 接続と切断タイマーを管理します
 type ConnectionHub struct {
 	mu          sync.RWMutex
 	connections map[string]*Connection
@@ -39,6 +38,7 @@ type ConnectionHub struct {
 	cb HubCallbacks
 }
 
+// NewConnectionHub は ConnectionHub を生成します
 func NewConnectionHub(cb HubCallbacks) *ConnectionHub {
 	return &ConnectionHub{
 		connections: make(map[string]*Connection),
@@ -47,6 +47,7 @@ func NewConnectionHub(cb HubCallbacks) *ConnectionHub {
 	}
 }
 
+// Register は新しい WebSocket 接続を登録します
 func (h *ConnectionHub) Register(conn *Connection) {
 	h.mu.Lock()
 	var reconnectGameID string
@@ -63,12 +64,13 @@ func (h *ConnectionHub) Register(conn *Connection) {
 	h.connections[conn.playerID] = conn
 	h.mu.Unlock()
 
-	// Notify opponent outside the lock to avoid deadlock.
+	// デッドロック防止のためロック外で対戦相手に通知
 	if reconnectGameID != "" && h.cb.OnGameReconnect != nil {
 		h.cb.OnGameReconnect(conn.playerID, reconnectGameID)
 	}
 }
 
+// Unregister は WebSocket 接続を解除し切断タイマーを開始します
 func (h *ConnectionHub) Unregister(conn *Connection) {
 	h.mu.Lock()
 	if existing, ok := h.connections[conn.playerID]; !ok || existing != conn {
@@ -95,8 +97,7 @@ func (h *ConnectionHub) Unregister(conn *Connection) {
 	}
 	h.mu.Unlock()
 
-	// All callbacks below run outside the lock to avoid deadlock,
-	// since they may call SendToPlayer which acquires RLock.
+	// SendToPlayer が RLock を取得するためデッドロック防止でロック外で実行
 	if h.cb.OnSpectatorDisconnect != nil {
 		h.cb.OnSpectatorDisconnect(conn.playerID)
 	}
@@ -108,6 +109,7 @@ func (h *ConnectionHub) Unregister(conn *Connection) {
 	}
 }
 
+// SendToPlayer は指定プレイヤーにメッセージを送信します
 func (h *ConnectionHub) SendToPlayer(playerID string, msg *WSMessage) {
 	h.mu.RLock()
 	conn, ok := h.connections[playerID]
@@ -117,7 +119,7 @@ func (h *ConnectionHub) SendToPlayer(playerID string, msg *WSMessage) {
 	}
 }
 
-// SendRawToPlayer sends pre-marshaled bytes to a player without additional marshaling.
+// SendRawToPlayer はマーシャル済みバイト列をプレイヤーに送信します
 func (h *ConnectionHub) SendRawToPlayer(playerID string, data []byte) {
 	h.mu.RLock()
 	conn, ok := h.connections[playerID]

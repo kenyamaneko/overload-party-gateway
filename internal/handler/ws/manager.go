@@ -3,138 +3,158 @@ package ws
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
+	"sync"
 	"time"
 
+	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
+	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
+	"github.com/kenyamaneko/overload-party-gateway/internal/client/cardclient"
+	"github.com/kenyamaneko/overload-party-gateway/internal/client/matchmakingclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/constants"
-	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
-	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
-// Manager routes incoming WebSocket messages and coordinates the Hub,
-// GameRelay, SpectateRelay, and matchmaking queue. It contains no game or
-// connection state itself.
+// Manager は受信 WebSocket メッセージをルーティングし、Hub / GameRelay / SpectateRelay を調整します。
+// Manager 自体はゲームや接続の状態を持たない。
 type Manager struct {
 	Hub      *ConnectionHub
 	Relay    *GameRelay
 	Spectate *SpectateRelay
 
-	battleClient   service.BattleClient
-	playerService  *service.PlayerService
-	deckService    *service.DeckService
-	deckRepo       port.DeckRepo
-	gameConfigRepo port.GameConfigRepo
-	gamePlayerRepo port.GamePlayerRepo
-	queue          *repository.MatchmakingQueue
+	battleClient      service.BattleClient
+	accountClient     *accountclient.Client
+	cardClient        *cardclient.Client
+	matchmakingClient *matchmakingclient.Client
+	gamePlayerRepo    port.GamePlayerRepo
+
+	// matchmaking_start 後のプレイヤー単位の待機タイムアウト。
+	// 期限切れ時に matchmaking_error を push し上流をキャンセルする。
+	matchmakingTimeout time.Duration
+
+	// プレイヤー単位のマッチメイキングタイマー。HandleMatchMade で成功時に停止し、
+	// 切断/キャンセル時にもクリアされる。
+	matchWaitMu sync.Mutex
+	matchWait   map[string]*time.Timer
 }
 
-func NewManager(battleClient service.BattleClient, playerService *service.PlayerService, deckService *service.DeckService, deckRepo port.DeckRepo, gameConfigRepo port.GameConfigRepo, gamePlayerRepo port.GamePlayerRepo) *Manager {
-	queue := repository.NewMatchmakingQueue()
-
+// NewManager は WebSocket Manager を生成します
+func NewManager(
+	battleClient service.BattleClient,
+	accountClient *accountclient.Client,
+	cardClient *cardclient.Client,
+	matchmakingClient *matchmakingclient.Client,
+	gamePlayerRepo port.GamePlayerRepo,
+	matchmakingTimeout time.Duration,
+) *Manager {
 	m := &Manager{
-		battleClient:   battleClient,
-		playerService:  playerService,
-		deckService:    deckService,
-		deckRepo:       deckRepo,
-		gameConfigRepo: gameConfigRepo,
-		gamePlayerRepo: gamePlayerRepo,
-		queue:          queue,
+		battleClient:       battleClient,
+		accountClient:      accountClient,
+		cardClient:         cardClient,
+		matchmakingClient:  matchmakingClient,
+		gamePlayerRepo:     gamePlayerRepo,
+		matchmakingTimeout: matchmakingTimeout,
+		matchWait:          make(map[string]*time.Timer),
 	}
 
-	// Hub needs to query GameRelay for the player's gameID on disconnect,
-	// and GameRelay needs Hub for sending messages. We wire them up here.
 	hub := NewConnectionHub(HubCallbacks{
 		GetGameID:             func(playerID string) (string, bool) { return m.Relay.GameIDForPlayer(playerID) },
 		OnDisconnectTimeout:   func(playerID, gameID string) { m.Relay.HandleDisconnectTimeout(playerID, gameID) },
 		OnSpectatorDisconnect: func(playerID string) { m.Spectate.RemoveSpectator(playerID) },
-		OnMatchmakingLeave:    func(playerID string) { m.queue.Leave(playerID) },
+		OnMatchmakingLeave:    m.cancelMatchmaking,
 		OnGameDisconnect:      func(playerID, gameID string) { m.Relay.NotifyOpponentDisconnected(playerID, gameID) },
 		OnGameReconnect:       func(playerID, gameID string) { m.Relay.NotifyOpponentReconnected(playerID, gameID) },
 	})
 	relay := NewGameRelay(hub, battleClient)
-	spectate := NewSpectateRelay(hub, battleClient)
+	spectate := NewSpectateRelay(hub, battleClient, gamePlayerRepo)
 
 	m.Hub = hub
 	m.Relay = relay
 	m.Spectate = spectate
 
-	// Cross-wire: GameRelay notifies SpectateRelay on state updates and game over.
 	relay.spectateRelay = spectate
+	relay.accountClient = accountClient
+	relay.gamePlayerRepo = gamePlayerRepo
 
-	// Wire player service for exp awarding on game over.
-	relay.playerService = playerService
-
-	// Wire player lookup for battle_start banner data.
-	if playerService != nil {
-		lookupFn := PlayerLookupFunc(func(ctx context.Context, playerID string) (string, int64, error) {
-			p, err := playerService.GetPlayer(ctx, playerID)
-			if err != nil {
-				return "", 0, err
-			}
-			if p == nil {
-				return "", 0, nil
-			}
-			return p.Username, p.Level, nil
-		})
-		relay.playerLookup = lookupFn
-		spectate.playerLookup = lookupFn
-	}
+	lookupFn := PlayerLookupFunc(func(ctx context.Context, playerID string) (string, int64, error) {
+		p, err := accountClient.GetPlayer(ctx, playerID)
+		if err != nil {
+			return "", 0, err
+		}
+		if p == nil {
+			return "", 0, nil
+		}
+		return p.Username, p.Level, nil
+	})
+	relay.playerLookup = lookupFn
+	spectate.playerLookup = lookupFn
 
 	return m
 }
 
-// StartMatchmaking starts the matchmaking loop. Should be called in a goroutine.
-func (m *Manager) StartMatchmaking(ctx context.Context) {
-	matcher := service.NewMatchmakingService(m.queue, func(ctx context.Context, result model.MatchResult) {
-		notifyError := func(msg string) {
-			errMsg := &WSMessage{
-				Type: constants.WSMsgError,
-				Data: mustMarshal(ErrorMessage{Code: "matchmaking_error", Message: msg, Retryable: true}),
-			}
-			for _, pid := range []string{result.Player1ID, result.Player2ID} {
-				m.Hub.SendToPlayer(pid, errMsg)
-			}
-		}
-
-		p1Cards, err := m.resolveDeckCards(ctx, result.Player1ID, result.Player1Deck)
-		if err != nil {
-			log.Printf("matchmaking: resolve p1 deck failed: %v", err)
-			notifyError("failed to create game")
-			return
-		}
-		p2Cards, err := m.resolveDeckCards(ctx, result.Player2ID, result.Player2Deck)
-		if err != nil {
-			log.Printf("matchmaking: resolve p2 deck failed: %v", err)
-			notifyError("failed to create game")
-			return
-		}
-		game, err := m.battleClient.CreatePvPGame(ctx, p1Cards, p2Cards)
-		if err != nil {
-			log.Printf("matchmaking: create pvp game failed: %v", err)
-			notifyError("failed to create game")
-			return
-		}
-		// game_players: ゲートウェイ管轄のプレイヤー ID マッピングを永続化
-		if m.gamePlayerRepo != nil {
-			if err := m.gamePlayerRepo.InsertGamePlayer(ctx, game.GameID, 1, result.Player1ID); err != nil {
-				log.Printf("matchmaking: insert game_player p1: %v", err)
-			}
-			if err := m.gamePlayerRepo.InsertGamePlayer(ctx, game.GameID, 2, result.Player2ID); err != nil {
-				log.Printf("matchmaking: insert game_player p2: %v", err)
-			}
-		}
-		m.Relay.RegisterGameMeta(game.GameID, result.Player1ID, result.Player2ID, constants.MatchTypePvp)
-		m.Spectate.RegisterGame(game.GameID, result.Player1ID, result.Player2ID)
-		m.Relay.NotifyMatchFound(game.GameID, result.Player1ID, result.Player2ID)
-	})
-	matcher.Run(ctx)
+// cancelMatchmaking はプレイヤー切断時にマッチメイキングサービスへキャンセルを fire-and-forget する。
+// Hub の unregister パスから呼ばれるためエラーはログのみ。
+func (m *Manager) cancelMatchmaking(playerID string) {
+	m.stopMatchWait(playerID)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := m.matchmakingClient.Cancel(ctx, playerID); err != nil {
+		log.Printf("matchmaking cancel for %s: %v", playerID, err)
+	}
 }
 
-// HandleMessage routes an incoming WebSocket message to the appropriate handler.
-// Each message gets a 30-second timeout to prevent goroutine leaks from slow
-// DB queries or battle server HTTP calls.
+// startMatchWait はプレイヤー単位のマッチメイキングタイムアウトを開始（または再開始）する。
+// タイマー発火時に matchmaking_error を push し上流をキャンセルする。
+func (m *Manager) startMatchWait(playerID string) {
+	if m.matchmakingTimeout <= 0 {
+		return
+	}
+	m.matchWaitMu.Lock()
+	if existing, ok := m.matchWait[playerID]; ok {
+		existing.Stop()
+	}
+	t := time.AfterFunc(m.matchmakingTimeout, func() {
+		m.handleMatchWaitTimeout(playerID)
+	})
+	m.matchWait[playerID] = t
+	m.matchWaitMu.Unlock()
+}
+
+// stopMatchWait はプレイヤー単位のタイマーを停止する。冪等。
+func (m *Manager) stopMatchWait(playerID string) {
+	m.matchWaitMu.Lock()
+	if t, ok := m.matchWait[playerID]; ok {
+		t.Stop()
+		delete(m.matchWait, playerID)
+	}
+	m.matchWaitMu.Unlock()
+}
+
+// handleMatchWaitTimeout は match_found 待ちが長すぎる場合に発火する。
+// ローカルの待機エントリを削除し、matchmaking_error を push、上流をキャンセルする。
+func (m *Manager) handleMatchWaitTimeout(playerID string) {
+	m.matchWaitMu.Lock()
+	if _, ok := m.matchWait[playerID]; !ok {
+		m.matchWaitMu.Unlock()
+		return
+	}
+	delete(m.matchWait, playerID)
+	m.matchWaitMu.Unlock()
+
+	log.Printf("matchmaking: wait timeout for player %s after %v", playerID, m.matchmakingTimeout)
+	sendErrorToPlayer(m.Hub, playerID, "matchmaking_error", "matchmaking timed out", true)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := m.matchmakingClient.Cancel(ctx, playerID); err != nil {
+		log.Printf("matchmaking: upstream cancel after timeout for %s: %v", playerID, err)
+	}
+}
+
+// HandleMessage は受信 WebSocket メッセージを適切なハンドラーにルーティングします。
+// goroutine リーク防止のため各メッセージに 30 秒のタイムアウトを設定する。
 func (m *Manager) HandleMessage(conn *Connection, msg *WSMessage) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -147,14 +167,17 @@ func (m *Manager) HandleMessage(conn *Connection, msg *WSMessage) {
 		m.handleMatchmakingStart(ctx, conn, msg.Data)
 
 	case constants.WSMsgMatchmakingCancel:
-		m.queue.Leave(conn.playerID)
+		m.stopMatchWait(conn.playerID)
+		if err := m.matchmakingClient.Cancel(ctx, conn.playerID); err != nil {
+			sendError(conn, "matchmaking_error", "failed to cancel: "+err.Error(), true)
+			return
+		}
 		conn.SendMessage(&WSMessage{Type: constants.WSMsgMatchmakingCancelled})
 
 	case constants.WSMsgNpcBattleStart:
 		m.handleNpcBattleStart(ctx, conn, msg.Data)
 
 	case constants.WSMsgGameAction:
-		// Spectators must not be able to send game actions.
 		if m.Spectate.IsSpectator(conn.playerID) {
 			log.Printf("spectator %s tried to send game_action — ignored", conn.playerID)
 			return
@@ -181,7 +204,7 @@ func (m *Manager) HandleMessage(conn *Connection, msg *WSMessage) {
 	}
 }
 
-// handleMatchmakingStart checks the battle limit and enqueues the player.
+// handleMatchmakingStart はデッキを検証し（card サービス経由）、マッチメイキングサービスに enqueue する。
 func (m *Manager) handleMatchmakingStart(ctx context.Context, conn *Connection, data json.RawMessage) {
 	var req MatchmakingStartMessage
 	if err := json.Unmarshal(data, &req); err != nil {
@@ -197,15 +220,17 @@ func (m *Manager) handleMatchmakingStart(ctx context.Context, conn *Connection, 
 		return
 	}
 
-	if err := m.deckService.ValidateDeckForBattle(ctx, conn.playerID, req.DeckID); err != nil {
+	if err := m.cardClient.ValidateDeckForBattle(ctx, conn.playerID, req.DeckID); err != nil {
 		sendError(conn, "matchmaking_error", "deck validation failed: "+err.Error(), false)
 		return
 	}
 
-	if err := m.queue.Join(conn.playerID, req.DeckID); err != nil {
-		sendError(conn, "matchmaking_error", err.Error(), true)
+	if err := m.matchmakingClient.Enqueue(ctx, conn.playerID, req.DeckID); err != nil {
+		retryable := errors.Is(err, matchmakingclient.ErrUnavailable)
+		sendError(conn, "matchmaking_error", "failed to enqueue: "+err.Error(), retryable)
 		return
 	}
+	m.startMatchWait(conn.playerID)
 	conn.SendMessage(&WSMessage{Type: constants.WSMsgMatchmakingStarted})
 }
 
@@ -224,7 +249,7 @@ func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, da
 		return
 	}
 
-	if err := m.deckService.ValidateDeckForBattle(ctx, conn.playerID, req.DeckID); err != nil {
+	if err := m.cardClient.ValidateDeckForBattle(ctx, conn.playerID, req.DeckID); err != nil {
 		sendError(conn, "npc_battle_error", "deck validation failed: "+err.Error(), false)
 		return
 	}
@@ -240,14 +265,12 @@ func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, da
 		sendError(conn, "npc_battle_error", err.Error(), true)
 		return
 	}
-	// NPC 戦では人間は常に player_num=1。NPC 側（player_num=2）は game_players に書かない。
 	if m.gamePlayerRepo != nil {
 		if err := m.gamePlayerRepo.InsertGamePlayer(ctx, game.GameID, 1, conn.playerID); err != nil {
 			log.Printf("npc battle: insert game_player: %v", err)
 		}
 	}
-	m.Relay.RegisterGameMeta(game.GameID, conn.playerID, "", constants.MatchTypeNpc)
-	m.Spectate.RegisterGame(game.GameID, conn.playerID, "")
+	m.Spectate.RegisterGame(game.GameID)
 	conn.SendMessage(&WSMessage{
 		Type: constants.WSMsgNpcBattleCreated,
 		Data: mustMarshal(NPCBattleCreatedMessage{
@@ -256,13 +279,53 @@ func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, da
 	})
 }
 
+// HandleMatchMade は port.MatchEventHandler の実装です。
+// Pub/Sub subscriber が match_made イベント受信時に呼び出す。
+//
+// 全 Gateway Pod が competing-consumer で受信する。2 人のうちいずれかの
+// WS 接続を保持する Pod のみが通知を push し、他の Pod は ack して終了する。
+func (m *Manager) HandleMatchMade(ctx context.Context, event port.MatchMadeEvent) error {
+	if len(event.Players) != 2 {
+		return errors.New("match_made event must contain exactly 2 players")
+	}
+
+	// どの Pod が接続を保持するかに関わらず待機タイマーを停止（保持していない Pod では noop）
+	m.stopMatchWait(event.Players[0].PlayerID)
+	m.stopMatchWait(event.Players[1].PlayerID)
+
+	p1Cards, err := m.resolveDeckCards(ctx, event.Players[0].PlayerID, event.Players[0].DeckID)
+	if err != nil {
+		return err
+	}
+	p2Cards, err := m.resolveDeckCards(ctx, event.Players[1].PlayerID, event.Players[1].DeckID)
+	if err != nil {
+		return err
+	}
+
+	game, err := m.battleClient.CreatePvPGame(ctx, p1Cards, p2Cards)
+	if err != nil {
+		return err
+	}
+
+	if m.gamePlayerRepo != nil {
+		if err := m.gamePlayerRepo.InsertGamePlayer(ctx, game.GameID, 1, event.Players[0].PlayerID); err != nil {
+			log.Printf("match_made: insert game_player p1: %v", err)
+		}
+		if err := m.gamePlayerRepo.InsertGamePlayer(ctx, game.GameID, 2, event.Players[1].PlayerID); err != nil {
+			log.Printf("match_made: insert game_player p2: %v", err)
+		}
+	}
+
+	m.Spectate.RegisterGame(game.GameID)
+	m.Relay.NotifyMatchFound(game.GameID, event.Players[0].PlayerID, event.Players[1].PlayerID)
+	return nil
+}
+
 func (m *Manager) resolveDeckCards(ctx context.Context, playerID string, deckID int64) ([]service.BattleDeckCard, error) {
-	deckCards, err := m.deckRepo.GetDeckCards(ctx, playerID, deckID)
+	deckCards, err := m.cardClient.GetDeckCards(ctx, playerID, deckID)
 	if err != nil {
 		return nil, err
 	}
-	// DeckCardはカード種別ごとの行(Count>=1)なので、展開後の総枚数を先に求めて
-	// スライスを事前確保し、ループ中の再割当てを防ぐ。
 	totalCount := 0
 	for _, dc := range deckCards {
 		totalCount += dc.Count
@@ -276,24 +339,27 @@ func (m *Manager) resolveDeckCards(ctx context.Context, playerID string, deckID 
 	return cards, nil
 }
 
-// ActiveSpectateGames returns the list of currently active games available for spectating.
-func (m *Manager) ActiveSpectateGames() []model.SpectateGameInfo {
+// ActiveSpectateGames は現在観戦可能なゲーム一覧を返します
+func (m *Manager) ActiveSpectateGames() []apigateway.SpectateGameInfo {
 	return m.Spectate.ActiveGames()
 }
 
 func (m *Manager) checkAndIncrementBattleLimit(ctx context.Context, playerID string) (string, error) {
-	if m.playerService == nil {
+	if m.accountClient == nil {
 		return "", nil
 	}
-	limitResp, err := m.playerService.GetBattleLimit(ctx, playerID)
+	limitResp, err := m.accountClient.GetBattleLimit(ctx, playerID)
 	if err != nil {
 		return "", err
 	}
 	if !limitResp.CanBattle {
 		return "daily battle limit reached", nil
 	}
-	if err := m.playerService.IncrementBattleCount(ctx, playerID); err != nil {
+	if err := m.accountClient.IncrementBattleCount(ctx, playerID); err != nil {
 		return "", err
 	}
 	return "", nil
 }
+
+// resolveDeckCards での DeckCard 間接参照のため import を維持
+var _ = apigateway.DeckCard{}

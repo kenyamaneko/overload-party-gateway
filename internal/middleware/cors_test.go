@@ -20,7 +20,7 @@ func setupRouter(allowedOrigins ...string) *gin.Engine {
 		c.Status(http.StatusOK)
 	})
 	r.OPTIONS("/test", func(c *gin.Context) {
-		// This handler should not be reached for preflight; the middleware aborts first.
+		// preflight では到達しない。middleware が先に abort する。
 		c.Status(http.StatusOK)
 	})
 	return r

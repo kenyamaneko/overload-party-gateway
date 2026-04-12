@@ -16,7 +16,7 @@ func mustMarshal(v interface{}) json.RawMessage {
 	return data
 }
 
-// sendError sends an error message to a single connection.
+// sendError は単一接続にエラーメッセージを送信する。
 func sendError(conn *Connection, code, message string, retryable bool) {
 	conn.SendMessage(&WSMessage{
 		Type: constants.WSMsgError,
@@ -24,7 +24,7 @@ func sendError(conn *Connection, code, message string, retryable bool) {
 	})
 }
 
-// sendErrorToPlayer sends an error message to a player via the hub.
+// sendErrorToPlayer は hub 経由でプレイヤーにエラーメッセージを送信する。
 func sendErrorToPlayer(hub *ConnectionHub, playerID, code, message string, retryable bool) {
 	hub.SendToPlayer(playerID, &WSMessage{
 		Type: constants.WSMsgError,

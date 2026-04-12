@@ -8,14 +8,16 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/kenyamaneko/overload-party-gateway/internal/model"
+	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
 )
 
+// StaticService はお知らせや日替わり Tips など静的コンテンツを提供します
 type StaticService struct {
-	announcements []model.Announcement
-	dailyTips     []model.DailyTip
+	announcements []apigateway.Announcement
+	dailyTips     []apigateway.DailyTip
 }
 
+// NewStaticService は dataDir 内の JSON ファイルを読み込み StaticService を生成します
 func NewStaticService(dataDir string) (*StaticService, error) {
 	s := &StaticService{}
 
@@ -34,10 +36,10 @@ func NewStaticService(dataDir string) (*StaticService, error) {
 	return s, nil
 }
 
-// ActiveAnnouncements returns announcements that are currently active.
-func (s *StaticService) ActiveAnnouncements() []model.Announcement {
+// ActiveAnnouncements は現在有効なお知らせを返します
+func (s *StaticService) ActiveAnnouncements() []apigateway.Announcement {
 	now := time.Now()
-	active := make([]model.Announcement, 0)
+	active := make([]apigateway.Announcement, 0)
 	for _, a := range s.announcements {
 		if !a.PublishedAt.After(now) && a.ExpiresAt.After(now) {
 			active = append(active, a)
@@ -46,8 +48,8 @@ func (s *StaticService) ActiveAnnouncements() []model.Announcement {
 	return active
 }
 
-// TodaysTip returns a deterministically selected daily tip based on the date.
-func (s *StaticService) TodaysTip() *model.DailyTip {
+// TodaysTip は日付に基づいて決定論的に選択された日替わり Tips を返します
+func (s *StaticService) TodaysTip() *apigateway.DailyTip {
 	if len(s.dailyTips) == 0 {
 		return nil
 	}

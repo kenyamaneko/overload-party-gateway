@@ -1,8 +1,12 @@
+// Package main はローカルモード gateway のエントリポイントです。
+//
+// *_SERVICE_URL 環境変数で指定した URL の全下流サービスが起動している必要がある。
+// cmd/main との違いは認証 middleware: DevAuth により Firebase ID トークンの代わりに
+// `dev-token-{uid}` を使用でき、CORS は全オリジン許可となる。
 package main
 
 import (
 	"context"
-	"encoding/json"
 	"log"
 	"net/http"
 	"os/signal"
@@ -10,16 +14,20 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
 
-	gencache "github.com/kenyamaneko/overload-party-common/packages/devdata/cache"
-	"github.com/kenyamaneko/overload-party-gateway/internal/cache"
+	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
+	"github.com/kenyamaneko/overload-party-gateway/internal/client/cardclient"
+	"github.com/kenyamaneko/overload-party-gateway/internal/client/matchmakingclient"
+	"github.com/kenyamaneko/overload-party-gateway/internal/client/scenarioclient"
+	"github.com/kenyamaneko/overload-party-gateway/internal/client/shopclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/config"
+	pubsubadapter "github.com/kenyamaneko/overload-party-gateway/internal/adapter/pubsub"
 	"github.com/kenyamaneko/overload-party-gateway/internal/handler/rest"
 	ws "github.com/kenyamaneko/overload-party-gateway/internal/handler/ws"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
-	"github.com/kenyamaneko/overload-party-gateway/internal/router"
-	"github.com/kenyamaneko/overload-party-gateway/internal/model"
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
+	"github.com/kenyamaneko/overload-party-gateway/internal/router"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
@@ -27,92 +35,58 @@ func main() {
 	log.Println("=== Overload Party Gateway (LOCAL MODE) ===")
 
 	cfg := config.Load()
+	if cfg.DatabaseURL == "" {
+		log.Fatal("DATABASE_URL must be set (gateway owns gateway.game_players and reads newsfeed.news_articles)")
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// 1. Card cache from embedded JSON
-	cardCache := cache.NewCardCache()
-	if err := cardCache.LoadFromBytes(gencache.CardsJSON); err != nil {
-		log.Fatalf("failed to load embedded cards: %v", err)
+	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	if err != nil {
+		log.Fatalf("failed to create pg pool: %v", err)
 	}
-	log.Printf("loaded %d cards from embedded cards_gen.json", cardCache.Count())
+	defer pool.Close()
 
-	// 2. Mock repositories
-	playerRepo := repository.NewMockPlayerRepository()
-	deckRepo := repository.NewMockDeckRepository()
-	playerCardRepo := repository.NewMockPlayerCardRepository()
-	cardRepo := repository.NewMockCardRepository(cardCache.All())
-	shopRepo := repository.NewMockShopRepository()
-	subRepo := repository.NewMockSubscriptionRepository()
-	factionRepo := repository.NewMockFactionRepository()
-	storyRepo := repository.NewMockStoryRepository()
-	userSettingsRepo := repository.NewMockUserSettingsRepository()
-	gameConfigRepo := repository.NewMockGameConfigRepository()
+	newsRepo := repository.NewPgNewsRepository(pool)
+	gamePlayerRepo := repository.NewPgGamePlayerRepository(pool)
 
-	// 2b. Seed shop products from embedded JSON
-	seedShopProductsFromJSON(shopRepo)
+	cardClient := cardclient.New(cfg.CardServiceURL)
+	matchmakingClient := matchmakingclient.New(cfg.MatchmakingServiceURL)
+	accountClient := accountclient.New(cfg.AccountServiceURL)
+	shopClient := shopclient.New(cfg.ShopServiceURL)
+	scenarioClient := scenarioclient.New(cfg.ScenarioServiceURL)
 
-	// 3. Services
-	authService := service.NewAuthService(playerRepo, shopRepo, userSettingsRepo, &repository.MockTxRunner{})
-	playerService := service.NewPlayerService(playerRepo, gameConfigRepo)
-	cardService := service.NewCardService(cardRepo, playerCardRepo)
-	deckService := service.NewDeckService(deckRepo, playerCardRepo, cardCache)
-	shopService := service.NewShopService(shopRepo, subRepo, playerRepo, factionRepo, &repository.MockTxRunner{}, cardCache, nil, nil)
-	storyService := service.NewStoryService(storyRepo, nil, "")
-	subscriptionService := service.NewSubscriptionService(subRepo, playerRepo, &repository.MockTxRunner{}, nil)
-	newsRepo := repository.NewMockNewsRepository()
-	seedNewsMock(newsRepo)
 	newsService := service.NewNewsService(newsRepo)
-	userSettingsService := service.NewUserSettingsService(userSettingsRepo)
-	gamePlayerRepo := repository.NewMockGamePlayerRepository()
 
-	// 4. Battle client (uses cfg.BattleServerURL, default http://localhost:9002)
-	log.Printf("battle client: %s", cfg.BattleServerURL)
 	battleClient := service.NewBattleClient(cfg.BattleServerURL)
-
-	// 5. Handlers
-	wsManager := ws.NewManager(battleClient, playerService, deckService, deckRepo, gameConfigRepo, gamePlayerRepo)
-	go wsManager.StartMatchmaking(ctx)
-	wsHandler := ws.NewHandler(wsManager, nil, playerRepo, nil)
+	matchmakingTimeout := time.Duration(cfg.MatchmakingTimeoutSec) * time.Second
+	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, matchmakingTimeout)
+	wsHandler := ws.NewHandler(wsManager, nil, accountClient, nil)
 	handlers := &router.Handlers{
-		Auth:         rest.NewAuthHandler(authService),
-		Player:       rest.NewPlayerHandler(playerService),
+		Auth:         rest.NewAuthHandler(accountClient),
+		Player:       rest.NewPlayerHandler(accountClient),
+		UserSettings: rest.NewUserSettingsHandler(accountClient),
 		Spectate:     rest.NewSpectateHandler(wsManager),
-		Card:         rest.NewCardHandler(cardService),
-		Deck:         rest.NewDeckHandler(deckService),
-		PlayerCard:   rest.NewPlayerCardHandler(deckService),
+		Card:         rest.NewCardHandler(cardClient),
+		Deck:         rest.NewDeckHandler(cardClient),
+		PlayerCard:   rest.NewPlayerCardHandler(cardClient),
 		GameLog:      rest.NewGameLogHandler(battleClient),
 		NPC:          rest.NewNPCHandler(battleClient),
-		Shop:         rest.NewShopHandler(shopService),
-		Webhook:      rest.NewWebhookHandler(subscriptionService),
-		Story:        rest.NewStoryHandler(storyService),
-		UserSettings: rest.NewUserSettingsHandler(userSettingsService),
+		Shop:         rest.NewShopHandler(shopClient),
+		Scenario:     rest.NewScenarioHandler(scenarioClient),
 		News:         rest.NewNewsHandler(newsService),
 	}
 
-	// 5. Dev player setup: give all active cards + starter decks on first request
-	devPlayerSetup := newDevPlayerSetup(cardCache, playerCardRepo, deckRepo)
-
-	// 6. Bridge: when ShopService inserts player cards (e.g. select-faction),
-	// also add them to MockPlayerCardRepository so services can read them.
-	shopRepo.SetOnCardsInserted(func(playerID string, cards []*model.PlayerCard) {
-		playerCardRepo.SeedPlayerCards(playerID, cards)
-		log.Printf("synced %d player cards for %s (shop → playerCard)", len(cards), playerID)
-	})
-
-	// 7. Router (DevAuth instead of FirebaseAuth)
 	r := gin.Default()
-	r.Use(middleware.CORS()) // allow all origins in local mode
+	r.Use(middleware.CORS())
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "mode": "local"})
 	})
 
-	// WebSocket (no REST auth middleware; auth is handled inside HandleUpgrade)
 	r.GET("/ws", wsHandler.HandleUpgrade)
 
-	// Public API endpoints (no auth required, used by client splash screen)
 	pub := r.Group("/api/v1")
 	{
 		pub.GET("/health", func(c *gin.Context) {
@@ -129,21 +103,10 @@ func main() {
 		pub.GET("/cloud-news", handlers.News.GetCloudNews)
 	}
 
-	devRegister := func(ctx context.Context, firebaseUID, username string) (string, error) {
-		p, err := authService.Register(ctx, firebaseUID, username)
-		if err != nil {
-			return "", err
-		}
-		return p.PlayerID, nil
-	}
-
 	api := r.Group("/api/v1")
-	api.Use(middleware.DevAuthWithPlayerResolve(playerRepo, devRegister, middleware.DevPlayerSetup(devPlayerSetup)))
+	api.Use(middleware.DevAuthWithPlayerResolve(accountClient))
 	router.RegisterAuthRoutes(api, handlers)
 	router.RegisterAPIRoutes(api, handlers)
-
-	// Webhooks (no auth)
-	router.RegisterWebhookRoutes(r.Group("/api/v1/shop/webhook"), handlers)
 
 	srv := &http.Server{
 		Addr:    ":9001",
@@ -152,6 +115,23 @@ func main() {
 
 	srvCtx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	// ローカルモードでは Pub/Sub subscriber はオプション。
+	// NPC バトルがメインワークフローであり match_made イベントは不要。
+	if cfg.PubsubProjectID != "" {
+		subscriber, err := pubsubadapter.NewMatchSubscriber(srvCtx, cfg.PubsubProjectID, cfg.MatchmakingSubscription, wsManager)
+		if err != nil {
+			log.Fatalf("failed to create match subscriber: %v", err)
+		}
+		defer func() { _ = subscriber.Close() }()
+		go func() {
+			if err := subscriber.Run(srvCtx); err != nil && srvCtx.Err() == nil {
+				log.Fatalf("match subscriber error: %v", err)
+			}
+		}()
+	} else {
+		log.Println("PUBSUB_PROJECT_ID is unset; skipping matchmaking Pub/Sub subscriber (NPC battles only)")
+	}
 
 	go func() {
 		log.Println("gateway local server starting on :9001")
@@ -171,15 +151,4 @@ func main() {
 		log.Fatalf("server forced to shutdown: %v", err)
 	}
 	log.Println("gateway local server exited")
-}
-
-func seedShopProductsFromJSON(repo *repository.MockShopRepository) {
-	var products []*model.Product
-	if err := json.Unmarshal(gencache.ProductsJSON, &products); err != nil {
-		log.Fatalf("failed to unmarshal products_gen.json: %v", err)
-	}
-	for _, p := range products {
-		repo.AddProduct(p)
-	}
-	log.Printf("seeded %d shop products from products_gen.json", len(products))
 }

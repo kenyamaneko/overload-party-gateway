@@ -1,0 +1,31 @@
+{
+  "name": "@kenyamaneko/overload-party-api-gateway",
+  "version": "0.0.0",
+  "description": "Overload Party gateway API types — the single npm package for the client. Contains all REST request/response types (player, card, shop, scenario) and WS message envelopes.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kenyamaneko/overload-party-gateway.git",
+    "directory": "packages/api-gateway-npm"
+  },
+  "dependencies": {
+    "@kenyamaneko/overload-party-card-types": "*",
+    "@kenyamaneko/overload-party-game-design-constants": "*",
+    "@kenyamaneko/overload-party-game-state": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0"
+  }
+}

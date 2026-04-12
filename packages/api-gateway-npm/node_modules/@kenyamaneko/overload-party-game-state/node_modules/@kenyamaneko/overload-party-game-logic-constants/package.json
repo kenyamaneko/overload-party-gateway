@@ -1,0 +1,26 @@
+{
+  "name": "@kenyamaneko/overload-party-game-logic-constants",
+  "version": "0.0.0",
+  "description": "Overload Party game logic constants (Phase / WinReason / ActionType / EventType / EffectOp etc.). Auto-generated from data/game_logic_constants.yaml.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kenyamaneko/overload-party-common.git",
+    "directory": "packages/game-logic-constants-npm"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0"
+  }
+}

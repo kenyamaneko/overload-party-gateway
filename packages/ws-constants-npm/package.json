@@ -1,0 +1,26 @@
+{
+  "name": "@kenyamaneko/overload-party-ws-constants",
+  "version": "0.0.0",
+  "description": "Overload Party WebSocket message type constants (WSServerMsg* / WSClientMsg*). Auto-generated from data/gateway_ws_constants.yaml.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kenyamaneko/overload-party-gateway.git",
+    "directory": "packages/ws-constants-npm"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0"
+  }
+}

@@ -1,0 +1,122 @@
+name: publish packages
+
+# ADR-015 Phase 6: gateway owns ws-constants + api-gateway (Go + npm).
+# On every push to main that touches packages/**, this workflow tags each
+# changed Go module with packages/<name>/vX.Y.Z and publishes the npm
+# packages to GitHub Packages.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/**"
+      - "data/ws_constants.yaml"
+      - "data/models.yaml"
+      - "scripts/generate_types.py"
+      - ".github/workflows/publish.yaml"
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump (patch / minor / major)"
+        required: false
+        default: "patch"
+        type: choice
+        options: [patch, minor, major]
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      ws_constants_go: ${{ steps.filter.outputs.ws_constants_go }}
+      api_gateway_go: ${{ steps.filter.outputs.api_gateway_go }}
+      ws_constants_npm: ${{ steps.filter.outputs.ws_constants_npm }}
+      api_gateway_npm: ${{ steps.filter.outputs.api_gateway_npm }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            ws_constants_go:
+              - 'packages/ws-constants/**'
+            api_gateway_go:
+              - 'packages/api-gateway/**'
+            ws_constants_npm:
+              - 'packages/ws-constants-npm/**'
+            api_gateway_npm:
+              - 'packages/api-gateway-npm/**'
+
+  tag-go-modules:
+    needs: detect-changes
+    runs-on: ubuntu-latest
+    if: |
+      needs.detect-changes.outputs.ws_constants_go == 'true' ||
+      needs.detect-changes.outputs.api_gateway_go == 'true' ||
+      github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - name: Tag ws-constants
+        if: needs.detect-changes.outputs.ws_constants_go == 'true' || github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          cd packages/ws-constants
+          go build ./...
+          NEXT=$(../../scripts/ci/next-version.sh packages/ws-constants "${{ inputs.bump || 'patch' }}")
+          git tag "packages/ws-constants/${NEXT}"
+          git push origin "packages/ws-constants/${NEXT}"
+      - name: Tag api-gateway
+        if: needs.detect-changes.outputs.api_gateway_go == 'true' || github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          cd packages/api-gateway
+          go build ./...
+          NEXT=$(../../scripts/ci/next-version.sh packages/api-gateway "${{ inputs.bump || 'patch' }}")
+          git tag "packages/api-gateway/${NEXT}"
+          git push origin "packages/api-gateway/${NEXT}"
+
+  publish-npm:
+    needs: detect-changes
+    runs-on: ubuntu-latest
+    if: |
+      needs.detect-changes.outputs.ws_constants_npm == 'true' ||
+      needs.detect-changes.outputs.api_gateway_npm == 'true' ||
+      github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@kenyamaneko"
+      - name: Publish ws-constants-npm
+        if: needs.detect-changes.outputs.ws_constants_npm == 'true' || github.event_name == 'workflow_dispatch'
+        working-directory: packages/ws-constants-npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          rm -f package-lock.json
+          npm install --no-package-lock
+          npm run build
+          npm publish --access restricted
+      - name: Publish api-gateway-npm
+        if: needs.detect-changes.outputs.api_gateway_npm == 'true' || github.event_name == 'workflow_dispatch'
+        working-directory: packages/api-gateway-npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          rm -f package-lock.json
+          npm install --no-package-lock
+          npm run build
+          npm publish --access restricted

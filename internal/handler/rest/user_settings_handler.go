@@ -5,35 +5,36 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
+	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
-	"github.com/kenyamaneko/overload-party-gateway/internal/model"
-	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
+// UserSettingsHandler はユーザー設定の REST エンドポイントを処理します
 type UserSettingsHandler struct {
-	svc *service.UserSettingsService
+	account *accountclient.Client
 }
 
-func NewUserSettingsHandler(svc *service.UserSettingsService) *UserSettingsHandler {
-	return &UserSettingsHandler{svc: svc}
+// NewUserSettingsHandler は UserSettingsHandler を生成します
+func NewUserSettingsHandler(account *accountclient.Client) *UserSettingsHandler {
+	return &UserSettingsHandler{account: account}
 }
 
+// GetSettings はユーザー設定を返します
 func (h *UserSettingsHandler) GetSettings(c *gin.Context) {
 	playerID := middleware.GetPlayerID(c)
-
-	s, err := h.svc.Get(c.Request.Context(), playerID)
+	settings, err := h.account.GetSettings(c.Request.Context(), playerID)
 	if err != nil {
-		respondError(c, err)
+		respondAccountErr(c, err)
 		return
 	}
-
-	c.JSON(http.StatusOK, s)
+	c.JSON(http.StatusOK, settings)
 }
 
+// UpdateSettings はユーザー設定を更新します
 func (h *UserSettingsHandler) UpdateSettings(c *gin.Context) {
 	playerID := middleware.GetPlayerID(c)
-
-	var req model.UpdateSettingsRequest
+	var req apigateway.UpdateSettingsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -42,19 +43,10 @@ func (h *UserSettingsHandler) UpdateSettings(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "language is required"})
 		return
 	}
-
-	s := &model.UserSettings{
-		PlayerID:    playerID,
-		Language:    req.Language,
-		BgmVolume:   req.BgmVolume,
-		SeVolume:    req.SeVolume,
-		PushEnabled: req.PushEnabled,
-	}
-
-	if err := h.svc.Update(c.Request.Context(), s); err != nil {
-		respondError(c, err)
+	settings, err := h.account.UpdateSettings(c.Request.Context(), playerID, req)
+	if err != nil {
+		respondAccountErr(c, err)
 		return
 	}
-
-	c.JSON(http.StatusOK, s)
+	c.JSON(http.StatusOK, settings)
 }

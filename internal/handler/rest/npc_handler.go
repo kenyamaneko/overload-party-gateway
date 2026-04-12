@@ -8,14 +8,17 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
+// NPCHandler は NPC モデルの REST エンドポイントを処理します
 type NPCHandler struct {
 	battleClient service.BattleClient
 }
 
+// NewNPCHandler は NPCHandler を生成します
 func NewNPCHandler(battleClient service.BattleClient) *NPCHandler {
 	return &NPCHandler{battleClient: battleClient}
 }
 
+// GetNPCModels は NPC モデル一覧を返します
 func (h *NPCHandler) GetNPCModels(c *gin.Context) {
 	models, err := h.battleClient.GetNPCModels(c.Request.Context())
 	if err != nil {

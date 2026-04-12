@@ -1,145 +1,79 @@
-# Overload Party Gateway
+# overload-party-gateway
 
-**Overload Party** のクライアント向け REST API ゲートウェイサーバー。
+クライアントが唯一通信する薄い WS/REST ゲートウェイ。認証・ルーティング・WebSocket リレーを担い、ドメインロジックはすべて下流 6 サービスに委譲する。
 
-Overload Party は、AWS・Azure・GCP・OCI など実在するクラウドサービスを擬人化したキャラクターで戦う 1v1 リアルタイム対戦カードゲームです。本リポジトリはクライアントアプリとバトルサーバーの間に位置し、認証・プレイヤーデータ・デッキ管理・ショップ/課金処理、そして **WebSocket 経由での対戦通信・マッチメイキング** などを担うゲートウェイ API を提供します。
-
-## 技術スタック
-
-- **Go** (Gin)
-- **PostgreSQL** (pgx)
-- **Firebase Authentication**
-- **Apple / Google IAP** レシート検証
-
-## プロジェクト構成
+## サービス間連携
 
 ```
-cmd/
-  main/       # 本番エントリポイント (PostgreSQL + Firebase Auth)
-  local/      # ローカル開発用エントリポイント (インメモリ Mock)
-internal/
-  cache/      # カード定義キャッシュ
-  config/     # 環境変数の読み込み
-  constants/  # 定数 (コード生成)
-  handler/    # REST ハンドラー
-  middleware/ # CORS, 認証ミドルウェア
-  model/      # データモデル
-  platform/   # Apple/Google レシート検証
-  repository/ # PostgreSQL / Mock リポジトリ
-  service/    # ビジネスロジック
+Client (React / Capacitor)
+  ├─ WS  /ws                        ← ゲーム状態同期、マッチメイキング、観戦
+  └─ REST /api/v1/*                  ← 認証、デッキ、カード、ショップ等
+              │
+              ▼
+Gateway (このサービス, :9001)
+  ├─ HTTP → account   (:9005)  プレイヤー / 認証 / 設定 / EXP
+  ├─ HTTP → card      (:9003)  カードマスター / デッキ CRUD
+  ├─ HTTP → matchmaking(:9004) enqueue / cancel
+  ├─ HTTP → battle    (:9002)  ゲーム作成 / アクション / 状態取得
+  ├─ HTTP → shop      (:9006)  商品 / 購入 / サブスクリプション
+  ├─ HTTP → scenario  (:9007)  エピソード / スクリプト
+  ├─ PostgreSQL                 gateway.game_players (所有) + newsfeed.news_articles (read-only)
+  └─ Cloud Pub/Sub subscriber ×3
+        ├─ matchmaking-events-gateway        ← match_made
+        ├─ faction-selected-gateway-sub      ← faction_selected
+        └─ premium-updated-gateway-sub       ← premium_updated
 ```
 
-## セットアップ
+エンドポイント一覧は [docs/API_REFERENCE.md](docs/API_REFERENCE.md) を参照。
 
-### 必要なもの
+## 環境変数
 
-- Go 1.25+
-- PostgreSQL (本番モード)
-- Firebase プロジェクト (本番モード)
+**Deployment env (インフラ層):**
 
-### ローカル開発 (推奨)
+| 変数名 | デフォルト | 説明 |
+|---|---|---|
+| `PORT` | `9001` | リッスンポート |
+| `ENV` | `dev` | 動作環境 (`dev` / `stg` / `prod`) |
+| `LOG_LEVEL` | `info` | ログレベル |
+| `DATABASE_URL` | *(必須)* | PostgreSQL 接続文字列 (`gateway.game_players` + `newsfeed.news_articles`) |
+| `PUBSUB_PROJECT_ID` | *(必須)* | GCP プロジェクト ID |
 
-DB・Firebase 不要。インメモリ Mock リポジトリで起動します。
+**ConfigMap (サービス URL):**
 
-```bash
-make run-local
-# http://localhost:9001/api/v1/
-```
+| 変数名 | デフォルト | 説明 |
+|---|---|---|
+| `BATTLE_SERVER_URL` | `http://localhost:9002` | Battle サービス URL |
+| `CARD_SERVICE_URL` | `http://localhost:9003` | Card サービス URL |
+| `MATCHMAKING_SERVICE_URL` | `http://localhost:9004` | Matchmaking サービス URL |
+| `ACCOUNT_SERVICE_URL` | `http://localhost:9005` | Account サービス URL |
+| `SHOP_SERVICE_URL` | `http://localhost:9006` | Shop サービス URL |
+| `SCENARIO_SERVICE_URL` | `http://localhost:9007` | Scenario サービス URL |
 
-ローカルモードでは `X-Dev-UID` ヘッダーで認証をバイパスできます。
+**ConfigMap (Pub/Sub):**
 
-### 本番モード
+| 変数名 | デフォルト | 説明 |
+|---|---|---|
+| `MATCHMAKING_SUBSCRIPTION` | `matchmaking-events-gateway` | matchmaking Pub/Sub サブスクリプション名 |
+| `FACTION_SELECTED_SUBSCRIPTION` | `faction-selected-gateway-sub` | faction-selected Pub/Sub サブスクリプション名 |
+| `PREMIUM_UPDATED_SUBSCRIPTION` | `premium-updated-gateway-sub` | premium-updated Pub/Sub サブスクリプション名 |
 
-```bash
-# .env を作成
-cp .env.example .env  # 環境変数を設定
+**ConfigMap (アプリ挙動):**
 
-# 起動
-make run-gateway
-```
+| 変数名 | デフォルト | 説明 |
+|---|---|---|
+| `ALLOWED_ORIGINS` | *(空)* | CORS 許可オリジン (カンマ区切り、prod 必須) |
+| `MATCHMAKING_TIMEOUT_SEC` | `60` | プレイヤーごとのマッチメイク待ちタイムアウト秒 |
+| `APP_MIN_VERSION` | `0.1.0` | 最低必要バージョン |
+| `APP_LATEST_VERSION` | `0.1.0` | 最新バージョン |
+| `APP_FORCE_UPDATE` | `false` | 強制アップデートフラグ |
 
-### 環境変数
+## 公開パッケージ
 
-| 変数 | 必須 | デフォルト | 説明 |
-|------|------|-----------|------|
-| `PORT` | - | `9001` | サーバーポート |
-| `ENV` | - | `dev` | 実行環境 (`dev` / `prod`) |
-| `DATABASE_URL` | 本番 | - | PostgreSQL 接続文字列 |
-| `ALLOWED_ORIGINS` | 本番 | - | CORS 許可オリジン (カンマ区切り) |
-| `APPLE_KEY_ID` | - | - | App Store Connect API キー ID |
-| `APPLE_ISSUER_ID` | - | - | App Store Connect Issuer ID |
-| `APPLE_BUNDLE_ID` | - | - | アプリ Bundle ID |
-| `APPLE_PRIVATE_KEY_PATH` | - | - | App Store Connect 秘密鍵パス |
-| `APPLE_ENVIRONMENT` | - | `Sandbox` | `Production` / `Sandbox` |
-| `GOOGLE_PACKAGE_NAME` | - | - | Google Play パッケージ名 |
-| `BATTLE_SERVER_URL` | - | `http://localhost:9002` | Battle Server への接続 URL |
-| `APP_MIN_VERSION` | - | `0.1.0` | 最低必要バージョン |
-| `APP_LATEST_VERSION` | - | `0.1.0` | 最新バージョン |
-| `APP_FORCE_UPDATE` | - | `false` | 強制アップデートフラグ |
+| パッケージ | 言語 | 説明 |
+|---|---|---|
+| `packages/ws-constants/` | Go | WS メッセージ型定数 |
+| `packages/ws-constants-npm/` | npm | 同上 (クライアント向け) |
+| `packages/api-gateway/` | Go | REST / WS エンベロープ型 |
+| `packages/api-gateway-npm/` | npm | 同上 (クライアント向け) |
 
-## 開発コマンド
-
-```bash
-make help              # コマンド一覧
-make run-local         # ローカルサーバー起動
-make run-gateway       # 本番モードサーバー起動
-make test              # ユニットテスト実行
-make test-all          # ユニット + 統合テスト実行
-make test-integration  # 統合テストのみ実行 (Docker 必須)
-make test-db-up        # テスト用 PostgreSQL 起動
-make test-db-down      # テスト用 PostgreSQL 停止
-make lint              # Lint 実行
-make fmt               # コードフォーマット
-make build             # Docker イメージビルド
-```
-
-## 依存管理 (Go Modules + Vendor)
-
-Docker ビルドではプライベートリポジトリ (`overload-party-common`) への認証を不要にするため、`go mod vendor` で依存を `vendor/` に含めています。
-
-### ローカルでの依存更新
-
-`overload-party-common` はプライベートリポジトリのため、Go proxy 経由では取得できません。
-`go get` を実行する前に `GOPRIVATE` を設定してください（`GONOSUMCHECK` は `GOPRIVATE` に含まれるため不要です）。
-
-```bash
-make update-common
-# vendor/ の変更もコミット
-```
-
-> **注意:** `go mod vendor` を忘れると、Docker ビルドや CI の build ジョブで古い依存のままになります。
-
-### CI
-
-lint/test ジョブでは vendor を使わず、`GITHUB_TOKEN` によるトークン認証で最新パッケージを取得します。build-and-push ジョブでは `vendor/` を使用するため認証は不要です。
-
-## 統合テスト
-
-PostgreSQL に対する統合テスト (`internal/repository/pg_*`) は Docker が必要です。
-テスト用 DB は `overload-party-common/db/docker-compose.test.yml` で起動します (battle リポと共用)。
-
-```bash
-# 一括実行 (DB 起動 → テスト)
-make test-integration
-
-# 手動で DB を起動しておく場合
-make test-db-up
-TEST_DB_URL="postgres://testuser:testpass@localhost:5433/testdb?sslmode=disable" go test ./internal/repository/ -run TestPg -v
-make test-db-down
-```
-
-`TEST_DB_URL` が未設定の場合、統合テストは自動的にスキップされます。
-
-## Roadmap
-
-- [ ] セキュリティ監査
-- [ ] ロードテスト
-- [ ] 本番リリース
-
-## 関連リポジトリ
-
-| リポジトリ | 概要 |
-|-----------|------|
-| `overload-party-common` | ゲーム仕様・カード YAML 定義・コード生成スクリプト (Single Source of Truth) |
-| `overload-party-client` | クライアント (React + Capacitor) |
-| `overload-party-battle` | バトルサーバー (ゲームエンジン / REST API バックエンド) |
+SSoT: `data/ws_constants.yaml` + `data/models.yaml` → `python3 scripts/generate_types.py` で再生成。`*_gen.go` / `*_gen.ts` は自動生成 — 直接編集しない。

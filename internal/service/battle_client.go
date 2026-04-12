@@ -14,8 +14,8 @@ import (
 	apibattle "github.com/kenyamaneko/overload-party-common/packages/api-battle-rpc"
 )
 
-// Type aliases expose the generated battle RPC types under the service package
-// so callers can keep using service.ActionResult etc. without edit churn.
+// 生成済み battle RPC 型の re-export。
+// 呼び出し側が service.ActionResult 等をそのまま使えるようにする。
 type (
 	BattleDeckCard    = apibattle.BattleDeckCard
 	GameCreatedResult = apibattle.GameCreatedResult
@@ -23,10 +23,9 @@ type (
 	ActionResult      = apibattle.ActionResult
 )
 
-// BattleClient is the interface for communicating with the battle server REST API.
-// Gateway uses this to delegate game creation, action processing, and state retrieval.
-// All player-facing methods use playerNum (1 or 2) instead of playerID;
-// the gateway resolves playerID → playerNum before calling these methods.
+// BattleClient は battle server REST API との通信インターフェースです。
+// gateway はゲーム作成、アクション処理、ステート取得をこのクライアントに委譲する。
+// プレイヤー向けメソッドは playerID ではなく playerNum (1/2) を使用する。
 type BattleClient interface {
 	GetNPCModels(ctx context.Context) (json.RawMessage, error)
 	StartNPCBattle(ctx context.Context, deckCards []BattleDeckCard, npcModel string) (*GameCreatedResult, error)
@@ -46,6 +45,7 @@ type battleClient struct {
 	client  *http.Client
 }
 
+// NewBattleClient は battle server への HTTP クライアントを生成します
 func NewBattleClient(baseURL string) BattleClient {
 	return &battleClient{
 		baseURL: baseURL,
@@ -148,8 +148,8 @@ func (c *battleClient) GetGameLogText(ctx context.Context, gameID string) ([]byt
 	return body, nil
 }
 
-// parseBattleError attempts to extract a structured error message from the battle server response body.
-// Falls back to including the raw status code and body.
+// parseBattleError は battle server のレスポンスから構造化エラーメッセージを抽出します。
+// 抽出できない場合はステータスコードと body をそのまま含めたエラーを返す。
 func parseBattleError(statusCode int, body []byte) error {
 	var errResp struct {
 		Error string `json:"error"`
@@ -162,7 +162,7 @@ func parseBattleError(statusCode int, body []byte) error {
 	return fmt.Errorf("battle server returned %d: %s", statusCode, string(body))
 }
 
-// --- HTTP helpers ---
+// --- HTTP ヘルパー ---
 
 func (c *battleClient) post(ctx context.Context, path string, body any, result any) error {
 	jsonBody, err := json.Marshal(body)

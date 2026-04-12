@@ -3,27 +3,30 @@ module github.com/kenyamaneko/overload-party-gateway
 go 1.25.1
 
 require (
-	cloud.google.com/go v0.123.0
-	cloud.google.com/go/storage v1.56.0
+	cloud.google.com/go/pubsub v1.50.1
 	firebase.google.com/go/v4 v4.19.0
 	github.com/gin-gonic/gin v1.11.0
-	github.com/golang-jwt/jwt/v4 v4.5.2
-	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/kenyamaneko/overload-party-common/packages/api-battle-rpc v0.1.0
-	github.com/kenyamaneko/overload-party-common/packages/api-client v0.1.0
 	github.com/kenyamaneko/overload-party-common/packages/card-types v0.1.0
-	github.com/kenyamaneko/overload-party-common/packages/devdata v0.1.1
+	github.com/kenyamaneko/overload-party-common/packages/pubsub-events v0.1.0
 	github.com/kenyamaneko/overload-party-common/packages/game-design-constants v0.1.0
 	github.com/kenyamaneko/overload-party-common/packages/game-logic-constants v0.1.0
-	github.com/kenyamaneko/overload-party-common/packages/ws-constants v0.1.0
+	github.com/kenyamaneko/overload-party-gateway/packages/api-gateway v0.0.0-00010101000000-000000000000
+	github.com/kenyamaneko/overload-party-gateway/packages/ws-constants v0.0.0-00010101000000-000000000000
 	github.com/stretchr/testify v1.11.1
-	google.golang.org/api v0.267.0
+)
+
+replace (
+	github.com/kenyamaneko/overload-party-common/packages/pubsub-events => ../overload-party-common/packages/pubsub-events
+	github.com/kenyamaneko/overload-party-gateway/packages/api-gateway => ./packages/api-gateway
+	github.com/kenyamaneko/overload-party-gateway/packages/ws-constants => ./packages/ws-constants
 )
 
 require (
 	cel.dev/expr v0.25.1 // indirect
+	cloud.google.com/go v0.123.0 // indirect
 	cloud.google.com/go/auth v0.18.1 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
@@ -31,6 +34,8 @@ require (
 	cloud.google.com/go/iam v1.5.3 // indirect
 	cloud.google.com/go/longrunning v0.8.0 // indirect
 	cloud.google.com/go/monitoring v1.24.3 // indirect
+	cloud.google.com/go/pubsub/v2 v2.0.0 // indirect
+	cloud.google.com/go/storage v1.56.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.30.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.53.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.53.0 // indirect
@@ -54,8 +59,10 @@ require (
 	github.com/go-playground/validator/v10 v10.27.0 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/goccy/go-yaml v1.18.0 // indirect
+	github.com/golang-jwt/jwt/v4 v4.5.2 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.11 // indirect
 	github.com/googleapis/gax-go/v2 v2.17.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
@@ -75,6 +82,7 @@ require (
 	github.com/spiffe/go-spiffe/v2 v2.6.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.0 // indirect
+	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/detectors/gcp v1.39.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.61.0 // indirect
@@ -95,6 +103,7 @@ require (
 	golang.org/x/text v0.34.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
 	golang.org/x/tools v0.41.0 // indirect
+	google.golang.org/api v0.267.0 // indirect
 	google.golang.org/appengine/v2 v2.0.6 // indirect
 	google.golang.org/genproto v0.0.0-20260128011058-8636f8732409 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260203192932-546029d2fa20 // indirect

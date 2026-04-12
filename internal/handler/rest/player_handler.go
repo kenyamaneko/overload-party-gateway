@@ -1,37 +1,39 @@
 package rest
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
-	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
+// PlayerHandler はプレイヤー情報の REST エンドポイントを処理します
 type PlayerHandler struct {
-	playerService *service.PlayerService
+	account *accountclient.Client
 }
 
-func NewPlayerHandler(playerService *service.PlayerService) *PlayerHandler {
-	return &PlayerHandler{playerService: playerService}
+// NewPlayerHandler は PlayerHandler を生成します
+func NewPlayerHandler(account *accountclient.Client) *PlayerHandler {
+	return &PlayerHandler{account: account}
 }
 
+// GetPlayer はプレイヤー情報を返します
 func (h *PlayerHandler) GetPlayer(c *gin.Context) {
 	playerID := middleware.GetPlayerID(c)
-
-	resp, err := h.playerService.GetPlayerResponse(c.Request.Context(), playerID)
+	player, err := h.account.GetPlayer(c.Request.Context(), playerID)
 	if err != nil {
-		respondError(c, err)
+		respondAccountErr(c, err)
 		return
 	}
-
-	c.JSON(http.StatusOK, resp)
+	c.JSON(http.StatusOK, player)
 }
 
+// UpdateName はプレイヤー名を変更します
 func (h *PlayerHandler) UpdateName(c *gin.Context) {
 	playerID := middleware.GetPlayerID(c)
-
 	var req struct {
 		Name string `json:"name" binding:"required"`
 	}
@@ -39,24 +41,33 @@ func (h *PlayerHandler) UpdateName(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	player, err := h.playerService.UpdateUsername(c.Request.Context(), playerID, req.Name)
+	player, err := h.account.UpdateName(c.Request.Context(), playerID, req.Name)
 	if err != nil {
-		respondError(c, err)
+		respondAccountErr(c, err)
 		return
 	}
-
 	c.JSON(http.StatusOK, player)
 }
 
+// GetBattleLimit はバトル回数制限情報を返します
 func (h *PlayerHandler) GetBattleLimit(c *gin.Context) {
 	playerID := middleware.GetPlayerID(c)
-
-	result, err := h.playerService.GetBattleLimit(c.Request.Context(), playerID)
+	limit, err := h.account.GetBattleLimit(c.Request.Context(), playerID)
 	if err != nil {
-		respondError(c, err)
+		respondAccountErr(c, err)
 		return
 	}
+	c.JSON(http.StatusOK, limit)
+}
 
-	c.JSON(http.StatusOK, result)
+func respondAccountErr(c *gin.Context, err error) {
+	if errors.Is(err, accountclient.ErrNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	if errors.Is(err, accountclient.ErrPlayerAlreadyRegistered) {
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 }

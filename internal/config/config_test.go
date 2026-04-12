@@ -13,14 +13,15 @@ func TestLoad_Defaults(t *testing.T) {
 	assert.Equal(t, "dev", cfg.Env)
 	assert.Equal(t, "info", cfg.LogLevel)
 	assert.Equal(t, "", cfg.DatabaseURL)
-	assert.Equal(t, "", cfg.AppleKeyID)
-	assert.Equal(t, "", cfg.AppleIssuerID)
-	assert.Equal(t, "", cfg.AppleBundleID)
-	assert.Equal(t, "", cfg.ApplePrivateKeyPath)
-	assert.Equal(t, "Sandbox", cfg.AppleEnvironment)
-	assert.Equal(t, "", cfg.GooglePackageName)
 	assert.Nil(t, cfg.AllowedOrigins)
 	assert.Equal(t, "http://localhost:9002", cfg.BattleServerURL)
+	assert.Equal(t, "http://localhost:9003", cfg.CardServiceURL)
+	assert.Equal(t, "http://localhost:9004", cfg.MatchmakingServiceURL)
+	assert.Equal(t, "http://localhost:9005", cfg.AccountServiceURL)
+	assert.Equal(t, "http://localhost:9006", cfg.ShopServiceURL)
+	assert.Equal(t, "http://localhost:9007", cfg.ScenarioServiceURL)
+	assert.Equal(t, "matchmaking-events-gateway", cfg.MatchmakingSubscription)
+	assert.Equal(t, 60, cfg.MatchmakingTimeoutSec)
 	assert.Equal(t, "0.1.0", cfg.AppMinVersion)
 	assert.Equal(t, "0.1.0", cfg.AppLatestVersion)
 	assert.False(t, cfg.AppForceUpdate)
@@ -31,14 +32,12 @@ func TestLoad_CustomValues(t *testing.T) {
 	t.Setenv("ENV", "production")
 	t.Setenv("LOG_LEVEL", "debug")
 	t.Setenv("DATABASE_URL", "postgres://localhost:5432/mydb")
-	t.Setenv("APPLE_KEY_ID", "key123")
-	t.Setenv("APPLE_ISSUER_ID", "issuer456")
-	t.Setenv("APPLE_BUNDLE_ID", "com.example.app")
-	t.Setenv("APPLE_PRIVATE_KEY_PATH", "/path/to/key.p8")
-	t.Setenv("APPLE_ENVIRONMENT", "Production")
-	t.Setenv("GOOGLE_PACKAGE_NAME", "com.example.android")
 	t.Setenv("ALLOWED_ORIGINS", "http://localhost:3000")
 	t.Setenv("BATTLE_SERVER_URL", "http://battle:9002")
+	t.Setenv("CARD_SERVICE_URL", "http://card:9001")
+	t.Setenv("ACCOUNT_SERVICE_URL", "http://account:9001")
+	t.Setenv("SHOP_SERVICE_URL", "http://shop:9001")
+	t.Setenv("SCENARIO_SERVICE_URL", "http://scenario:9001")
 	t.Setenv("APP_MIN_VERSION", "1.0.0")
 	t.Setenv("APP_LATEST_VERSION", "1.2.0")
 	t.Setenv("APP_FORCE_UPDATE", "true")
@@ -49,14 +48,12 @@ func TestLoad_CustomValues(t *testing.T) {
 	assert.Equal(t, "production", cfg.Env)
 	assert.Equal(t, "debug", cfg.LogLevel)
 	assert.Equal(t, "postgres://localhost:5432/mydb", cfg.DatabaseURL)
-	assert.Equal(t, "key123", cfg.AppleKeyID)
-	assert.Equal(t, "issuer456", cfg.AppleIssuerID)
-	assert.Equal(t, "com.example.app", cfg.AppleBundleID)
-	assert.Equal(t, "/path/to/key.p8", cfg.ApplePrivateKeyPath)
-	assert.Equal(t, "Production", cfg.AppleEnvironment)
-	assert.Equal(t, "com.example.android", cfg.GooglePackageName)
 	assert.Equal(t, []string{"http://localhost:3000"}, cfg.AllowedOrigins)
 	assert.Equal(t, "http://battle:9002", cfg.BattleServerURL)
+	assert.Equal(t, "http://card:9001", cfg.CardServiceURL)
+	assert.Equal(t, "http://account:9001", cfg.AccountServiceURL)
+	assert.Equal(t, "http://shop:9001", cfg.ShopServiceURL)
+	assert.Equal(t, "http://scenario:9001", cfg.ScenarioServiceURL)
 	assert.Equal(t, "1.0.0", cfg.AppMinVersion)
 	assert.Equal(t, "1.2.0", cfg.AppLatestVersion)
 	assert.True(t, cfg.AppForceUpdate)
@@ -68,31 +65,11 @@ func TestSplitCSV(t *testing.T) {
 		input string
 		want  []string
 	}{
-		{
-			name:  "empty string",
-			input: "",
-			want:  nil,
-		},
-		{
-			name:  "single value",
-			input: "a",
-			want:  []string{"a"},
-		},
-		{
-			name:  "multiple values",
-			input: "a,b,c",
-			want:  []string{"a", "b", "c"},
-		},
-		{
-			name:  "values with whitespace are trimmed",
-			input: "a, b , c",
-			want:  []string{"a", "b", "c"},
-		},
-		{
-			name:  "only whitespace and commas yields empty",
-			input: " , , ",
-			want:  nil,
-		},
+		{"empty string", "", nil},
+		{"single value", "a", []string{"a"}},
+		{"multiple values", "a,b,c", []string{"a", "b", "c"}},
+		{"values with whitespace are trimmed", "a, b , c", []string{"a", "b", "c"}},
+		{"only whitespace and commas yields empty", " , , ", nil},
 	}
 
 	for _, tt := range tests {

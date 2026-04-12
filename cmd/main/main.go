@@ -11,24 +11,22 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	gcsstorage "cloud.google.com/go/storage"
-
-	"github.com/kenyamaneko/overload-party-gateway/internal/cache"
+	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
+	"github.com/kenyamaneko/overload-party-gateway/internal/client/cardclient"
+	"github.com/kenyamaneko/overload-party-gateway/internal/client/matchmakingclient"
+	"github.com/kenyamaneko/overload-party-gateway/internal/client/scenarioclient"
+	"github.com/kenyamaneko/overload-party-gateway/internal/client/shopclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/config"
+	pubsubadapter "github.com/kenyamaneko/overload-party-gateway/internal/adapter/pubsub"
 	"github.com/kenyamaneko/overload-party-gateway/internal/handler/rest"
 	ws "github.com/kenyamaneko/overload-party-gateway/internal/handler/ws"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
-	"github.com/kenyamaneko/overload-party-gateway/internal/router"
-	"github.com/kenyamaneko/overload-party-gateway/internal/platform"
-	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
+	"github.com/kenyamaneko/overload-party-gateway/internal/router"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
-const (
-	serverShutdownTimeout    = 10 * time.Second
-	cardCacheRefreshInterval = 5 * time.Minute
-)
+const serverShutdownTimeout = 10 * time.Second
 
 func main() {
 	ctx := context.Background()
@@ -40,121 +38,63 @@ func main() {
 	if cfg.DatabaseURL == "" {
 		log.Fatal("DATABASE_URL must be set")
 	}
+	if cfg.PubsubProjectID == "" {
+		log.Fatal("PUBSUB_PROJECT_ID must be set")
+	}
 
 	if cfg.Env == "prod" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	// PostgreSQL connection pool
+	// PostgreSQL 接続プール: gateway.game_players（gateway 所有）と
+	// newsfeed.news_articles（read-only クロススキーマプロキシ）に使用
 	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("failed to create pg pool: %v", err)
 	}
 	defer pool.Close()
 
-	// Firebase Auth client
+	// Firebase Auth クライアント
 	authClient, err := middleware.NewFirebaseAuthClient(ctx)
 	if err != nil {
 		log.Fatalf("failed to create firebase auth client: %v", err)
 	}
 
-	// Repositories (PostgreSQL)
-	playerRepo := repository.NewPgPlayerRepository(pool)
-	cardRepo := repository.NewPgCardRepository(pool)
-	deckRepo := repository.NewPgDeckRepository(pool)
-	playerCardRepo := repository.NewPgPlayerCardRepository(pool)
-	shopRepo := repository.NewPgShopRepository(pool)
-	subRepo := repository.NewPgSubscriptionRepository(pool)
-	factionRepo := repository.NewPgFactionRepository(pool)
-	storyRepo := repository.NewPgStoryRepository(pool)
-	userSettingsRepo := repository.NewPgUserSettingsRepository(pool)
-	gameConfigRepo := repository.NewPgGameConfigRepository(pool)
+	// gateway 所有の game_players リポジトリ + read-only newsfeed プロキシ
 	newsRepo := repository.NewPgNewsRepository(pool)
-
-	// Card cache (load at startup)
-	cardCache := cache.NewCardCache()
-	if err := cardCache.Load(ctx, cardRepo); err != nil {
-		log.Fatalf("failed to load card cache: %v", err)
-	}
-	log.Printf("loaded %d cards into cache", cardCache.Count())
-
-	// Receipt verifiers
-	var appleVerifier platform.ReceiptVerifier
-	var googleVerifier platform.ReceiptVerifier
-	if cfg.ApplePrivateKeyPath != "" {
-		av, err := platform.NewAppleReceiptVerifier(
-			cfg.AppleKeyID, cfg.AppleIssuerID, cfg.AppleBundleID,
-			cfg.ApplePrivateKeyPath, cfg.AppleEnvironment,
-		)
-		if err != nil {
-			log.Fatalf("failed to create apple verifier: %v", err)
-		}
-		appleVerifier = av
-	}
-	if cfg.GooglePackageName != "" {
-		gv, err := platform.NewGoogleReceiptVerifier(ctx, cfg.GooglePackageName)
-		if err != nil {
-			log.Fatalf("failed to create google verifier: %v", err)
-		}
-		googleVerifier = gv
-	}
-
-	// GCS client for story scripts
-	var gcsClient *gcsstorage.Client
-	if cfg.StoryBucket != "" {
-		gc, err := gcsstorage.NewClient(ctx)
-		if err != nil {
-			log.Fatalf("failed to create gcs client: %v", err)
-		}
-		defer gc.Close()
-		gcsClient = gc
-	}
-
-	// Services
-	txManager := repository.NewTxManager(pool)
-	authService := service.NewAuthService(playerRepo, shopRepo, userSettingsRepo, txManager)
-	playerService := service.NewPlayerService(playerRepo, gameConfigRepo)
-	cardService := service.NewCardService(cardRepo, playerCardRepo)
-	deckService := service.NewDeckService(deckRepo, playerCardRepo, cardCache)
-	shopService := service.NewShopService(shopRepo, subRepo, playerRepo, factionRepo, txManager, cardCache, appleVerifier, googleVerifier)
-	storyService := service.NewStoryService(storyRepo, gcsClient, cfg.StoryBucket)
-	var googleSubVerifier service.GoogleSubVerifier
-	if cfg.GooglePackageName != "" {
-		gv, err := platform.NewGooglePlaySubVerifier(ctx, cfg.GooglePackageName)
-		if err != nil {
-			log.Fatalf("failed to create google sub verifier: %v", err)
-		}
-		googleSubVerifier = gv
-	}
-	subscriptionService := service.NewSubscriptionService(subRepo, playerRepo, txManager, googleSubVerifier)
-	newsService := service.NewNewsService(newsRepo)
-	userSettingsService := service.NewUserSettingsService(userSettingsRepo)
-
-	// Game player repository (gateway-owned game_players table)
 	gamePlayerRepo := repository.NewPgGamePlayerRepository(pool)
 
-	// Battle client (HTTP → battle server)
+	// 外部サービスクライアント
+	cardClient := cardclient.New(cfg.CardServiceURL)
+	matchmakingClient := matchmakingclient.New(cfg.MatchmakingServiceURL)
+	accountClient := accountclient.New(cfg.AccountServiceURL)
+	shopClient := shopclient.New(cfg.ShopServiceURL)
+	scenarioClient := scenarioclient.New(cfg.ScenarioServiceURL)
+
+	newsService := service.NewNewsService(newsRepo)
+
+	// Battle クライアント（HTTP → battle server）
 	battleClient := service.NewBattleClient(cfg.BattleServerURL)
-	wsManager := ws.NewManager(battleClient, playerService, deckService, deckRepo, gameConfigRepo, gamePlayerRepo)
-	go wsManager.StartMatchmaking(ctx)
-	wsHandler := ws.NewHandler(wsManager, authClient, playerRepo, cfg.AllowedOrigins)
+	matchmakingTimeout := time.Duration(cfg.MatchmakingTimeoutSec) * time.Second
+	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, matchmakingTimeout)
+	wsHandler := ws.NewHandler(wsManager, authClient, accountClient, cfg.AllowedOrigins)
+
 	handlers := &router.Handlers{
-		Auth:         rest.NewAuthHandler(authService),
-		Player:       rest.NewPlayerHandler(playerService),
+		Auth:         rest.NewAuthHandler(accountClient),
+		Player:       rest.NewPlayerHandler(accountClient),
+		UserSettings: rest.NewUserSettingsHandler(accountClient),
 		Spectate:     rest.NewSpectateHandler(wsManager),
-		Card:         rest.NewCardHandler(cardService),
-		Deck:         rest.NewDeckHandler(deckService),
-		PlayerCard:   rest.NewPlayerCardHandler(deckService),
+		Card:         rest.NewCardHandler(cardClient),
+		Deck:         rest.NewDeckHandler(cardClient),
+		PlayerCard:   rest.NewPlayerCardHandler(cardClient),
 		GameLog:      rest.NewGameLogHandler(battleClient),
 		NPC:          rest.NewNPCHandler(battleClient),
-		Shop:         rest.NewShopHandler(shopService),
-		Story:        rest.NewStoryHandler(storyService),
-		Webhook:      rest.NewWebhookHandler(subscriptionService),
-		UserSettings: rest.NewUserSettingsHandler(userSettingsService),
+		Shop:         rest.NewShopHandler(shopClient),
+		Scenario:     rest.NewScenarioHandler(scenarioClient),
 		News:         rest.NewNewsHandler(newsService),
 	}
 
-	// Router
+	// ルーター
 	r := gin.Default()
 	r.Use(middleware.CORS(cfg.AllowedOrigins...))
 
@@ -162,10 +102,10 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
-	// WebSocket (no REST auth middleware; auth is handled inside HandleUpgrade)
+	// WebSocket（REST auth middleware なし。認証は HandleUpgrade 内で処理）
 	r.GET("/ws", wsHandler.HandleUpgrade)
 
-	// Public API endpoints (no auth required, used by client splash screen)
+	// 公開 API エンドポイント（認証不要、クライアントのスプラッシュ画面で使用）
 	pub := r.Group("/api/v1")
 	{
 		pub.GET("/health", func(c *gin.Context) {
@@ -185,16 +125,11 @@ func main() {
 	v1 := r.Group("/api/v1")
 	v1.Use(middleware.FirebaseAuth(authClient))
 
-	// Auth endpoints: only need firebase_uid (player may not exist yet)
 	router.RegisterAuthRoutes(v1, handlers)
 
-	// All other endpoints: need player_id resolved from firebase_uid
 	api := v1.Group("")
-	api.Use(middleware.PlayerResolve(playerRepo))
+	api.Use(middleware.PlayerResolve(accountClient))
 	router.RegisterAPIRoutes(api, handlers)
-
-	// Webhooks (no Firebase auth -- authenticated by Apple/Google)
-	router.RegisterWebhookRoutes(r.Group("/api/v1/shop/webhook"), handlers)
 
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,
@@ -204,8 +139,50 @@ func main() {
 	srvCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// Start background goroutine for card cache refresh
-	go refreshCardCache(srvCtx, cardCache, cardRepo)
+	// マッチメイキング Pub/Sub subscriber を開始
+	subscriber, err := pubsubadapter.NewMatchSubscriber(srvCtx, cfg.PubsubProjectID, cfg.MatchmakingSubscription, wsManager)
+	if err != nil {
+		log.Fatalf("failed to create match subscriber: %v", err)
+	}
+	defer func() { _ = subscriber.Close() }()
+
+	go func() {
+		if err := subscriber.Run(srvCtx); err != nil && srvCtx.Err() == nil {
+			log.Fatalf("match subscriber error: %v", err)
+		}
+	}()
+
+	// クロスサービスイベント subscriber（faction-selected, premium-updated）。
+	// 接続中プレイヤーに WS 完了メッセージを push する。
+	wsPusher := &pubsubadapter.HubWSPusher{Hub: wsManager.Hub}
+
+	factionEventSub, err := pubsubadapter.NewEventSubscriber(
+		srvCtx, cfg.PubsubProjectID, cfg.FactionSelectedSubscription, "faction-selected", wsPusher,
+	)
+	if err != nil {
+		log.Fatalf("failed to create faction-selected event subscriber: %v", err)
+	}
+	defer func() { _ = factionEventSub.Close() }()
+
+	go func() {
+		if err := factionEventSub.Run(srvCtx); err != nil && srvCtx.Err() == nil {
+			log.Fatalf("faction-selected event subscriber error: %v", err)
+		}
+	}()
+
+	premiumEventSub, err := pubsubadapter.NewEventSubscriber(
+		srvCtx, cfg.PubsubProjectID, cfg.PremiumUpdatedSubscription, "premium-updated", wsPusher,
+	)
+	if err != nil {
+		log.Fatalf("failed to create premium-updated event subscriber: %v", err)
+	}
+	defer func() { _ = premiumEventSub.Close() }()
+
+	go func() {
+		if err := premiumEventSub.Run(srvCtx); err != nil && srvCtx.Err() == nil {
+			log.Fatalf("premium-updated event subscriber error: %v", err)
+		}
+	}()
 
 	go func() {
 		log.Printf("gateway server starting on :%s (env=%s)", cfg.Port, cfg.Env)
@@ -225,23 +202,4 @@ func main() {
 	}
 
 	log.Println("gateway server exited")
-}
-
-// refreshCardCache periodically refreshes the card definition cache.
-func refreshCardCache(ctx context.Context, cc *cache.CardCache, repo port.CardRepo) {
-	ticker := time.NewTicker(cardCacheRefreshInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			if err := cc.Refresh(ctx, repo); err != nil {
-				log.Printf("card cache refresh error: %v", err)
-			} else {
-				log.Printf("card cache refreshed: %d cards", cc.Count())
-			}
-		}
-	}
 }

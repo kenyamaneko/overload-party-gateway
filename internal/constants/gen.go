@@ -5,7 +5,7 @@ package constants
 import (
 	gamedesign "github.com/kenyamaneko/overload-party-common/packages/game-design-constants"
 	gamelogic "github.com/kenyamaneko/overload-party-common/packages/game-logic-constants"
-	genws "github.com/kenyamaneko/overload-party-common/packages/ws-constants"
+	genws "github.com/kenyamaneko/overload-party-gateway/packages/ws-constants"
 )
 
 // Initial values.
@@ -76,6 +76,8 @@ const (
 	WSMsgSpectateEnded          = genws.WSServerMsgSpectateEnded
 	WSMsgSpectateStampBroadcast = genws.WSServerMsgSpectateStampBroadcast
 	WSMsgGameStateRestore       = genws.WSServerMsgGameStateRestore
+	WSMsgFactionSelectionComplete = genws.WSServerMsgFactionSelectionComplete
+	WSMsgPremiumUpdateComplete    = genws.WSServerMsgPremiumUpdateComplete
 )
 
 // WS client message types.

@@ -1,0 +1,26 @@
+{
+  "name": "@kenyamaneko/overload-party-newsfeed-constants",
+  "version": "0.0.0",
+  "description": "Overload Party newsfeed constants (CloudNewsSource). Auto-generated from data/newsfeed_constants.yaml.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kenyamaneko/overload-party-common.git",
+    "directory": "packages/newsfeed-constants-npm"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0"
+  }
+}

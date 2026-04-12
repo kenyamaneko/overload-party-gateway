@@ -7,68 +7,57 @@ import (
 	"sync"
 	"time"
 
+	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
 	"github.com/kenyamaneko/overload-party-gateway/internal/constants"
-	"github.com/kenyamaneko/overload-party-gateway/internal/model"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
-// spectatorInfo holds a spectator's connection and the time they joined.
+// spectatorInfo は観戦者の接続と参加時刻を保持する。
 type spectatorInfo struct {
 	conn     *Connection
 	joinedAt time.Time
 }
 
-// gameInfo holds metadata about an active spectatable game.
-type gameInfo struct {
-	player1ID string
-	player2ID string
-	startedAt time.Time
-}
-
-// SpectateRelay manages spectator connections for active games.
-// It is intentionally separate from GameRelay so that spectators
-// never affect game membership or disconnect/forfeit logic.
+// SpectateRelay はアクティブなゲームの観戦接続を管理します。
+// 観戦者がゲームメンバーシップや切断/forfeit ロジックに影響しないよう
+// GameRelay とは意図的に分離している。
 type SpectateRelay struct {
-	hub          *ConnectionHub
-	battleClient service.BattleClient
-	// playerLookup is wired in after construction for spectate_joined banner data.
+	hub            *ConnectionHub
+	battleClient   service.BattleClient
+	gamePlayerRepo port.GamePlayerRepo
+	// spectate_joined バナーデータ用。コンストラクション後に設定される。
 	playerLookup PlayerLookupFunc
 
 	mu         sync.RWMutex
-	// gameID → spectatorID → spectatorInfo
-	spectators map[string]map[string]*spectatorInfo
-	// gameID → game metadata
-	games map[string]*gameInfo
+	spectators  map[string]map[string]*spectatorInfo // gameID → spectatorID → spectatorInfo
+	activeGames map[string]time.Time                  // gameID → startedAt
 }
 
-func NewSpectateRelay(hub *ConnectionHub, battleClient service.BattleClient) *SpectateRelay {
+// NewSpectateRelay は SpectateRelay を生成します
+func NewSpectateRelay(hub *ConnectionHub, battleClient service.BattleClient, gamePlayerRepo port.GamePlayerRepo) *SpectateRelay {
 	return &SpectateRelay{
-		hub:          hub,
-		battleClient: battleClient,
-		spectators:   make(map[string]map[string]*spectatorInfo),
-		games:        make(map[string]*gameInfo),
+		hub:            hub,
+		battleClient:   battleClient,
+		gamePlayerRepo: gamePlayerRepo,
+		spectators:     make(map[string]map[string]*spectatorInfo),
+		activeGames:    make(map[string]time.Time),
 	}
 }
 
-// RegisterGame records the two players for a game so that spectate_update
-// can later fetch a state view for player1 (as a canonical observer view).
-func (sr *SpectateRelay) RegisterGame(gameID, player1ID, player2ID string) {
+// RegisterGame はゲームをアクティブかつ観戦可能として登録します
+func (sr *SpectateRelay) RegisterGame(gameID string) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
-	sr.games[gameID] = &gameInfo{
-		player1ID: player1ID,
-		player2ID: player2ID,
-		startedAt: time.Now(),
-	}
+	sr.activeGames[gameID] = time.Now()
 }
 
-// UnregisterGame cleans up all spectator state for a finished game.
-// It also sends spectate_ended to all current spectators.
+// UnregisterGame は終了したゲームの観戦状態をクリーンアップし、全観戦者に spectate_ended を送信します
 func (sr *SpectateRelay) UnregisterGame(gameID string, winningPlayerNum int64, winReason string) {
 	sr.mu.Lock()
 	spectatorMap := sr.spectators[gameID]
 	delete(sr.spectators, gameID)
-	delete(sr.games, gameID)
+	delete(sr.activeGames, gameID)
 	sr.mu.Unlock()
 
 	if len(spectatorMap) == 0 {
@@ -88,9 +77,8 @@ func (sr *SpectateRelay) UnregisterGame(gameID string, winningPlayerNum int64, w
 	}
 }
 
-// HandleSpectateJoin processes a spectate_join message.
-// It verifies the game exists via the battle server, then adds the spectator
-// and responds with the current game state.
+// HandleSpectateJoin は spectate_join メッセージを処理します。
+// battle server 経由でゲームの存在を確認し、観戦者を追加して現在のゲーム状態を返す。
 func (sr *SpectateRelay) HandleSpectateJoin(conn *Connection, data json.RawMessage) {
 	var req SpectateJoinMessage
 	if err := json.Unmarshal(data, &req); err != nil {
@@ -99,15 +87,15 @@ func (sr *SpectateRelay) HandleSpectateJoin(conn *Connection, data json.RawMessa
 	}
 
 	sr.mu.RLock()
-	gi, knownGame := sr.games[req.GameID]
+	_, knownGame := sr.activeGames[req.GameID]
 	sr.mu.RUnlock()
 
-	if !knownGame || gi == nil {
+	if !knownGame {
 		sr.sendSpectateError(conn, "game_not_found", "game not found or not active")
 		return
 	}
 
-	// Fetch current game state for player1 (num=1) as a canonical observer view.
+	// player1 (num=1) のゲーム状態を正規のオブザーバービューとして取得
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	rawState, err := sr.battleClient.GetGameStateForPlayer(ctx, req.GameID, 1)
@@ -116,21 +104,29 @@ func (sr *SpectateRelay) HandleSpectateJoin(conn *Connection, data json.RawMessa
 		return
 	}
 
-	// Resolve player names/levels for the spectate banner.
+	// DB からプレイヤー名とレベルを解決
 	var p1Name, p2Name string
 	var p1Level, p2Level int64
-	if sr.playerLookup != nil {
-		if gi.player1ID != "" {
-			p1Name, p1Level, _ = sr.playerLookup(ctx, gi.player1ID)
-		}
-		if gi.player2ID != "" {
-			p2Name, p2Level, _ = sr.playerLookup(ctx, gi.player2ID)
+	if sr.playerLookup != nil && sr.gamePlayerRepo != nil {
+		entries, err := sr.gamePlayerRepo.LookupGamePlayers(ctx, req.GameID)
+		if err != nil {
+			log.Printf("spectate: lookup game players for %s: %v", req.GameID, err)
 		} else {
-			p2Name = "NPC"
+			for _, e := range entries {
+				name, level, _ := sr.playerLookup(ctx, e.PlayerID)
+				switch e.PlayerNum {
+				case 1:
+					p1Name, p1Level = name, level
+				case 2:
+					p2Name, p2Level = name, level
+				}
+			}
+			if len(entries) == 1 {
+				p2Name = "NPC"
+			}
 		}
 	}
 
-	// Register spectator
 	sr.mu.Lock()
 	if sr.spectators[req.GameID] == nil {
 		sr.spectators[req.GameID] = make(map[string]*spectatorInfo)
@@ -156,7 +152,7 @@ func (sr *SpectateRelay) HandleSpectateJoin(conn *Connection, data json.RawMessa
 	log.Printf("spectator %s joined game %s", conn.playerID, req.GameID)
 }
 
-// HandleSpectateLeave processes a spectate_leave message.
+// HandleSpectateLeave は spectate_leave メッセージを処理します
 func (sr *SpectateRelay) HandleSpectateLeave(conn *Connection, data json.RawMessage) {
 	var req SpectateLeaveMessage
 	if err := json.Unmarshal(data, &req); err != nil {
@@ -175,8 +171,8 @@ func (sr *SpectateRelay) HandleSpectateLeave(conn *Connection, data json.RawMess
 	log.Printf("spectator %s left game %s", conn.playerID, req.GameID)
 }
 
-// RemoveSpectator removes a spectator from all games they may be watching.
-// Called when their WebSocket connection is closed.
+// RemoveSpectator は観戦中の全ゲームから観戦者を除去します。
+// WebSocket 接続クローズ時に呼ばれる。
 func (sr *SpectateRelay) RemoveSpectator(playerID string) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
@@ -190,7 +186,7 @@ func (sr *SpectateRelay) RemoveSpectator(playerID string) {
 	}
 }
 
-// HandleSpectateStamp processes a spectate_stamp message and broadcasts it.
+// HandleSpectateStamp は spectate_stamp メッセージを処理しブロードキャストします
 func (sr *SpectateRelay) HandleSpectateStamp(conn *Connection, data json.RawMessage) {
 	var req SpectateStampMessage
 	if err := json.Unmarshal(data, &req); err != nil {
@@ -206,12 +202,11 @@ func (sr *SpectateRelay) HandleSpectateStamp(conn *Connection, data json.RawMess
 		}),
 	}
 
-	// Broadcast to all spectators of the game (including sender).
 	sr.broadcastToSpectators(req.GameID, msg)
 }
 
-// BroadcastStateUpdate sends a spectate_update message to all spectators of a game.
-// Called whenever game state changes (i.e. after game_state is sent to players).
+// BroadcastStateUpdate はゲームの全観戦者に spectate_update メッセージを送信します。
+// ゲーム状態が変化するたび（game_state 送信後）に呼ばれる。
 func (sr *SpectateRelay) BroadcastStateUpdate(gameID string, state json.RawMessage) {
 	msg := &WSMessage{
 		Type: constants.WSMsgSpectateUpdate,
@@ -230,7 +225,7 @@ func (sr *SpectateRelay) BroadcastStateUpdate(gameID string, state json.RawMessa
 	}
 }
 
-// IsSpectator returns true if the given playerID is currently spectating any game.
+// IsSpectator は指定プレイヤーがいずれかのゲームを観戦中かどうかを返します
 func (sr *SpectateRelay) IsSpectator(playerID string) bool {
 	sr.mu.RLock()
 	defer sr.mu.RUnlock()
@@ -256,19 +251,44 @@ func (sr *SpectateRelay) broadcastToSpectators(gameID string, msg *WSMessage) {
 	}
 }
 
-// ActiveGames returns a snapshot of all currently registered games.
-func (sr *SpectateRelay) ActiveGames() []model.SpectateGameInfo {
+// ActiveGames は現在アクティブなゲーム一覧をプレイヤー情報付きで返します
+func (sr *SpectateRelay) ActiveGames() []apigateway.SpectateGameInfo {
 	sr.mu.RLock()
-	defer sr.mu.RUnlock()
+	gameIDs := make(map[string]time.Time, len(sr.activeGames))
+	for gid, t := range sr.activeGames {
+		gameIDs[gid] = t
+	}
+	sr.mu.RUnlock()
 
-	result := make([]model.SpectateGameInfo, 0, len(sr.games))
-	for gameID, gi := range sr.games {
-		result = append(result, model.SpectateGameInfo{
+	if len(gameIDs) == 0 {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	result := make([]apigateway.SpectateGameInfo, 0, len(gameIDs))
+	for gameID, startedAt := range gameIDs {
+		info := apigateway.SpectateGameInfo{
 			GameID:    gameID,
-			Player1ID: gi.player1ID,
-			Player2ID: gi.player2ID,
-			StartedAt: gi.startedAt,
-		})
+			StartedAt: startedAt,
+		}
+		if sr.gamePlayerRepo != nil {
+			entries, err := sr.gamePlayerRepo.LookupGamePlayers(ctx, gameID)
+			if err != nil {
+				log.Printf("spectate: lookup players for active game %s: %v", gameID, err)
+			} else {
+				for _, e := range entries {
+					switch e.PlayerNum {
+					case 1:
+						info.Player1ID = e.PlayerID
+					case 2:
+						info.Player2ID = e.PlayerID
+					}
+				}
+			}
+		}
+		result = append(result, info)
 	}
 	return result
 }

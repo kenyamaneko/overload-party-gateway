@@ -4,28 +4,32 @@ import (
 	"context"
 	"sync"
 
-	"github.com/kenyamaneko/overload-party-gateway/internal/model"
+	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
+// MockNewsRepository はテスト用のインメモリ NewsRepo 実装です
 type MockNewsRepository struct {
 	mu       sync.Mutex
-	articles []*model.NewsArticle
+	articles []*apigateway.NewsArticle
 }
 
 var _ port.NewsRepo = (*MockNewsRepository)(nil)
 
+// NewMockNewsRepository は MockNewsRepository を生成します
 func NewMockNewsRepository() *MockNewsRepository {
 	return &MockNewsRepository{}
 }
 
-func (r *MockNewsRepository) Seed(articles []*model.NewsArticle) {
+// Seed はテスト用の記事データを設定します
+func (r *MockNewsRepository) Seed(articles []*apigateway.NewsArticle) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.articles = articles
 }
 
-func (r *MockNewsRepository) List(ctx context.Context, limit, offset int) ([]*model.NewsArticle, error) {
+// List はテスト用の記事一覧を返します
+func (r *MockNewsRepository) List(ctx context.Context, limit, offset int) ([]*apigateway.NewsArticle, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 

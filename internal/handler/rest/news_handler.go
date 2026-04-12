@@ -9,14 +9,17 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
+// NewsHandler はクラウドニュースの REST エンドポイントを処理します
 type NewsHandler struct {
 	svc *service.NewsService
 }
 
+// NewNewsHandler は NewsHandler を生成します
 func NewNewsHandler(svc *service.NewsService) *NewsHandler {
 	return &NewsHandler{svc: svc}
 }
 
+// GetCloudNews はクラウドニュース記事一覧を返します
 func (h *NewsHandler) GetCloudNews(c *gin.Context) {
 	limit := 20
 	offset := 0

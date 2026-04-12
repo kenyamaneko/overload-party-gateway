@@ -9,28 +9,29 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 
+	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
-	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
-// Handler upgrades HTTP connections to WebSocket and hands off to Manager.
+// Handler は HTTP 接続を WebSocket にアップグレードし Manager に引き渡します
 type Handler struct {
-	manager    *Manager
-	authClient *auth.Client // nil in local/dev mode
-	playerRepo port.PlayerRepo
-	upgrader   websocket.Upgrader
+	manager       *Manager
+	authClient    *auth.Client // nil in local/dev mode
+	accountClient *accountclient.Client
+	upgrader      websocket.Upgrader
 }
 
-func NewHandler(manager *Manager, authClient *auth.Client, playerRepo port.PlayerRepo, allowedOrigins []string) *Handler {
+// NewHandler は WebSocket Handler を生成します
+func NewHandler(manager *Manager, authClient *auth.Client, accountClient *accountclient.Client, allowedOrigins []string) *Handler {
 	origins := make(map[string]struct{}, len(allowedOrigins))
 	for _, o := range allowedOrigins {
 		origins[o] = struct{}{}
 	}
 
 	return &Handler{
-		manager:    manager,
-		authClient: authClient,
-		playerRepo: playerRepo,
+		manager:       manager,
+		authClient:    authClient,
+		accountClient: accountClient,
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  wsReadBufferSize,
 			WriteBufferSize: wsWriteBufferSize,
@@ -45,7 +46,7 @@ func NewHandler(manager *Manager, authClient *auth.Client, playerRepo port.Playe
 	}
 }
 
-// HandleUpgrade handles GET /ws?token=<firebase_id_token>
+// HandleUpgrade は GET /ws?token=<firebase_id_token> の WebSocket アップグレードを処理します
 func (h *Handler) HandleUpgrade(c *gin.Context) {
 	token := c.Query("token")
 	if token == "" {
@@ -56,13 +57,12 @@ func (h *Handler) HandleUpgrade(c *gin.Context) {
 	var playerID string
 
 	if h.authClient != nil {
-		// Production: verify Firebase token
 		decoded, err := h.authClient.VerifyIDToken(c.Request.Context(), token)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 			return
 		}
-		player, err := h.playerRepo.FindByFirebaseUID(c.Request.Context(), decoded.UID)
+		player, err := h.accountClient.FindByFirebaseUID(c.Request.Context(), decoded.UID)
 		if err != nil || player == nil {
 			log.Printf("ws handler: find player by firebase uid %s: %v", decoded.UID, err)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "player not registered"})
@@ -70,13 +70,12 @@ func (h *Handler) HandleUpgrade(c *gin.Context) {
 		}
 		playerID = player.PlayerID
 	} else {
-		// Local/dev: extract UID from dev token and resolve player
 		if !strings.HasPrefix(token, middleware.DevTokenPrefix) {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid dev token format"})
 			return
 		}
 		uid := strings.TrimPrefix(token, middleware.DevTokenPrefix)
-		player, err := h.playerRepo.FindByFirebaseUID(c.Request.Context(), uid)
+		player, err := h.accountClient.FindByFirebaseUID(c.Request.Context(), uid)
 		if err != nil || player == nil {
 			log.Printf("ws handler (dev): player not found for uid=%s: %v", uid, err)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "player not registered"})

@@ -1,0 +1,26 @@
+{
+  "name": "@kenyamaneko/overload-party-card-types",
+  "version": "0.0.0",
+  "description": "Overload Party card definition types (CardDefinition / CardStats / PassiveEffect / NpcModel). Auto-generated from data/models.yaml.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kenyamaneko/overload-party-common.git",
+    "directory": "packages/card-types-npm"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0"
+  }
+}

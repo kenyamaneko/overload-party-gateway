@@ -7,13 +7,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/constants"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
-// battleStateMeta is a minimal projection of the battle server's game state
-// JSON, used only to extract turn-related metadata (timer, active player).
-// Gateway does NOT transform the full game state — it is passed through as-is.
+// battleStateMeta は battle server のゲーム状態 JSON の最小射影。
+// ターン関連メタデータ（タイマー、アクティブプレイヤー）の抽出にのみ使用する。
+// gateway はゲーム状態を変換せずそのままパススルーする。
 type battleStateMeta struct {
 	CurrentTurn int64 `json:"currentTurn"`
 	IsMyTurn    bool  `json:"isMyTurn"`
@@ -22,139 +24,117 @@ type battleStateMeta struct {
 	} `json:"myView"`
 }
 
-// turnTimerInfo holds the state for an active turn timer.
+// turnTimerInfo はアクティブなターンタイマーの状態を保持する。
 type turnTimerInfo struct {
 	timer          *time.Timer
 	activePlayerID string
 }
 
-// gameMetaInfo stores per-game metadata set at creation time.
-type gameMetaInfo struct {
-	player1ID string
-	player2ID string
-	matchType string // "pvp" or "npc"
+// playerSession は game_enter 時に DB からキャッシュされるプレイヤーのゲーム内状態。
+type playerSession struct {
+	gameID    string
+	playerNum int
 }
 
-// PlayerLookupFunc resolves a player's display name and level by ID.
+// PlayerLookupFunc はプレイヤー ID から表示名とレベルを解決する関数型です
 type PlayerLookupFunc func(ctx context.Context, playerID string) (name string, level int64, err error)
 
-// GameRelay manages game membership and relays game actions/state between
-// players and the battle server.
+// GameRelay はゲームメンバーシップを管理し、プレイヤーと battle server 間のアクション/状態を中継します
 type GameRelay struct {
 	hub          *ConnectionHub
 	battleClient service.BattleClient
 
-	// spectateRelay is wired in after construction to avoid circular dependencies.
-	spectateRelay *SpectateRelay
-	// playerLookup is wired in after construction by the Manager.
-	playerLookup PlayerLookupFunc
-	// playerService is wired in after construction for exp awarding.
-	playerService *service.PlayerService
+	// 循環依存回避のためコンストラクション後に設定
+	spectateRelay  *SpectateRelay
+	playerLookup   PlayerLookupFunc
+	accountClient  *accountclient.Client
+	gamePlayerRepo port.GamePlayerRepo
 
 	mu          sync.RWMutex
-	gameMembers map[string][]string    // gameID → []playerID
-	playerGames map[string]string      // playerID → gameID
-	gameMeta    map[string]gameMetaInfo // gameID → metadata
+	gameMembers map[string][]string          // gameID → []playerID
+	playerGames map[string]playerSession     // playerID → session (gameID + playerNum)
 
 	timerMu    sync.Mutex
 	turnTimers map[string]*turnTimerInfo // gameID → active turn timer
-
-	expAwarded map[string]bool // gameID → already awarded
 }
 
+// NewGameRelay は GameRelay を生成します
 func NewGameRelay(hub *ConnectionHub, battleClient service.BattleClient) *GameRelay {
 	return &GameRelay{
 		hub:          hub,
 		battleClient: battleClient,
 		gameMembers:  make(map[string][]string),
-		playerGames:  make(map[string]string),
-		gameMeta:     make(map[string]gameMetaInfo),
+		playerGames:  make(map[string]playerSession),
 		turnTimers:   make(map[string]*turnTimerInfo),
-		expAwarded:   make(map[string]bool),
 	}
 }
 
-// RegisterGameMeta stores player IDs and match type for a game.
-// Called at game creation time (matchmaking result or NPC battle start).
-func (r *GameRelay) RegisterGameMeta(gameID, player1ID, player2ID, matchType string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.gameMeta[gameID] = gameMetaInfo{
-		player1ID: player1ID,
-		player2ID: player2ID,
-		matchType: matchType,
-	}
-}
-
-// GameIDForPlayer returns the gameID for a player, if any.
+// GameIDForPlayer はプレイヤーの gameID を返します
 func (r *GameRelay) GameIDForPlayer(playerID string) (string, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	gid, ok := r.playerGames[playerID]
-	return gid, ok
+	sess, ok := r.playerGames[playerID]
+	if !ok {
+		return "", false
+	}
+	return sess.gameID, true
 }
 
-// NotifyOpponentDisconnected sends an opponent_disconnected message to the
-// other player in the game when a player disconnects.
+// NotifyOpponentDisconnected はプレイヤー切断時に対戦相手に opponent_disconnected を送信します
 func (r *GameRelay) NotifyOpponentDisconnected(playerID, gameID string) {
 	r.sendToOpponent(playerID, gameID, constants.WSMsgOpponentDisconnected)
 }
 
-// NotifyOpponentReconnected sends an opponent_reconnected message to the
-// other player when a disconnected player returns.
+// NotifyOpponentReconnected は切断したプレイヤーの復帰時に対戦相手に opponent_reconnected を送信します
 func (r *GameRelay) NotifyOpponentReconnected(playerID, gameID string) {
 	r.sendToOpponent(playerID, gameID, constants.WSMsgOpponentReconnected)
 }
 
-// sendToOpponent resolves the opponent for a given player in a game and sends
-// a message of the specified type.
+// sendToOpponent は gameMembers から対戦相手を解決しメッセージを送信する。
 func (r *GameRelay) sendToOpponent(playerID, gameID, msgType string) {
 	r.mu.RLock()
-	meta, ok := r.gameMeta[gameID]
+	members := r.gameMembers[gameID]
 	r.mu.RUnlock()
-	if !ok {
-		return
-	}
 
-	opponentID := meta.player2ID
-	if playerID == meta.player2ID {
-		opponentID = meta.player1ID
+	for _, pid := range members {
+		if pid != playerID {
+			r.hub.SendToPlayer(pid, &WSMessage{Type: msgType})
+			return
+		}
 	}
-	r.hub.SendToPlayer(opponentID, &WSMessage{Type: msgType})
 }
 
-func (r *GameRelay) JoinGame(playerID, gameID string) {
+// JoinGame はプレイヤーをゲームに参加させます
+func (r *GameRelay) JoinGame(playerID, gameID string, playerNum int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if oldGameID, ok := r.playerGames[playerID]; ok && oldGameID != gameID {
-		r.gameMembers[oldGameID] = removeString(r.gameMembers[oldGameID], playerID)
-		if len(r.gameMembers[oldGameID]) == 0 {
-			delete(r.gameMembers, oldGameID)
-			delete(r.gameMeta, oldGameID)
+	if oldSess, ok := r.playerGames[playerID]; ok && oldSess.gameID != gameID {
+		r.gameMembers[oldSess.gameID] = removeString(r.gameMembers[oldSess.gameID], playerID)
+		if len(r.gameMembers[oldSess.gameID]) == 0 {
+			delete(r.gameMembers, oldSess.gameID)
 		}
 	}
 
-	r.playerGames[playerID] = gameID
+	r.playerGames[playerID] = playerSession{gameID: gameID, playerNum: playerNum}
 	r.gameMembers[gameID] = appendUnique(r.gameMembers[gameID], playerID)
 }
 
+// LeaveGame はプレイヤーをゲームから離脱させます
 func (r *GameRelay) LeaveGame(playerID string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if gameID, ok := r.playerGames[playerID]; ok {
+	if sess, ok := r.playerGames[playerID]; ok {
 		delete(r.playerGames, playerID)
-		r.gameMembers[gameID] = removeString(r.gameMembers[gameID], playerID)
-		if len(r.gameMembers[gameID]) == 0 {
-			delete(r.gameMembers, gameID)
-			delete(r.gameMeta, gameID)
+		r.gameMembers[sess.gameID] = removeString(r.gameMembers[sess.gameID], playerID)
+		if len(r.gameMembers[sess.gameID]) == 0 {
+			delete(r.gameMembers, sess.gameID)
 		}
 	}
 }
 
-// BroadcastToGame sends the same message to all players in a game.
-// 全員に同一メッセージを送るため、一度だけ Marshal して使い回す。
+// BroadcastToGame はゲーム内の全プレイヤーに同一メッセージを送信します
 func (r *GameRelay) BroadcastToGame(gameID string, msg *WSMessage) {
 	data, err := json.Marshal(msg)
 	if err != nil {
@@ -171,6 +151,7 @@ func (r *GameRelay) BroadcastToGame(gameID string, msg *WSMessage) {
 	}
 }
 
+// SendGameStateToPlayers はゲーム内の全プレイヤーにゲーム状態を送信します
 func (r *GameRelay) SendGameStateToPlayers(gameID string) {
 	r.mu.RLock()
 	players := r.gameMembers[gameID]
@@ -178,14 +159,12 @@ func (r *GameRelay) SendGameStateToPlayers(gameID string) {
 
 	var activePlayerID string
 	var activeTimeBank int64
-	// spectateState holds the transformed state for the first player,
-	// used as the canonical observer view sent to spectators.
-	var spectateState json.RawMessage
+	var spectateState json.RawMessage // 観戦者に送る正規オブザーバービュー
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	for i, pid := range players {
-		pNum := r.resolvePlayerNum(gameID, pid)
+		pNum := r.resolvePlayerNum(pid)
 		if pNum == 0 {
 			continue
 		}
@@ -196,7 +175,7 @@ func (r *GameRelay) SendGameStateToPlayers(gameID string) {
 			continue
 		}
 
-		// Extract turn timer info from the raw battle state
+		// battle 状態からターンタイマー情報を抽出
 		var meta battleStateMeta
 		if err := json.Unmarshal(state, &meta); err != nil {
 			log.Printf("failed to extract turn timer for player %s: %v", pid, err)
@@ -210,23 +189,24 @@ func (r *GameRelay) SendGameStateToPlayers(gameID string) {
 			Data: state,
 		})
 
-		// Capture the first player's state for spectators.
+		// 最初のプレイヤーの状態を観戦者用にキャプチャ
 		if i == 0 {
 			spectateState = state
 		}
 	}
 
-	// Refresh turn timer based on active player's TimeBank
+	// アクティブプレイヤーの TimeBank に基づきターンタイマーを更新
 	if activePlayerID != "" {
 		r.resetTurnTimer(gameID, activePlayerID, activeTimeBank)
 	}
 
-	// Forward state updates to spectators.
+	// 観戦者に状態更新を転送
 	if r.spectateRelay != nil && spectateState != nil {
 		r.spectateRelay.BroadcastStateUpdate(gameID, spectateState)
 	}
 }
 
+// SendTurnControlsToPlayers はゲーム内の全プレイヤーにターンコントロール情報を送信します
 func (r *GameRelay) SendTurnControlsToPlayers(gameID string) {
 	r.mu.RLock()
 	players := r.gameMembers[gameID]
@@ -235,7 +215,7 @@ func (r *GameRelay) SendTurnControlsToPlayers(gameID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	for _, pid := range players {
-		pNum := r.resolvePlayerNum(gameID, pid)
+		pNum := r.resolvePlayerNum(pid)
 		if pNum == 0 {
 			continue
 		}
@@ -255,12 +235,12 @@ func (r *GameRelay) SendTurnControlsToPlayers(gameID string) {
 	}
 }
 
-// sendActionPerformed dispatches action_performed messages for each event.
+// sendActionPerformed はイベントごとに action_performed メッセージをディスパッチする。
 //
-// Routing is based on the event metadata:
-//   - System event (IsSystem=true) → sent to ALL players (state fetched per-player)
-//   - Player's own action          → sent to opponents (gateway fetches their info-hidden state)
-//   - Other player's action (NPC)  → sent to the acting player (state included from battle server)
+// ルーティングはイベントメタデータに基づく:
+//   - システムイベント (turn_start) → 全プレイヤーに送信
+//   - 自分のアクション → 対戦相手に送信（情報隠蔽済み状態を取得）
+//   - 他プレイヤーのアクション (NPC) → 行動プレイヤーに送信（battle server の状態付き）
 func (r *GameRelay) sendActionPerformed(gameID, actingPlayerID string, result *service.ActionResult) {
 	if result == nil || len(result.Events) == 0 {
 		return
@@ -272,15 +252,13 @@ func (r *GameRelay) sendActionPerformed(gameID, actingPlayerID string, result *s
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	actingPlayerNum := r.resolvePlayerNum(gameID, actingPlayerID)
+	actingPlayerNum := r.resolvePlayerNum(actingPlayerID)
 	for _, evt := range result.Events {
 		switch {
 		case evt.EventType == constants.EventTypeTurnStart:
-			// System event (turn_start) → send to ALL players
 			r.sendActionToPlayers(ctx, gameID, players, evt)
 
 		case evt.PlayerNum != nil && *evt.PlayerNum == int64(actingPlayerNum):
-			// Player's own action → send to opponents
 			opponents := make([]string, 0, len(players))
 			for _, pid := range players {
 				if pid != actingPlayerID {
@@ -290,8 +268,6 @@ func (r *GameRelay) sendActionPerformed(gameID, actingPlayerID string, result *s
 			r.sendActionToPlayers(ctx, gameID, opponents, evt)
 
 		default:
-			// Other player's action (NPC) → send to the acting player
-			// State snapshot is passed through from the battle server as-is.
 			if len(evt.State) == 0 {
 				continue
 			}
@@ -308,13 +284,9 @@ func (r *GameRelay) sendActionPerformed(gameID, actingPlayerID string, result *s
 	}
 }
 
-// runNpcTurns repeatedly calls AdvanceNpcTurn while the battle server signals
-// NpcPending=true. Each iteration's events are relayed via sendActionPerformed,
-// so the human player sees every NPC action in order with its post-action state.
-// Returns the final ActionResult so the caller can handle GameOver.
-//
-// Guards against infinite loops in case the battle server never clears NpcPending
-// (e.g. buggy NPC strategy stuck in a phase). maxNpcTurnIterations caps the loop.
+// runNpcTurns は battle server が NpcPending=true を返す間 AdvanceNpcTurn を繰り返し呼び出す。
+// 各イテレーションのイベントは sendActionPerformed で中継され、プレイヤーは全 NPC アクションを順に受け取る。
+// battle server が NpcPending をクリアしないバグへの安全弁として maxNpcTurnIterations で上限を設ける。
 func (r *GameRelay) runNpcTurns(ctx context.Context, gameID, playerID string, current *service.ActionResult) *service.ActionResult {
 	const maxNpcTurnIterations = 200
 	for i := 0; current != nil && current.NpcPending && !current.GameOver; i++ {
@@ -333,12 +305,11 @@ func (r *GameRelay) runNpcTurns(ctx context.Context, gameID, playerID string, cu
 	return current
 }
 
-// sendActionToPlayers fetches each player's game state and sends the
-// action_performed message. The state is passed through from the battle
-// server without transformation.
+// sendActionToPlayers は各プレイヤーのゲーム状態を取得し action_performed メッセージを送信する。
+// 状態は battle server からの変換なしのパススルー。
 func (r *GameRelay) sendActionToPlayers(ctx context.Context, gameID string, pids []string, evt service.ActionEvent) {
 	for _, pid := range pids {
-		pNum := r.resolvePlayerNum(gameID, pid)
+		pNum := r.resolvePlayerNum(pid)
 		if pNum == 0 {
 			continue
 		}
@@ -359,7 +330,6 @@ func (r *GameRelay) sendActionToPlayers(ctx context.Context, gameID string, pids
 	}
 }
 
-
 func (r *GameRelay) broadcastGameOver(gameID string, winningPlayerNum int64, reason string) {
 	r.BroadcastToGame(gameID, &WSMessage{
 		Type: constants.WSMsgGameOver,
@@ -372,42 +342,59 @@ func (r *GameRelay) broadcastGameOver(gameID string, winningPlayerNum int64, rea
 
 	r.awardGameExp(gameID, winningPlayerNum, reason)
 
-	// Notify and clean up spectators.
+	// 観戦者に通知しクリーンアップ
 	if r.spectateRelay != nil {
 		r.spectateRelay.UnregisterGame(gameID, winningPlayerNum, reason)
 	}
 }
 
-// awardGameExp grants experience points to players after a game ends.
-// This runs after the game-over broadcast, so errors do not block the
-// game-over flow. If config retrieval or DB update fails, exp awarding
-// is skipped entirely and the error is logged.
+// awardGameExp はゲーム終了後にプレイヤーに経験値を付与する。
+// インメモリ状態ではなく DB レベルの冪等性（exp_awarded フラグ）を使用し、
+// 重複呼び出しや gateway 再起動による二重付与を防止する。
 func (r *GameRelay) awardGameExp(gameID string, winnerNum int64, reason string) {
-	if r.playerService == nil {
-		return
-	}
-
-	r.mu.Lock()
-	if r.expAwarded[gameID] {
-		r.mu.Unlock()
-		return
-	}
-	r.expAwarded[gameID] = true
-	meta, hasMeta := r.gameMeta[gameID]
-	r.mu.Unlock()
-	if !hasMeta {
+	if r.accountClient == nil || r.gamePlayerRepo == nil {
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	if err := r.playerService.AwardGameExp(ctx, meta.player1ID, meta.player2ID, winnerNum, reason, meta.matchType); err != nil {
+	awarded, err := r.gamePlayerRepo.MarkExpAwarded(ctx, gameID)
+	if err != nil {
+		log.Printf("ERROR: mark exp awarded for game %s: %v", gameID, err)
+		return
+	}
+	if !awarded {
+		return
+	}
+
+	entries, err := r.gamePlayerRepo.LookupGamePlayers(ctx, gameID)
+	if err != nil {
+		log.Printf("ERROR: lookup game players for exp (game %s): %v", gameID, err)
+		return
+	}
+
+	var player1ID, player2ID string
+	for _, e := range entries {
+		switch e.PlayerNum {
+		case 1:
+			player1ID = e.PlayerID
+		case 2:
+			player2ID = e.PlayerID
+		}
+	}
+
+	matchType := constants.MatchTypePvp
+	if len(entries) == 1 {
+		matchType = constants.MatchTypeNpc
+	}
+
+	if err := r.accountClient.AwardGameExp(ctx, player1ID, player2ID, winnerNum, reason, matchType); err != nil {
 		log.Printf("ERROR: award game exp for game %s: %v", gameID, err)
 	}
 }
 
-// HandleGameEnter processes a game_enter message.
+// HandleGameEnter は game_enter メッセージを処理します
 func (r *GameRelay) HandleGameEnter(conn *Connection, data json.RawMessage) {
 	var req GameEnterMessage
 	if err := json.Unmarshal(data, &req); err != nil {
@@ -415,35 +402,40 @@ func (r *GameRelay) HandleGameEnter(conn *Connection, data json.RawMessage) {
 		return
 	}
 
-	r.JoinGame(conn.playerID, req.GameID)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	playerNum, err := r.gamePlayerRepo.LookupPlayerNum(ctx, req.GameID, conn.playerID)
+	if err != nil {
+		log.Printf("lookup player_num for %s in game %s: %v", conn.playerID, req.GameID, err)
+		sendError(conn, "game_error", "player not found in game", false)
+		return
+	}
+
+	r.JoinGame(conn.playerID, req.GameID, playerNum)
 	conn.SendMessage(&WSMessage{
 		Type: constants.WSMsgGameEntered,
 		Data: mustMarshal(map[string]string{"game_id": req.GameID}),
 	})
 
-	// battle_start/turn_start carry the initial state for entry animation.
-	// SendGameStateToPlayers follows to deliver the authoritative state
-	// and start the turn timer. Clients use the two messages for different purposes.
+	// battle_start/turn_start はエントリーアニメーション用の初期状態を運ぶ。
+	// 続く SendGameStateToPlayers が権威ある状態を配信しターンタイマーを開始する。
 	r.sendBattleStartAndTurnStart(conn, req.GameID)
 	r.advanceNpcIfNeeded(req.GameID, conn.playerID)
 	r.SendGameStateToPlayers(req.GameID)
 	r.SendTurnControlsToPlayers(req.GameID)
 }
 
-// advanceNpcIfNeeded triggers the NPC's first turn if the NPC is the active
-// player. This ensures NPC action events are delivered after game_enter,
-// using the same flow as subsequent NPC turns.
+// advanceNpcIfNeeded は NPC がアクティブプレイヤーの場合に NPC の最初のターンを実行する。
+// game_enter 後に NPC アクションイベントが配信されるようにする。
 func (r *GameRelay) advanceNpcIfNeeded(gameID, playerID string) {
-	r.mu.RLock()
-	meta, hasMeta := r.gameMeta[gameID]
-	r.mu.RUnlock()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
-	if !hasMeta || meta.matchType != constants.MatchTypeNpc {
+	matchType := r.lookupMatchType(ctx, gameID)
+	if matchType != constants.MatchTypeNpc {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 	result, err := r.battleClient.AdvanceNpcTurn(ctx, gameID)
 	if err != nil {
 		log.Printf("advance NPC turn (game %s): %v", gameID, err)
@@ -460,15 +452,14 @@ func (r *GameRelay) advanceNpcIfNeeded(gameID, playerID string) {
 	}
 }
 
-// sendBattleStartAndTurnStart sends battle_start and turn_start action_performed
-// events to the entering player. These are synthetic events generated by the
-// gateway (not from the battle server) because they require player profile data.
+// sendBattleStartAndTurnStart はゲーム参加プレイヤーに battle_start と turn_start の
+// action_performed イベントを送信する。プレイヤープロフィールデータが必要なため
+// battle server ではなく gateway が生成する合成イベント。
 func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Fetch initial game state for this player
-	pNum := r.resolvePlayerNum(gameID, conn.playerID)
+	pNum := r.resolvePlayerNum(conn.playerID)
 	if pNum == 0 {
 		log.Printf("cannot resolve player_num for %s in game %s", conn.playerID, gameID)
 		return
@@ -480,40 +471,37 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 		return
 	}
 
-	// Resolve game metadata
-	r.mu.RLock()
-	gameMeta, hasMeta := r.gameMeta[gameID]
-	r.mu.RUnlock()
+	// DB からゲームメタデータを解決
+	entries, err := r.gamePlayerRepo.LookupGamePlayers(ctx, gameID)
+	if err != nil {
+		log.Printf("lookup game players for battle_start (game %s): %v", gameID, err)
+		return
+	}
+	matchType := constants.MatchTypePvp
+	if len(entries) == 1 {
+		matchType = constants.MatchTypeNpc
+	}
 
-	// Build battle_start action_data
 	battleStartData := map[string]interface{}{
-		"match_type": constants.MatchTypePvp,
-	}
-	if hasMeta {
-		battleStartData["match_type"] = gameMeta.matchType
-
-		myName, myLevel := r.lookupPlayer(ctx, conn.playerID)
-		var oppName string
-		var oppLevel int64
-		if gameMeta.matchType == constants.MatchTypeNpc {
-			oppName, oppLevel = "NPC", 0
-		} else {
-			opponentID := gameMeta.player2ID
-			if conn.playerID == gameMeta.player2ID {
-				opponentID = gameMeta.player1ID
-			}
-			oppName, oppLevel = r.lookupPlayer(ctx, opponentID)
-		}
-
-		battleStartData["my_name"] = myName
-		battleStartData["my_level"] = myLevel
-		battleStartData["opponent_name"] = oppName
-		battleStartData["opponent_level"] = oppLevel
+		"match_type": matchType,
 	}
 
-	// Send battle_start.
-	// Sequence is 0 because battle_start and turn_start are synthetic gateway
-	// events, not part of the battle server's event sequence.
+	myName, myLevel := r.lookupPlayer(ctx, conn.playerID)
+	var oppName string
+	var oppLevel int64
+	if matchType == constants.MatchTypeNpc {
+		oppName, oppLevel = "NPC", 0
+	} else {
+		opponentID := r.findOpponent(entries, conn.playerID)
+		oppName, oppLevel = r.lookupPlayer(ctx, opponentID)
+	}
+
+	battleStartData["my_name"] = myName
+	battleStartData["my_level"] = myLevel
+	battleStartData["opponent_name"] = oppName
+	battleStartData["opponent_level"] = oppLevel
+
+	// Sequence 0: battle_start / turn_start は gateway 合成イベントであり battle server のイベントシーケンスに含まれない
 	conn.SendMessage(&WSMessage{
 		Type: constants.WSMsgActionPerformed,
 		Data: mustMarshal(ActionPerformedMessage{
@@ -524,7 +512,6 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 		}),
 	})
 
-	// Build turn_start action_data from game state
 	var stateMeta battleStateMeta
 	if err := json.Unmarshal(rawState, &stateMeta); err == nil {
 		turnStartData := map[string]interface{}{
@@ -543,8 +530,7 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 	}
 }
 
-// lookupPlayer resolves a player's display name and level.
-// Returns defaults on error.
+// lookupPlayer はプレイヤーの表示名とレベルを解決する。エラー時はデフォルト値を返す。
 func (r *GameRelay) lookupPlayer(ctx context.Context, playerID string) (string, int64) {
 	if r.playerLookup == nil {
 		return "", 0
@@ -557,7 +543,7 @@ func (r *GameRelay) lookupPlayer(ctx context.Context, playerID string) (string, 
 	return name, level
 }
 
-// HandleGameAction processes a game_action message.
+// HandleGameAction は game_action メッセージを処理します
 func (r *GameRelay) HandleGameAction(ctx context.Context, conn *Connection, data json.RawMessage) {
 	var action GameActionMessage
 	if err := json.Unmarshal(data, &action); err != nil {
@@ -565,7 +551,7 @@ func (r *GameRelay) HandleGameAction(ctx context.Context, conn *Connection, data
 		return
 	}
 
-	pNum := r.resolvePlayerNum(action.GameID, conn.playerID)
+	pNum := r.resolvePlayerNum(conn.playerID)
 	if pNum == 0 {
 		sendError(conn, "game_error", "player not found in game", false)
 		return
@@ -583,12 +569,10 @@ func (r *GameRelay) HandleGameAction(ctx context.Context, conn *Connection, data
 		return
 	}
 
-	// action_performed carries the state snapshot for client-side animation.
-	// SendGameStateToPlayers follows to deliver the authoritative final state
-	// and reset the turn timer. Clients use the two messages for different purposes.
+	// action_performed はクライアントアニメーション用のスナップショットを運ぶ。
+	// 続く SendGameStateToPlayers が権威ある最終状態を配信しターンタイマーをリセットする。
 	r.sendActionPerformed(action.GameID, conn.playerID, result)
-	// If the human's action passes the turn to an NPC, drain pending NPC actions
-	// so the client sees every NPC event before the authoritative state.
+	// プレイヤーのアクションで NPC にターンが渡った場合、権威ある状態の前に全 NPC イベントを配信
 	result = r.runNpcTurns(ctx, action.GameID, conn.playerID, result)
 	r.SendGameStateToPlayers(action.GameID)
 	r.SendTurnControlsToPlayers(action.GameID)
@@ -600,8 +584,8 @@ func (r *GameRelay) HandleGameAction(ctx context.Context, conn *Connection, data
 	}
 }
 
-// leaveAllPlayers removes all players from a game's membership.
-// Used after game over to clean up gameMembers / playerGames.
+// leaveAllPlayers はゲームの全プレイヤーのメンバーシップを解除する。
+// game over 後に gameMembers / playerGames をクリーンアップする。
 func (r *GameRelay) leaveAllPlayers(gameID string) {
 	r.mu.RLock()
 	players := make([]string, len(r.gameMembers[gameID]))
@@ -610,19 +594,14 @@ func (r *GameRelay) leaveAllPlayers(gameID string) {
 	for _, pid := range players {
 		r.LeaveGame(pid)
 	}
-
-	r.mu.Lock()
-	delete(r.expAwarded, gameID)
-	r.mu.Unlock()
 }
 
-// resetTurnTimer cancels any existing timer for the game and starts a new one.
-// When the timer fires, it sends a forfeit for the active player (timeout loss).
+// resetTurnTimer は既存のタイマーをキャンセルし新しいタイマーを開始する。
+// タイマー発火時にアクティブプレイヤーの forfeit（タイムアウト負け）を送信する。
 func (r *GameRelay) resetTurnTimer(gameID, activePlayerID string, timeBankSeconds int64) {
 	r.timerMu.Lock()
 	defer r.timerMu.Unlock()
 
-	// Cancel existing timer
 	if info, ok := r.turnTimers[gameID]; ok {
 		info.timer.Stop()
 		delete(r.turnTimers, gameID)
@@ -632,10 +611,10 @@ func (r *GameRelay) resetTurnTimer(gameID, activePlayerID string, timeBankSecond
 		return
 	}
 
-	// Add a small buffer (2s) to account for network latency.
-	// The battle server is the authoritative source — if the player sends an
-	// action just before the Gateway timer fires, the server will deduct the
-	// real elapsed time and may still allow the action.
+	// ネットワーク遅延を考慮して 2 秒のバッファを追加。
+	// battle server が権威ある情報源であり、Gateway タイマー発火直前に
+	// プレイヤーがアクションを送信した場合、server は実経過時間を差し引き
+	// アクションを許可する可能性がある。
 	duration := time.Duration(timeBankSeconds+2) * time.Second
 
 	timer := time.AfterFunc(duration, func() {
@@ -659,7 +638,7 @@ func (r *GameRelay) resetTurnTimer(gameID, activePlayerID string, timeBankSecond
 	}
 }
 
-// cancelTurnTimer stops and removes the turn timer for a game.
+// cancelTurnTimer はゲームのターンタイマーを停止し削除する。
 func (r *GameRelay) cancelTurnTimer(gameID string) {
 	r.timerMu.Lock()
 	defer r.timerMu.Unlock()
@@ -670,14 +649,14 @@ func (r *GameRelay) cancelTurnTimer(gameID string) {
 	}
 }
 
-// handleTurnTimeout sends a forfeit action when the turn timer expires.
+// handleTurnTimeout はターンタイマー期限切れ時に forfeit アクションを送信する。
 //
 // forfeit reason は本来バトルのドメイン知識だが、ターンタイマーと切断タイマーは
 // gateway の責務であり、Battle Server はタイムアウトの種別を区別できないため、
 // 例外的に gateway が reason を指定して Battle Server に送る。
 // broadcastGameOver でも gateway 側の WinReason で上書きしている。
 func (r *GameRelay) handleTurnTimeout(gameID, playerID string) {
-	pNum := r.resolvePlayerNum(gameID, playerID)
+	pNum := r.resolvePlayerNum(playerID)
 	if pNum == 0 {
 		return
 	}
@@ -695,13 +674,13 @@ func (r *GameRelay) handleTurnTimeout(gameID, playerID string) {
 	}
 }
 
-// HandleUseStamp processes a use_stamp message.
+// HandleUseStamp は use_stamp メッセージを処理します
 func (r *GameRelay) HandleUseStamp(conn *Connection, data json.RawMessage) {
 	var req UseStampMessage
 	if err := json.Unmarshal(data, &req); err != nil {
 		return
 	}
-	pNum := r.resolvePlayerNum(req.GameID, conn.playerID)
+	pNum := r.resolvePlayerNum(conn.playerID)
 	r.BroadcastToGame(req.GameID, &WSMessage{
 		Type: constants.WSMsgStampUsed,
 		Data: mustMarshal(StampUsedMessage{
@@ -712,12 +691,12 @@ func (r *GameRelay) HandleUseStamp(conn *Connection, data json.RawMessage) {
 	})
 }
 
-// HandleDisconnectTimeout processes a forfeit after disconnect timeout.
+// HandleDisconnectTimeout は切断タイムアウト後の forfeit を処理します。
 // forfeit reason の方針については handleTurnTimeout のコメントを参照。
 func (r *GameRelay) HandleDisconnectTimeout(playerID, gameID string) {
 	r.cancelTurnTimer(gameID)
 
-	pNum := r.resolvePlayerNum(gameID, playerID)
+	pNum := r.resolvePlayerNum(playerID)
 	if pNum == 0 {
 		return
 	}
@@ -734,7 +713,7 @@ func (r *GameRelay) HandleDisconnectTimeout(playerID, gameID string) {
 	}
 }
 
-// NotifyMatchFound sends match_found to both players.
+// NotifyMatchFound は両プレイヤーに match_found を送信します
 func (r *GameRelay) NotifyMatchFound(gameID, player1ID, player2ID string) {
 	msg := &WSMessage{
 		Type: constants.WSMsgMatchFound,
@@ -746,22 +725,42 @@ func (r *GameRelay) NotifyMatchFound(gameID, player1ID, player2ID string) {
 	r.hub.SendToPlayer(player2ID, msg)
 }
 
-// resolvePlayerNum maps a playerID to their player_num (1 or 2) using gameMeta.
-// Returns 0 if the playerID is not found in the game.
-func (r *GameRelay) resolvePlayerNum(gameID, playerID string) int {
+// resolvePlayerNum はインメモリセッションからキャッシュ済み playerNum を返す。
+// プレイヤーがゲームに参加していない場合は 0 を返す。
+func (r *GameRelay) resolvePlayerNum(playerID string) int {
 	r.mu.RLock()
-	meta, ok := r.gameMeta[gameID]
+	sess, ok := r.playerGames[playerID]
 	r.mu.RUnlock()
 	if !ok {
 		return 0
 	}
-	if playerID == meta.player1ID {
-		return 1
+	return sess.playerNum
+}
+
+// lookupMatchType は game_players の行数からマッチタイプを導出する。
+func (r *GameRelay) lookupMatchType(ctx context.Context, gameID string) string {
+	if r.gamePlayerRepo == nil {
+		return ""
 	}
-	if playerID == meta.player2ID {
-		return 2
+	entries, err := r.gamePlayerRepo.LookupGamePlayers(ctx, gameID)
+	if err != nil {
+		log.Printf("lookup match type for game %s: %v", gameID, err)
+		return ""
 	}
-	return 0
+	if len(entries) == 1 {
+		return constants.MatchTypeNpc
+	}
+	return constants.MatchTypePvp
+}
+
+// findOpponent は game_players エントリから対戦相手の playerID を返す。
+func (r *GameRelay) findOpponent(entries []port.GamePlayerEntry, selfID string) string {
+	for _, e := range entries {
+		if e.PlayerID != selfID {
+			return e.PlayerID
+		}
+	}
+	return ""
 }
 
 func appendUnique(slice []string, s string) []string {
@@ -773,7 +772,7 @@ func appendUnique(slice []string, s string) []string {
 	return append(slice, s)
 }
 
-// forfeitReason builds the action data for a forfeit request.
+// forfeitReason は forfeit リクエスト用のアクションデータを構築する。
 func forfeitReason(reason string) json.RawMessage {
 	return mustMarshal(map[string]string{"reason": reason})
 }

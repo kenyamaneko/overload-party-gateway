@@ -3,42 +3,42 @@ package ws
 import (
 	"encoding/json"
 
-	apiclient "github.com/kenyamaneko/overload-party-common/packages/api-client"
+	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
 )
 
-// WSMessage is the envelope for all WebSocket messages.
+// WSMessage は全 WebSocket メッセージのエンベロープです
 type WSMessage struct {
 	Type string          `json:"type"`
 	Data json.RawMessage `json:"data,omitempty"`
 }
 
-// --- Client → Server ---
+// --- クライアント → サーバー ---
 
-type MatchmakingStartMessage = apiclient.MatchmakingStartMessage
-type GameEnterMessage = apiclient.GameEnterMessage
-type NPCBattleStartMessage = apiclient.NPCBattleStartMessage
-type GameActionMessage = apiclient.GameActionMessage
-type UseStampMessage = apiclient.UseStampMessage
+type MatchmakingStartMessage = apigateway.MatchmakingStartMessage
+type GameEnterMessage = apigateway.GameEnterMessage
+type NPCBattleStartMessage = apigateway.NPCBattleStartMessage
+type GameActionMessage = apigateway.GameActionMessage
+type UseStampMessage = apigateway.UseStampMessage
 
-// --- Server → Client ---
+// --- サーバー → クライアント ---
 
-type ErrorMessage = apiclient.ErrorMessage
-type MatchFoundMessage = apiclient.MatchFoundMessage
-type GameOverMessage = apiclient.GameOverMessage
-type ActionRejectedMessage = apiclient.ActionRejectedMessage
-type ActionPerformedMessage = apiclient.ActionPerformedMessage
-type StampUsedMessage = apiclient.StampUsedMessage
-type NPCBattleCreatedMessage = apiclient.NPCBattleCreatedMessage
+type ErrorMessage = apigateway.ErrorMessage
+type MatchFoundMessage = apigateway.MatchFoundMessage
+type GameOverMessage = apigateway.GameOverMessage
+type ActionRejectedMessage = apigateway.ActionRejectedMessage
+type ActionPerformedMessage = apigateway.ActionPerformedMessage
+type StampUsedMessage = apigateway.StampUsedMessage
+type NPCBattleCreatedMessage = apigateway.NPCBattleCreatedMessage
 
-// --- Spectate: Client → Server ---
+// --- 観戦: クライアント → サーバー ---
 
-type SpectateJoinMessage = apiclient.SpectateJoinMessage
-type SpectateLeaveMessage = apiclient.SpectateLeaveMessage
-type SpectateStampMessage = apiclient.SpectateStampMessage
+type SpectateJoinMessage = apigateway.SpectateJoinMessage
+type SpectateLeaveMessage = apigateway.SpectateLeaveMessage
+type SpectateStampMessage = apigateway.SpectateStampMessage
 
-// --- Spectate: Server → Client ---
+// --- 観戦: サーバー → クライアント ---
 
-type SpectateJoinedMessage = apiclient.SpectateJoinedMessage
-type SpectateErrorMessage = apiclient.SpectateErrorMessage
-type SpectateEndedMessage = apiclient.SpectateEndedMessage
-type SpectateStampBroadcastMessage = apiclient.SpectateStampBroadcastMessage
+type SpectateJoinedMessage = apigateway.SpectateJoinedMessage
+type SpectateErrorMessage = apigateway.SpectateErrorMessage
+type SpectateEndedMessage = apigateway.SpectateEndedMessage
+type SpectateStampBroadcastMessage = apigateway.SpectateStampBroadcastMessage

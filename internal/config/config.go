@@ -1,65 +1,74 @@
 package config
 
 import (
+	"log"
 	"os"
+	"strconv"
 	"strings"
 )
 
+// Config は gateway サービスの設定を保持します
 type Config struct {
-	Port        string
-	Env         string
-	LogLevel    string
-	DatabaseURL string // env: DATABASE_URL (PostgreSQL connection string)
+	Port     string
+	Env      string
+	LogLevel string
 
-	// Apple App Store
-	AppleKeyID          string
-	AppleIssuerID       string
-	AppleBundleID       string
-	ApplePrivateKeyPath string
-	AppleEnvironment    string // "Production" or "Sandbox"
-
-	// Google Play
-	GooglePackageName string
-
-	// CORS
 	AllowedOrigins []string
 
-	// Battle server
-	BattleServerURL string // env: BATTLE_SERVER_URL
+	BattleServerURL       string
+	CardServiceURL        string
+	MatchmakingServiceURL string
+	AccountServiceURL     string
+	ShopServiceURL        string
+	ScenarioServiceURL    string
 
-	// App version
-	AppMinVersion    string // env: APP_MIN_VERSION
-	AppLatestVersion string // env: APP_LATEST_VERSION
-	AppForceUpdate   bool   // env: APP_FORCE_UPDATE
+	// game_players / news_articles は gateway が直接 Postgres に接続して読み書きする
+	DatabaseURL string
 
-	// Story scripts (GCS bucket; empty = local filesystem fallback)
-	StoryBucket string
+	PubsubProjectID         string
+	MatchmakingSubscription string
+
+	FactionSelectedSubscription string
+	PremiumUpdatedSubscription  string
+
+	// matchmaking_start 後のプレイヤー待機タイムアウト（秒）。
+	// タイムアウト時に gateway がエラーを push し、上流の enqueue をキャンセルする。
+	MatchmakingTimeoutSec int
+
+	AppMinVersion    string
+	AppLatestVersion string
+	AppForceUpdate   bool
 }
 
+// Load は環境変数からサービス設定を読み込みます
 func Load() *Config {
 	return &Config{
-		Port:        getEnv("PORT", "9001"),
-		Env:         getEnv("ENV", "dev"),
-		LogLevel:    getEnv("LOG_LEVEL", "info"),
-		DatabaseURL: getEnv("DATABASE_URL", ""),
-
-		AppleKeyID:          getEnv("APPLE_KEY_ID", ""),
-		AppleIssuerID:       getEnv("APPLE_ISSUER_ID", ""),
-		AppleBundleID:       getEnv("APPLE_BUNDLE_ID", ""),
-		ApplePrivateKeyPath: getEnv("APPLE_PRIVATE_KEY_PATH", ""),
-		AppleEnvironment:    getEnv("APPLE_ENVIRONMENT", "Sandbox"),
-
-		GooglePackageName: getEnv("GOOGLE_PACKAGE_NAME", ""),
+		Port:     getEnv("PORT", "9001"),
+		Env:      getEnv("ENV", "dev"),
+		LogLevel: getEnv("LOG_LEVEL", "info"),
 
 		AllowedOrigins: splitCSV(getEnv("ALLOWED_ORIGINS", "")),
 
-		BattleServerURL: getEnv("BATTLE_SERVER_URL", "http://localhost:9002"),
+		BattleServerURL:       getEnv("BATTLE_SERVER_URL", "http://localhost:9002"),
+		CardServiceURL:        getEnv("CARD_SERVICE_URL", "http://localhost:9003"),
+		MatchmakingServiceURL: getEnv("MATCHMAKING_SERVICE_URL", "http://localhost:9004"),
+		AccountServiceURL:     getEnv("ACCOUNT_SERVICE_URL", "http://localhost:9005"),
+		ShopServiceURL:        getEnv("SHOP_SERVICE_URL", "http://localhost:9006"),
+		ScenarioServiceURL:    getEnv("SCENARIO_SERVICE_URL", "http://localhost:9007"),
+
+		DatabaseURL: getEnv("DATABASE_URL", ""),
+
+		PubsubProjectID:         getEnv("PUBSUB_PROJECT_ID", ""),
+		MatchmakingSubscription: getEnv("MATCHMAKING_SUBSCRIPTION", "matchmaking-events-gateway"),
+
+		FactionSelectedSubscription: getEnv("FACTION_SELECTED_SUBSCRIPTION", "faction-selected-gateway-sub"),
+		PremiumUpdatedSubscription:  getEnv("PREMIUM_UPDATED_SUBSCRIPTION", "premium-updated-gateway-sub"),
+
+		MatchmakingTimeoutSec: getEnvInt("MATCHMAKING_TIMEOUT_SEC", 60),
 
 		AppMinVersion:    getEnv("APP_MIN_VERSION", "0.1.0"),
 		AppLatestVersion: getEnv("APP_LATEST_VERSION", "0.1.0"),
 		AppForceUpdate:   getEnv("APP_FORCE_UPDATE", "false") == "true",
-
-		StoryBucket: getEnv("STORY_BUCKET", ""),
 	}
 }
 
@@ -82,4 +91,17 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// getEnvInt は環境変数を int として読み取る。未設定なら fallback、不正値なら fail-fast。
+func getEnvInt(key string, fallback int) int {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		log.Fatalf("config: %s is not a valid int: %q", key, v)
+	}
+	return n
 }

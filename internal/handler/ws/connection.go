@@ -18,11 +18,12 @@ const (
 	maxMsgSize     = 4096
 	sendBufferSize = 64
 
-	// WebSocket接続ごとの読み書きバッファサイズ（gorilla/websocket Upgrader用）。
+	// WebSocket 接続ごとの読み書きバッファサイズ（gorilla/websocket Upgrader 用）
 	wsReadBufferSize  = 1024
 	wsWriteBufferSize = 1024
 )
 
+// Connection は WebSocket 接続を表します
 type Connection struct {
 	conn     *websocket.Conn
 	playerID string
@@ -31,6 +32,7 @@ type Connection struct {
 	closed   bool
 }
 
+// NewConnection は WebSocket Connection を生成します
 func NewConnection(conn *websocket.Conn, playerID string) *Connection {
 	return &Connection{
 		conn:     conn,
@@ -39,10 +41,12 @@ func NewConnection(conn *websocket.Conn, playerID string) *Connection {
 	}
 }
 
+// PlayerID は接続のプレイヤー ID を返します
 func (c *Connection) PlayerID() string {
 	return c.playerID
 }
 
+// SendMessage はメッセージを JSON にマーシャルして送信します
 func (c *Connection) SendMessage(msg *WSMessage) {
 	data, err := json.Marshal(msg)
 	if err != nil {
@@ -52,9 +56,8 @@ func (c *Connection) SendMessage(msg *WSMessage) {
 	c.SendRaw(data)
 }
 
-// SendRaw sends pre-marshaled bytes to the client without additional marshaling.
-// Use this when the same message is broadcast to multiple connections to avoid
-// redundant json.Marshal calls.
+// SendRaw はマーシャル済みバイト列を送信します。
+// 同一メッセージを複数接続にブロードキャストする際に json.Marshal の重複を避ける。
 func (c *Connection) SendRaw(data []byte) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -69,20 +72,10 @@ func (c *Connection) SendRaw(data []byte) {
 	}
 }
 
-// MessageHandler is the interface for processing incoming WebSocket messages.
-type MessageHandler interface {
-	HandleMessage(conn *Connection, msg *WSMessage)
-}
-
-// ConnectionLifecycle is the interface for connection registration/unregistration.
-type ConnectionLifecycle interface {
-	Register(conn *Connection)
-	Unregister(conn *Connection)
-}
-
-func (c *Connection) ReadPump(lifecycle ConnectionLifecycle, handler MessageHandler) {
+// ReadPump は WebSocket からメッセージを読み取り Manager にディスパッチします
+func (c *Connection) ReadPump(hub *ConnectionHub, manager *Manager) {
 	defer func() {
-		lifecycle.Unregister(c)
+		hub.Unregister(c)
 		c.Close()
 	}()
 
@@ -112,10 +105,11 @@ func (c *Connection) ReadPump(lifecycle ConnectionLifecycle, handler MessageHand
 			continue
 		}
 
-		handler.HandleMessage(c, &msg)
+		manager.HandleMessage(c, &msg)
 	}
 }
 
+// WritePump はバッファからメッセージを読み取り WebSocket に書き込みます
 func (c *Connection) WritePump() {
 	ticker := time.NewTicker(pingInterval)
 	defer func() {
@@ -145,6 +139,7 @@ func (c *Connection) WritePump() {
 	}
 }
 
+// Close は接続をクローズします
 func (c *Connection) Close() {
 	c.mu.Lock()
 	defer c.mu.Unlock()

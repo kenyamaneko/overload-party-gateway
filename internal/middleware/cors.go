@@ -6,11 +6,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// CORSプリフライトのキャッシュ有効期間（秒）。24時間。
+// CORS プリフライトのキャッシュ有効期間（秒）。24 時間。
 const corsMaxAge = "86400"
 
-// CORS returns a Gin middleware that sets CORS headers.
-// In production the allowed origins should be restricted.
+// CORS は CORS ヘッダーを設定する Gin middleware を返します。
+// 本番では allowedOrigins で許可オリジンを制限する。
 func CORS(allowedOrigins ...string) gin.HandlerFunc {
 	origins := make(map[string]struct{}, len(allowedOrigins))
 	for _, o := range allowedOrigins {
@@ -24,7 +24,6 @@ func CORS(allowedOrigins ...string) gin.HandlerFunc {
 			return
 		}
 
-		// Check if the origin is allowed (empty list = allow all)
 		allowed := len(origins) == 0
 		if !allowed {
 			_, allowed = origins[origin]

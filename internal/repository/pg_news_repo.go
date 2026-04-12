@@ -6,22 +6,24 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/kenyamaneko/overload-party-gateway/internal/model"
+	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
-// Compile-time interface check.
 var _ port.NewsRepo = (*PgNewsRepository)(nil)
 
+// PgNewsRepository は PostgreSQL によるニュース記事のリポジトリです
 type PgNewsRepository struct {
 	pool *pgxpool.Pool
 }
 
+// NewPgNewsRepository は PgNewsRepository を生成します
 func NewPgNewsRepository(pool *pgxpool.Pool) *PgNewsRepository {
 	return &PgNewsRepository{pool: pool}
 }
 
-func (r *PgNewsRepository) List(ctx context.Context, limit int, offset int) ([]*model.NewsArticle, error) {
+// List はニュース記事を公開日降順で取得します
+func (r *PgNewsRepository) List(ctx context.Context, limit int, offset int) ([]*apigateway.NewsArticle, error) {
 	rows, err := connFrom(ctx, r.pool).Query(ctx, `
 		SELECT article_id, source, title, summary, tags, published_at, fetched_at
 		  FROM news_articles
@@ -35,9 +37,9 @@ func (r *PgNewsRepository) List(ctx context.Context, limit int, offset int) ([]*
 	}
 	defer rows.Close()
 
-	var articles []*model.NewsArticle
+	var articles []*apigateway.NewsArticle
 	for rows.Next() {
-		a := &model.NewsArticle{}
+		a := &apigateway.NewsArticle{}
 		if err := rows.Scan(
 			&a.ArticleID, &a.Source, &a.Title,
 			&a.Summary, &a.Tags, &a.PublishedAt, &a.FetchedAt,

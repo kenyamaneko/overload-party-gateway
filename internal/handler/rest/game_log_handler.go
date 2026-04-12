@@ -8,14 +8,17 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
+// GameLogHandler はゲームログの REST エンドポイントを処理します
 type GameLogHandler struct {
 	battleClient service.BattleClient
 }
 
+// NewGameLogHandler は GameLogHandler を生成します
 func NewGameLogHandler(battleClient service.BattleClient) *GameLogHandler {
 	return &GameLogHandler{battleClient: battleClient}
 }
 
+// GetGameLog はゲームログを JSON で返します
 func (h *GameLogHandler) GetGameLog(c *gin.Context) {
 	gameID := c.Param("gameId")
 
@@ -32,6 +35,7 @@ func (h *GameLogHandler) GetGameLog(c *gin.Context) {
 	c.Data(http.StatusOK, "application/json; charset=utf-8", log)
 }
 
+// GetGameLogText はゲームログをテキスト形式で返します
 func (h *GameLogHandler) GetGameLogText(c *gin.Context) {
 	gameID := c.Param("gameId")
 

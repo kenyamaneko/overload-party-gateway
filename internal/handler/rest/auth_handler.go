@@ -1,58 +1,65 @@
 package rest
 
 import (
+	"errors"
 	"net/http"
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 
+	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
+	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
-	"github.com/kenyamaneko/overload-party-gateway/internal/model"
-	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
 const maxUsernameRunes = 50
 
+// AuthHandler は認証関連の REST エンドポイントを処理します
 type AuthHandler struct {
-	authService *service.AuthService
+	account *accountclient.Client
 }
 
-func NewAuthHandler(authService *service.AuthService) *AuthHandler {
-	return &AuthHandler{authService: authService}
+// NewAuthHandler は AuthHandler を生成します
+func NewAuthHandler(account *accountclient.Client) *AuthHandler {
+	return &AuthHandler{account: account}
 }
 
+// Register はプレイヤー新規登録を処理します
 func (h *AuthHandler) Register(c *gin.Context) {
-	var req model.RegisterRequest
+	var req apigateway.RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	// Generated API types carry no validation tags; enforce length here to
-	// preserve the original binding:"required,min=1,max=50" contract.
 	if n := utf8.RuneCountInString(req.Username); n < 1 || n > maxUsernameRunes {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "username must be 1-50 characters"})
 		return
 	}
 
 	firebaseUID := middleware.GetFirebaseUID(c)
-
-	player, err := h.authService.Register(c.Request.Context(), firebaseUID, req.Username)
+	player, err := h.account.Register(c.Request.Context(), firebaseUID, req.Username)
 	if err != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		if errors.Is(err, accountclient.ErrPlayerAlreadyRegistered) {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-
 	c.JSON(http.StatusCreated, player)
 }
 
+// Login はプレイヤーログインを処理します
 func (h *AuthHandler) Login(c *gin.Context) {
 	firebaseUID := middleware.GetFirebaseUID(c)
-
-	player, err := h.authService.Login(c.Request.Context(), firebaseUID)
+	player, err := h.account.Login(c.Request.Context(), firebaseUID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		if errors.Is(err, accountclient.ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-
 	c.JSON(http.StatusOK, player)
 }

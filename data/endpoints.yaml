@@ -1,0 +1,395 @@
+# ─── Endpoint definitions ────────────────────────────────
+# REST / WS エンドポイント定義。generate_api_docs.py が docs/API_REFERENCE.md を生成する。
+endpoint_groups:
+  # ── Public REST (認証不要) ─────────────────────────────
+  - name: Public REST（認証不要）
+    base_path: /api/v1
+    auth: none
+    description: スプラッシュ画面やバージョンチェック等。認証不要。
+    endpoints:
+      - method: GET
+        path: /api/v1/health
+        summary: API ヘルスチェック
+        response_description: '`{"status":"ok"}`'
+
+      - method: GET
+        path: /api/v1/version
+        summary: アプリバージョン情報を取得
+        response_type: VersionResponse
+        errors:
+          - status: 500
+            description: 設定ロード失敗
+
+      - method: GET
+        path: /api/v1/announcements
+        summary: アクティブなお知らせ一覧を取得
+        response_type: Announcement
+        response_description: "`Announcement[]`"
+        notes: 有効期限内のお知らせのみ返す。
+
+      - method: GET
+        path: /api/v1/daily
+        summary: 今日の Tips を取得
+        response_type: DailyTip
+
+      - method: GET
+        path: /api/v1/cloud-news
+        summary: クラウドニュース記事一覧を取得（ページネーション対応）
+        response_type: NewsArticle
+        response_description: "`NewsArticle[]`（クエリ: `?limit=20&offset=0`）"
+        errors:
+          - status: 500
+            description: newsfeed テーブル読み取りエラー
+
+  # ── Auth REST (Firebase 認証、PlayerResolve なし) ──────
+  - name: Auth REST
+    base_path: /api/v1
+    auth: firebase
+    description: 認証エンドポイント。Firebase Token 検証済みだが PlayerResolve 未適用（未登録ユーザーがアクセスするため）。
+    endpoints:
+      - method: POST
+        path: /api/v1/auth/register
+        summary: 新規プレイヤー登録
+        request_type: RegisterRequest
+        response_type: PlayerResponse
+        response_description: "`201 Created`"
+        errors:
+          - status: 400
+            description: username が空または 50 文字超
+          - status: 409
+            description: 既に登録済み
+
+      - method: POST
+        path: /api/v1/auth/login
+        summary: 既存プレイヤーのログイン
+        response_type: PlayerResponse
+        errors:
+          - status: 404
+            description: プレイヤー未登録
+
+  # ── Authenticated REST (Firebase + PlayerResolve) ──────
+  - name: Authenticated REST
+    base_path: /api/v1
+    auth: firebase
+    description: |
+      Firebase Token 検証 + PlayerResolve ミドルウェア適用済み。
+      リクエストコンテキストに player_id がセットされる。
+    endpoints:
+      # Player
+      - method: GET
+        path: /api/v1/player
+        summary: 自分のプレイヤー情報を取得
+        response_type: PlayerResponse
+        errors:
+          - status: 404
+            description: プレイヤー未登録
+
+      - method: PUT
+        path: /api/v1/player/name
+        summary: プレイヤー名を変更
+        request_type: PlayerNameRequest
+        response_type: PlayerResponse
+        errors:
+          - status: 400
+            description: name が空
+          - status: 404
+            description: プレイヤー未登録
+
+      - method: GET
+        path: /api/v1/player/battle-limit
+        summary: デイリーバトル残り回数を取得
+        response_type: BattleLimitResponse
+
+      - method: GET
+        path: /api/v1/player/cards
+        summary: 所持カード一覧を取得
+        response_type: PlayerCardWithDef
+        response_description: "`PlayerCardWithDef[]`"
+
+      # Decks
+      - method: GET
+        path: /api/v1/player/decks
+        summary: デッキ一覧を取得
+        response_type: Deck
+        response_description: "`Deck[]`"
+
+      - method: GET
+        path: /api/v1/player/decks/:deckId
+        summary: デッキ詳細を取得（カード構成付き）
+        response_type: DeckDetailResponse
+        errors:
+          - status: 400
+            description: deckId が不正
+          - status: 404
+            description: デッキが存在しない
+
+      - method: POST
+        path: /api/v1/player/decks
+        summary: 新規デッキ作成
+        request_type: DeckCreateRequest
+        response_type: Deck
+        response_description: "`201 Created`"
+        errors:
+          - status: 400
+            description: バリデーションエラー（デッキ名・カード構成不正）
+
+      - method: PUT
+        path: /api/v1/player/decks/:deckId
+        summary: デッキ更新
+        request_type: DeckUpdateRequest
+        response_type: Deck
+        errors:
+          - status: 400
+            description: バリデーションエラー
+          - status: 404
+            description: デッキが存在しない
+
+      - method: DELETE
+        path: /api/v1/player/decks/:deckId
+        summary: デッキ削除
+        response_description: "`204 No Content`"
+        errors:
+          - status: 400
+            description: deckId が不正
+          - status: 404
+            description: デッキが存在しない
+
+      # User settings
+      - method: GET
+        path: /api/v1/player/settings
+        summary: ユーザー設定を取得
+        response_type: UserSettings
+
+      - method: PUT
+        path: /api/v1/player/settings
+        summary: ユーザー設定を更新
+        request_type: UpdateSettingsRequest
+        response_type: UserSettings
+        errors:
+          - status: 400
+            description: バリデーションエラー
+
+      # Cards
+      - method: GET
+        path: /api/v1/cards
+        summary: 全カード定義一覧を取得（所持情報付き）
+        response_type: PlayerCardWithDef
+        response_description: "`PlayerCardWithDef[]`"
+
+      # Game log
+      - method: GET
+        path: /api/v1/games/:gameId/log
+        summary: ゲームログを JSON で取得（battle サーバーにプロキシ）
+        response_description: "Battle サーバーのゲームログ JSON"
+        errors:
+          - status: 404
+            description: ゲームが存在しない
+          - status: 500
+            description: Battle サーバー接続エラー
+
+      - method: GET
+        path: /api/v1/games/:gameId/log/text
+        summary: ゲームログをテキスト形式で取得
+        response_description: "`text/plain` 形式のゲームログ"
+        errors:
+          - status: 404
+            description: ゲームが存在しない
+
+      # NPC
+      - method: GET
+        path: /api/v1/npc/models
+        summary: NPC モデル一覧を取得（battle サーバーにプロキシ）
+        response_type: NpcModel
+        response_description: "`NpcModel[]`"
+        errors:
+          - status: 404
+            description: NPC モデルが存在しない
+
+      # Spectate
+      - method: GET
+        path: /api/v1/spectate/games
+        summary: 観戦可能なアクティブゲーム一覧を取得
+        response_type: SpectateGameInfo
+        response_description: "`SpectateGameInfo[]`"
+
+      # Shop
+      - method: POST
+        path: /api/v1/player/select-faction
+        summary: ファクション選択（初回無料、カード付与あり）
+        request_type: SelectFactionRequest
+        response_type: SelectFactionResponse
+        errors:
+          - status: 400
+            description: 不正なファクション名
+          - status: 409
+            description: 既に同じファクションを選択済み
+
+      - method: GET
+        path: /api/v1/shop/products
+        summary: ショップ商品一覧を取得（購入済みフラグ付き）
+        response_type: ProductResponse
+        response_description: "`{products: ProductResponse[]}`"
+
+      - method: POST
+        path: /api/v1/shop/purchase
+        summary: 商品を購入
+        request_type: PurchaseRequest
+        response_type: PurchaseResponse
+        errors:
+          - status: 400
+            description: リクエスト不正
+          - status: 402
+            description: レシート検証失敗
+          - status: 404
+            description: 商品が存在しない
+          - status: 409
+            description: 既に購入済み
+
+      - method: POST
+        path: /api/v1/shop/subscribe
+        summary: プレミアムサブスクリプション開始
+        request_type: PurchaseRequest
+        response_type: SubscribeResponse
+        errors:
+          - status: 400
+            description: リクエスト不正
+          - status: 402
+            description: レシート検証失敗
+
+      # Scenario
+      - method: GET
+        path: /api/v1/scenarios
+        summary: エピソード一覧を取得（アンロック状態付き、`?lang=ja`）
+        response_type: EpisodeWithStatus
+        response_description: "`{episodes: EpisodeWithStatus[]}`"
+
+      - method: GET
+        path: /api/v1/scenarios/:episodeId/script
+        summary: エピソードスクリプトを取得（`?lang=ja`）
+        response_type: ScenarioScriptResponse
+        errors:
+          - status: 403
+            description: エピソード未アンロック
+          - status: 404
+            description: エピソードが存在しない
+
+      - method: POST
+        path: /api/v1/scenarios/:episodeId/complete
+        summary: エピソードをクリア済みにする
+        response_type: ScenarioCompleteResponse
+        errors:
+          - status: 403
+            description: エピソード未アンロック
+          - status: 404
+            description: エピソードが存在しない
+
+  # ── WebSocket ──────────────────────────────────────────
+  - name: WebSocket
+    path: /ws
+    auth: firebase (on connect)
+    description: |
+      `GET /ws?token=<firebase_id_token>` で WebSocket にアップグレード。
+      全メッセージは `{"type":"<message_type>","data":{...}}` エンベロープ形式。
+    messages:
+      client_to_server:
+        - type: matchmaking_start
+          payload_type: MatchmakingStartMessage
+          summary: マッチメイキング開始（matchmaking サービスにエンキュー）
+        - type: matchmaking_cancel
+          payload_type: null
+          summary: マッチメイキングキャンセル
+        - type: game_enter
+          payload_type: GameEnterMessage
+          summary: ゲームに参加（PvP マッチ後）
+        - type: npc_battle_start
+          payload_type: NPCBattleStartMessage
+          summary: NPC バトル開始
+        - type: game_action
+          payload_type: GameActionMessage
+          summary: ゲームアクション送信（play_card, attack, scale_up, etc.）
+        - type: use_stamp
+          payload_type: UseStampMessage
+          summary: スタンプ送信
+        - type: ping
+          payload_type: null
+          summary: Ping（サーバーは pong を返す）
+        - type: spectate_join
+          payload_type: SpectateJoinMessage
+          summary: ゲーム観戦開始
+        - type: spectate_leave
+          payload_type: SpectateLeaveMessage
+          summary: ゲーム観戦終了
+        - type: spectate_stamp
+          payload_type: SpectateStampMessage
+          summary: 観戦中スタンプ送信
+
+      server_to_client:
+        - type: matchmaking_started
+          payload_type: null
+          summary: マッチメイキング開始確認
+        - type: matchmaking_cancelled
+          payload_type: null
+          summary: マッチメイキングキャンセル確認
+        - type: match_found
+          payload_type: MatchFoundMessage
+          summary: マッチング成立通知
+        - type: game_entered
+          payload_type: null
+          summary: ゲーム参加完了確認
+        - type: game_state
+          payload_type: ActionPerformedMessage
+          summary: ゲーム初期状態（game_enter 直後）
+        - type: action_performed
+          payload_type: ActionPerformedMessage
+          summary: アクション実行結果 + 最新ゲーム状態
+        - type: action_rejected
+          payload_type: ActionRejectedMessage
+          summary: アクション拒否通知
+        - type: game_over
+          payload_type: GameOverMessage
+          summary: ゲーム終了通知
+        - type: turn_controls
+          payload_type: TurnControlsMessage
+          summary: ターン操作可能状態の通知
+        - type: npc_battle_created
+          payload_type: NPCBattleCreatedMessage
+          summary: NPC バトル作成完了
+        - type: stamp_used
+          payload_type: StampUsedMessage
+          summary: スタンプ受信通知
+        - type: error
+          payload_type: ErrorMessage
+          summary: エラー通知
+        - type: pong
+          payload_type: null
+          summary: Pong 応答
+        - type: opponent_disconnected
+          payload_type: null
+          summary: 対戦相手が切断
+        - type: opponent_reconnected
+          payload_type: null
+          summary: 対戦相手が再接続
+        - type: game_state_restore
+          payload_type: ActionPerformedMessage
+          summary: 再接続時のゲーム状態復元
+        - type: faction_selection_complete
+          payload_type: null
+          summary: ファクション選択完了通知（REST 経由のファクション選択を WS で通知）
+        - type: premium_update_complete
+          payload_type: null
+          summary: プレミアム状態更新通知
+        - type: spectate_joined
+          payload_type: SpectateJoinedMessage
+          summary: 観戦開始完了（現在のゲーム状態付き）
+        - type: spectate_update
+          payload_type: ActionPerformedMessage
+          summary: 観戦中のゲーム状態更新
+        - type: spectate_ended
+          payload_type: SpectateEndedMessage
+          summary: 観戦中のゲーム終了
+        - type: spectate_error
+          payload_type: SpectateErrorMessage
+          summary: 観戦エラー
+        - type: spectate_stamp_broadcast
+          payload_type: SpectateStampBroadcastMessage
+          summary: 観戦者スタンプブロードキャスト

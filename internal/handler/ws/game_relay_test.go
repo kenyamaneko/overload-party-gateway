@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/kenyamaneko/overload-party-gateway/internal/constants"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
@@ -279,7 +278,7 @@ func TestRunNpcTurns_IterationCapReached(t *testing.T) {
 func TestJoinGame(t *testing.T) {
 	relay, _ := newTestRelay()
 
-	relay.JoinGame("p1", "game_1")
+	relay.JoinGame("p1", "game_1", 1)
 
 	// playerGames should map p1 → game_1
 	gid, ok := relay.GameIDForPlayer("p1")
@@ -296,8 +295,8 @@ func TestJoinGame(t *testing.T) {
 func TestJoinGame_TwoPlayers(t *testing.T) {
 	relay, _ := newTestRelay()
 
-	relay.JoinGame("p1", "game_1")
-	relay.JoinGame("p2", "game_1")
+	relay.JoinGame("p1", "game_1", 1)
+	relay.JoinGame("p2", "game_1", 2)
 
 	relay.mu.RLock()
 	members := relay.gameMembers["game_1"]
@@ -310,8 +309,8 @@ func TestJoinGame_TwoPlayers(t *testing.T) {
 func TestJoinGame_DuplicateJoin(t *testing.T) {
 	relay, _ := newTestRelay()
 
-	relay.JoinGame("p1", "game_1")
-	relay.JoinGame("p1", "game_1")
+	relay.JoinGame("p1", "game_1", 1)
+	relay.JoinGame("p1", "game_1", 1)
 
 	relay.mu.RLock()
 	members := relay.gameMembers["game_1"]
@@ -322,8 +321,8 @@ func TestJoinGame_DuplicateJoin(t *testing.T) {
 func TestLeaveGame(t *testing.T) {
 	relay, _ := newTestRelay()
 
-	relay.JoinGame("p1", "game_1")
-	relay.JoinGame("p2", "game_1")
+	relay.JoinGame("p1", "game_1", 1)
+	relay.JoinGame("p2", "game_1", 2)
 
 	relay.LeaveGame("p1")
 
@@ -346,19 +345,16 @@ func TestLeaveGame(t *testing.T) {
 func TestLeaveGame_LastPlayer_CleansUpGame(t *testing.T) {
 	relay, _ := newTestRelay()
 
-	relay.RegisterGameMeta("game_1", "p1", "p2", constants.MatchTypePvp)
-	relay.JoinGame("p1", "game_1")
-	relay.JoinGame("p2", "game_1")
+	relay.JoinGame("p1", "game_1", 1)
+	relay.JoinGame("p2", "game_1", 2)
 
 	relay.LeaveGame("p1")
 	relay.LeaveGame("p2")
 
 	relay.mu.RLock()
 	_, gameMembersExist := relay.gameMembers["game_1"]
-	_, gameMetaExists := relay.gameMeta["game_1"]
 	relay.mu.RUnlock()
 	assert.False(t, gameMembersExist, "gameMembers should be cleaned up when last player leaves")
-	assert.False(t, gameMetaExists, "gameMeta should be cleaned up when last player leaves")
 }
 
 func TestLeaveGame_NotInGame(t *testing.T) {
@@ -371,30 +367,19 @@ func TestLeaveGame_NotInGame(t *testing.T) {
 	assert.False(t, ok)
 }
 
-func TestRegisterGameMeta(t *testing.T) {
+func TestJoinGame_CachesPlayerNum(t *testing.T) {
 	relay, _ := newTestRelay()
 
-	relay.RegisterGameMeta("game_1", "p1", "p2", constants.MatchTypePvp)
+	relay.JoinGame("p1", "game_1", 1)
+	relay.JoinGame("p2", "game_1", 2)
 
-	relay.mu.RLock()
-	meta, ok := relay.gameMeta["game_1"]
-	relay.mu.RUnlock()
-	require.True(t, ok)
-	assert.Equal(t, "p1", meta.player1ID)
-	assert.Equal(t, "p2", meta.player2ID)
-	assert.Equal(t, constants.MatchTypePvp, meta.matchType)
+	assert.Equal(t, 1, relay.resolvePlayerNum("p1"))
+	assert.Equal(t, 2, relay.resolvePlayerNum("p2"))
 }
 
-func TestRegisterGameMeta_NPC(t *testing.T) {
+func TestResolvePlayerNum_NotInGame(t *testing.T) {
 	relay, _ := newTestRelay()
-
-	relay.RegisterGameMeta("game_2", "p1", "npc_bot", constants.MatchTypeNpc)
-
-	relay.mu.RLock()
-	meta, ok := relay.gameMeta["game_2"]
-	relay.mu.RUnlock()
-	require.True(t, ok)
-	assert.Equal(t, constants.MatchTypeNpc, meta.matchType)
+	assert.Equal(t, 0, relay.resolvePlayerNum("unknown"))
 }
 
 func TestGameIDForPlayer(t *testing.T) {
@@ -405,7 +390,7 @@ func TestGameIDForPlayer(t *testing.T) {
 	assert.False(t, ok)
 
 	// After joining
-	relay.JoinGame("p1", "game_1")
+	relay.JoinGame("p1", "game_1", 1)
 	gid, ok := relay.GameIDForPlayer("p1")
 	assert.True(t, ok)
 	assert.Equal(t, "game_1", gid)
@@ -419,14 +404,8 @@ func TestGameIDForPlayer(t *testing.T) {
 func TestLeaveAllPlayers(t *testing.T) {
 	relay, _ := newTestRelay()
 
-	relay.RegisterGameMeta("game_1", "p1", "p2", constants.MatchTypePvp)
-	relay.JoinGame("p1", "game_1")
-	relay.JoinGame("p2", "game_1")
-
-	// Mark exp as awarded to verify cleanup
-	relay.mu.Lock()
-	relay.expAwarded["game_1"] = true
-	relay.mu.Unlock()
+	relay.JoinGame("p1", "game_1", 1)
+	relay.JoinGame("p2", "game_1", 2)
 
 	relay.leaveAllPlayers("game_1")
 
@@ -437,10 +416,8 @@ func TestLeaveAllPlayers(t *testing.T) {
 
 	relay.mu.RLock()
 	_, membersExist := relay.gameMembers["game_1"]
-	_, expExists := relay.expAwarded["game_1"]
 	relay.mu.RUnlock()
 	assert.False(t, membersExist, "gameMembers should be cleaned up")
-	assert.False(t, expExists, "expAwarded should be cleaned up")
 }
 
 // ========================================================================
@@ -583,9 +560,8 @@ func TestMustMarshal(t *testing.T) {
 func TestJoinGame_SwitchGame(t *testing.T) {
 	relay, _ := newTestRelay()
 
-	relay.RegisterGameMeta("game_1", "p1", "p2", constants.MatchTypePvp)
-	relay.JoinGame("p1", "game_1")
-	relay.JoinGame("p1", "game_2")
+	relay.JoinGame("p1", "game_1", 1)
+	relay.JoinGame("p1", "game_2", 1)
 
 	// p1 should now be in game_2
 	gid, ok := relay.GameIDForPlayer("p1")
@@ -596,31 +572,27 @@ func TestJoinGame_SwitchGame(t *testing.T) {
 	relay.mu.RLock()
 	members2 := relay.gameMembers["game_2"]
 	members1 := relay.gameMembers["game_1"]
-	_, game1MetaExists := relay.gameMeta["game_1"]
 	relay.mu.RUnlock()
 	assert.Contains(t, members2, "p1")
 
 	// p1 should be removed from game_1's members
 	assert.NotContains(t, members1, "p1")
-
-	// game_1 has no members left, so gameMeta should be cleaned up
-	assert.False(t, game1MetaExists, "gameMeta for game_1 should be cleaned up when last member leaves")
 }
 
 // ========================================================================
 // sendToOpponent via NotifyOpponentDisconnected/Reconnected
 // ========================================================================
 
-func TestNotifyOpponentDisconnected_NoMeta(t *testing.T) {
+func TestNotifyOpponentDisconnected_NoMembers(t *testing.T) {
 	relay, _ := newTestRelay()
 
-	// No meta registered -- should not panic.
+	// No members registered -- should not panic.
 	relay.NotifyOpponentDisconnected("p1", "nonexistent_game")
 }
 
-func TestNotifyOpponentReconnected_NoMeta(t *testing.T) {
+func TestNotifyOpponentReconnected_NoMembers(t *testing.T) {
 	relay, _ := newTestRelay()
 
-	// No meta registered -- should not panic.
+	// No members registered -- should not panic.
 	relay.NotifyOpponentReconnected("p1", "nonexistent_game")
 }

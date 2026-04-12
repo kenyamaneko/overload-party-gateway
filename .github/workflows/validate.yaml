@@ -1,0 +1,43 @@
+name: Validate codegen
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  codegen-sync:
+    name: Codegen sync check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install pyyaml "overload-party-doc-tools @ git+https://github.com/kenyamaneko/overload-party-common.git@main#subdirectory=packages/doc-tools"
+
+      - name: Run codegen
+        run: python3 scripts/generate_types.py
+
+      - name: Run schema-doc codegen
+        run: python3 scripts/generate_schema_doc.py
+
+      - name: Run api-doc codegen
+        run: python3 scripts/generate_api_docs.py
+
+      - name: Check for drift
+        run: |
+          if ! git diff --exit-code; then
+            echo "::error::Generated files are out of sync. Run 'python3 scripts/generate_types.py', 'python3 scripts/generate_schema_doc.py', and 'python3 scripts/generate_api_docs.py' and commit."
+            exit 1
+          fi
+          if [ -n "$(git ls-files --others --exclude-standard)" ]; then
+            echo "::error::Codegen produced untracked files:"
+            git ls-files --others --exclude-standard
+            exit 1
+          fi
