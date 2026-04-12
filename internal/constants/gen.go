@@ -4,7 +4,7 @@ package constants
 
 import (
 	gamedesign "github.com/kenyamaneko/overload-party-common/packages/game-design-constants"
-	gamelogic "github.com/kenyamaneko/overload-party-common/packages/game-logic-constants"
+	gamelogic "github.com/kenyamaneko/overload-party-battle/packages/game-logic-constants-go"
 	genws "github.com/kenyamaneko/overload-party-gateway/packages/ws-constants"
 )
 

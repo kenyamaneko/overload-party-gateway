@@ -3,23 +3,22 @@ module github.com/kenyamaneko/overload-party-gateway
 go 1.25.1
 
 require (
-	cloud.google.com/go/pubsub v1.50.1
+	cloud.google.com/go/pubsub/v2 v2.0.0
 	firebase.google.com/go/v4 v4.19.0
 	github.com/gin-gonic/gin v1.11.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/jackc/pgx/v5 v5.8.0
-	github.com/kenyamaneko/overload-party-common/packages/api-battle-rpc v0.1.0
-	github.com/kenyamaneko/overload-party-common/packages/card-types v0.1.0
-	github.com/kenyamaneko/overload-party-common/packages/pubsub-events v0.1.0
+	github.com/kenyamaneko/overload-party-battle/packages/api-battle-rpc-go v0.1.0
+	github.com/kenyamaneko/overload-party-battle/packages/game-logic-constants-go v0.1.0
+	github.com/kenyamaneko/overload-party-card/packages/api-card v0.1.0
 	github.com/kenyamaneko/overload-party-common/packages/game-design-constants v0.1.0
-	github.com/kenyamaneko/overload-party-common/packages/game-logic-constants v0.1.0
+	github.com/kenyamaneko/overload-party-common/packages/pubsub-events v0.1.0
 	github.com/kenyamaneko/overload-party-gateway/packages/api-gateway v0.0.0-00010101000000-000000000000
 	github.com/kenyamaneko/overload-party-gateway/packages/ws-constants v0.0.0-00010101000000-000000000000
 	github.com/stretchr/testify v1.11.1
 )
 
 replace (
-	github.com/kenyamaneko/overload-party-common/packages/pubsub-events => ../overload-party-common/packages/pubsub-events
 	github.com/kenyamaneko/overload-party-gateway/packages/api-gateway => ./packages/api-gateway
 	github.com/kenyamaneko/overload-party-gateway/packages/ws-constants => ./packages/ws-constants
 )
@@ -34,7 +33,6 @@ require (
 	cloud.google.com/go/iam v1.5.3 // indirect
 	cloud.google.com/go/longrunning v0.8.0 // indirect
 	cloud.google.com/go/monitoring v1.24.3 // indirect
-	cloud.google.com/go/pubsub/v2 v2.0.0 // indirect
 	cloud.google.com/go/storage v1.56.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.30.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.53.0 // indirect
@@ -82,6 +80,7 @@ require (
 	github.com/spiffe/go-spiffe/v2 v2.6.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.0 // indirect
+	go.einride.tech/aip v0.73.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/detectors/gcp v1.39.0 // indirect

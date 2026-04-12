@@ -21,7 +21,7 @@ import (
 	"strings"
 	"sync"
 
-	"cloud.google.com/go/pubsub"
+	"cloud.google.com/go/pubsub/v2"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
@@ -39,14 +39,13 @@ func playerIDList(players []port.MatchedPlayer) string {
 // port.MatchEventHandler 経由でディスパッチします
 type MatchSubscriber struct {
 	client         *pubsub.Client
-	subscription   *pubsub.Subscription
+	subscriber     *pubsub.Subscriber
 	handler        port.MatchEventHandler
 	processedMu    sync.Mutex
 	processedMatch map[string]struct{}
 }
 
 // NewMatchSubscriber は指定 subscription から pull する subscriber を生成します。
-// subscription は Terraform で事前作成されている必要がある。
 func NewMatchSubscriber(ctx context.Context, projectID, subscriptionID string, handler port.MatchEventHandler) (*MatchSubscriber, error) {
 	if projectID == "" {
 		return nil, errors.New("matchsubscriber: projectID is empty")
@@ -61,19 +60,9 @@ func NewMatchSubscriber(ctx context.Context, projectID, subscriptionID string, h
 	if err != nil {
 		return nil, fmt.Errorf("matchsubscriber: new client: %w", err)
 	}
-	sub := client.Subscription(subscriptionID)
-	ok, err := sub.Exists(ctx)
-	if err != nil {
-		_ = client.Close()
-		return nil, fmt.Errorf("matchsubscriber: exists check: %w", err)
-	}
-	if !ok {
-		_ = client.Close()
-		return nil, fmt.Errorf("matchsubscriber: subscription %q not found in %q", subscriptionID, projectID)
-	}
 	return &MatchSubscriber{
 		client:         client,
-		subscription:   sub,
+		subscriber:     client.Subscriber(subscriptionID),
 		handler:        handler,
 		processedMatch: make(map[string]struct{}),
 	}, nil
@@ -81,8 +70,8 @@ func NewMatchSubscriber(ctx context.Context, projectID, subscriptionID string, h
 
 // Run は ctx がキャンセルされるか Receive がエラーを返すまでブロックします
 func (s *MatchSubscriber) Run(ctx context.Context) error {
-	log.Printf("matchsubscriber: pulling from %s", s.subscription.ID())
-	return s.subscription.Receive(ctx, s.handle)
+	log.Printf("matchsubscriber: pulling from %s", s.subscriber.ID())
+	return s.subscriber.Receive(ctx, s.handle)
 }
 
 // Close は Pub/Sub クライアントをクローズします

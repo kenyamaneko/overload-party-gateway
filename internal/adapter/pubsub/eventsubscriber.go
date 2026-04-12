@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"log"
 
-	"cloud.google.com/go/pubsub"
+	"cloud.google.com/go/pubsub/v2"
 
 	pubsubevents "github.com/kenyamaneko/overload-party-common/packages/pubsub-events"
 	ws "github.com/kenyamaneko/overload-party-gateway/internal/handler/ws"
@@ -46,10 +46,10 @@ func (h *HubWSPusher) SendToPlayer(playerID string, msg any) {
 
 // EventSubscriber は faction-selected / premium-updated イベントを WS push にルーティングする汎用 Pub/Sub subscriber です
 type EventSubscriber struct {
-	client       *pubsub.Client
-	subscription *pubsub.Subscription
-	pusher       WSPusher
-	topicKind    string // "faction-selected" | "premium-updated" (for log messages)
+	client     *pubsub.Client
+	subscriber *pubsub.Subscriber
+	pusher     WSPusher
+	topicKind  string // "faction-selected" | "premium-updated" (for log messages)
 }
 
 // NewEventSubscriber はクロスサービスイベントトピック用の subscriber を生成します
@@ -65,28 +65,18 @@ func NewEventSubscriber(
 	if err != nil {
 		return nil, fmt.Errorf("event subscriber: new client: %w", err)
 	}
-	sub := client.Subscription(subscriptionID)
-	ok, err := sub.Exists(ctx)
-	if err != nil {
-		_ = client.Close()
-		return nil, fmt.Errorf("event subscriber: exists check %q: %w", subscriptionID, err)
-	}
-	if !ok {
-		_ = client.Close()
-		return nil, fmt.Errorf("event subscriber: subscription %q not found", subscriptionID)
-	}
 	return &EventSubscriber{
-		client:       client,
-		subscription: sub,
-		pusher:       pusher,
-		topicKind:    topicKind,
+		client:     client,
+		subscriber: client.Subscriber(subscriptionID),
+		pusher:     pusher,
+		topicKind:  topicKind,
 	}, nil
 }
 
 // Run は ctx がキャンセルされるか Receive がエラーを返すまでブロックします
 func (s *EventSubscriber) Run(ctx context.Context) error {
-	log.Printf("event subscriber [%s]: pulling from %s", s.topicKind, s.subscription.ID())
-	return s.subscription.Receive(ctx, s.handle)
+	log.Printf("event subscriber [%s]: pulling from %s", s.topicKind, s.subscriber.ID())
+	return s.subscriber.Receive(ctx, s.handle)
 }
 
 // Close は Pub/Sub クライアントをクローズします

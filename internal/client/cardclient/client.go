@@ -14,7 +14,7 @@ import (
 	"time"
 
 	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
-	cardtypes "github.com/kenyamaneko/overload-party-common/packages/card-types"
+	cardtypes "github.com/kenyamaneko/overload-party-card/packages/api-card"
 )
 
 // ErrNotFound は card サービスが 404 を返した場合のエラーです

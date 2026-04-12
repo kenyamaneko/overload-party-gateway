@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"time"
 
-	apibattle "github.com/kenyamaneko/overload-party-common/packages/api-battle-rpc"
+	apibattle "github.com/kenyamaneko/overload-party-battle/packages/api-battle-rpc-go"
 )
 
 // 生成済み battle RPC 型の re-export。

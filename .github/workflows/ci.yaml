@@ -26,9 +26,12 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Configure Go private modules
-        run: git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        run: |
+          git config --global url."https://x-access-token:${{ secrets.COMMON_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-common".insteadOf "https://github.com/kenyamaneko/overload-party-common"
+          git config --global url."https://x-access-token:${{ secrets.BATTLE_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-battle".insteadOf "https://github.com/kenyamaneko/overload-party-battle"
         env:
           GOPRIVATE: github.com/kenyamaneko/*
+          GONOSUMDB: github.com/kenyamaneko/*
       # golangci-lint-action のビルド済みバイナリは Go 1.25 未対応のため
       # go install でソースからビルドして使う
       - run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
@@ -44,9 +47,12 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Configure Go private modules
-        run: git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        run: |
+          git config --global url."https://x-access-token:${{ secrets.COMMON_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-common".insteadOf "https://github.com/kenyamaneko/overload-party-common"
+          git config --global url."https://x-access-token:${{ secrets.BATTLE_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-battle".insteadOf "https://github.com/kenyamaneko/overload-party-battle"
         env:
           GOPRIVATE: github.com/kenyamaneko/*
+          GONOSUMDB: github.com/kenyamaneko/*
       - name: Run unit tests
         run: go test -race ./internal/... -count=1
         env:
