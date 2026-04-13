@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"cloud.google.com/go/firestore"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -41,6 +42,9 @@ func main() {
 	if cfg.PubsubProjectID == "" {
 		log.Fatal("PUBSUB_PROJECT_ID must be set")
 	}
+	if cfg.FirestoreProjectID == "" {
+		log.Fatal("FIRESTORE_PROJECT_ID must be set (game_config)")
+	}
 
 	if cfg.Env == "prod" {
 		gin.SetMode(gin.ReleaseMode)
@@ -54,6 +58,13 @@ func main() {
 	}
 	defer pool.Close()
 
+	// Firestore クライアント (game_config)
+	fsClient, err := firestore.NewClient(ctx, cfg.FirestoreProjectID)
+	if err != nil {
+		log.Fatalf("failed to create firestore client: %v", err)
+	}
+	defer func() { _ = fsClient.Close() }()
+
 	// Firebase Auth クライアント
 	authClient, err := middleware.NewFirebaseAuthClient(ctx)
 	if err != nil {
@@ -63,6 +74,9 @@ func main() {
 	// gateway 所有の game_players リポジトリ + read-only newsfeed プロキシ
 	newsRepo := repository.NewPgNewsRepository(pool)
 	gamePlayerRepo := repository.NewPgGamePlayerRepository(pool)
+	// game_config は現在 gateway の runtime パスから参照していない。
+	// クライアント到達性は起動時に検証するため、repo を生成だけしておく。
+	_ = repository.NewFirestoreGameConfigRepository(fsClient)
 
 	// 外部サービスクライアント
 	cardClient := cardclient.New(cfg.CardServiceURL)

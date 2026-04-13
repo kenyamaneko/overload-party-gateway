@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"cloud.google.com/go/firestore"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -50,6 +51,21 @@ func main() {
 
 	newsRepo := repository.NewPgNewsRepository(pool)
 	gamePlayerRepo := repository.NewPgGamePlayerRepository(pool)
+
+	// Firestore クライアント (game_config)。
+	// ローカルモードでは optional: FIRESTORE_PROJECT_ID が未設定ならスキップ。
+	// FIRESTORE_EMULATOR_HOST が設定されていれば公式クライアントが自動的に
+	// エミュレーターへルーティングする。
+	if cfg.FirestoreProjectID != "" {
+		fsClient, err := firestore.NewClient(ctx, cfg.FirestoreProjectID)
+		if err != nil {
+			log.Fatalf("failed to create firestore client: %v", err)
+		}
+		defer func() { _ = fsClient.Close() }()
+		_ = repository.NewFirestoreGameConfigRepository(fsClient)
+	} else {
+		log.Println("FIRESTORE_PROJECT_ID is unset; skipping Firestore client (game_config not read at runtime)")
+	}
 
 	cardClient := cardclient.New(cfg.CardServiceURL)
 	matchmakingClient := matchmakingclient.New(cfg.MatchmakingServiceURL)

@@ -27,3 +27,9 @@ type GamePlayerEntry struct {
 	PlayerNum int
 	PlayerID  string
 }
+
+// GameConfigRepo はゲーム設定値の読み取りを抽象化するインターフェースです。
+// キーが存在しない場合は ErrNotFound を返す（fail-fast）。
+type GameConfigRepo interface {
+	GetInt64(ctx context.Context, key string) (int64, error)
+}

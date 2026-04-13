@@ -50,6 +50,23 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Set up Java (Firestore emulator runtime)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Set up gcloud (Firestore emulator)
+        uses: google-github-actions/setup-gcloud@v2
+      - name: Install Firestore emulator component
+        run: gcloud components install cloud-firestore-emulator beta --quiet
+      - name: Start Firestore emulator
+        run: |
+          gcloud emulators firestore start --host-port=localhost:9041 >/tmp/firestore.log 2>&1 &
+          for i in {1..30}; do
+            if curl -sf http://localhost:9041 >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          echo "Firestore emulator failed to start"; cat /tmp/firestore.log; exit 1
       - name: Configure Go private modules
         run: |
           git config --global url."https://x-access-token:${{ secrets.COMMON_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-common".insteadOf "https://github.com/kenyamaneko/overload-party-common"
@@ -65,6 +82,8 @@ jobs:
         run: go test -race ./internal/... -count=1
         env:
           GOPRIVATE: github.com/kenyamaneko/*
+          FIRESTORE_EMULATOR_HOST: localhost:9041
+          FIRESTORE_PROJECT_ID: overload-party-test
 
   build-and-push:
     needs: [lint, test]

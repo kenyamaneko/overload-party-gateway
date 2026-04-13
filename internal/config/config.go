@@ -28,6 +28,10 @@ type Config struct {
 	PubsubProjectID         string
 	MatchmakingSubscription string
 
+	// FirestoreProjectID は game_config コレクションの読み取り先プロジェクト ID。
+	// ローカル/CI では FIRESTORE_EMULATOR_HOST を別途設定することでエミュレーターに接続する。
+	FirestoreProjectID string
+
 	FactionSelectedSubscription string
 	PremiumUpdatedSubscription  string
 
@@ -60,6 +64,8 @@ func Load() *Config {
 
 		PubsubProjectID:         getEnv("PUBSUB_PROJECT_ID", ""),
 		MatchmakingSubscription: getEnv("MATCHMAKING_SUBSCRIPTION", "matchmaking-events-gateway"),
+
+		FirestoreProjectID: getEnv("FIRESTORE_PROJECT_ID", ""),
 
 		FactionSelectedSubscription: getEnv("FACTION_SELECTED_SUBSCRIPTION", "faction-selected-gateway-sub"),
 		PremiumUpdatedSubscription:  getEnv("PREMIUM_UPDATED_SUBSCRIPTION", "premium-updated-gateway-sub"),

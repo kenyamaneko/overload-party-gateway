@@ -11,7 +11,7 @@
 --     ゲーム終了時に exp_awarded を更新して経験値付与処理を担う。
 --   - player_id は account.players を参照するが、スキーマをまたぐため FK は張らず
 --     app-level integrity で担保する (ADR-014)。
---   - shared.update_updated_at() は shared スキーマで提供される前提。
+--   - gateway.game_players には updated_at カラムが無いためトリガー関数は不要。
 
 -- =============================================================================
 -- Schemas
