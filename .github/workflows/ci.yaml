@@ -29,6 +29,10 @@ jobs:
         run: |
           git config --global url."https://x-access-token:${{ secrets.COMMON_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-common".insteadOf "https://github.com/kenyamaneko/overload-party-common"
           git config --global url."https://x-access-token:${{ secrets.BATTLE_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-battle".insteadOf "https://github.com/kenyamaneko/overload-party-battle"
+          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-card".insteadOf "https://github.com/kenyamaneko/overload-party-card"
+          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-account".insteadOf "https://github.com/kenyamaneko/overload-party-account"
+          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-shop".insteadOf "https://github.com/kenyamaneko/overload-party-shop"
+          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-scenario".insteadOf "https://github.com/kenyamaneko/overload-party-scenario"
         env:
           GOPRIVATE: github.com/kenyamaneko/*
           GONOSUMDB: github.com/kenyamaneko/*
@@ -50,6 +54,10 @@ jobs:
         run: |
           git config --global url."https://x-access-token:${{ secrets.COMMON_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-common".insteadOf "https://github.com/kenyamaneko/overload-party-common"
           git config --global url."https://x-access-token:${{ secrets.BATTLE_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-battle".insteadOf "https://github.com/kenyamaneko/overload-party-battle"
+          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-card".insteadOf "https://github.com/kenyamaneko/overload-party-card"
+          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-account".insteadOf "https://github.com/kenyamaneko/overload-party-account"
+          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-shop".insteadOf "https://github.com/kenyamaneko/overload-party-shop"
+          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-scenario".insteadOf "https://github.com/kenyamaneko/overload-party-scenario"
         env:
           GOPRIVATE: github.com/kenyamaneko/*
           GONOSUMDB: github.com/kenyamaneko/*
