@@ -8,13 +8,13 @@ import (
 	"sync"
 	"time"
 
-	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/cardclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/matchmakingclient"
-	"github.com/kenyamaneko/overload-party-gateway/internal/constants"
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
+	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
+	genws "github.com/kenyamaneko/overload-party-gateway/packages/ws-constants"
 )
 
 // Manager は受信 WebSocket メッセージをルーティングし、Hub / GameRelay / SpectateRelay を調整します。
@@ -59,6 +59,7 @@ func NewManager(
 		matchWait:          make(map[string]*time.Timer),
 	}
 
+	// HubCallbacks は m.Relay / m.Spectate の後初期化を見込んで遅延参照する。
 	hub := NewConnectionHub(HubCallbacks{
 		GetGameID:             func(playerID string) (string, bool) { return m.Relay.GameIDForPlayer(playerID) },
 		OnDisconnectTimeout:   func(playerID, gameID string) { m.Relay.HandleDisconnectTimeout(playerID, gameID) },
@@ -67,16 +68,6 @@ func NewManager(
 		OnGameDisconnect:      func(playerID, gameID string) { m.Relay.NotifyOpponentDisconnected(playerID, gameID) },
 		OnGameReconnect:       func(playerID, gameID string) { m.Relay.NotifyOpponentReconnected(playerID, gameID) },
 	})
-	relay := NewGameRelay(hub, battleClient)
-	spectate := NewSpectateRelay(hub, battleClient, gamePlayerRepo)
-
-	m.Hub = hub
-	m.Relay = relay
-	m.Spectate = spectate
-
-	relay.spectateRelay = spectate
-	relay.accountClient = accountClient
-	relay.gamePlayerRepo = gamePlayerRepo
 
 	lookupFn := PlayerLookupFunc(func(ctx context.Context, playerID string) (string, int64, error) {
 		p, err := accountClient.GetPlayer(ctx, playerID)
@@ -88,14 +79,20 @@ func NewManager(
 		}
 		return p.Username, p.Level, nil
 	})
-	relay.playerLookup = lookupFn
-	spectate.playerLookup = lookupFn
+
+	spectate := NewSpectateRelay(hub, battleClient, gamePlayerRepo, lookupFn)
+	relay := NewGameRelay(hub, battleClient, spectate, accountClient, gamePlayerRepo, lookupFn)
+
+	m.Hub = hub
+	m.Relay = relay
+	m.Spectate = spectate
 
 	return m
 }
 
 // cancelMatchmaking はプレイヤー切断時にマッチメイキングサービスへキャンセルを fire-and-forget する。
-// Hub の unregister パスから呼ばれるためエラーはログのみ。
+// Hub の unregister パスから呼ばれる時点で WS コネクションは既に切断済みなので、
+// 親 ctx は Background を使い、短いタイムアウトだけ付ける。エラーはログのみ。
 func (m *Manager) cancelMatchmaking(playerID string) {
 	m.stopMatchWait(playerID)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -146,6 +143,7 @@ func (m *Manager) handleMatchWaitTimeout(playerID string) {
 	log.Printf("matchmaking: wait timeout for player %s after %v", playerID, m.matchmakingTimeout)
 	sendErrorToPlayer(m.Hub, playerID, "matchmaking_error", "matchmaking timed out", true)
 
+	// タイマー発火経路は WS リクエスト ctx を持たない。上流キャンセルは接続状態に依存せず完了させたい。
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	if err := m.matchmakingClient.Cancel(ctx, playerID); err != nil {
@@ -154,50 +152,51 @@ func (m *Manager) handleMatchWaitTimeout(playerID string) {
 }
 
 // HandleMessage は受信 WebSocket メッセージを適切なハンドラーにルーティングします。
-// goroutine リーク防止のため各メッセージに 30 秒のタイムアウトを設定する。
+// 親 ctx は conn.Context()（WS 切断で cancel）とし、下流呼び出しが切断後も走り続けないようにする。
+// 個別メッセージ処理の暴走を防ぐため 30 秒の上限を重ねる。
 func (m *Manager) HandleMessage(conn *Connection, msg *WSMessage) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(conn.Context(), 30*time.Second)
 	defer cancel()
 
 	switch msg.Type {
-	case constants.WSMsgGameEnter:
+	case genws.WSClientMsgGameEnter:
 		m.Relay.HandleGameEnter(conn, msg.Data)
 
-	case constants.WSMsgMatchmakingStart:
+	case genws.WSClientMsgMatchmakingStart:
 		m.handleMatchmakingStart(ctx, conn, msg.Data)
 
-	case constants.WSMsgMatchmakingCancel:
+	case genws.WSClientMsgMatchmakingCancel:
 		m.stopMatchWait(conn.playerID)
 		if err := m.matchmakingClient.Cancel(ctx, conn.playerID); err != nil {
 			sendError(conn, "matchmaking_error", "failed to cancel: "+err.Error(), true)
 			return
 		}
-		conn.SendMessage(&WSMessage{Type: constants.WSMsgMatchmakingCancelled})
+		conn.SendMessage(&WSMessage{Type: genws.WSServerMsgMatchmakingCancelled})
 
-	case constants.WSMsgNpcBattleStart:
+	case genws.WSClientMsgNpcBattleStart:
 		m.handleNpcBattleStart(ctx, conn, msg.Data)
 
-	case constants.WSMsgGameAction:
+	case genws.WSClientMsgGameAction:
 		if m.Spectate.IsSpectator(conn.playerID) {
 			log.Printf("spectator %s tried to send game_action — ignored", conn.playerID)
 			return
 		}
 		m.Relay.HandleGameAction(ctx, conn, msg.Data)
 
-	case constants.WSMsgUseStamp:
+	case genws.WSClientMsgUseStamp:
 		m.Relay.HandleUseStamp(conn, msg.Data)
 
-	case constants.WSMsgSpectateJoin:
+	case genws.WSClientMsgSpectateJoin:
 		m.Spectate.HandleSpectateJoin(conn, msg.Data)
 
-	case constants.WSMsgSpectateLeave:
+	case genws.WSClientMsgSpectateLeave:
 		m.Spectate.HandleSpectateLeave(conn, msg.Data)
 
-	case constants.WSMsgSpectateStamp:
+	case genws.WSClientMsgSpectateStamp:
 		m.Spectate.HandleSpectateStamp(conn, msg.Data)
 
-	case constants.WSMsgPing:
-		conn.SendMessage(&WSMessage{Type: constants.WSMsgPong})
+	case genws.WSClientMsgPing:
+		conn.SendMessage(&WSMessage{Type: genws.WSServerMsgPong})
 
 	default:
 		log.Printf("unhandled message type: %s from player %s", msg.Type, conn.playerID)
@@ -231,7 +230,7 @@ func (m *Manager) handleMatchmakingStart(ctx context.Context, conn *Connection, 
 		return
 	}
 	m.startMatchWait(conn.playerID)
-	conn.SendMessage(&WSMessage{Type: constants.WSMsgMatchmakingStarted})
+	conn.SendMessage(&WSMessage{Type: genws.WSServerMsgMatchmakingStarted})
 }
 
 func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, data json.RawMessage) {
@@ -272,7 +271,7 @@ func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, da
 	}
 	m.Spectate.RegisterGame(game.GameID)
 	conn.SendMessage(&WSMessage{
-		Type: constants.WSMsgNpcBattleCreated,
+		Type: genws.WSServerMsgNpcBattleCreated,
 		Data: mustMarshal(NPCBattleCreatedMessage{
 			GameID: game.GameID,
 		}),
@@ -340,8 +339,8 @@ func (m *Manager) resolveDeckCards(ctx context.Context, playerID string, deckID 
 }
 
 // ActiveSpectateGames は現在観戦可能なゲーム一覧を返します
-func (m *Manager) ActiveSpectateGames() []apigateway.SpectateGameInfo {
-	return m.Spectate.ActiveGames()
+func (m *Manager) ActiveSpectateGames(ctx context.Context) []apigateway.SpectateGameInfo {
+	return m.Spectate.ActiveGames(ctx)
 }
 
 func (m *Manager) checkAndIncrementBattleLimit(ctx context.Context, playerID string) (string, error) {
@@ -360,4 +359,3 @@ func (m *Manager) checkAndIncrementBattleLimit(ctx context.Context, playerID str
 	}
 	return "", nil
 }
-

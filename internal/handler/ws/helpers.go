@@ -2,16 +2,19 @@ package ws
 
 import (
 	"encoding/json"
-	"log"
+	"fmt"
 
-	"github.com/kenyamaneko/overload-party-gateway/internal/constants"
+	genws "github.com/kenyamaneko/overload-party-gateway/packages/ws-constants"
 )
 
+// mustMarshal は内部で構築した値を JSON 化する。
+// 内部構造体の Marshal が失敗するのは設定ミス（unsupported な型をフィールドに含む等）に
+// 起因する純粋なバグなので fail-fast にする。silent な nil 返却はクライアントに不正な
+// メッセージを送り続ける原因になるため避ける。
 func mustMarshal(v interface{}) json.RawMessage {
 	data, err := json.Marshal(v)
 	if err != nil {
-		log.Printf("BUG: mustMarshal failed: %v (type: %T)", err, v)
-		return nil
+		panic(fmt.Sprintf("BUG: mustMarshal failed: %v (type: %T)", err, v))
 	}
 	return data
 }
@@ -19,7 +22,7 @@ func mustMarshal(v interface{}) json.RawMessage {
 // sendError は単一接続にエラーメッセージを送信する。
 func sendError(conn *Connection, code, message string, retryable bool) {
 	conn.SendMessage(&WSMessage{
-		Type: constants.WSMsgError,
+		Type: genws.WSServerMsgError,
 		Data: mustMarshal(ErrorMessage{Code: code, Message: message, Retryable: retryable}),
 	})
 }
@@ -27,7 +30,7 @@ func sendError(conn *Connection, code, message string, retryable bool) {
 // sendErrorToPlayer は hub 経由でプレイヤーにエラーメッセージを送信する。
 func sendErrorToPlayer(hub *ConnectionHub, playerID, code, message string, retryable bool) {
 	hub.SendToPlayer(playerID, &WSMessage{
-		Type: constants.WSMsgError,
+		Type: genws.WSServerMsgError,
 		Data: mustMarshal(ErrorMessage{Code: code, Message: message, Retryable: retryable}),
 	})
 }

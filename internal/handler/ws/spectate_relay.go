@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
-	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
-	"github.com/kenyamaneko/overload-party-gateway/internal/constants"
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
+	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
+	genws "github.com/kenyamaneko/overload-party-gateway/packages/ws-constants"
 )
 
 // spectatorInfo は観戦者の接続と参加時刻を保持する。
@@ -26,20 +26,26 @@ type SpectateRelay struct {
 	hub            *ConnectionHub
 	battleClient   service.BattleClient
 	gamePlayerRepo port.GamePlayerRepo
-	// spectate_joined バナーデータ用。コンストラクション後に設定される。
-	playerLookup PlayerLookupFunc
+	playerLookup   PlayerLookupFunc // spectate_joined バナーデータ用。nil 可
 
-	mu         sync.RWMutex
+	mu          sync.RWMutex
 	spectators  map[string]map[string]*spectatorInfo // gameID → spectatorID → spectatorInfo
-	activeGames map[string]time.Time                  // gameID → startedAt
+	activeGames map[string]time.Time                 // gameID → startedAt
 }
 
-// NewSpectateRelay は SpectateRelay を生成します
-func NewSpectateRelay(hub *ConnectionHub, battleClient service.BattleClient, gamePlayerRepo port.GamePlayerRepo) *SpectateRelay {
+// NewSpectateRelay は SpectateRelay を生成します。
+// gamePlayerRepo / playerLookup は nil 可（mock モード / テスト用）。
+func NewSpectateRelay(
+	hub *ConnectionHub,
+	battleClient service.BattleClient,
+	gamePlayerRepo port.GamePlayerRepo,
+	playerLookup PlayerLookupFunc,
+) *SpectateRelay {
 	return &SpectateRelay{
 		hub:            hub,
 		battleClient:   battleClient,
 		gamePlayerRepo: gamePlayerRepo,
+		playerLookup:   playerLookup,
 		spectators:     make(map[string]map[string]*spectatorInfo),
 		activeGames:    make(map[string]time.Time),
 	}
@@ -65,7 +71,7 @@ func (sr *SpectateRelay) UnregisterGame(gameID string, winningPlayerNum int64, w
 	}
 
 	msg := &WSMessage{
-		Type: constants.WSMsgSpectateEnded,
+		Type: genws.WSServerMsgSpectateEnded,
 		Data: mustMarshal(SpectateEndedMessage{
 			GameID:           gameID,
 			WinningPlayerNum: winningPlayerNum,
@@ -95,8 +101,9 @@ func (sr *SpectateRelay) HandleSpectateJoin(conn *Connection, data json.RawMessa
 		return
 	}
 
-	// player1 (num=1) のゲーム状態を正規のオブザーバービューとして取得
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// player1 (num=1) のゲーム状態を正規のオブザーバービューとして取得。
+	// WS リクエスト経路のため conn.Context() を親に使い、切断時に下流呼び出しをキャンセルする。
+	ctx, cancel := context.WithTimeout(conn.Context(), 10*time.Second)
 	defer cancel()
 	rawState, err := sr.battleClient.GetGameStateForPlayer(ctx, req.GameID, 1)
 	if err != nil || rawState == nil {
@@ -138,7 +145,7 @@ func (sr *SpectateRelay) HandleSpectateJoin(conn *Connection, data json.RawMessa
 	sr.mu.Unlock()
 
 	conn.SendMessage(&WSMessage{
-		Type: constants.WSMsgSpectateJoined,
+		Type: genws.WSServerMsgSpectateJoined,
 		Data: mustMarshal(SpectateJoinedMessage{
 			GameID:       req.GameID,
 			Player1Name:  p1Name,
@@ -194,7 +201,7 @@ func (sr *SpectateRelay) HandleSpectateStamp(conn *Connection, data json.RawMess
 	}
 
 	msg := &WSMessage{
-		Type: constants.WSMsgSpectateStampBroadcast,
+		Type: genws.WSServerMsgSpectateStampBroadcast,
 		Data: mustMarshal(SpectateStampBroadcastMessage{
 			GameID:      req.GameID,
 			SpectatorID: conn.playerID,
@@ -209,7 +216,7 @@ func (sr *SpectateRelay) HandleSpectateStamp(conn *Connection, data json.RawMess
 // ゲーム状態が変化するたび（game_state 送信後）に呼ばれる。
 func (sr *SpectateRelay) BroadcastStateUpdate(gameID string, state json.RawMessage) {
 	msg := &WSMessage{
-		Type: constants.WSMsgSpectateUpdate,
+		Type: genws.WSServerMsgSpectateUpdate,
 		Data: state,
 	}
 	data, err := json.Marshal(msg)
@@ -251,8 +258,9 @@ func (sr *SpectateRelay) broadcastToSpectators(gameID string, msg *WSMessage) {
 	}
 }
 
-// ActiveGames は現在アクティブなゲーム一覧をプレイヤー情報付きで返します
-func (sr *SpectateRelay) ActiveGames() []apigateway.SpectateGameInfo {
+// ActiveGames は現在アクティブなゲーム一覧をプレイヤー情報付きで返します。
+// REST リクエスト経由で呼ばれるので、クライアント切断で DB 検索をキャンセルできるように親 ctx を受け取る。
+func (sr *SpectateRelay) ActiveGames(parent context.Context) []apigateway.SpectateGameInfo {
 	sr.mu.RLock()
 	gameIDs := make(map[string]time.Time, len(sr.activeGames))
 	for gid, t := range sr.activeGames {
@@ -264,7 +272,7 @@ func (sr *SpectateRelay) ActiveGames() []apigateway.SpectateGameInfo {
 		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
 	defer cancel()
 
 	result := make([]apigateway.SpectateGameInfo, 0, len(gameIDs))
@@ -295,7 +303,7 @@ func (sr *SpectateRelay) ActiveGames() []apigateway.SpectateGameInfo {
 
 func (sr *SpectateRelay) sendSpectateError(conn *Connection, code, message string) {
 	conn.SendMessage(&WSMessage{
-		Type: constants.WSMsgSpectateError,
+		Type: genws.WSServerMsgSpectateError,
 		Data: mustMarshal(SpectateErrorMessage{Code: code, Message: message}),
 	})
 }

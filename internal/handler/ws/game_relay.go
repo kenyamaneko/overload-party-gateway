@@ -7,10 +7,12 @@ import (
 	"sync"
 	"time"
 
+	gamelogic "github.com/kenyamaneko/overload-party-battle/packages/game-logic-constants-go"
+	gamedesign "github.com/kenyamaneko/overload-party-common/packages/game-design-constants"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
-	"github.com/kenyamaneko/overload-party-gateway/internal/constants"
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
+	genws "github.com/kenyamaneko/overload-party-gateway/packages/ws-constants"
 )
 
 // battleStateMeta は battle server のゲーム状態 JSON の最小射影。
@@ -24,12 +26,6 @@ type battleStateMeta struct {
 	} `json:"myView"`
 }
 
-// turnTimerInfo はアクティブなターンタイマーの状態を保持する。
-type turnTimerInfo struct {
-	timer          *time.Timer
-	activePlayerID string
-}
-
 // playerSession は game_enter 時に DB からキャッシュされるプレイヤーのゲーム内状態。
 type playerSession struct {
 	gameID    string
@@ -39,33 +35,49 @@ type playerSession struct {
 // PlayerLookupFunc はプレイヤー ID から表示名とレベルを解決する関数型です
 type PlayerLookupFunc func(ctx context.Context, playerID string) (name string, level int64, err error)
 
-// GameRelay はゲームメンバーシップを管理し、プレイヤーと battle server 間のアクション/状態を中継します
-type GameRelay struct {
-	hub          *ConnectionHub
-	battleClient service.BattleClient
+// 下流呼び出しの既定タイムアウト。WS コネクション ctx を親に持たせた上で
+// 個別呼び出しの上限として使用する。
+const downstreamCallTimeout = 10 * time.Second
 
-	// 循環依存回避のためコンストラクション後に設定
+// GameRelay はゲームメンバーシップを管理し、プレイヤーと battle server 間のアクション/状態を中継します。
+// 依存は全て NewGameRelay で注入する。accountClient / gamePlayerRepo / playerLookup は nil 許容で、
+// nil の場合は EXP 付与や表示名解決をスキップする（ローカル開発 / テスト向け）。
+type GameRelay struct {
+	hub            *ConnectionHub
+	battleClient   service.BattleClient
 	spectateRelay  *SpectateRelay
 	playerLookup   PlayerLookupFunc
 	accountClient  *accountclient.Client
 	gamePlayerRepo port.GamePlayerRepo
 
 	mu          sync.RWMutex
-	gameMembers map[string][]string          // gameID → []playerID
-	playerGames map[string]playerSession     // playerID → session (gameID + playerNum)
+	gameMembers map[string][]string      // gameID → []playerID
+	playerGames map[string]playerSession // playerID → session (gameID + playerNum)
 
 	timerMu    sync.Mutex
 	turnTimers map[string]*turnTimerInfo // gameID → active turn timer
 }
 
-// NewGameRelay は GameRelay を生成します
-func NewGameRelay(hub *ConnectionHub, battleClient service.BattleClient) *GameRelay {
+// NewGameRelay は GameRelay を生成します。
+// accountClient / gamePlayerRepo / playerLookup は nil 可（mock モード / テスト用）。
+func NewGameRelay(
+	hub *ConnectionHub,
+	battleClient service.BattleClient,
+	spectateRelay *SpectateRelay,
+	accountClient *accountclient.Client,
+	gamePlayerRepo port.GamePlayerRepo,
+	playerLookup PlayerLookupFunc,
+) *GameRelay {
 	return &GameRelay{
-		hub:          hub,
-		battleClient: battleClient,
-		gameMembers:  make(map[string][]string),
-		playerGames:  make(map[string]playerSession),
-		turnTimers:   make(map[string]*turnTimerInfo),
+		hub:            hub,
+		battleClient:   battleClient,
+		spectateRelay:  spectateRelay,
+		accountClient:  accountClient,
+		gamePlayerRepo: gamePlayerRepo,
+		playerLookup:   playerLookup,
+		gameMembers:    make(map[string][]string),
+		playerGames:    make(map[string]playerSession),
+		turnTimers:     make(map[string]*turnTimerInfo),
 	}
 }
 
@@ -82,15 +94,14 @@ func (r *GameRelay) GameIDForPlayer(playerID string) (string, bool) {
 
 // NotifyOpponentDisconnected はプレイヤー切断時に対戦相手に opponent_disconnected を送信します
 func (r *GameRelay) NotifyOpponentDisconnected(playerID, gameID string) {
-	r.sendToOpponent(playerID, gameID, constants.WSMsgOpponentDisconnected)
+	r.sendToOpponent(playerID, gameID, genws.WSServerMsgOpponentDisconnected)
 }
 
 // NotifyOpponentReconnected は切断したプレイヤーの復帰時に対戦相手に opponent_reconnected を送信します
 func (r *GameRelay) NotifyOpponentReconnected(playerID, gameID string) {
-	r.sendToOpponent(playerID, gameID, constants.WSMsgOpponentReconnected)
+	r.sendToOpponent(playerID, gameID, genws.WSServerMsgOpponentReconnected)
 }
 
-// sendToOpponent は gameMembers から対戦相手を解決しメッセージを送信する。
 func (r *GameRelay) sendToOpponent(playerID, gameID, msgType string) {
 	r.mu.RLock()
 	members := r.gameMembers[gameID]
@@ -136,9 +147,13 @@ func (r *GameRelay) LeaveGame(playerID string) {
 
 // BroadcastToGame はゲーム内の全プレイヤーに同一メッセージを送信します
 func (r *GameRelay) BroadcastToGame(gameID string, msg *WSMessage) {
+	// mustMarshal は内部構造体専用で panic する。BroadcastToGame は battle server 由来の
+	// json.RawMessage を Data に格納したメッセージ（例: game_state）も流すため、ここでは
+	// json.Marshal を直接使う。エンベロープに json.RawMessage を入れる場合は失敗しないはずだが、
+	// 念のためエラーログを出して継続する（broadcast 自体を panic させない）。
 	data, err := json.Marshal(msg)
 	if err != nil {
-		log.Printf("marshal broadcast message: %v", err)
+		log.Printf("ERROR: marshal broadcast message for game %s (type=%s): %v", gameID, msg.Type, err)
 		return
 	}
 
@@ -161,7 +176,9 @@ func (r *GameRelay) SendGameStateToPlayers(gameID string) {
 	var activeTimeBank int64
 	var spectateState json.RawMessage // 観戦者に送る正規オブザーバービュー
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// SendGameStateToPlayers はタイマー発火・game_over 後の整合等、特定の WS リクエストに
+	// 紐づかない経路からも呼ばれるため、独立したタイムアウトを使う。
+	ctx, cancel := context.WithTimeout(context.Background(), downstreamCallTimeout)
 	defer cancel()
 	for i, pid := range players {
 		pNum := r.resolvePlayerNum(pid)
@@ -170,49 +187,48 @@ func (r *GameRelay) SendGameStateToPlayers(gameID string) {
 		}
 		state, err := r.battleClient.GetGameStateForPlayer(ctx, gameID, pNum)
 		if err != nil {
-			log.Printf("get game state for player %s: %v", pid, err)
+			log.Printf("ERROR: get game state for player %s in game %s: %v", pid, gameID, err)
 			sendErrorToPlayer(r.hub, pid, "game_state_error", "failed to retrieve game state", true)
 			continue
 		}
 
-		// battle 状態からターンタイマー情報を抽出
 		var meta battleStateMeta
 		if err := json.Unmarshal(state, &meta); err != nil {
-			log.Printf("failed to extract turn timer for player %s: %v", pid, err)
+			// battle server からの state が想定外の構造。ターンタイマー更新は諦めるが
+			// クライアントへの状態転送自体は継続する（将来追加されたフィールドへの前方互換）。
+			log.Printf("ERROR: extract turn timer for player %s in game %s: %v", pid, gameID, err)
 		} else if meta.IsMyTurn {
 			activePlayerID = pid
 			activeTimeBank = meta.MyView.TimeBank
 		}
 
 		r.hub.SendToPlayer(pid, &WSMessage{
-			Type: constants.WSMsgGameState,
+			Type: genws.WSServerMsgGameState,
 			Data: state,
 		})
 
-		// 最初のプレイヤーの状態を観戦者用にキャプチャ
 		if i == 0 {
 			spectateState = state
 		}
 	}
 
-	// アクティブプレイヤーの TimeBank に基づきターンタイマーを更新
 	if activePlayerID != "" {
 		r.resetTurnTimer(gameID, activePlayerID, activeTimeBank)
 	}
 
-	// 観戦者に状態更新を転送
 	if r.spectateRelay != nil && spectateState != nil {
 		r.spectateRelay.BroadcastStateUpdate(gameID, spectateState)
 	}
 }
 
-// SendTurnControlsToPlayers はゲーム内の全プレイヤーにターンコントロール情報を送信します
+// SendTurnControlsToPlayers はゲーム内の全プレイヤーにターンコントロール情報を送信します。
+// SendGameStateToPlayers と同じく WS リクエストに紐づかない経路（タイマー発火等）からも呼ばれるため、独立したタイムアウトを使う。
 func (r *GameRelay) SendTurnControlsToPlayers(gameID string) {
 	r.mu.RLock()
 	players := r.gameMembers[gameID]
 	r.mu.RUnlock()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), downstreamCallTimeout)
 	defer cancel()
 	for _, pid := range players {
 		pNum := r.resolvePlayerNum(pid)
@@ -221,7 +237,7 @@ func (r *GameRelay) SendTurnControlsToPlayers(gameID string) {
 		}
 		raw, err := r.battleClient.GetTurnControlsForPlayer(ctx, gameID, pNum)
 		if err != nil {
-			log.Printf("get turn controls for player %s: %v", pid, err)
+			log.Printf("ERROR: get turn controls for player %s in game %s: %v", pid, gameID, err)
 			sendErrorToPlayer(r.hub, pid, "turn_controls_error", "failed to retrieve turn controls", true)
 			continue
 		}
@@ -229,7 +245,7 @@ func (r *GameRelay) SendTurnControlsToPlayers(gameID string) {
 			continue
 		}
 		r.hub.SendToPlayer(pid, &WSMessage{
-			Type: constants.WSMsgTurnControls,
+			Type: genws.WSServerMsgTurnControls,
 			Data: raw,
 		})
 	}
@@ -241,7 +257,7 @@ func (r *GameRelay) SendTurnControlsToPlayers(gameID string) {
 //   - システムイベント (turn_start) → 全プレイヤーに送信
 //   - 自分のアクション → 対戦相手に送信（情報隠蔽済み状態を取得）
 //   - 他プレイヤーのアクション (NPC) → 行動プレイヤーに送信（battle server の状態付き）
-func (r *GameRelay) sendActionPerformed(gameID, actingPlayerID string, result *service.ActionResult) {
+func (r *GameRelay) sendActionPerformed(ctx context.Context, gameID, actingPlayerID string, result *service.ActionResult) {
 	if result == nil || len(result.Events) == 0 {
 		return
 	}
@@ -250,12 +266,10 @@ func (r *GameRelay) sendActionPerformed(gameID, actingPlayerID string, result *s
 	players := r.gameMembers[gameID]
 	r.mu.RUnlock()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 	actingPlayerNum := r.resolvePlayerNum(actingPlayerID)
 	for _, evt := range result.Events {
 		switch {
-		case evt.EventType == constants.EventTypeTurnStart:
+		case evt.EventType == gamelogic.EventTypeTurnStart:
 			r.sendActionToPlayers(ctx, gameID, players, evt)
 
 		case evt.PlayerNum != nil && *evt.PlayerNum == int64(actingPlayerNum):
@@ -272,7 +286,7 @@ func (r *GameRelay) sendActionPerformed(gameID, actingPlayerID string, result *s
 				continue
 			}
 			r.hub.SendToPlayer(actingPlayerID, &WSMessage{
-				Type: constants.WSMsgActionPerformed,
+				Type: genws.WSServerMsgActionPerformed,
 				Data: mustMarshal(ActionPerformedMessage{
 					Sequence:   evt.Sequence,
 					ActionType: evt.EventType,
@@ -291,15 +305,20 @@ func (r *GameRelay) runNpcTurns(ctx context.Context, gameID, playerID string, cu
 	const maxNpcTurnIterations = 200
 	for i := 0; current != nil && current.NpcPending && !current.GameOver; i++ {
 		if i >= maxNpcTurnIterations {
-			log.Printf("runNpcTurns: iteration cap reached (game=%s, player=%s)", gameID, playerID)
+			log.Printf("ERROR: runNpcTurns iteration cap reached (game=%s, player=%s) — possible battle server bug", gameID, playerID)
 			return current
 		}
 		next, err := r.battleClient.AdvanceNpcTurn(ctx, gameID)
 		if err != nil {
-			log.Printf("advance NPC turn loop (game=%s, player=%s): %v", gameID, playerID, err)
+			if isCanceled(err) {
+				log.Printf("runNpcTurns canceled (game=%s, player=%s): %v", gameID, playerID, err)
+			} else {
+				log.Printf("ERROR: advance NPC turn loop (game=%s, player=%s): %v", gameID, playerID, err)
+				sendErrorToPlayer(r.hub, playerID, "npc_turn_error", "failed to advance NPC turn", true)
+			}
 			return current
 		}
-		r.sendActionPerformed(gameID, playerID, next)
+		r.sendActionPerformed(ctx, gameID, playerID, next)
 		current = next
 	}
 	return current
@@ -315,11 +334,17 @@ func (r *GameRelay) sendActionToPlayers(ctx context.Context, gameID string, pids
 		}
 		state, err := r.battleClient.GetGameStateForPlayer(ctx, gameID, pNum)
 		if err != nil {
-			log.Printf("get game state for action_performed (player %s): %v", pid, err)
+			if isCanceled(err) {
+				// 上流（典型的には WS 切断）でキャンセルされた。ループは続行不要、次プレイヤーへ。
+				log.Printf("get game state for action_performed canceled (player %s): %v", pid, err)
+				continue
+			}
+			log.Printf("ERROR: get game state for action_performed (player %s, game %s): %v", pid, gameID, err)
+			sendErrorToPlayer(r.hub, pid, "game_state_error", "failed to retrieve game state", true)
 			continue
 		}
 		r.hub.SendToPlayer(pid, &WSMessage{
-			Type: constants.WSMsgActionPerformed,
+			Type: genws.WSServerMsgActionPerformed,
 			Data: mustMarshal(ActionPerformedMessage{
 				Sequence:   evt.Sequence,
 				ActionType: evt.EventType,
@@ -332,7 +357,7 @@ func (r *GameRelay) sendActionToPlayers(ctx context.Context, gameID string, pids
 
 func (r *GameRelay) broadcastGameOver(gameID string, winningPlayerNum int64, reason string) {
 	r.BroadcastToGame(gameID, &WSMessage{
-		Type: constants.WSMsgGameOver,
+		Type: genws.WSServerMsgGameOver,
 		Data: mustMarshal(GameOverMessage{
 			GameID:           gameID,
 			WinningPlayerNum: winningPlayerNum,
@@ -342,55 +367,8 @@ func (r *GameRelay) broadcastGameOver(gameID string, winningPlayerNum int64, rea
 
 	r.awardGameExp(gameID, winningPlayerNum, reason)
 
-	// 観戦者に通知しクリーンアップ
 	if r.spectateRelay != nil {
 		r.spectateRelay.UnregisterGame(gameID, winningPlayerNum, reason)
-	}
-}
-
-// awardGameExp はゲーム終了後にプレイヤーに経験値を付与する。
-// インメモリ状態ではなく DB レベルの冪等性（exp_awarded フラグ）を使用し、
-// 重複呼び出しや gateway 再起動による二重付与を防止する。
-func (r *GameRelay) awardGameExp(gameID string, winnerNum int64, reason string) {
-	if r.accountClient == nil || r.gamePlayerRepo == nil {
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	awarded, err := r.gamePlayerRepo.MarkExpAwarded(ctx, gameID)
-	if err != nil {
-		log.Printf("ERROR: mark exp awarded for game %s: %v", gameID, err)
-		return
-	}
-	if !awarded {
-		return
-	}
-
-	entries, err := r.gamePlayerRepo.LookupGamePlayers(ctx, gameID)
-	if err != nil {
-		log.Printf("ERROR: lookup game players for exp (game %s): %v", gameID, err)
-		return
-	}
-
-	var player1ID, player2ID string
-	for _, e := range entries {
-		switch e.PlayerNum {
-		case 1:
-			player1ID = e.PlayerID
-		case 2:
-			player2ID = e.PlayerID
-		}
-	}
-
-	matchType := constants.MatchTypePvp
-	if len(entries) == 1 {
-		matchType = constants.MatchTypeNpc
-	}
-
-	if err := r.accountClient.AwardGameExp(ctx, player1ID, player2ID, winnerNum, reason, matchType); err != nil {
-		log.Printf("ERROR: award game exp for game %s: %v", gameID, err)
 	}
 }
 
@@ -402,47 +380,55 @@ func (r *GameRelay) HandleGameEnter(conn *Connection, data json.RawMessage) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(conn.Context(), downstreamCallTimeout)
 	defer cancel()
 	playerNum, err := r.gamePlayerRepo.LookupPlayerNum(ctx, req.GameID, conn.playerID)
 	if err != nil {
-		log.Printf("lookup player_num for %s in game %s: %v", conn.playerID, req.GameID, err)
+		if isCanceled(err) {
+			// 接続切断につき中止
+			return
+		}
+		log.Printf("ERROR: lookup player_num for %s in game %s: %v", conn.playerID, req.GameID, err)
 		sendError(conn, "game_error", "player not found in game", false)
 		return
 	}
 
 	r.JoinGame(conn.playerID, req.GameID, playerNum)
 	conn.SendMessage(&WSMessage{
-		Type: constants.WSMsgGameEntered,
+		Type: genws.WSServerMsgGameEntered,
 		Data: mustMarshal(map[string]string{"game_id": req.GameID}),
 	})
 
 	// battle_start/turn_start はエントリーアニメーション用の初期状態を運ぶ。
 	// 続く SendGameStateToPlayers が権威ある状態を配信しターンタイマーを開始する。
 	r.sendBattleStartAndTurnStart(conn, req.GameID)
-	r.advanceNpcIfNeeded(req.GameID, conn.playerID)
+	r.advanceNpcIfNeeded(conn.Context(), req.GameID, conn.playerID)
 	r.SendGameStateToPlayers(req.GameID)
 	r.SendTurnControlsToPlayers(req.GameID)
 }
 
 // advanceNpcIfNeeded は NPC がアクティブプレイヤーの場合に NPC の最初のターンを実行する。
 // game_enter 後に NPC アクションイベントが配信されるようにする。
-func (r *GameRelay) advanceNpcIfNeeded(gameID, playerID string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+func (r *GameRelay) advanceNpcIfNeeded(parentCtx context.Context, gameID, playerID string) {
+	ctx, cancel := context.WithTimeout(parentCtx, downstreamCallTimeout)
 	defer cancel()
 
 	matchType := r.lookupMatchType(ctx, gameID)
-	if matchType != constants.MatchTypeNpc {
+	if matchType != gamedesign.MatchTypeNpc {
 		return
 	}
 
 	result, err := r.battleClient.AdvanceNpcTurn(ctx, gameID)
 	if err != nil {
-		log.Printf("advance NPC turn (game %s): %v", gameID, err)
+		if isCanceled(err) {
+			return
+		}
+		log.Printf("ERROR: advance NPC turn (game %s): %v", gameID, err)
+		sendErrorToPlayer(r.hub, playerID, "npc_turn_error", "failed to advance NPC turn", true)
 		return
 	}
 
-	r.sendActionPerformed(gameID, playerID, result)
+	r.sendActionPerformed(ctx, gameID, playerID, result)
 	result = r.runNpcTurns(ctx, gameID, playerID, result)
 
 	if result != nil && result.GameOver {
@@ -456,30 +442,37 @@ func (r *GameRelay) advanceNpcIfNeeded(gameID, playerID string) {
 // action_performed イベントを送信する。プレイヤープロフィールデータが必要なため
 // battle server ではなく gateway が生成する合成イベント。
 func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(conn.Context(), downstreamCallTimeout)
 	defer cancel()
 
 	pNum := r.resolvePlayerNum(conn.playerID)
 	if pNum == 0 {
-		log.Printf("cannot resolve player_num for %s in game %s", conn.playerID, gameID)
+		log.Printf("ERROR: cannot resolve player_num for %s in game %s", conn.playerID, gameID)
+		sendError(conn, "game_error", "player not in game", false)
 		return
 	}
 	rawState, err := r.battleClient.GetGameStateForPlayer(ctx, gameID, pNum)
 	if err != nil {
-		log.Printf("get game state for battle_start (player %s): %v", conn.playerID, err)
+		if isCanceled(err) {
+			return
+		}
+		log.Printf("ERROR: get game state for battle_start (player %s): %v", conn.playerID, err)
 		sendErrorToPlayer(r.hub, conn.playerID, "game_state_error", "failed to retrieve game state", true)
 		return
 	}
 
-	// DB からゲームメタデータを解決
 	entries, err := r.gamePlayerRepo.LookupGamePlayers(ctx, gameID)
 	if err != nil {
-		log.Printf("lookup game players for battle_start (game %s): %v", gameID, err)
+		if isCanceled(err) {
+			return
+		}
+		log.Printf("ERROR: lookup game players for battle_start (game %s): %v", gameID, err)
+		sendErrorToPlayer(r.hub, conn.playerID, "game_state_error", "failed to retrieve game metadata", true)
 		return
 	}
-	matchType := constants.MatchTypePvp
+	matchType := gamedesign.MatchTypePvp
 	if len(entries) == 1 {
-		matchType = constants.MatchTypeNpc
+		matchType = gamedesign.MatchTypeNpc
 	}
 
 	battleStartData := map[string]interface{}{
@@ -489,7 +482,7 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 	myName, myLevel := r.lookupPlayer(ctx, conn.playerID)
 	var oppName string
 	var oppLevel int64
-	if matchType == constants.MatchTypeNpc {
+	if matchType == gamedesign.MatchTypeNpc {
 		oppName, oppLevel = "NPC", 0
 	} else {
 		opponentID := r.findOpponent(entries, conn.playerID)
@@ -503,41 +496,47 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 
 	// Sequence 0: battle_start / turn_start は gateway 合成イベントであり battle server のイベントシーケンスに含まれない
 	conn.SendMessage(&WSMessage{
-		Type: constants.WSMsgActionPerformed,
+		Type: genws.WSServerMsgActionPerformed,
 		Data: mustMarshal(ActionPerformedMessage{
 			Sequence:   0,
-			ActionType: constants.EventTypeBattleStart,
+			ActionType: gamelogic.EventTypeBattleStart,
 			ActionData: mustMarshal(battleStartData),
 			State:      rawState,
 		}),
 	})
 
 	var stateMeta battleStateMeta
-	if err := json.Unmarshal(rawState, &stateMeta); err == nil {
-		turnStartData := map[string]interface{}{
-			"turn":       stateMeta.CurrentTurn,
-			"is_my_turn": stateMeta.IsMyTurn,
-		}
-		conn.SendMessage(&WSMessage{
-			Type: constants.WSMsgActionPerformed,
-			Data: mustMarshal(ActionPerformedMessage{
-				Sequence:   0,
-				ActionType: constants.EventTypeTurnStart,
-				ActionData: mustMarshal(turnStartData),
-				State:      rawState,
-			}),
-		})
+	if err := json.Unmarshal(rawState, &stateMeta); err != nil {
+		// turn_start メタが取れなくても battle_start は送信済み。クライアントは続く
+		// SendGameStateToPlayers の game_state で同等情報を得るため continue する。
+		log.Printf("ERROR: parse state meta for turn_start (game %s): %v", gameID, err)
+		return
 	}
+	turnStartData := map[string]interface{}{
+		"turn":       stateMeta.CurrentTurn,
+		"is_my_turn": stateMeta.IsMyTurn,
+	}
+	conn.SendMessage(&WSMessage{
+		Type: genws.WSServerMsgActionPerformed,
+		Data: mustMarshal(ActionPerformedMessage{
+			Sequence:   0,
+			ActionType: gamelogic.EventTypeTurnStart,
+			ActionData: mustMarshal(turnStartData),
+			State:      rawState,
+		}),
+	})
 }
 
-// lookupPlayer はプレイヤーの表示名とレベルを解決する。エラー時はデフォルト値を返す。
+// lookupPlayer はプレイヤーの表示名とレベルを解決する。
+// 表示用メタデータの解決失敗は battle 進行をブロックしないので、エラー時は空値で続行する
+// （クライアントは "" / 0 をプレースホルダとして表示）。
 func (r *GameRelay) lookupPlayer(ctx context.Context, playerID string) (string, int64) {
 	if r.playerLookup == nil {
 		return "", 0
 	}
 	name, level, err := r.playerLookup(ctx, playerID)
 	if err != nil {
-		log.Printf("lookup player %s: %v", playerID, err)
+		log.Printf("lookup player %s (continuing with empty profile): %v", playerID, err)
 		return "", 0
 	}
 	return name, level
@@ -558,8 +557,11 @@ func (r *GameRelay) HandleGameAction(ctx context.Context, conn *Connection, data
 	}
 	result, err := r.battleClient.ProcessAction(ctx, action.GameID, pNum, action.ActionType, action.Data)
 	if err != nil {
+		if isCanceled(err) {
+			return
+		}
 		conn.SendMessage(&WSMessage{
-			Type: constants.WSMsgActionRejected,
+			Type: genws.WSServerMsgActionRejected,
 			Data: mustMarshal(ActionRejectedMessage{
 				GameID:     action.GameID,
 				ActionType: action.ActionType,
@@ -571,8 +573,7 @@ func (r *GameRelay) HandleGameAction(ctx context.Context, conn *Connection, data
 
 	// action_performed はクライアントアニメーション用のスナップショットを運ぶ。
 	// 続く SendGameStateToPlayers が権威ある最終状態を配信しターンタイマーをリセットする。
-	r.sendActionPerformed(action.GameID, conn.playerID, result)
-	// プレイヤーのアクションで NPC にターンが渡った場合、権威ある状態の前に全 NPC イベントを配信
+	r.sendActionPerformed(ctx, action.GameID, conn.playerID, result)
 	result = r.runNpcTurns(ctx, action.GameID, conn.playerID, result)
 	r.SendGameStateToPlayers(action.GameID)
 	r.SendTurnControlsToPlayers(action.GameID)
@@ -596,84 +597,6 @@ func (r *GameRelay) leaveAllPlayers(gameID string) {
 	}
 }
 
-// resetTurnTimer は既存のタイマーをキャンセルし新しいタイマーを開始する。
-// タイマー発火時にアクティブプレイヤーの forfeit（タイムアウト負け）を送信する。
-func (r *GameRelay) resetTurnTimer(gameID, activePlayerID string, timeBankSeconds int64) {
-	r.timerMu.Lock()
-	defer r.timerMu.Unlock()
-
-	if info, ok := r.turnTimers[gameID]; ok {
-		info.timer.Stop()
-		delete(r.turnTimers, gameID)
-	}
-
-	if timeBankSeconds <= 0 {
-		return
-	}
-
-	// ネットワーク遅延を考慮して 2 秒のバッファを追加。
-	// battle server が権威ある情報源であり、Gateway タイマー発火直前に
-	// プレイヤーがアクションを送信した場合、server は実経過時間を差し引き
-	// アクションを許可する可能性がある。
-	duration := time.Duration(timeBankSeconds+2) * time.Second
-
-	timer := time.AfterFunc(duration, func() {
-		r.timerMu.Lock()
-		info, ok := r.turnTimers[gameID]
-		if !ok || info.activePlayerID != activePlayerID {
-			// ターン交代済み — 旧プレイヤーへの誤 forfeit を防止
-			r.timerMu.Unlock()
-			return
-		}
-		delete(r.turnTimers, gameID)
-		r.timerMu.Unlock()
-
-		log.Printf("turn timer expired for game %s, player %s", gameID, activePlayerID)
-		r.handleTurnTimeout(gameID, activePlayerID)
-	})
-
-	r.turnTimers[gameID] = &turnTimerInfo{
-		timer:          timer,
-		activePlayerID: activePlayerID,
-	}
-}
-
-// cancelTurnTimer はゲームのターンタイマーを停止し削除する。
-func (r *GameRelay) cancelTurnTimer(gameID string) {
-	r.timerMu.Lock()
-	defer r.timerMu.Unlock()
-
-	if info, ok := r.turnTimers[gameID]; ok {
-		info.timer.Stop()
-		delete(r.turnTimers, gameID)
-	}
-}
-
-// handleTurnTimeout はターンタイマー期限切れ時に forfeit アクションを送信する。
-//
-// forfeit reason は本来バトルのドメイン知識だが、ターンタイマーと切断タイマーは
-// gateway の責務であり、Battle Server はタイムアウトの種別を区別できないため、
-// 例外的に gateway が reason を指定して Battle Server に送る。
-// broadcastGameOver でも gateway 側の WinReason で上書きしている。
-func (r *GameRelay) handleTurnTimeout(gameID, playerID string) {
-	pNum := r.resolvePlayerNum(playerID)
-	if pNum == 0 {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	result, err := r.battleClient.ProcessAction(ctx, gameID, pNum, constants.ActionTypeForfeit, forfeitReason(constants.WinReasonTurnTimeout))
-	if err != nil {
-		log.Printf("turn timeout forfeit error (game=%s, player=%s): %v", gameID, playerID, err)
-		return
-	}
-	if result != nil && result.GameOver {
-		r.SendGameStateToPlayers(gameID)
-		r.broadcastGameOver(gameID, result.WinningPlayerNum, constants.WinReasonTurnTimeout)
-		r.leaveAllPlayers(gameID)
-	}
-}
-
 // HandleUseStamp は use_stamp メッセージを処理します
 func (r *GameRelay) HandleUseStamp(conn *Connection, data json.RawMessage) {
 	var req UseStampMessage
@@ -682,7 +605,7 @@ func (r *GameRelay) HandleUseStamp(conn *Connection, data json.RawMessage) {
 	}
 	pNum := r.resolvePlayerNum(conn.playerID)
 	r.BroadcastToGame(req.GameID, &WSMessage{
-		Type: constants.WSMsgStampUsed,
+		Type: genws.WSServerMsgStampUsed,
 		Data: mustMarshal(StampUsedMessage{
 			GameID:    req.GameID,
 			PlayerNum: int64(pNum),
@@ -700,15 +623,19 @@ func (r *GameRelay) HandleDisconnectTimeout(playerID, gameID string) {
 	if pNum == 0 {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// 切断タイムアウトは WS コネクション喪失後に発火するので Background ベースで実行する。
+	ctx, cancel := context.WithTimeout(context.Background(), downstreamCallTimeout)
 	defer cancel()
-	result, err := r.battleClient.ProcessAction(ctx, gameID, pNum, constants.ActionTypeForfeit, forfeitReason(constants.WinReasonDisconnect))
+	result, err := r.battleClient.ProcessAction(ctx, gameID, pNum, gamelogic.ActionTypeForfeit, forfeitReason(gamelogic.WinReasonDisconnect))
 	if err != nil {
-		log.Printf("forfeit error: %v", err)
+		// 切断 forfeit は対戦相手にも影響する（ゲーム終了せず宙ぶらりんになる）。
+		// 接続は既に切れているので本人通知は不可能だが、対戦相手は DB 観測 / 別経路の
+		// 再接続でリカバリする想定。要監視。
+		log.Printf("ERROR: disconnect forfeit (game=%s, player=%s, opponent stuck risk): %v", gameID, playerID, err)
 		return
 	}
 	if result != nil && result.GameOver {
-		r.broadcastGameOver(gameID, result.WinningPlayerNum, constants.WinReasonDisconnect)
+		r.broadcastGameOver(gameID, result.WinningPlayerNum, gamelogic.WinReasonDisconnect)
 		r.leaveAllPlayers(gameID)
 	}
 }
@@ -716,7 +643,7 @@ func (r *GameRelay) HandleDisconnectTimeout(playerID, gameID string) {
 // NotifyMatchFound は両プレイヤーに match_found を送信します
 func (r *GameRelay) NotifyMatchFound(gameID, player1ID, player2ID string) {
 	msg := &WSMessage{
-		Type: constants.WSMsgMatchFound,
+		Type: genws.WSServerMsgMatchFound,
 		Data: mustMarshal(MatchFoundMessage{
 			GameID: gameID,
 		}),
@@ -738,19 +665,20 @@ func (r *GameRelay) resolvePlayerNum(playerID string) int {
 }
 
 // lookupMatchType は game_players の行数からマッチタイプを導出する。
+// 失敗時は空文字を返し、呼び出し元は MatchTypeNpc 分岐に入らない（≒ 何もしない）安全側にフォールスルーする。
 func (r *GameRelay) lookupMatchType(ctx context.Context, gameID string) string {
 	if r.gamePlayerRepo == nil {
 		return ""
 	}
 	entries, err := r.gamePlayerRepo.LookupGamePlayers(ctx, gameID)
 	if err != nil {
-		log.Printf("lookup match type for game %s: %v", gameID, err)
+		log.Printf("ERROR: lookup match type for game %s: %v", gameID, err)
 		return ""
 	}
 	if len(entries) == 1 {
-		return constants.MatchTypeNpc
+		return gamedesign.MatchTypeNpc
 	}
-	return constants.MatchTypePvp
+	return gamedesign.MatchTypePvp
 }
 
 // findOpponent は game_players エントリから対戦相手の playerID を返す。

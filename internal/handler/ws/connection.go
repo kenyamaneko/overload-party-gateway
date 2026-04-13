@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"sync"
@@ -8,7 +9,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/kenyamaneko/overload-party-gateway/internal/constants"
+	genws "github.com/kenyamaneko/overload-party-gateway/packages/ws-constants"
 )
 
 const (
@@ -30,15 +31,29 @@ type Connection struct {
 	send     chan []byte
 	mu       sync.Mutex
 	closed   bool
+
+	// ctx は接続が閉じられた時点で cancel される。
+	// 下流の HTTP 呼び出しに引き回すことで、WS 切断時に in-flight な処理を即座に打ち切る。
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 // NewConnection は WebSocket Connection を生成します
 func NewConnection(conn *websocket.Conn, playerID string) *Connection {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Connection{
 		conn:     conn,
 		playerID: playerID,
 		send:     make(chan []byte, sendBufferSize),
+		ctx:      ctx,
+		cancel:   cancel,
 	}
+}
+
+// Context は接続生存期間に紐づく context を返します。
+// 接続が Close されると cancel されます。
+func (c *Connection) Context() context.Context {
+	return c.ctx
 }
 
 // PlayerID は接続のプレイヤー ID を返します
@@ -99,7 +114,7 @@ func (c *Connection) ReadPump(hub *ConnectionHub, manager *Manager) {
 		var msg WSMessage
 		if err := json.Unmarshal(data, &msg); err != nil {
 			c.SendMessage(&WSMessage{
-				Type: constants.WSMsgError,
+				Type: genws.WSServerMsgError,
 				Data: mustMarshal(ErrorMessage{Code: "invalid_message", Message: "invalid JSON", Retryable: false}),
 			})
 			continue
@@ -145,10 +160,13 @@ func (c *Connection) Close() {
 	defer c.mu.Unlock()
 	if !c.closed {
 		c.closed = true
+		// 下流呼び出しを即座に打ち切るため close より先に cancel する。
+		if c.cancel != nil {
+			c.cancel()
+		}
 		close(c.send)
 		if c.conn != nil {
 			c.conn.Close()
 		}
 	}
 }
-

@@ -20,6 +20,6 @@ func NewSpectateHandler(wsManager *ws.Manager) *SpectateHandler {
 
 // GetActiveGames は現在観戦可能なゲーム一覧を返します
 func (h *SpectateHandler) GetActiveGames(c *gin.Context) {
-	games := h.wsManager.ActiveSpectateGames()
+	games := h.wsManager.ActiveSpectateGames(c.Request.Context())
 	c.JSON(http.StatusOK, games)
 }
