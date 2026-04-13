@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	apicard "github.com/kenyamaneko/overload-party-card/packages/api-card"
+	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/cardclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
 )
@@ -54,13 +55,13 @@ func (h *DeckHandler) GetDeck(c *gin.Context) {
 func (h *DeckHandler) CreateDeck(c *gin.Context) {
 	playerID := middleware.GetPlayerID(c)
 
-	var req apicard.DeckCreateRequest
+	var req apigateway.DeckCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	deck, err := h.card.CreateDeck(c.Request.Context(), playerID, req)
+	deck, err := h.card.CreateDeck(c.Request.Context(), playerID, toCardCreateRequest(req))
 	if err != nil {
 		respondCardErr(c, err)
 		return
@@ -77,13 +78,13 @@ func (h *DeckHandler) UpdateDeck(c *gin.Context) {
 		return
 	}
 
-	var req apicard.DeckUpdateRequest
+	var req apigateway.DeckUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	deck, err := h.card.UpdateDeck(c.Request.Context(), playerID, deckID, req)
+	deck, err := h.card.UpdateDeck(c.Request.Context(), playerID, deckID, toCardUpdateRequest(req))
 	if err != nil {
 		respondCardErr(c, err)
 		return
@@ -105,6 +106,34 @@ func (h *DeckHandler) DeleteDeck(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusNoContent)
+}
+
+// toCardCreateRequest は client 契約を内部 RPC 契約に変換します。
+func toCardCreateRequest(req apigateway.DeckCreateRequest) apicard.DeckCreateRequest {
+	cards := make([]apicard.DeckCardEntry, len(req.Cards))
+	for i, c := range req.Cards {
+		cards[i] = apicard.DeckCardEntry{CardID: c.CardID, ArtNo: c.ArtNo, Count: c.Count}
+	}
+	return apicard.DeckCreateRequest{
+		DeckName:  req.DeckName,
+		Cards:     cards,
+		PlaymatNo: req.PlaymatNo,
+		SleeveNo:  req.SleeveNo,
+	}
+}
+
+// toCardUpdateRequest は client 契約を内部 RPC 契約に変換します。
+func toCardUpdateRequest(req apigateway.DeckUpdateRequest) apicard.DeckUpdateRequest {
+	cards := make([]apicard.DeckCardEntry, len(req.Cards))
+	for i, c := range req.Cards {
+		cards[i] = apicard.DeckCardEntry{CardID: c.CardID, ArtNo: c.ArtNo, Count: c.Count}
+	}
+	return apicard.DeckUpdateRequest{
+		DeckName:  req.DeckName,
+		Cards:     cards,
+		PlaymatNo: req.PlaymatNo,
+		SleeveNo:  req.SleeveNo,
+	}
 }
 
 func respondCardErr(c *gin.Context, err error) {

@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	apiaccount "github.com/kenyamaneko/overload-party-account/packages/api-account"
+	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
 )
@@ -34,7 +35,7 @@ func (h *UserSettingsHandler) GetSettings(c *gin.Context) {
 // UpdateSettings はユーザー設定を更新します
 func (h *UserSettingsHandler) UpdateSettings(c *gin.Context) {
 	playerID := middleware.GetPlayerID(c)
-	var req apiaccount.UpdateSettingsRequest
+	var req apigateway.UpdateSettingsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -43,10 +44,20 @@ func (h *UserSettingsHandler) UpdateSettings(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "language is required"})
 		return
 	}
-	settings, err := h.account.UpdateSettings(c.Request.Context(), playerID, req)
+	settings, err := h.account.UpdateSettings(c.Request.Context(), playerID, toAccountUpdateSettingsRequest(req))
 	if err != nil {
 		respondAccountErr(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, settings)
+}
+
+// toAccountUpdateSettingsRequest は client 契約を内部 RPC 契約に変換します。
+func toAccountUpdateSettingsRequest(req apigateway.UpdateSettingsRequest) apiaccount.UpdateSettingsRequest {
+	return apiaccount.UpdateSettingsRequest{
+		Language:    req.Language,
+		BgmVolume:   req.BgmVolume,
+		SeVolume:    req.SeVolume,
+		PushEnabled: req.PushEnabled,
+	}
 }

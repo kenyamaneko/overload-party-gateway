@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	apishop "github.com/kenyamaneko/overload-party-shop/packages/api-shop"
+	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/shopclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
 )
@@ -24,7 +25,7 @@ func NewShopHandler(shop *shopclient.Client) *ShopHandler {
 // SelectFaction はファクション選択を処理します
 func (h *ShopHandler) SelectFaction(c *gin.Context) {
 	playerID := middleware.GetPlayerID(c)
-	var req apishop.SelectFactionRequest
+	var req apigateway.SelectFactionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -55,12 +56,12 @@ func (h *ShopHandler) GetProducts(c *gin.Context) {
 // Purchase は商品購入を処理します
 func (h *ShopHandler) Purchase(c *gin.Context) {
 	playerID := middleware.GetPlayerID(c)
-	var req apishop.PurchaseRequest
+	var req apigateway.PurchaseRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := h.shop.Purchase(c.Request.Context(), playerID, req); err != nil {
+	if err := h.shop.Purchase(c.Request.Context(), playerID, toShopPurchaseRequest(req)); err != nil {
 		respondShopErr(c, err)
 		return
 	}
@@ -70,17 +71,26 @@ func (h *ShopHandler) Purchase(c *gin.Context) {
 // Subscribe はサブスクリプション登録を処理します
 func (h *ShopHandler) Subscribe(c *gin.Context) {
 	playerID := middleware.GetPlayerID(c)
-	var req apishop.PurchaseRequest
+	var req apigateway.PurchaseRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	expiresAt, err := h.shop.Subscribe(c.Request.Context(), playerID, req)
+	expiresAt, err := h.shop.Subscribe(c.Request.Context(), playerID, toShopPurchaseRequest(req))
 	if err != nil {
 		respondShopErr(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "subscription activated", "expires_at": expiresAt})
+}
+
+// toShopPurchaseRequest は client 契約を内部 RPC 契約に変換します。
+func toShopPurchaseRequest(req apigateway.PurchaseRequest) apishop.PurchaseRequest {
+	return apishop.PurchaseRequest{
+		ProductID:     req.ProductID,
+		Platform:      req.Platform,
+		PurchaseToken: req.PurchaseToken,
+	}
 }
 
 func respondShopErr(c *gin.Context, err error) {
