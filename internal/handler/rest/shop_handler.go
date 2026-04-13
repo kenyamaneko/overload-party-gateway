@@ -12,6 +12,21 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
 )
 
+// validatePurchaseRequest は gateway 段階で弾ける明らかな不正を検出する。
+// 商品 ID の存在やレシート検証は shop サービス側で実施する。
+func validatePurchaseRequest(req apigateway.PurchaseRequest) error {
+	if req.ProductID == "" {
+		return errors.New("product_id is required")
+	}
+	if req.Platform == "" {
+		return errors.New("platform is required")
+	}
+	if req.PurchaseToken == "" {
+		return errors.New("purchase_token is required")
+	}
+	return nil
+}
+
 // ShopHandler はショップ関連の REST エンドポイントを処理します
 type ShopHandler struct {
 	shop *shopclient.Client
@@ -28,6 +43,10 @@ func (h *ShopHandler) SelectFaction(c *gin.Context) {
 	var req apigateway.SelectFactionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if req.Faction == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "faction is required"})
 		return
 	}
 	resp, err := h.shop.SelectFaction(c.Request.Context(), playerID, req.Faction)
@@ -61,6 +80,10 @@ func (h *ShopHandler) Purchase(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if err := validatePurchaseRequest(req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	if err := h.shop.Purchase(c.Request.Context(), playerID, toShopPurchaseRequest(req)); err != nil {
 		respondShopErr(c, err)
 		return
@@ -73,6 +96,10 @@ func (h *ShopHandler) Subscribe(c *gin.Context) {
 	playerID := middleware.GetPlayerID(c)
 	var req apigateway.PurchaseRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := validatePurchaseRequest(req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
