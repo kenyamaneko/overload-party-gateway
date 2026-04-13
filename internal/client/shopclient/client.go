@@ -13,7 +13,7 @@ import (
 	"net/url"
 	"time"
 
-	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
+	apishop "github.com/kenyamaneko/overload-party-shop/packages/api-shop"
 )
 
 var (
@@ -66,11 +66,11 @@ func (c *Client) SelectFaction(ctx context.Context, playerID, faction string) (*
 }
 
 type productsResponse struct {
-	Products []apigateway.ProductResponse `json:"products"`
+	Products []apishop.ProductResponse `json:"products"`
 }
 
 // GetProducts は商品一覧を取得します
-func (c *Client) GetProducts(ctx context.Context, playerID string) ([]apigateway.ProductResponse, error) {
+func (c *Client) GetProducts(ctx context.Context, playerID string) ([]apishop.ProductResponse, error) {
 	path := fmt.Sprintf("/internal/v1/players/%s/products", url.PathEscape(playerID))
 	var out productsResponse
 	if err := c.doJSON(ctx, http.MethodGet, path, nil, &out); err != nil {
@@ -80,7 +80,7 @@ func (c *Client) GetProducts(ctx context.Context, playerID string) ([]apigateway
 }
 
 // Purchase は商品購入を処理します
-func (c *Client) Purchase(ctx context.Context, playerID string, req apigateway.PurchaseRequest) error {
+func (c *Client) Purchase(ctx context.Context, playerID string, req apishop.PurchaseRequest) error {
 	path := fmt.Sprintf("/internal/v1/players/%s/purchase", url.PathEscape(playerID))
 	return c.doJSON(ctx, http.MethodPost, path, req, nil)
 }
@@ -91,7 +91,7 @@ type subscribeResponse struct {
 }
 
 // Subscribe はサブスクリプション登録を処理します
-func (c *Client) Subscribe(ctx context.Context, playerID string, req apigateway.PurchaseRequest) (*time.Time, error) {
+func (c *Client) Subscribe(ctx context.Context, playerID string, req apishop.PurchaseRequest) (*time.Time, error) {
 	path := fmt.Sprintf("/internal/v1/players/%s/subscribe", url.PathEscape(playerID))
 	var out subscribeResponse
 	if err := c.doJSON(ctx, http.MethodPost, path, req, &out); err != nil {

@@ -6,7 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
+	apishop "github.com/kenyamaneko/overload-party-shop/packages/api-shop"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/shopclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
 )
@@ -24,7 +24,7 @@ func NewShopHandler(shop *shopclient.Client) *ShopHandler {
 // SelectFaction はファクション選択を処理します
 func (h *ShopHandler) SelectFaction(c *gin.Context) {
 	playerID := middleware.GetPlayerID(c)
-	var req apigateway.SelectFactionRequest
+	var req apishop.SelectFactionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -55,7 +55,7 @@ func (h *ShopHandler) GetProducts(c *gin.Context) {
 // Purchase は商品購入を処理します
 func (h *ShopHandler) Purchase(c *gin.Context) {
 	playerID := middleware.GetPlayerID(c)
-	var req apigateway.PurchaseRequest
+	var req apishop.PurchaseRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -70,7 +70,7 @@ func (h *ShopHandler) Purchase(c *gin.Context) {
 // Subscribe はサブスクリプション登録を処理します
 func (h *ShopHandler) Subscribe(c *gin.Context) {
 	playerID := middleware.GetPlayerID(c)
-	var req apigateway.PurchaseRequest
+	var req apishop.PurchaseRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

@@ -13,7 +13,7 @@ import (
 	"net/url"
 	"time"
 
-	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
+	apiscenario "github.com/kenyamaneko/overload-party-scenario/packages/api-scenario"
 )
 
 var (
@@ -39,11 +39,11 @@ func New(baseURL string) *Client {
 
 // ListEpisodesResponse はエピソード一覧のレスポンス型です
 type ListEpisodesResponse struct {
-	Episodes []apigateway.EpisodeWithStatus `json:"episodes"`
+	Episodes []apiscenario.EpisodeWithStatus `json:"episodes"`
 }
 
 // ListEpisodes はプレイヤーのエピソード一覧を取得します
-func (c *Client) ListEpisodes(ctx context.Context, playerID, lang string) ([]apigateway.EpisodeWithStatus, error) {
+func (c *Client) ListEpisodes(ctx context.Context, playerID, lang string) ([]apiscenario.EpisodeWithStatus, error) {
 	path := fmt.Sprintf("/internal/v1/players/%s/scenarios", url.PathEscape(playerID))
 	if lang != "" {
 		path += "?lang=" + url.QueryEscape(lang)

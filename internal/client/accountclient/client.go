@@ -13,7 +13,7 @@ import (
 	"net/url"
 	"time"
 
-	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
+	apiaccount "github.com/kenyamaneko/overload-party-account/packages/api-account"
 )
 
 var (
@@ -96,8 +96,8 @@ func (c *Client) FindByFirebaseUID(ctx context.Context, firebaseUID string) (*Pl
 }
 
 // GetPlayer はプレイヤー情報を取得します
-func (c *Client) GetPlayer(ctx context.Context, playerID string) (*apigateway.PlayerResponse, error) {
-	var out apigateway.PlayerResponse
+func (c *Client) GetPlayer(ctx context.Context, playerID string) (*apiaccount.PlayerResponse, error) {
+	var out apiaccount.PlayerResponse
 	path := "/internal/v1/players/" + url.PathEscape(playerID)
 	if err := c.doJSON(ctx, http.MethodGet, path, nil, &out); err != nil {
 		return nil, err
@@ -120,8 +120,8 @@ func (c *Client) UpdateName(ctx context.Context, playerID, name string) (*Player
 }
 
 // GetBattleLimit はバトル回数制限情報を取得します
-func (c *Client) GetBattleLimit(ctx context.Context, playerID string) (*apigateway.BattleLimitResponse, error) {
-	var out apigateway.BattleLimitResponse
+func (c *Client) GetBattleLimit(ctx context.Context, playerID string) (*apiaccount.BattleLimitResponse, error) {
+	var out apiaccount.BattleLimitResponse
 	path := "/internal/v1/players/" + url.PathEscape(playerID) + "/battle-limit"
 	if err := c.doJSON(ctx, http.MethodGet, path, nil, &out); err != nil {
 		return nil, err
@@ -212,8 +212,8 @@ func (c *Client) AwardGameExp(ctx context.Context, p1ID, p2ID string, winnerNum 
 }
 
 // GetSettings はユーザー設定を取得します
-func (c *Client) GetSettings(ctx context.Context, playerID string) (*apigateway.UserSettings, error) {
-	var out apigateway.UserSettings
+func (c *Client) GetSettings(ctx context.Context, playerID string) (*apiaccount.UserSettings, error) {
+	var out apiaccount.UserSettings
 	path := "/internal/v1/players/" + url.PathEscape(playerID) + "/settings"
 	if err := c.doJSON(ctx, http.MethodGet, path, nil, &out); err != nil {
 		return nil, err
@@ -222,8 +222,8 @@ func (c *Client) GetSettings(ctx context.Context, playerID string) (*apigateway.
 }
 
 // UpdateSettings はユーザー設定を更新します
-func (c *Client) UpdateSettings(ctx context.Context, playerID string, req apigateway.UpdateSettingsRequest) (*apigateway.UserSettings, error) {
-	var out apigateway.UserSettings
+func (c *Client) UpdateSettings(ctx context.Context, playerID string, req apiaccount.UpdateSettingsRequest) (*apiaccount.UserSettings, error) {
+	var out apiaccount.UserSettings
 	path := "/internal/v1/players/" + url.PathEscape(playerID) + "/settings"
 	if err := c.doJSON(ctx, http.MethodPut, path, req, &out); err != nil {
 		return nil, err

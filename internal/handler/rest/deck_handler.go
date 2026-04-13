@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
+	apicard "github.com/kenyamaneko/overload-party-card/packages/api-card"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/cardclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
 )
@@ -54,7 +54,7 @@ func (h *DeckHandler) GetDeck(c *gin.Context) {
 func (h *DeckHandler) CreateDeck(c *gin.Context) {
 	playerID := middleware.GetPlayerID(c)
 
-	var req apigateway.DeckCreateRequest
+	var req apicard.DeckCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -77,7 +77,7 @@ func (h *DeckHandler) UpdateDeck(c *gin.Context) {
 		return
 	}
 
-	var req apigateway.DeckUpdateRequest
+	var req apicard.DeckUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

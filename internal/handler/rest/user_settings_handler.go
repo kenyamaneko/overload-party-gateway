@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
+	apiaccount "github.com/kenyamaneko/overload-party-account/packages/api-account"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
 )
@@ -34,7 +34,7 @@ func (h *UserSettingsHandler) GetSettings(c *gin.Context) {
 // UpdateSettings はユーザー設定を更新します
 func (h *UserSettingsHandler) UpdateSettings(c *gin.Context) {
 	playerID := middleware.GetPlayerID(c)
-	var req apigateway.UpdateSettingsRequest
+	var req apiaccount.UpdateSettingsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
