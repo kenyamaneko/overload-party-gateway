@@ -8,7 +8,7 @@ require (
 	github.com/gin-gonic/gin v1.11.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/jackc/pgx/v5 v5.8.0
-	github.com/kenyamaneko/overload-party-account/packages/api-account v0.0.0-20260413001617-5120ba5e4ecb
+	github.com/kenyamaneko/overload-party-account/packages/api-account v0.1.0
 	github.com/kenyamaneko/overload-party-battle/packages/api-battle-rpc-go v0.1.0
 	github.com/kenyamaneko/overload-party-battle/packages/game-logic-constants-go v0.1.0
 	github.com/kenyamaneko/overload-party-card/packages/api-card v0.1.0
