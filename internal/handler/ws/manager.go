@@ -361,5 +361,3 @@ func (m *Manager) checkAndIncrementBattleLimit(ctx context.Context, playerID str
 	return "", nil
 }
 
-// resolveDeckCards での DeckCard 間接参照のため import を維持
-var _ = apigateway.DeckCard{}

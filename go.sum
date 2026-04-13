@@ -147,6 +147,8 @@ github.com/jackc/puddle/v2 v2.2.2 h1:PR8nw+E/1w0GLuRFSmiioY6UooMp6KJv0/61nB7icHo
 github.com/jackc/puddle/v2 v2.2.2/go.mod h1:vriiEXHvEE654aYKXXjOvZM39qJ0q+azkZFrfEOc3H4=
 github.com/json-iterator/go v1.1.12 h1:PV8peI4a0ysnczrg+LtxykD8LfKY9ML6u2jnxaEnrnM=
 github.com/json-iterator/go v1.1.12/go.mod h1:e30LSqwooZae/UwlEbR2852Gd8hjQvJoHmT4TnhNGBo=
+github.com/kenyamaneko/overload-party-account/packages/api-account v0.0.0-20260413001617-5120ba5e4ecb h1:+BAOAH4ZyvuApCx8EqG9jSpyOFLByNRDjMzDT0A2nIQ=
+github.com/kenyamaneko/overload-party-account/packages/api-account v0.0.0-20260413001617-5120ba5e4ecb/go.mod h1:BlbsrvxOitktbd/2h/Xp4JIBkby9SRLMUkdS3mJWxWY=
 github.com/kenyamaneko/overload-party-battle/packages/api-battle-rpc-go v0.1.0 h1:zKReb9098Kz6GsMmG2NEdQIvgF/HGPQA9REEZhR2skQ=
 github.com/kenyamaneko/overload-party-battle/packages/api-battle-rpc-go v0.1.0/go.mod h1:TMk17tOXh+b9fDm92CdL5q4vgxqhvi+ciAyC7clxKvo=
 github.com/kenyamaneko/overload-party-battle/packages/game-logic-constants-go v0.1.0 h1:nxbYSBUkTerPTfy+9UugWeZYXOFzhsSxaVUgtgh8r+U=
@@ -157,6 +159,10 @@ github.com/kenyamaneko/overload-party-common/packages/game-design-constants v0.1
 github.com/kenyamaneko/overload-party-common/packages/game-design-constants v0.1.0/go.mod h1:4z5Ry1Y8LZQM4OKqLivo/OhVefKloLZP2vUDQ1Yo0UI=
 github.com/kenyamaneko/overload-party-common/packages/pubsub-events v0.1.0 h1:Du4JlWpUCNH4FTSdOkrldEy4Ht85hICI3IgkrjiC4rU=
 github.com/kenyamaneko/overload-party-common/packages/pubsub-events v0.1.0/go.mod h1:oDm7RoYDIXdaTLNvcN/g1ApMxNQb9DxUuh0czs5lrvM=
+github.com/kenyamaneko/overload-party-scenario/packages/api-scenario v0.1.0 h1:m0jUkrSjf3q6UDf9qViXH5+jLF4TvdRgvsgQfYXykqo=
+github.com/kenyamaneko/overload-party-scenario/packages/api-scenario v0.1.0/go.mod h1:nV0AZBdeJnJfHCtqQ1OvHjO3TMCj+V7KifBD/tx+48Y=
+github.com/kenyamaneko/overload-party-shop/packages/api-shop v0.1.0 h1:aSTT+QZQQNOIR547TdSUDgyRypT4FPoWYsCPj9HIIg8=
+github.com/kenyamaneko/overload-party-shop/packages/api-shop v0.1.0/go.mod h1:Y+Ft3GQRgbris71KdXdInHgSFxK+PZ5nD1lULtHrDYA=
 github.com/klauspost/cpuid/v2 v2.3.0 h1:S4CRMLnYUhGeDFDqkGriYKdfoFlDnMtqTiI/sFzhA9Y=
 github.com/klauspost/cpuid/v2 v2.3.0/go.mod h1:hqwkgyIinND0mEev00jJYCxPNVRVXFQeu1XKlok6oO0=
 github.com/kr/pretty v0.3.1 h1:flRD4NNwYAUpkphVc1HcthR4KEIFJ65n8Mw5qdRn3LE=
