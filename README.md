@@ -36,7 +36,7 @@ Gateway (このサービス, :9001)
 | `ENV` | `dev` | 動作環境 (`dev` / `stg` / `prod`) |
 | `LOG_LEVEL` | `info` | ログレベル |
 | `DATABASE_URL` | *(必須)* | PostgreSQL 接続文字列 (`gateway.game_players` + `newsfeed.news_articles`) |
-| `PUBSUB_PROJECT_ID` | *(必須)* | GCP プロジェクト ID |
+| `PUBSUB_PROJECT_ID` | *(必須)* | Google Cloud プロジェクト ID |
 
 **ConfigMap (サービス URL):**
 

@@ -37,7 +37,7 @@ files:
           - {name: ArtNo, type: int64, json: "art_no", doc: "アート番号"}
           - {name: Count, type: int, json: "count", doc: "所持枚数"}
           - {name: CardName, type: string, json: "card_name", doc: "カード名"}
-          - {name: ResourceLabel, type: string, json: "resource_label", doc: "リソースラベル（AWS/Azure/GCP/Oracle のサービス名）"}
+          - {name: ResourceLabel, type: string, json: "resource_label", doc: "リソースラベル（AWS/Azure/Google Cloud/Oracle のサービス名）"}
           - {name: Faction, type: string, json: "faction", ts_type: "FactionId | 'Neutral'", doc: "ファクション（`SHE` / `Tenki` / `Sugar` / `Tuners` / `Neutral`）"}
           - {name: CardType, type: string, json: "card_type", ts_type: CardType, doc: "カード種別"}
           - {name: DeployTurns, type: int64, json: "deploy_turns", doc: "デプロイターン数（0=即時）"}
