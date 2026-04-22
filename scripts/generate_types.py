@@ -416,6 +416,8 @@ def generate_api_reference(ep_data: dict, models_data: dict, output_path: Path) 
         "",
         "> 自動生成 -- 直接編集しない。`data/endpoints.yaml` の `endpoint_groups` セクションから",
         "> `python3 scripts/generate_types.py` で生成される。",
+        ">",
+        "> WebSocket プロトコル契約は [WS_REFERENCE.md](WS_REFERENCE.md) を参照。",
         "",
         f"生成日時: `{now}`",
         "",

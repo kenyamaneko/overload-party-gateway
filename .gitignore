@@ -19,9 +19,6 @@ go.work.sum
 # Coverage
 coverage*.out
 
-# Symlinks
-/docs
-
 # Claude
 .claude/
 CLAUDE.md
