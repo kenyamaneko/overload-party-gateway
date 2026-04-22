@@ -16,7 +16,7 @@ require (
 	github.com/kenyamaneko/overload-party-common/packages/game-design-constants v0.1.0
 	github.com/kenyamaneko/overload-party-gateway/packages/api-gateway v0.0.0-00010101000000-000000000000
 	github.com/kenyamaneko/overload-party-gateway/packages/ws-constants v0.0.0-00010101000000-000000000000
-	github.com/kenyamaneko/overload-party-scenario/packages/api-scenario v0.1.1
+	github.com/kenyamaneko/overload-party-scenario/packages/api-scenario v0.1.2
 	github.com/kenyamaneko/overload-party-shop/packages/api-shop v0.1.5
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/sync v0.19.0
@@ -113,9 +113,3 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-// Local dev replace (上流タグ発行前の暫定。go.mod の require バージョンは
-// タグ push を前提に記載しており、タグ発行後に本 replace を削除する)。
-replace github.com/kenyamaneko/overload-party-scenario/packages/api-scenario => ../overload-party-scenario/packages/api-scenario
-
-replace github.com/kenyamaneko/overload-party-shop/packages/api-shop => ../overload-party-shop/packages/api-shop
