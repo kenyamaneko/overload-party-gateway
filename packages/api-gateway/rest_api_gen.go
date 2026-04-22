@@ -139,12 +139,12 @@ type DeckUpdateRequest struct {
 	SleeveNo  *int64          `json:"sleeve_no,omitempty"`
 }
 
-// UpdateSettingsRequest is the request body for PUT /player/settings.
+// UpdateSettingsRequest is the request body for PUT /player/settings. 部分更新。指定フィールドのみ更新される。
 type UpdateSettingsRequest struct {
-	Language    string `json:"language"`
-	BgmVolume   int64  `json:"bgm_volume"`
-	SeVolume    int64  `json:"se_volume"`
-	PushEnabled bool   `json:"push_enabled"`
+	Language    *string `json:"language,omitempty"`
+	BgmVolume   *int64  `json:"bgm_volume,omitempty"`
+	SeVolume    *int64  `json:"se_volume,omitempty"`
+	PushEnabled *bool   `json:"push_enabled,omitempty"`
 }
 
 // PurchaseRequest is the request body for POST /shop/purchase.

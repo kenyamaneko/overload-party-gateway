@@ -5,7 +5,7 @@
 >
 > WebSocket プロトコル契約は [WS_REFERENCE.md](WS_REFERENCE.md) を参照。
 
-生成日時: `2026-04-22T00:19:37Z`
+生成日時: `2026-04-22T00:35:35Z`
 
 ## Public REST（認証不要）
 
@@ -410,10 +410,10 @@ Firebase Token 検証 + PlayerResolve ミドルウェア適用済み。
 
 | フィールド | 型 | JSON | 説明 |
 |---|---|---|---|
-| Language | `string` | `language` | 言語（`ja` / `en`） |
-| BgmVolume | `number` | `bgm_volume` | BGM 音量（0-100） |
-| SeVolume | `number` | `se_volume` | SE 音量（0-100） |
-| PushEnabled | `boolean` | `push_enabled` | プッシュ通知の有効/無効 |
+| Language | `string?` | `language` | 言語（`ja` / `en`） |
+| BgmVolume | `number?` | `bgm_volume` | BGM 音量（0-100） |
+| SeVolume | `number?` | `se_volume` | SE 音量（0-100） |
+| PushEnabled | `boolean?` | `push_enabled` | プッシュ通知の有効/無効 |
 
 **レスポンス**: `UserSettings`
 

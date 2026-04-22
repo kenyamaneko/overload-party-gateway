@@ -528,12 +528,12 @@ files:
           - {name: SleeveNo, type: "*int64", json: "sleeve_no,omitempty", doc: "スリーブ番号"}
 
       - name: UpdateSettingsRequest
-        comment: "UpdateSettingsRequest is the request body for PUT /player/settings."
+        comment: "UpdateSettingsRequest is the request body for PUT /player/settings. 部分更新。指定フィールドのみ更新される。"
         fields:
-          - {name: Language, type: string, json: "language", doc: "言語（`ja` / `en`）"}
-          - {name: BgmVolume, type: int64, json: "bgm_volume", doc: "BGM 音量（0-100）"}
-          - {name: SeVolume, type: int64, json: "se_volume", doc: "SE 音量（0-100）"}
-          - {name: PushEnabled, type: bool, json: "push_enabled", doc: "プッシュ通知の有効/無効"}
+          - {name: Language, type: "*string", json: "language,omitempty", doc: "言語（`ja` / `en`）"}
+          - {name: BgmVolume, type: "*int64", json: "bgm_volume,omitempty", doc: "BGM 音量（0-100）"}
+          - {name: SeVolume, type: "*int64", json: "se_volume,omitempty", doc: "SE 音量（0-100）"}
+          - {name: PushEnabled, type: "*bool", json: "push_enabled,omitempty", doc: "プッシュ通知の有効/無効"}
 
       - name: PurchaseRequest
         comment: "PurchaseRequest is the request body for POST /shop/purchase."
