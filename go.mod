@@ -1,6 +1,6 @@
 module github.com/kenyamaneko/overload-party-gateway
 
-go 1.25.1
+go 1.25.9
 
 require (
 	cloud.google.com/go/firestore v1.21.0
@@ -19,6 +19,7 @@ require (
 	github.com/kenyamaneko/overload-party-scenario/packages/api-scenario v0.1.1
 	github.com/kenyamaneko/overload-party-shop/packages/api-shop v0.1.5
 	github.com/stretchr/testify v1.11.1
+	golang.org/x/sync v0.19.0
 	google.golang.org/grpc v1.79.1
 )
 
@@ -100,7 +101,6 @@ require (
 	golang.org/x/mod v0.32.0 // indirect
 	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/oauth2 v0.35.0 // indirect
-	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
@@ -114,7 +114,8 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-// Local dev replace (ADR-022 で上流タグがまだ push されていない期間の暫定。
-// CI / タグ発行後に削除する)
+// Local dev replace (上流タグ発行前の暫定。go.mod の require バージョンは
+// タグ push を前提に記載しており、タグ発行後に本 replace を削除する)。
 replace github.com/kenyamaneko/overload-party-scenario/packages/api-scenario => ../overload-party-scenario/packages/api-scenario
+
 replace github.com/kenyamaneko/overload-party-shop/packages/api-shop => ../overload-party-shop/packages/api-shop

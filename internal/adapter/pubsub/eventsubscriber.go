@@ -11,7 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 
 	"cloud.google.com/go/pubsub/v2"
 
@@ -22,16 +22,19 @@ import (
 	genws "github.com/kenyamaneko/overload-party-gateway/packages/ws-constants"
 )
 
-// WSPusher は接続中プレイヤーへのメッセージ送信に使用するインターフェースです。
-// ConnectionHub の SendToPlayer シグネチャに対応する。
-type WSPusher interface {
-	SendToPlayer(playerID string, msg any)
-}
-
 // WSMessage は WS hub が送信する最小メッセージ形式です。
 type WSMessage struct {
 	Type string          `json:"type"`
 	Data json.RawMessage `json:"data,omitempty"`
+}
+
+// WSPusher は接続中プレイヤーへのメッセージ送信に使用するインターフェースです。
+//
+// Why: 過去は `msg any` 型で ConnectionHub.SendToPlayer のシグネチャに合わせていたが、
+// subscriber 側は常に *WSMessage しか渡さない内部契約であり、any を維持する利点がない。
+// 契約違反を型レベルで検出するため *WSMessage に厳密化している。
+type WSPusher interface {
+	SendToPlayer(playerID string, msg *WSMessage)
 }
 
 // HubWSPusher は ConnectionHub を subscriber が必要とする WSPusher インターフェースに適合させます。
@@ -41,15 +44,10 @@ type HubWSPusher struct {
 }
 
 // SendToPlayer はプレイヤーにメッセージを送信します。
-func (h *HubWSPusher) SendToPlayer(playerID string, msg any) {
-	m, ok := msg.(*WSMessage)
-	if !ok {
-		log.Printf("event subscriber: unexpected msg type %T for player %s", msg, playerID)
-		return
-	}
+func (h *HubWSPusher) SendToPlayer(playerID string, msg *WSMessage) {
 	h.Hub.SendToPlayer(playerID, &ws.WSMessage{
-		Type: m.Type,
-		Data: json.RawMessage(m.Data),
+		Type: msg.Type,
+		Data: json.RawMessage(msg.Data),
 	})
 }
 
@@ -83,35 +81,46 @@ func NewPlayerOnboardedSubscriber(
 
 // Run は ctx がキャンセルされるか Receive がエラーを返すまでブロックします。
 func (s *PlayerOnboardedSubscriber) Run(ctx context.Context) error {
-	log.Printf("player-onboarded subscriber: pulling from %s", s.subscriber.ID())
+	slog.Info("player-onboarded subscriber: pulling", "subscription", s.subscriber.ID())
 	return s.subscriber.Receive(ctx, s.handle)
 }
 
 // Close は Pub/Sub クライアントをクローズします。
 func (s *PlayerOnboardedSubscriber) Close() error { return s.client.Close() }
 
-func (s *PlayerOnboardedSubscriber) handle(_ context.Context, msg *pubsub.Message) {
-	var ev apiscenario.PlayerOnboardedEvent
-	if err := json.Unmarshal(msg.Data, &ev); err != nil {
-		log.Printf("player-onboarded subscriber: bad payload (ack+drop): %v", err)
+func (s *PlayerOnboardedSubscriber) handle(ctx context.Context, msg *pubsub.Message) {
+	if ack := s.processEvent(ctx, msg.Data); ack {
 		msg.Ack()
-		return
+	} else {
+		msg.Nack()
+	}
+}
+
+// processEvent は Pub/Sub ペイロードを処理し、ack すべきか (true) / nack すべきか
+// (false) を返す。*pubsub.Message への依存を handle に閉じ込めることで、
+// ビジネスロジックを単体テストから直接検証できるようにする。
+func (s *PlayerOnboardedSubscriber) processEvent(_ context.Context, data []byte) (ack bool) {
+	var ev apiscenario.PlayerOnboardedEvent
+	if err := json.Unmarshal(data, &ev); err != nil {
+		slog.Error("player-onboarded subscriber: bad payload (nack)",
+			"error", err, "payload_len", len(data))
+		return false
 	}
 	if ev.EventType != apiscenario.EventTypePlayerOnboarded {
-		log.Printf("player-onboarded subscriber: unknown event_type %q (ack+drop)", ev.EventType)
-		msg.Ack()
-		return
+		slog.Warn("player-onboarded subscriber: unknown event_type, acking",
+			"event_type", ev.EventType, "event_id", ev.EventID)
+		return true
 	}
 	if ev.PlayerID == "" {
-		log.Printf("player-onboarded subscriber: missing player_id (ack+drop)")
-		msg.Ack()
-		return
+		slog.Error("player-onboarded subscriber: missing player_id (nack)",
+			"event_id", ev.EventID)
+		return false
 	}
 	s.pusher.SendToPlayer(ev.PlayerID, &WSMessage{
 		Type: genws.WSServerMsgOnboardingComplete,
-		Data: msg.Data,
+		Data: data,
 	})
-	msg.Ack()
+	return true
 }
 
 // FactionPurchasedSubscriber は faction-purchased-gateway-sub からイベントを取得し、
@@ -144,35 +153,45 @@ func NewFactionPurchasedSubscriber(
 
 // Run は ctx がキャンセルされるか Receive がエラーを返すまでブロックします。
 func (s *FactionPurchasedSubscriber) Run(ctx context.Context) error {
-	log.Printf("faction-purchased subscriber: pulling from %s", s.subscriber.ID())
+	slog.Info("faction-purchased subscriber: pulling", "subscription", s.subscriber.ID())
 	return s.subscriber.Receive(ctx, s.handle)
 }
 
 // Close は Pub/Sub クライアントをクローズします。
 func (s *FactionPurchasedSubscriber) Close() error { return s.client.Close() }
 
-func (s *FactionPurchasedSubscriber) handle(_ context.Context, msg *pubsub.Message) {
-	var ev apishop.FactionPurchasedEvent
-	if err := json.Unmarshal(msg.Data, &ev); err != nil {
-		log.Printf("faction-purchased subscriber: bad payload (ack+drop): %v", err)
+func (s *FactionPurchasedSubscriber) handle(ctx context.Context, msg *pubsub.Message) {
+	if ack := s.processEvent(ctx, msg.Data); ack {
 		msg.Ack()
-		return
+	} else {
+		msg.Nack()
+	}
+}
+
+// processEvent は Pub/Sub ペイロードを処理し、ack すべきか (true) / nack すべきか
+// (false) を返す。
+func (s *FactionPurchasedSubscriber) processEvent(_ context.Context, data []byte) (ack bool) {
+	var ev apishop.FactionPurchasedEvent
+	if err := json.Unmarshal(data, &ev); err != nil {
+		slog.Error("faction-purchased subscriber: bad payload (nack)",
+			"error", err, "payload_len", len(data))
+		return false
 	}
 	if ev.EventType != apishop.EventTypeFactionPurchased {
-		log.Printf("faction-purchased subscriber: unknown event_type %q (ack+drop)", ev.EventType)
-		msg.Ack()
-		return
+		slog.Warn("faction-purchased subscriber: unknown event_type, acking",
+			"event_type", ev.EventType, "event_id", ev.EventID)
+		return true
 	}
 	if ev.PlayerID == "" {
-		log.Printf("faction-purchased subscriber: missing player_id (ack+drop)")
-		msg.Ack()
-		return
+		slog.Error("faction-purchased subscriber: missing player_id (nack)",
+			"event_id", ev.EventID)
+		return false
 	}
 	s.pusher.SendToPlayer(ev.PlayerID, &WSMessage{
 		Type: genws.WSServerMsgFactionPurchaseComplete,
-		Data: msg.Data,
+		Data: data,
 	})
-	msg.Ack()
+	return true
 }
 
 // PremiumUpdatedSubscriber は premium-updated-gateway-sub からイベントを取得し、
@@ -205,33 +224,43 @@ func NewPremiumUpdatedSubscriber(
 
 // Run は ctx がキャンセルされるか Receive がエラーを返すまでブロックします。
 func (s *PremiumUpdatedSubscriber) Run(ctx context.Context) error {
-	log.Printf("premium-updated subscriber: pulling from %s", s.subscriber.ID())
+	slog.Info("premium-updated subscriber: pulling", "subscription", s.subscriber.ID())
 	return s.subscriber.Receive(ctx, s.handle)
 }
 
 // Close は Pub/Sub クライアントをクローズします。
 func (s *PremiumUpdatedSubscriber) Close() error { return s.client.Close() }
 
-func (s *PremiumUpdatedSubscriber) handle(_ context.Context, msg *pubsub.Message) {
-	var ev apishop.PremiumUpdatedEvent
-	if err := json.Unmarshal(msg.Data, &ev); err != nil {
-		log.Printf("premium-updated subscriber: bad payload (ack+drop): %v", err)
+func (s *PremiumUpdatedSubscriber) handle(ctx context.Context, msg *pubsub.Message) {
+	if ack := s.processEvent(ctx, msg.Data); ack {
 		msg.Ack()
-		return
+	} else {
+		msg.Nack()
+	}
+}
+
+// processEvent は Pub/Sub ペイロードを処理し、ack すべきか (true) / nack すべきか
+// (false) を返す。
+func (s *PremiumUpdatedSubscriber) processEvent(_ context.Context, data []byte) (ack bool) {
+	var ev apishop.PremiumUpdatedEvent
+	if err := json.Unmarshal(data, &ev); err != nil {
+		slog.Error("premium-updated subscriber: bad payload (nack)",
+			"error", err, "payload_len", len(data))
+		return false
 	}
 	if ev.EventType != apishop.EventTypePremiumUpdated {
-		log.Printf("premium-updated subscriber: unknown event_type %q (ack+drop)", ev.EventType)
-		msg.Ack()
-		return
+		slog.Warn("premium-updated subscriber: unknown event_type, acking",
+			"event_type", ev.EventType, "event_id", ev.EventID)
+		return true
 	}
 	if ev.PlayerID == "" {
-		log.Printf("premium-updated subscriber: missing player_id (ack+drop)")
-		msg.Ack()
-		return
+		slog.Error("premium-updated subscriber: missing player_id (nack)",
+			"event_id", ev.EventID)
+		return false
 	}
 	s.pusher.SendToPlayer(ev.PlayerID, &WSMessage{
 		Type: genws.WSServerMsgPremiumUpdateComplete,
-		Data: msg.Data,
+		Data: data,
 	})
-	msg.Ack()
+	return true
 }

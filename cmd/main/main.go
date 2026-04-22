@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os/signal"
@@ -11,14 +12,15 @@ import (
 	"cloud.google.com/go/firestore"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/sync/errgroup"
 
+	pubsubadapter "github.com/kenyamaneko/overload-party-gateway/internal/adapter/pubsub"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/cardclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/matchmakingclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/scenarioclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/shopclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/config"
-	pubsubadapter "github.com/kenyamaneko/overload-party-gateway/internal/adapter/pubsub"
 	"github.com/kenyamaneko/overload-party-gateway/internal/handler/rest"
 	ws "github.com/kenyamaneko/overload-party-gateway/internal/handler/ws"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
@@ -28,6 +30,13 @@ import (
 )
 
 const serverShutdownTimeout = 10 * time.Second
+
+// subscriberRunner は errgroup で束ねる subscriber の最小契約。
+// Run は ctx キャンセルで return し、Close でリソースを解放する。
+type subscriberRunner interface {
+	Run(ctx context.Context) error
+	Close() error
+}
 
 func main() {
 	ctx := context.Background()
@@ -153,18 +162,12 @@ func main() {
 	srvCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// マッチメイキング Pub/Sub subscriber を開始
-	subscriber, err := pubsubadapter.NewMatchSubscriber(srvCtx, cfg.PubsubProjectID, cfg.MatchmakingSubscription, wsManager)
+	// マッチメイキング Pub/Sub subscriber
+	matchSub, err := pubsubadapter.NewMatchSubscriber(srvCtx, cfg.PubsubProjectID, cfg.MatchmakingSubscription, wsManager)
 	if err != nil {
 		log.Fatalf("failed to create match subscriber: %v", err)
 	}
-	defer func() { _ = subscriber.Close() }()
-
-	go func() {
-		if err := subscriber.Run(srvCtx); err != nil && srvCtx.Err() == nil {
-			log.Fatalf("match subscriber error: %v", err)
-		}
-	}()
+	defer func() { _ = matchSub.Close() }()
 
 	// クロスサービスイベント subscriber（player-onboarded, faction-purchased, premium-updated）。
 	// ADR-022 により business fact 単位で 3 トピックに分解されており、subscriber も 1:1 に対応する。
@@ -179,12 +182,6 @@ func main() {
 	}
 	defer func() { _ = onboardedSub.Close() }()
 
-	go func() {
-		if err := onboardedSub.Run(srvCtx); err != nil && srvCtx.Err() == nil {
-			log.Fatalf("player-onboarded subscriber error: %v", err)
-		}
-	}()
-
 	factionPurchasedSub, err := pubsubadapter.NewFactionPurchasedSubscriber(
 		srvCtx, cfg.PubsubProjectID, cfg.FactionPurchasedSubscription, wsPusher,
 	)
@@ -193,42 +190,65 @@ func main() {
 	}
 	defer func() { _ = factionPurchasedSub.Close() }()
 
-	go func() {
-		if err := factionPurchasedSub.Run(srvCtx); err != nil && srvCtx.Err() == nil {
-			log.Fatalf("faction-purchased subscriber error: %v", err)
-		}
-	}()
-
-	premiumEventSub, err := pubsubadapter.NewPremiumUpdatedSubscriber(
+	premiumUpdatedSub, err := pubsubadapter.NewPremiumUpdatedSubscriber(
 		srvCtx, cfg.PubsubProjectID, cfg.PremiumUpdatedSubscription, wsPusher,
 	)
 	if err != nil {
 		log.Fatalf("failed to create premium-updated subscriber: %v", err)
 	}
-	defer func() { _ = premiumEventSub.Close() }()
+	defer func() { _ = premiumUpdatedSub.Close() }()
 
-	go func() {
-		if err := premiumEventSub.Run(srvCtx); err != nil && srvCtx.Err() == nil {
-			log.Fatalf("premium-updated subscriber error: %v", err)
-		}
-	}()
-
-	go func() {
-		log.Printf("gateway server starting on :%s (env=%s)", cfg.Port, cfg.Env)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("listen: %v", err)
-		}
-	}()
-
-	<-srvCtx.Done()
-	log.Println("shutting down gracefully...")
-
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), serverShutdownTimeout)
-	defer cancel()
-
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Fatalf("server forced to shutdown: %v", err)
+	// Why: graceful shutdown 時に全 subscriber と HTTP server が確実に停止するまで
+	// main を block させるため errgroup で束ねる。どれか 1 つが err を返すと
+	// gCtx がキャンセルされ、他の subscriber / server も停止する。
+	// subscriber の Receive は ctx キャンセルで nil を返す仕様なので、通常の
+	// graceful shutdown パスでは g.Wait が err=nil で抜ける。
+	if err := runServices(srvCtx, cfg, srv, matchSub, onboardedSub, factionPurchasedSub, premiumUpdatedSub); err != nil {
+		log.Fatalf("server: %v", err)
 	}
 
 	log.Println("gateway server exited")
+}
+
+// runServices は HTTP server と全 subscriber を errgroup で束ねて起動する。
+// ctx キャンセル (SIGINT/SIGTERM) を検知すると HTTP server の Shutdown を呼び、
+// subscriber も gCtx 経由で停止する。
+func runServices(
+	ctx context.Context,
+	cfg *config.Config,
+	srv *http.Server,
+	subscribers ...subscriberRunner,
+) error {
+	g, gCtx := errgroup.WithContext(ctx)
+
+	for _, sub := range subscribers {
+		sub := sub
+		g.Go(func() error {
+			if err := sub.Run(gCtx); err != nil && gCtx.Err() == nil {
+				return fmt.Errorf("subscriber: %w", err)
+			}
+			return nil
+		})
+	}
+
+	g.Go(func() error {
+		log.Printf("gateway server starting on :%s (env=%s)", cfg.Port, cfg.Env)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			return fmt.Errorf("http server: %w", err)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		<-gCtx.Done()
+		log.Println("shutting down gracefully...")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), serverShutdownTimeout)
+		defer cancel()
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			return fmt.Errorf("http shutdown: %w", err)
+		}
+		return nil
+	})
+
+	return g.Wait()
 }
