@@ -16,7 +16,7 @@ battle は **意図的に passive な REST-only エンジン** として配置�
 
 | gateway の役割 | なぜ gateway か |
 |---|---|
-| match_made / faction-selected / premium-updated の Pub/Sub subscribe | battle / account / shop は Pub/Sub 購読を持たない。WS 接続を保持しているレイヤでのみ push が成立する |
+| match_made / player-onboarded / faction-purchased / premium-updated の Pub/Sub subscribe | battle / account / scenario / shop は Pub/Sub 購読を持たない。WS 接続を保持しているレイヤでのみ push が成立する |
 | ターンタイマー（ウォールクロック）と `reason: turn_timeout` forfeit 送出 | battle は `TimeBank` の減算しか見ず実時間を知らない。WS 側で turn_start を送出した時点を基準に計時できるのは gateway のみ |
 | 切断検知と 60 秒猶予タイマー、`reason: disconnect` forfeit 送出 | battle は「disconnected」概念を持たず forfeit アクションしか受け付けない。WS 断を検知できるのは gateway のみ |
 | NPC ターンの連続駆動（advance-npc のポーリングループ、最大 200 回） | battle は 1 リクエスト = 1 手を契約に固定している（state 更新を 1 手ずつ WS に流せるように）。連続局面を埋める駆動は呼び出し側の責務 |
@@ -56,7 +56,7 @@ Pub/Sub は Exactly-Once Delivery を使うが、**Exactly-Once は subscription
 gateway は水平スケールするが、Pod 間で「プレイヤー X の接続を持つ Pod はどれか」を追跡しない。接続マップはすべて per-Pod インメモリ。Pod を跨いだ WS push の解決はしない:
 
 - match_made: Pub/Sub の **competing consumer** により 1 メッセージは 1 Pod にしか届かない。メッセージを受領した Pod が「自 Pod に該当プレイヤーの接続があるか」だけ見る。なければ ack して drop（`match_found` は届かない）
-- faction-selected / premium-updated: 同様に competing consumer。自 Pod に接続がなければ ack して drop（一過性通知なので未達は許容）
+- player-onboarded / faction-purchased / premium-updated: 同様に competing consumer。自 Pod に接続がなければ ack して drop（一過性通知なので未達は許容）
 
 **「プレイヤーの WS 接続先 Pod は一意」** の前提は単一接続契約（[FEATURE_SPEC §2.2](FEATURE_SPEC.md)）で担保される。多重デバイス等で同一 playerID が別 Pod に繋がると旧接続が close されるので、定常状態では必ず 1 Pod にしか接続がない。
 
@@ -78,8 +78,9 @@ gateway がドメイン状態を持たないと言いつつ 1 つだけ DB テ�
 | Subscription | 副作用 | 冪等性の担保 |
 |---|---|---|
 | `matchmaking-events-gateway` (Exactly-Once) | battle ゲーム作成 + `game_players` 挿入 + WS push | §4 の 3 層冪等性 |
-| `faction-selected-gateway-sub` | WS push のみ（該当接続なしは drop） | 一過性のため DB dedup なし |
-| `premium-updated-gateway-sub` | WS push のみ | 同上 |
+| `player-onboarded-gateway-sub` | WS `onboarding_complete` push のみ（該当接続なしは drop） | 一過性のため DB dedup なし |
+| `faction-purchased-gateway-sub` | WS `faction_purchase_complete` push のみ | 同上 |
+| `premium-updated-gateway-sub` | WS `premium_update_complete` push のみ | 同上 |
 
 subscription 名と publisher 側はこのリポジトリからは導けない。matchmaking / shop 側の publish 設定と併せて変更すること（subscription 再作成は過去メッセージの loss を伴う）。
 
@@ -92,4 +93,4 @@ SIGTERM 受信時、**HTTP / WS 新規受付停止 → 既存 WS への close �
 gateway の env は [internal/config/config.go](../internal/config/config.go) が SSoT。運用上の注意点のみ:
 
 - **`MATCHMAKING_TIMEOUT_SEC`**: マッチ待機タイムアウト。短すぎるとキューが浅い時間帯にユーザーが離脱しやすい。matchmaking サービスのキュー長メトリクスと併せて調整する
-- **Pub/Sub subscription 名** (`MATCHMAKING_SUBSCRIPTION` / `FACTION_SELECTED_SUBSCRIPTION` / `PREMIUM_UPDATED_SUBSCRIPTION`): 環境（dev/stg/prod）ごとに分離する。異環境の subscription を共有するとメッセージが競合してどちらの環境にも届かない事故が起きる
+- **Pub/Sub subscription 名** (`MATCHMAKING_SUBSCRIPTION` / `PLAYER_ONBOARDED_SUBSCRIPTION` / `FACTION_PURCHASED_SUBSCRIPTION` / `PREMIUM_UPDATED_SUBSCRIPTION`): 環境（dev/stg/prod）ごとに分離する。異環境の subscription を共有するとメッセージが競合してどちらの環境にも届かない事故が起きる

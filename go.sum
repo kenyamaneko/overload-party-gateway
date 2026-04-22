@@ -157,12 +157,6 @@ github.com/kenyamaneko/overload-party-card/packages/api-card v0.1.0 h1:+YhduHEeR
 github.com/kenyamaneko/overload-party-card/packages/api-card v0.1.0/go.mod h1:wSw2k41xPSBd7uLhrp65FPQ7BdgFcY4E07Tf0goqp1I=
 github.com/kenyamaneko/overload-party-common/packages/game-design-constants v0.1.0 h1:1+9zGE1CWh+XkiQ0FYnNBIOXHyS9N+OjzVVvWIJRaXo=
 github.com/kenyamaneko/overload-party-common/packages/game-design-constants v0.1.0/go.mod h1:4z5Ry1Y8LZQM4OKqLivo/OhVefKloLZP2vUDQ1Yo0UI=
-github.com/kenyamaneko/overload-party-common/packages/pubsub-events v0.1.0 h1:Du4JlWpUCNH4FTSdOkrldEy4Ht85hICI3IgkrjiC4rU=
-github.com/kenyamaneko/overload-party-common/packages/pubsub-events v0.1.0/go.mod h1:oDm7RoYDIXdaTLNvcN/g1ApMxNQb9DxUuh0czs5lrvM=
-github.com/kenyamaneko/overload-party-scenario/packages/api-scenario v0.1.0 h1:m0jUkrSjf3q6UDf9qViXH5+jLF4TvdRgvsgQfYXykqo=
-github.com/kenyamaneko/overload-party-scenario/packages/api-scenario v0.1.0/go.mod h1:nV0AZBdeJnJfHCtqQ1OvHjO3TMCj+V7KifBD/tx+48Y=
-github.com/kenyamaneko/overload-party-shop/packages/api-shop v0.1.0 h1:aSTT+QZQQNOIR547TdSUDgyRypT4FPoWYsCPj9HIIg8=
-github.com/kenyamaneko/overload-party-shop/packages/api-shop v0.1.0/go.mod h1:Y+Ft3GQRgbris71KdXdInHgSFxK+PZ5nD1lULtHrDYA=
 github.com/klauspost/cpuid/v2 v2.3.0 h1:S4CRMLnYUhGeDFDqkGriYKdfoFlDnMtqTiI/sFzhA9Y=
 github.com/klauspost/cpuid/v2 v2.3.0/go.mod h1:hqwkgyIinND0mEev00jJYCxPNVRVXFQeu1XKlok6oO0=
 github.com/kr/pretty v0.3.1 h1:flRD4NNwYAUpkphVc1HcthR4KEIFJ65n8Mw5qdRn3LE=

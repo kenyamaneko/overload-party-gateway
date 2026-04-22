@@ -32,8 +32,9 @@ type Config struct {
 	// ローカル/CI では FIRESTORE_EMULATOR_HOST を別途設定することでエミュレーターに接続する。
 	FirestoreProjectID string
 
-	FactionSelectedSubscription string
-	PremiumUpdatedSubscription  string
+	PlayerOnboardedSubscription  string
+	FactionPurchasedSubscription string
+	PremiumUpdatedSubscription   string
 
 	// matchmaking_start 後のプレイヤー待機タイムアウト（秒）。
 	// タイムアウト時に gateway がエラーを push し、上流の enqueue をキャンセルする。
@@ -67,8 +68,9 @@ func Load() *Config {
 
 		FirestoreProjectID: getEnv("FIRESTORE_PROJECT_ID", ""),
 
-		FactionSelectedSubscription: getEnv("FACTION_SELECTED_SUBSCRIPTION", "faction-selected-gateway-sub"),
-		PremiumUpdatedSubscription:  getEnv("PREMIUM_UPDATED_SUBSCRIPTION", "premium-updated-gateway-sub"),
+		PlayerOnboardedSubscription:  getEnv("PLAYER_ONBOARDED_SUBSCRIPTION", "player-onboarded-gateway-sub"),
+		FactionPurchasedSubscription: getEnv("FACTION_PURCHASED_SUBSCRIPTION", "faction-purchased-gateway-sub"),
+		PremiumUpdatedSubscription:   getEnv("PREMIUM_UPDATED_SUBSCRIPTION", "premium-updated-gateway-sub"),
 
 		MatchmakingTimeoutSec: getEnvInt("MATCHMAKING_TIMEOUT_SEC", 60),
 

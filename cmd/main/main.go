@@ -166,35 +166,50 @@ func main() {
 		}
 	}()
 
-	// クロスサービスイベント subscriber（faction-selected, premium-updated）。
+	// クロスサービスイベント subscriber（player-onboarded, faction-purchased, premium-updated）。
+	// ADR-022 により business fact 単位で 3 トピックに分解されており、subscriber も 1:1 に対応する。
 	// 接続中プレイヤーに WS 完了メッセージを push する。
 	wsPusher := &pubsubadapter.HubWSPusher{Hub: wsManager.Hub}
 
-	factionEventSub, err := pubsubadapter.NewEventSubscriber(
-		srvCtx, cfg.PubsubProjectID, cfg.FactionSelectedSubscription, "faction-selected", wsPusher,
+	onboardedSub, err := pubsubadapter.NewPlayerOnboardedSubscriber(
+		srvCtx, cfg.PubsubProjectID, cfg.PlayerOnboardedSubscription, wsPusher,
 	)
 	if err != nil {
-		log.Fatalf("failed to create faction-selected event subscriber: %v", err)
+		log.Fatalf("failed to create player-onboarded subscriber: %v", err)
 	}
-	defer func() { _ = factionEventSub.Close() }()
+	defer func() { _ = onboardedSub.Close() }()
 
 	go func() {
-		if err := factionEventSub.Run(srvCtx); err != nil && srvCtx.Err() == nil {
-			log.Fatalf("faction-selected event subscriber error: %v", err)
+		if err := onboardedSub.Run(srvCtx); err != nil && srvCtx.Err() == nil {
+			log.Fatalf("player-onboarded subscriber error: %v", err)
 		}
 	}()
 
-	premiumEventSub, err := pubsubadapter.NewEventSubscriber(
-		srvCtx, cfg.PubsubProjectID, cfg.PremiumUpdatedSubscription, "premium-updated", wsPusher,
+	factionPurchasedSub, err := pubsubadapter.NewFactionPurchasedSubscriber(
+		srvCtx, cfg.PubsubProjectID, cfg.FactionPurchasedSubscription, wsPusher,
 	)
 	if err != nil {
-		log.Fatalf("failed to create premium-updated event subscriber: %v", err)
+		log.Fatalf("failed to create faction-purchased subscriber: %v", err)
+	}
+	defer func() { _ = factionPurchasedSub.Close() }()
+
+	go func() {
+		if err := factionPurchasedSub.Run(srvCtx); err != nil && srvCtx.Err() == nil {
+			log.Fatalf("faction-purchased subscriber error: %v", err)
+		}
+	}()
+
+	premiumEventSub, err := pubsubadapter.NewPremiumUpdatedSubscriber(
+		srvCtx, cfg.PubsubProjectID, cfg.PremiumUpdatedSubscription, wsPusher,
+	)
+	if err != nil {
+		log.Fatalf("failed to create premium-updated subscriber: %v", err)
 	}
 	defer func() { _ = premiumEventSub.Close() }()
 
 	go func() {
 		if err := premiumEventSub.Run(srvCtx); err != nil && srvCtx.Err() == nil {
-			log.Fatalf("premium-updated event subscriber error: %v", err)
+			log.Fatalf("premium-updated subscriber error: %v", err)
 		}
 	}()
 

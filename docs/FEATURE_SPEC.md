@@ -214,12 +214,14 @@ gateway は `/api/v1/**` の REST リクエストを下流サービスへ委譲�
 - Subscription: `matchmaking-events-gateway` (Exactly-Once)
 - 副作用: battle ゲーム作成 + DB 行挿入 + WS push
 
-### 9.2 faction-selected / premium-updated
+### 9.2 player-onboarded / faction-purchased / premium-updated
 
-- Subscription: `faction-selected-gateway-sub` / `premium-updated-gateway-sub`
+- Subscription: `player-onboarded-gateway-sub` / `faction-purchased-gateway-sub` / `premium-updated-gateway-sub`
+- WS push メッセージ: `onboarding_complete` / `faction_purchase_complete` / `premium_update_complete`
 - 副作用: **WS push のみ**（一過性、永続状態なし）
 - 該当プレイヤーが自 Pod に接続していなければ ack して drop（他 Pod が拾う／プレイヤーがオフラインなら単に通知されない）
 - DB dedup 不要: 副作用が一過性のため
+- ADR-022 により旧 `faction-selected` topic は廃止され、業務事実単位で player-onboarded (scenario) と faction-purchased (shop) の 2 トピックに分解された
 
 ---
 
