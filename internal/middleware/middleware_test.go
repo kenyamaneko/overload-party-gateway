@@ -2,16 +2,17 @@ package middleware
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"sync"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	apiaccount "github.com/kenyamaneko/overload-party-account/packages/api-account"
+	"github.com/kenyamaneko/overload-party-account/packages/api-account/apiaccountserverfake"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 )
@@ -20,68 +21,56 @@ func init() {
 	gin.SetMode(gin.TestMode)
 }
 
-// fakeAccountServer は FindByFirebaseUID / Register に実際の account サービスと
-// 同じレスポンスを返す httptest.Server を起動する。
-// PlayerResolve / DevAuthWithPlayerResolve は accountclient 経由で通信するため、
-// テストにはモック型ではなくライブエンドポイントが必要。
-type fakeAccountServer struct {
-	mu      sync.Mutex
-	players map[string]*accountclient.Player // firebaseUID → player
-	server  *httptest.Server
+// newStatefulAccountFake は apiaccountserverfake を stateful な players map と
+// 組み合わせて構成する helper。middleware テストは「FindByFirebaseUID → 404 なら
+// Register → 以降の FindByFirebaseUID は見つかる」という遷移に依存するため、
+// 固定 response ではなく map 経由の状態管理を Fn 側で閉じ込める。
+//
+// 返り値の seed は事前登録用。各テストの Arrange で呼ぶ。
+type statefulAccountFake struct {
+	server *apiaccountserverfake.Server
+	mu     sync.Mutex
+	// firebaseUID → Player
+	players map[string]apiaccount.Player
 }
 
-func newFakeAccountServer() *fakeAccountServer {
-	fa := &fakeAccountServer{players: map[string]*accountclient.Player{}}
-	mux := http.NewServeMux()
-
-	mux.HandleFunc("/internal/v1/players/by-firebase-uid/", func(w http.ResponseWriter, r *http.Request) {
-		uid := strings.TrimPrefix(r.URL.Path, "/internal/v1/players/by-firebase-uid/")
-		fa.mu.Lock()
-		defer fa.mu.Unlock()
-		p, ok := fa.players[uid]
-		if !ok {
-			w.WriteHeader(http.StatusNotFound)
-			return
+func newStatefulAccountFake() *statefulAccountFake {
+	s := &statefulAccountFake{
+		server:  apiaccountserverfake.NewServer(),
+		players: map[string]apiaccount.Player{},
+	}
+	s.server.FindByFirebaseUIDFn = func(firebaseUID string) (int, any) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if p, ok := s.players[firebaseUID]; ok {
+			return http.StatusOK, p
 		}
-		_ = json.NewEncoder(w).Encode(p)
-	})
-
-	mux.HandleFunc("/internal/v1/auth/register", func(w http.ResponseWriter, r *http.Request) {
-		var body struct {
-			FirebaseUID string `json:"firebase_uid"`
-			Username    string `json:"username"`
+		return http.StatusNotFound, nil
+	}
+	s.server.RegisterFn = func(req apiaccount.RegisterRequest) (int, any) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if _, exists := s.players[req.FirebaseUID]; exists {
+			return http.StatusConflict, nil
 		}
-		_ = json.NewDecoder(r.Body).Decode(&body)
-		fa.mu.Lock()
-		defer fa.mu.Unlock()
-		if _, ok := fa.players[body.FirebaseUID]; ok {
-			w.WriteHeader(http.StatusConflict)
-			return
+		p := apiaccount.Player{
+			PlayerID:    "generated-" + req.FirebaseUID,
+			FirebaseUID: req.FirebaseUID,
+			Username:    req.Username,
 		}
-		p := &accountclient.Player{
-			PlayerID:    "generated-" + body.FirebaseUID,
-			FirebaseUID: body.FirebaseUID,
-			Username:    body.Username,
-		}
-		fa.players[body.FirebaseUID] = p
-		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(p)
-	})
-
-	fa.server = httptest.NewServer(mux)
-	return fa
+		s.players[req.FirebaseUID] = p
+		return http.StatusCreated, p
+	}
+	return s
 }
 
-func (f *fakeAccountServer) close() { f.server.Close() }
+func (s *statefulAccountFake) close()                        { s.server.Close() }
+func (s *statefulAccountFake) client() *accountclient.Client { return accountclient.New(s.server.URL()) }
 
-func (f *fakeAccountServer) client() *accountclient.Client {
-	return accountclient.New(f.server.URL)
-}
-
-func (f *fakeAccountServer) seed(firebaseUID, playerID string) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.players[firebaseUID] = &accountclient.Player{
+func (s *statefulAccountFake) seed(firebaseUID, playerID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.players[firebaseUID] = apiaccount.Player{
 		PlayerID:    playerID,
 		FirebaseUID: firebaseUID,
 	}
@@ -125,7 +114,7 @@ func TestDevAuth(t *testing.T) {
 }
 
 func TestDevAuthWithPlayerResolve_AutoCreate(t *testing.T) {
-	fa := newFakeAccountServer()
+	fa := newStatefulAccountFake()
 	defer fa.close()
 
 	setupCalled := false
@@ -152,7 +141,7 @@ func TestDevAuthWithPlayerResolve_AutoCreate(t *testing.T) {
 }
 
 func TestDevAuthWithPlayerResolve_ExistingPlayer(t *testing.T) {
-	fa := newFakeAccountServer()
+	fa := newStatefulAccountFake()
 	defer fa.close()
 	fa.seed("existinguser", "existing-id")
 
@@ -173,7 +162,7 @@ func TestDevAuthWithPlayerResolve_ExistingPlayer(t *testing.T) {
 }
 
 func TestPlayerResolve_Success(t *testing.T) {
-	fa := newFakeAccountServer()
+	fa := newStatefulAccountFake()
 	defer fa.close()
 	fa.seed("uid1", "p1")
 
@@ -197,7 +186,7 @@ func TestPlayerResolve_Success(t *testing.T) {
 }
 
 func TestPlayerResolve_MissingUID(t *testing.T) {
-	fa := newFakeAccountServer()
+	fa := newStatefulAccountFake()
 	defer fa.close()
 
 	r := gin.New()
@@ -214,7 +203,7 @@ func TestPlayerResolve_MissingUID(t *testing.T) {
 }
 
 func TestPlayerResolve_PlayerNotRegistered(t *testing.T) {
-	fa := newFakeAccountServer()
+	fa := newStatefulAccountFake()
 	defer fa.close()
 
 	r := gin.New()

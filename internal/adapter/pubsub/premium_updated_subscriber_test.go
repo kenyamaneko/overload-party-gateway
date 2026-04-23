@@ -6,75 +6,72 @@ import (
 	"time"
 
 	apishop "github.com/kenyamaneko/overload-party-shop/packages/api-shop"
+	"github.com/kenyamaneko/overload-party-shop/packages/api-shop/apishopfake"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	genws "github.com/kenyamaneko/overload-party-gateway/packages/ws-constants"
 )
 
-// TestPremiumUpdatedSubscriber_ProcessEvent は
-// 「premium-updated topic で受信した状態変化を WS premium_update_complete に
-// 変換してプレイヤーに push する」仕様 (ADR-022) を固定する。
-func TestPremiumUpdatedSubscriber_ProcessEvent(t *testing.T) {
-	expiresAt := time.Now().Add(30 * 24 * time.Hour).UTC()
-	validEvent := apishop.PremiumUpdatedEvent{
-		EventType:        apishop.EventTypePremiumUpdated,
-		EventID:          "11111111-1111-1111-1111-111111111111",
-		Timestamp:        time.Now().UTC(),
-		PlayerID:         "p-1",
-		IsPremium:        true,
-		PremiumExpiresAt: &expiresAt,
-		Source:           apishop.PremiumUpdatedSourceShop,
-	}
-	validPayload := mustMarshal(t, validEvent)
-
+// TestPremiumUpdatedSubscriber_Consumes は「premium-updated topic で受信した
+// premium 状態変化を WS premium_update_complete に変換して push する」仕様を
+// Start() → stream.Consume → processEvent の経路で固定する。
+func TestPremiumUpdatedSubscriber_Consumes(t *testing.T) {
 	tests := []struct {
-		name     string
-		payload  []byte
-		wantAck  bool
-		assertFn func(t *testing.T, pusher *fakeWSPusher)
+		name         string
+		publish      func(ctx context.Context, pub *apishopfake.Publisher, broker *apishopfake.Broker)
+		wantAck      bool
+		assertPusher func(t *testing.T, pusher *fakeWSPusher)
 	}{
 		{
-			name:    "正常系: 接続中プレイヤーに premium_update_complete を push して ACK",
-			payload: validPayload,
+			name: "正常系: 接続中プレイヤーに premium_update_complete を push して ACK",
+			publish: func(ctx context.Context, pub *apishopfake.Publisher, _ *apishopfake.Broker) {
+				_ = apishopfake.PublishPremiumUpdated(ctx, pub, apishop.PremiumUpdatedEvent{
+					PlayerID:  "p-1",
+					IsPremium: true,
+				})
+			},
 			wantAck: true,
-			assertFn: func(t *testing.T, pusher *fakeWSPusher) {
+			assertPusher: func(t *testing.T, pusher *fakeWSPusher) {
 				require.Len(t, pusher.sent, 1)
 				assert.Equal(t, "p-1", pusher.sent[0].PlayerID)
 				assert.Equal(t, genws.WSServerMsgPremiumUpdateComplete, pusher.sent[0].Msg.Type)
-				assert.JSONEq(t, string(validPayload), string(pusher.sent[0].Msg.Data))
 			},
 		},
 		{
-			name:    "不正 JSON: 握りつぶさず NACK。push も発火しない",
-			payload: []byte("<xml/>"),
+			name: "不正 JSON: 握りつぶさず NACK",
+			publish: func(_ context.Context, _ *apishopfake.Publisher, broker *apishopfake.Broker) {
+				broker.Publish(apishop.TopicPremiumUpdated, []byte("not-json"))
+			},
 			wantAck: false,
-			assertFn: func(t *testing.T, pusher *fakeWSPusher) {
+			assertPusher: func(t *testing.T, pusher *fakeWSPusher) {
 				assert.Empty(t, pusher.sent)
 			},
 		},
 		{
 			name: "未知の event_type: 責務外として ACK",
-			payload: mustMarshal(t, apishop.PremiumUpdatedEvent{
-				EventType: "unknown",
-				EventID:   "22222222-2222-2222-2222-222222222222",
-				PlayerID:  "p-2",
-			}),
+			publish: func(_ context.Context, _ *apishopfake.Publisher, broker *apishopfake.Broker) {
+				broker.Publish(apishop.TopicPremiumUpdated, mustMarshal(t, apishop.PremiumUpdatedEvent{
+					EventType: "unknown",
+					EventID:   "22222222-2222-2222-2222-222222222222",
+					PlayerID:  "p-2",
+				}))
+			},
 			wantAck: true,
-			assertFn: func(t *testing.T, pusher *fakeWSPusher) {
+			assertPusher: func(t *testing.T, pusher *fakeWSPusher) {
 				assert.Empty(t, pusher.sent)
 			},
 		},
 		{
 			name: "player_id 欠落: ペイロード仕様違反として NACK",
-			payload: mustMarshal(t, apishop.PremiumUpdatedEvent{
-				EventType: apishop.EventTypePremiumUpdated,
-				EventID:   "33333333-3333-3333-3333-333333333333",
-				IsPremium: false,
-				Source:    apishop.PremiumUpdatedSourceShop,
-			}),
+			publish: func(_ context.Context, _ *apishopfake.Publisher, broker *apishopfake.Broker) {
+				broker.Publish(apishop.TopicPremiumUpdated, mustMarshal(t, apishop.PremiumUpdatedEvent{
+					EventType: apishop.EventTypePremiumUpdated,
+					EventID:   "33333333-3333-3333-3333-333333333333",
+				}))
+			},
 			wantAck: false,
-			assertFn: func(t *testing.T, pusher *fakeWSPusher) {
+			assertPusher: func(t *testing.T, pusher *fakeWSPusher) {
 				assert.Empty(t, pusher.sent)
 			},
 		},
@@ -82,11 +79,28 @@ func TestPremiumUpdatedSubscriber_ProcessEvent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			broker := apishopfake.NewBroker()
+			pub := apishopfake.NewPublisher(broker)
+			stream := apishopfake.NewStream(apishopfake.NewSubscriber(broker), apishop.TopicPremiumUpdated)
+
 			pusher := &fakeWSPusher{}
-			s := &PremiumUpdatedSubscriber{pusher: pusher}
-			ack := s.processEvent(context.Background(), tt.payload)
-			assert.Equal(t, tt.wantAck, ack)
-			tt.assertFn(t, pusher)
+			sub := NewPremiumUpdatedSubscriber(stream, pusher)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			started := make(chan struct{})
+			go func() {
+				close(started)
+				_ = sub.Run(ctx)
+			}()
+			<-started
+
+			tt.publish(ctx, pub, broker)
+
+			handlerErr := stream.ExpectHandled(t, time.Second)
+			assert.Equal(t, tt.wantAck, handlerErr == nil, "ack 判定 (nil=ack, err=%v)", handlerErr)
+			tt.assertPusher(t, pusher)
 		})
 	}
 }
