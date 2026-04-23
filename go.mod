@@ -17,7 +17,7 @@ require (
 	github.com/kenyamaneko/overload-party-gateway/packages/api-gateway v0.0.0-00010101000000-000000000000
 	github.com/kenyamaneko/overload-party-gateway/packages/ws-constants v0.0.0-00010101000000-000000000000
 	github.com/kenyamaneko/overload-party-scenario/packages/api-scenario v0.1.6
-	github.com/kenyamaneko/overload-party-shop/packages/api-shop v0.1.8
+	github.com/kenyamaneko/overload-party-shop/packages/api-shop v0.1.9
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/sync v0.19.0
 	google.golang.org/grpc v1.79.1

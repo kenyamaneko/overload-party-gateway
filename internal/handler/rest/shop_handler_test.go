@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -13,77 +12,18 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	apishop "github.com/kenyamaneko/overload-party-shop/packages/api-shop"
+	"github.com/kenyamaneko/overload-party-shop/packages/api-shop/apishopserverfake"
+
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/shopclient"
 	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
 )
 
-type fakeShopServer struct {
-	mu     sync.Mutex
-	server *httptest.Server
-
-	selectFactionStatus int
-	selectFactionBody   any
-
-	getProductsStatus int
-	getProductsBody   any
-
-	purchaseStatus int
-	purchaseBody   any
-
-	subscribeStatus int
-	subscribeBody   any
-}
-
-func newFakeShopServer() *fakeShopServer {
-	fs := &fakeShopServer{
-		selectFactionStatus: http.StatusOK,
-		selectFactionBody:   shopclient.SelectFactionResponse{Message: "ok", Faction: "f1", CardsGranted: 5},
-		getProductsStatus:   http.StatusOK,
-		purchaseStatus:      http.StatusOK,
-		subscribeStatus:     http.StatusOK,
-	}
-	mux := http.NewServeMux()
-	mux.HandleFunc("/internal/v1/players/", func(w http.ResponseWriter, r *http.Request) {
-		fs.mu.Lock()
-		defer fs.mu.Unlock()
-		path := r.URL.Path
-		switch {
-		case strings.HasSuffix(path, "/select-faction"):
-			w.WriteHeader(fs.selectFactionStatus)
-			if fs.selectFactionBody != nil {
-				_ = json.NewEncoder(w).Encode(fs.selectFactionBody)
-			}
-		case strings.HasSuffix(path, "/products"):
-			w.WriteHeader(fs.getProductsStatus)
-			if fs.getProductsBody != nil {
-				_ = json.NewEncoder(w).Encode(fs.getProductsBody)
-			}
-		case strings.HasSuffix(path, "/purchase"):
-			w.WriteHeader(fs.purchaseStatus)
-			if fs.purchaseBody != nil {
-				_ = json.NewEncoder(w).Encode(fs.purchaseBody)
-			}
-		case strings.HasSuffix(path, "/subscribe"):
-			w.WriteHeader(fs.subscribeStatus)
-			if fs.subscribeBody != nil {
-				_ = json.NewEncoder(w).Encode(fs.subscribeBody)
-			}
-		default:
-			w.WriteHeader(http.StatusNotImplemented)
-		}
-	})
-	fs.server = httptest.NewServer(mux)
-	return fs
-}
-
-func (f *fakeShopServer) close()                     { f.server.Close() }
-func (f *fakeShopServer) client() *shopclient.Client { return shopclient.New(f.server.URL) }
-
 func TestShopHandler_SelectFaction(t *testing.T) {
 	t.Run("invalid JSON returns 400", func(t *testing.T) {
-		fs := newFakeShopServer()
-		defer fs.close()
-		h := NewShopHandler(fs.client())
+		fs := apishopserverfake.NewServer()
+		defer fs.Close()
+		h := NewShopHandler(shopclient.New(fs.URL()))
 		r := gin.New()
 		r.Use(withPlayerID("p1"))
 		r.POST("/select-faction", h.SelectFaction)
@@ -96,9 +36,9 @@ func TestShopHandler_SelectFaction(t *testing.T) {
 	})
 
 	t.Run("empty faction returns 400", func(t *testing.T) {
-		fs := newFakeShopServer()
-		defer fs.close()
-		h := NewShopHandler(fs.client())
+		fs := apishopserverfake.NewServer()
+		defer fs.Close()
+		h := NewShopHandler(shopclient.New(fs.URL()))
 		r := gin.New()
 		r.Use(withPlayerID("p1"))
 		r.POST("/select-faction", h.SelectFaction)
@@ -111,11 +51,12 @@ func TestShopHandler_SelectFaction(t *testing.T) {
 	})
 
 	t.Run("downstream conflict (faction already selected) returns 409", func(t *testing.T) {
-		fs := newFakeShopServer()
-		defer fs.close()
-		fs.selectFactionStatus = http.StatusConflict
-		fs.selectFactionBody = map[string]string{"error": "faction already selected"}
-		h := NewShopHandler(fs.client())
+		fs := apishopserverfake.NewServer()
+		defer fs.Close()
+		fs.SelectFactionFn = func(_ string, _ apishopserverfake.SelectFactionRequest) (int, any) {
+			return http.StatusConflict, map[string]string{"error": "faction already selected"}
+		}
+		h := NewShopHandler(shopclient.New(fs.URL()))
 		r := gin.New()
 		r.Use(withPlayerID("p1"))
 		r.POST("/select-faction", h.SelectFaction)
@@ -128,11 +69,12 @@ func TestShopHandler_SelectFaction(t *testing.T) {
 	})
 
 	t.Run("downstream invalid faction returns 400", func(t *testing.T) {
-		fs := newFakeShopServer()
-		defer fs.close()
-		fs.selectFactionStatus = http.StatusBadRequest
-		fs.selectFactionBody = map[string]string{"error": "invalid faction"}
-		h := NewShopHandler(fs.client())
+		fs := apishopserverfake.NewServer()
+		defer fs.Close()
+		fs.SelectFactionFn = func(_ string, _ apishopserverfake.SelectFactionRequest) (int, any) {
+			return http.StatusBadRequest, map[string]string{"error": "invalid faction"}
+		}
+		h := NewShopHandler(shopclient.New(fs.URL()))
 		r := gin.New()
 		r.Use(withPlayerID("p1"))
 		r.POST("/select-faction", h.SelectFaction)
@@ -145,9 +87,14 @@ func TestShopHandler_SelectFaction(t *testing.T) {
 	})
 
 	t.Run("success returns 200 with shop response", func(t *testing.T) {
-		fs := newFakeShopServer()
-		defer fs.close()
-		h := NewShopHandler(fs.client())
+		fs := apishopserverfake.NewServer()
+		defer fs.Close()
+		fs.SelectFactionFn = func(_ string, req apishopserverfake.SelectFactionRequest) (int, any) {
+			return http.StatusOK, apishopserverfake.SelectFactionResponse{
+				Message: "ok", Faction: req.Faction, CardsGranted: 5,
+			}
+		}
+		h := NewShopHandler(shopclient.New(fs.URL()))
 		r := gin.New()
 		r.Use(withPlayerID("p1"))
 		r.POST("/select-faction", h.SelectFaction)
@@ -173,9 +120,9 @@ func TestShopHandler_Purchase_Validation(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fs := newFakeShopServer()
-			defer fs.close()
-			h := NewShopHandler(fs.client())
+			fs := apishopserverfake.NewServer()
+			defer fs.Close()
+			h := NewShopHandler(shopclient.New(fs.URL()))
 			r := gin.New()
 			r.Use(withPlayerID("p1"))
 			r.POST("/purchase", h.Purchase)
@@ -192,9 +139,9 @@ func TestShopHandler_Purchase_Validation(t *testing.T) {
 }
 
 func TestShopHandler_Purchase_Success(t *testing.T) {
-	fs := newFakeShopServer()
-	defer fs.close()
-	h := NewShopHandler(fs.client())
+	fs := apishopserverfake.NewServer()
+	defer fs.Close()
+	h := NewShopHandler(shopclient.New(fs.URL()))
 	r := gin.New()
 	r.Use(withPlayerID("p1"))
 	r.POST("/purchase", h.Purchase)
@@ -210,11 +157,12 @@ func TestShopHandler_Purchase_Success(t *testing.T) {
 }
 
 func TestShopHandler_Purchase_ReceiptInvalid(t *testing.T) {
-	fs := newFakeShopServer()
-	defer fs.close()
-	fs.purchaseStatus = http.StatusPaymentRequired
-	fs.purchaseBody = map[string]string{"error": "invalid receipt"}
-	h := NewShopHandler(fs.client())
+	fs := apishopserverfake.NewServer()
+	defer fs.Close()
+	fs.PurchaseFn = func(_ string, _ apishop.PurchaseRequest) (int, any) {
+		return http.StatusPaymentRequired, map[string]string{"error": "invalid receipt"}
+	}
+	h := NewShopHandler(shopclient.New(fs.URL()))
 	r := gin.New()
 	r.Use(withPlayerID("p1"))
 	r.POST("/purchase", h.Purchase)
@@ -229,11 +177,13 @@ func TestShopHandler_Purchase_ReceiptInvalid(t *testing.T) {
 }
 
 func TestShopHandler_Subscribe_Success(t *testing.T) {
-	fs := newFakeShopServer()
-	defer fs.close()
+	fs := apishopserverfake.NewServer()
+	defer fs.Close()
 	exp := time.Now().Add(24 * time.Hour).UTC()
-	fs.subscribeBody = map[string]any{"message": "ok", "expires_at": exp}
-	h := NewShopHandler(fs.client())
+	fs.SubscribeFn = func(_ string, _ apishop.PurchaseRequest) (int, any) {
+		return http.StatusOK, apishopserverfake.SubscribeResponse{Message: "ok", ExpiresAt: &exp}
+	}
+	h := NewShopHandler(shopclient.New(fs.URL()))
 	r := gin.New()
 	r.Use(withPlayerID("p1"))
 	r.POST("/subscribe", h.Subscribe)
@@ -249,9 +199,9 @@ func TestShopHandler_Subscribe_Success(t *testing.T) {
 }
 
 func TestShopHandler_Subscribe_Validation(t *testing.T) {
-	fs := newFakeShopServer()
-	defer fs.close()
-	h := NewShopHandler(fs.client())
+	fs := apishopserverfake.NewServer()
+	defer fs.Close()
+	h := NewShopHandler(shopclient.New(fs.URL()))
 	r := gin.New()
 	r.Use(withPlayerID("p1"))
 	r.POST("/subscribe", h.Subscribe)
@@ -265,10 +215,14 @@ func TestShopHandler_Subscribe_Validation(t *testing.T) {
 }
 
 func TestShopHandler_GetProducts(t *testing.T) {
-	fs := newFakeShopServer()
-	defer fs.close()
-	fs.getProductsBody = map[string]any{"products": []map[string]any{{"product_id": "x"}}}
-	h := NewShopHandler(fs.client())
+	fs := apishopserverfake.NewServer()
+	defer fs.Close()
+	fs.GetProductsFn = func(_ string) (int, any) {
+		return http.StatusOK, apishopserverfake.ProductsResponse{
+			Products: []apishop.ProductResponse{{ProductID: "x"}},
+		}
+	}
+	h := NewShopHandler(shopclient.New(fs.URL()))
 	r := gin.New()
 	r.Use(withPlayerID("p1"))
 	r.GET("/products", h.GetProducts)
