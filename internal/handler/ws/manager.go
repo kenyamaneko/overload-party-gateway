@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	apimatchmaking "github.com/kenyamaneko/overload-party-matchmaking/packages/api-matchmaking"
+
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/cardclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/matchmakingclient"
@@ -283,7 +285,7 @@ func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, da
 //
 // 全 Gateway Pod が competing-consumer で受信する。2 人のうちいずれかの
 // WS 接続を保持する Pod のみが通知を push し、他の Pod は ack して終了する。
-func (m *Manager) HandleMatchMade(ctx context.Context, event port.MatchMadeEvent) error {
+func (m *Manager) HandleMatchMade(ctx context.Context, event apimatchmaking.MatchMadeEvent) error {
 	if len(event.Players) != 2 {
 		return errors.New("match_made event must contain exactly 2 players")
 	}

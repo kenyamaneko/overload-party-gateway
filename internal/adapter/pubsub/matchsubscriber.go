@@ -9,11 +9,13 @@ import (
 	"strings"
 	"sync"
 
+	apimatchmaking "github.com/kenyamaneko/overload-party-matchmaking/packages/api-matchmaking"
+
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 // playerIDList はログメッセージ用にプレイヤー ID をフォーマットする。
-func playerIDList(players []port.MatchedPlayer) string {
+func playerIDList(players []apimatchmaking.MatchedPlayer) string {
 	ids := make([]string, 0, len(players))
 	for _, p := range players {
 		ids = append(ids, p.PlayerID)
@@ -51,12 +53,12 @@ func (s *MatchSubscriber) Run(ctx context.Context) error {
 
 // processEvent は 1 メッセージを処理する。戻り値 nil = ack、非 nil = nack。
 func (s *MatchSubscriber) processEvent(ctx context.Context, data []byte) error {
-	var event port.MatchMadeEvent
+	var event apimatchmaking.MatchMadeEvent
 	if err := json.Unmarshal(data, &event); err != nil {
 		slog.Error("matchsubscriber: bad payload (nack)", "error", err, "payload_len", len(data))
 		return fmt.Errorf("matchsubscriber: bad payload: %w", err)
 	}
-	if event.Type != "match_made" {
+	if event.Type != apimatchmaking.EventTypeMatchMade {
 		slog.Warn("matchsubscriber: unknown event type, acking", "event_type", event.Type)
 		return nil
 	}
