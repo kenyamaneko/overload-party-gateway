@@ -43,7 +43,30 @@ jobs:
         env:
           GOPRIVATE: github.com/kenyamaneko/*
 
-  test:
+  test-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Configure Go private modules
+        run: |
+          git config --global url."https://x-access-token:${{ secrets.COMMON_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-common".insteadOf "https://github.com/kenyamaneko/overload-party-common"
+          git config --global url."https://x-access-token:${{ secrets.BATTLE_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-battle".insteadOf "https://github.com/kenyamaneko/overload-party-battle"
+          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-card".insteadOf "https://github.com/kenyamaneko/overload-party-card"
+          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-account".insteadOf "https://github.com/kenyamaneko/overload-party-account"
+          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-shop".insteadOf "https://github.com/kenyamaneko/overload-party-shop"
+          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-scenario".insteadOf "https://github.com/kenyamaneko/overload-party-scenario"
+        env:
+          GOPRIVATE: github.com/kenyamaneko/*
+          GONOSUMDB: github.com/kenyamaneko/*
+      - name: Run unit tests
+        run: go test -race ./internal/... -count=1
+        env:
+          GOPRIVATE: github.com/kenyamaneko/*
+
+  test-integration:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -78,15 +101,15 @@ jobs:
         env:
           GOPRIVATE: github.com/kenyamaneko/*
           GONOSUMDB: github.com/kenyamaneko/*
-      - name: Run unit tests
-        run: go test -race ./internal/... -count=1
+      - name: Run integration tests
+        run: go test -race -tags=integration ./internal/... -count=1
         env:
           GOPRIVATE: github.com/kenyamaneko/*
           FIRESTORE_EMULATOR_HOST: localhost:9041
           FIRESTORE_PROJECT_ID: overload-party-test
 
   build-and-push:
-    needs: [lint, test]
+    needs: [lint, test-unit, test-integration]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
