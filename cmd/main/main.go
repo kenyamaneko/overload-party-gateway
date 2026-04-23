@@ -32,10 +32,10 @@ import (
 const serverShutdownTimeout = 10 * time.Second
 
 // subscriberRunner は errgroup で束ねる subscriber の最小契約。
-// Run は ctx キャンセルで return し、Close でリソースを解放する。
+// stream ライフサイクルは caller 側で defer Close しているため、subscriber は
+// Run のみを持つ。
 type subscriberRunner interface {
 	Run(ctx context.Context) error
-	Close() error
 }
 
 func main() {
@@ -162,41 +162,45 @@ func main() {
 	srvCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// マッチメイキング Pub/Sub subscriber
-	matchSub, err := pubsubadapter.NewMatchSubscriber(srvCtx, cfg.PubsubProjectID, cfg.MatchmakingSubscription, wsManager)
+	// 4 subscription 用の GCPMessageStream を生成。subscriber は port.MessageStream
+	// 経由でメッセージを受け取り、GCP SDK 型依存は adapter に閉じる。
+	matchStream, err := pubsubadapter.NewGCPMessageStream(srvCtx, cfg.PubsubProjectID, cfg.MatchmakingSubscription)
+	if err != nil {
+		log.Fatalf("failed to create matchmaking stream: %v", err)
+	}
+	defer func() { _ = matchStream.Close() }()
+
+	onboardedStream, err := pubsubadapter.NewGCPMessageStream(srvCtx, cfg.PubsubProjectID, cfg.PlayerOnboardedSubscription)
+	if err != nil {
+		log.Fatalf("failed to create player-onboarded stream: %v", err)
+	}
+	defer func() { _ = onboardedStream.Close() }()
+
+	factionPurchasedStream, err := pubsubadapter.NewGCPMessageStream(srvCtx, cfg.PubsubProjectID, cfg.FactionPurchasedSubscription)
+	if err != nil {
+		log.Fatalf("failed to create faction-purchased stream: %v", err)
+	}
+	defer func() { _ = factionPurchasedStream.Close() }()
+
+	premiumUpdatedStream, err := pubsubadapter.NewGCPMessageStream(srvCtx, cfg.PubsubProjectID, cfg.PremiumUpdatedSubscription)
+	if err != nil {
+		log.Fatalf("failed to create premium-updated stream: %v", err)
+	}
+	defer func() { _ = premiumUpdatedStream.Close() }()
+
+	matchSub, err := pubsubadapter.NewMatchSubscriber(matchStream, wsManager)
 	if err != nil {
 		log.Fatalf("failed to create match subscriber: %v", err)
 	}
-	defer func() { _ = matchSub.Close() }()
 
-	// クロスサービスイベント subscriber（player-onboarded, faction-purchased, premium-updated）。
-	// ADR-022 により business fact 単位で 3 トピックに分解されており、subscriber も 1:1 に対応する。
+	// クロスサービスイベント subscriber (player-onboarded, faction-purchased, premium-updated)。
+	// business fact 単位で 3 トピックに分解されており、subscriber も 1:1 に対応する。
 	// 接続中プレイヤーに WS 完了メッセージを push する。
 	wsPusher := &pubsubadapter.HubWSPusher{Hub: wsManager.Hub}
 
-	onboardedSub, err := pubsubadapter.NewPlayerOnboardedSubscriber(
-		srvCtx, cfg.PubsubProjectID, cfg.PlayerOnboardedSubscription, wsPusher,
-	)
-	if err != nil {
-		log.Fatalf("failed to create player-onboarded subscriber: %v", err)
-	}
-	defer func() { _ = onboardedSub.Close() }()
-
-	factionPurchasedSub, err := pubsubadapter.NewFactionPurchasedSubscriber(
-		srvCtx, cfg.PubsubProjectID, cfg.FactionPurchasedSubscription, wsPusher,
-	)
-	if err != nil {
-		log.Fatalf("failed to create faction-purchased subscriber: %v", err)
-	}
-	defer func() { _ = factionPurchasedSub.Close() }()
-
-	premiumUpdatedSub, err := pubsubadapter.NewPremiumUpdatedSubscriber(
-		srvCtx, cfg.PubsubProjectID, cfg.PremiumUpdatedSubscription, wsPusher,
-	)
-	if err != nil {
-		log.Fatalf("failed to create premium-updated subscriber: %v", err)
-	}
-	defer func() { _ = premiumUpdatedSub.Close() }()
+	onboardedSub := pubsubadapter.NewPlayerOnboardedSubscriber(onboardedStream, wsPusher)
+	factionPurchasedSub := pubsubadapter.NewFactionPurchasedSubscriber(factionPurchasedStream, wsPusher)
+	premiumUpdatedSub := pubsubadapter.NewPremiumUpdatedSubscriber(premiumUpdatedStream, wsPusher)
 
 	// Why: graceful shutdown 時に全 subscriber と HTTP server が確実に停止するまで
 	// main を block させるため errgroup で束ねる。どれか 1 つが err を返すと

@@ -1,15 +1,3 @@
-// Package pubsub は gateway 用の Pub/Sub イベント subscriber を実装します。
-//
-// MatchSubscriber は Cloud Pub/Sub から `match_made` イベントを pull し、
-// バトル作成 + WS プッシュバックに変換する。
-//
-// 全 Gateway Pod が同一 subscription `matchmaking-events-gateway` から pull するため、
-// 1 メッセージは 1 Pod にのみ配信される（competing consumers）。
-// 2 人のプレイヤーの WebSocket 接続を保持する Pod のみが push し、
-// 他の Pod はメッセージを受信してセッション解決に失敗し ack する。
-//
-// matchId 重複排除はインメモリ（Pod 単位）。Pod 再起動でリセットされるが、
-// Cloud Pub/Sub の Exactly-Once Delivery により ack 済みメッセージの再配信は発生しない。
 package pubsub
 
 import (
@@ -17,11 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"sync"
-
-	"cloud.google.com/go/pubsub/v2"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
@@ -35,77 +21,59 @@ func playerIDList(players []port.MatchedPlayer) string {
 	return "[" + strings.Join(ids, ",") + "]"
 }
 
-// MatchSubscriber は Cloud Pub/Sub から match_made イベントを受信し
-// port.MatchEventHandler 経由でディスパッチします
+// MatchSubscriber は match_made イベントを受信し port.MatchEventHandler 経由で
+// ディスパッチします。Pod-local な matchId 重複排除 map を保持し、Exactly-Once
+// Delivery で ack 済みメッセージが再配信されないことを前提に Pod 単位のみで dedup する。
 type MatchSubscriber struct {
-	client         *pubsub.Client
-	subscriber     *pubsub.Subscriber
+	stream         port.MessageStream
 	handler        port.MatchEventHandler
 	processedMu    sync.Mutex
 	processedMatch map[string]struct{}
 }
 
-// NewMatchSubscriber は指定 subscription から pull する subscriber を生成します。
-func NewMatchSubscriber(ctx context.Context, projectID, subscriptionID string, handler port.MatchEventHandler) (*MatchSubscriber, error) {
-	if projectID == "" {
-		return nil, errors.New("matchsubscriber: projectID is empty")
-	}
-	if subscriptionID == "" {
-		return nil, errors.New("matchsubscriber: subscriptionID is empty")
-	}
+// NewMatchSubscriber は MessageStream から pull する subscriber を生成します。
+func NewMatchSubscriber(stream port.MessageStream, handler port.MatchEventHandler) (*MatchSubscriber, error) {
 	if handler == nil {
 		return nil, errors.New("matchsubscriber: handler is nil")
 	}
-	client, err := pubsub.NewClient(ctx, projectID)
-	if err != nil {
-		return nil, fmt.Errorf("matchsubscriber: new client: %w", err)
-	}
 	return &MatchSubscriber{
-		client:         client,
-		subscriber:     client.Subscriber(subscriptionID),
+		stream:         stream,
 		handler:        handler,
 		processedMatch: make(map[string]struct{}),
 	}, nil
 }
 
-// Run は ctx がキャンセルされるか Receive がエラーを返すまでブロックします
+// Run は ctx がキャンセルされるか stream がエラーを返すまでブロックします。
 func (s *MatchSubscriber) Run(ctx context.Context) error {
-	log.Printf("matchsubscriber: pulling from %s", s.subscriber.ID())
-	return s.subscriber.Receive(ctx, s.handle)
+	slog.Info("matchsubscriber: consuming")
+	return s.stream.Consume(ctx, s.processEvent)
 }
 
-// Close は Pub/Sub クライアントをクローズします
-func (s *MatchSubscriber) Close() error {
-	return s.client.Close()
-}
-
-func (s *MatchSubscriber) handle(ctx context.Context, msg *pubsub.Message) {
+// processEvent は 1 メッセージを処理する。戻り値 nil = ack、非 nil = nack。
+func (s *MatchSubscriber) processEvent(ctx context.Context, data []byte) error {
 	var event port.MatchMadeEvent
-	if err := json.Unmarshal(msg.Data, &event); err != nil {
-		log.Printf("matchsubscriber: bad payload (will nack): %v raw=%s", err, string(msg.Data))
-		msg.Nack()
-		return
+	if err := json.Unmarshal(data, &event); err != nil {
+		slog.Error("matchsubscriber: bad payload (nack)", "error", err, "payload_len", len(data))
+		return fmt.Errorf("matchsubscriber: bad payload: %w", err)
 	}
 	if event.Type != "match_made" {
-		log.Printf("matchsubscriber: unknown event type %q, acking", event.Type)
-		msg.Ack()
-		return
+		slog.Warn("matchsubscriber: unknown event type, acking", "event_type", event.Type)
+		return nil
 	}
 
 	if !s.markProcessed(event.MatchID) {
-		log.Printf("matchsubscriber: duplicate matchId=%s, acking without re-handling", event.MatchID)
-		msg.Ack()
-		return
+		slog.Info("matchsubscriber: duplicate matchId, acking without re-handling",
+			"match_id", event.MatchID)
+		return nil
 	}
 
 	if err := s.handler.HandleMatchMade(ctx, event); err != nil {
-		log.Printf("matchsubscriber: handler failed matchId=%s players=%s err=%v",
-			event.MatchID, playerIDList(event.Players), err)
+		slog.Error("matchsubscriber: handler failed",
+			"match_id", event.MatchID, "players", playerIDList(event.Players), "error", err)
 		s.unmark(event.MatchID)
-		msg.Nack()
-		return
+		return fmt.Errorf("matchsubscriber: handler: %w", err)
 	}
-	msg.Ack()
+	return nil
 }
 
 // markProcessed はこの matchId がこの Pod で未処理の場合に true を返す。
