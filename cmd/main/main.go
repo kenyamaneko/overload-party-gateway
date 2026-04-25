@@ -162,27 +162,27 @@ func main() {
 	srvCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// 4 subscription 用の GCPMessageStream を生成。subscriber は port.MessageStream
-	// 経由でメッセージを受け取り、GCP SDK 型依存は adapter に閉じる。
-	matchStream, err := pubsubadapter.NewGCPMessageStream(srvCtx, cfg.PubsubProjectID, cfg.MatchmakingSubscription)
+	// 4 subscription 用の Stream を生成。subscriber は port.MessageStream
+	// 経由でメッセージを受け取り、Cloud Pub/Sub SDK 型依存は adapter に閉じる。
+	matchStream, err := pubsubadapter.NewStream(srvCtx, cfg.PubsubProjectID, cfg.MatchmakingSubscription)
 	if err != nil {
 		log.Fatalf("failed to create matchmaking stream: %v", err)
 	}
 	defer func() { _ = matchStream.Close() }()
 
-	onboardedStream, err := pubsubadapter.NewGCPMessageStream(srvCtx, cfg.PubsubProjectID, cfg.PlayerOnboardedSubscription)
+	onboardedStream, err := pubsubadapter.NewStream(srvCtx, cfg.PubsubProjectID, cfg.PlayerOnboardedSubscription)
 	if err != nil {
 		log.Fatalf("failed to create player-onboarded stream: %v", err)
 	}
 	defer func() { _ = onboardedStream.Close() }()
 
-	factionPurchasedStream, err := pubsubadapter.NewGCPMessageStream(srvCtx, cfg.PubsubProjectID, cfg.FactionPurchasedSubscription)
+	factionPurchasedStream, err := pubsubadapter.NewStream(srvCtx, cfg.PubsubProjectID, cfg.FactionPurchasedSubscription)
 	if err != nil {
 		log.Fatalf("failed to create faction-purchased stream: %v", err)
 	}
 	defer func() { _ = factionPurchasedStream.Close() }()
 
-	premiumUpdatedStream, err := pubsubadapter.NewGCPMessageStream(srvCtx, cfg.PubsubProjectID, cfg.PremiumUpdatedSubscription)
+	premiumUpdatedStream, err := pubsubadapter.NewStream(srvCtx, cfg.PubsubProjectID, cfg.PremiumUpdatedSubscription)
 	if err != nil {
 		log.Fatalf("failed to create premium-updated stream: %v", err)
 	}

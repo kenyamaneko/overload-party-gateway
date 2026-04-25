@@ -135,7 +135,7 @@ func main() {
 	// ローカルモードでは Pub/Sub subscriber はオプション。
 	// NPC バトルがメインワークフローであり match_made イベントは不要。
 	if cfg.PubsubProjectID != "" {
-		stream, err := pubsubadapter.NewGCPMessageStream(srvCtx, cfg.PubsubProjectID, cfg.MatchmakingSubscription)
+		stream, err := pubsubadapter.NewStream(srvCtx, cfg.PubsubProjectID, cfg.MatchmakingSubscription)
 		if err != nil {
 			log.Fatalf("failed to create matchmaking stream: %v", err)
 		}
