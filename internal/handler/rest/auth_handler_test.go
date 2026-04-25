@@ -40,7 +40,7 @@ func TestAuthHandler_Register(t *testing.T) {
 			return http.StatusCreated, apiaccount.Player{
 				PlayerID:    "p-" + req.FirebaseUID,
 				FirebaseUID: req.FirebaseUID,
-				Username:    req.Username,
+				Name:        req.Name,
 			}
 		}
 		h := NewAuthHandler(accountclient.New(fa.URL()))
@@ -49,14 +49,14 @@ func TestAuthHandler_Register(t *testing.T) {
 		r.Use(withFirebaseUID("uid-new"))
 		r.POST("/register", h.Register)
 
-		req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{"username":"alice"}`))
+		req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{"name":"alice"}`))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
 
 		require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 		assert.Contains(t, w.Body.String(), `"player_id":"p-uid-new"`)
-		assert.Contains(t, w.Body.String(), `"username":"alice"`)
+		assert.Contains(t, w.Body.String(), `"name":"alice"`)
 	})
 
 	t.Run("invalid JSON returns 400", func(t *testing.T) {
@@ -84,7 +84,7 @@ func TestAuthHandler_Register(t *testing.T) {
 		r := gin.New()
 		r.POST("/register", h.Register)
 
-		req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{"username":"alice"}`))
+		req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{"name":"alice"}`))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
@@ -104,7 +104,7 @@ func TestAuthHandler_Register(t *testing.T) {
 		r.Use(withFirebaseUID("uid-dup"))
 		r.POST("/register", h.Register)
 
-		req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{"username":"bob"}`))
+		req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{"name":"bob"}`))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
@@ -124,7 +124,7 @@ func TestAuthHandler_Register(t *testing.T) {
 		r.Use(withFirebaseUID("uid-x"))
 		r.POST("/register", h.Register)
 
-		req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{"username":"x"}`))
+		req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{"name":"x"}`))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
@@ -133,10 +133,10 @@ func TestAuthHandler_Register(t *testing.T) {
 	})
 }
 
-func TestAuthHandler_Register_UsernameValidation(t *testing.T) {
+func TestAuthHandler_Register_NameValidation(t *testing.T) {
 	tests := []struct {
-		name     string
-		username string
+		caseName   string
+		playerName string
 	}{
 		{"empty", ""},
 		{"whitespace_only", "   "},
@@ -145,7 +145,7 @@ func TestAuthHandler_Register_UsernameValidation(t *testing.T) {
 		{"too_long", strings.Repeat("a", 51)},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.caseName, func(t *testing.T) {
 			fa := apiaccountserverfake.NewServer()
 			defer fa.Close()
 			h := NewAuthHandler(accountclient.New(fa.URL()))
@@ -154,7 +154,7 @@ func TestAuthHandler_Register_UsernameValidation(t *testing.T) {
 			r.Use(withFirebaseUID("uid"))
 			r.POST("/register", h.Register)
 
-			body, _ := json.Marshal(map[string]string{"username": tt.username})
+			body, _ := json.Marshal(map[string]string{"name": tt.playerName})
 			req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(string(body)))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
@@ -165,7 +165,7 @@ func TestAuthHandler_Register_UsernameValidation(t *testing.T) {
 	}
 }
 
-func TestAuthHandler_Register_BoundaryUsername(t *testing.T) {
+func TestAuthHandler_Register_BoundaryName(t *testing.T) {
 	t.Run("max length 50 multibyte runes ok", func(t *testing.T) {
 		fa := apiaccountserverfake.NewServer()
 		defer fa.Close()
@@ -178,8 +178,8 @@ func TestAuthHandler_Register_BoundaryUsername(t *testing.T) {
 		r.POST("/register", h.Register)
 
 		// 50 ja runes (multibyte) — RuneCount でカウントされること
-		username := strings.Repeat("あ", 50)
-		body, _ := json.Marshal(map[string]string{"username": username})
+		name := strings.Repeat("あ", 50)
+		body, _ := json.Marshal(map[string]string{"name": name})
 		req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(string(body)))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -197,7 +197,7 @@ func TestAuthHandler_Login(t *testing.T) {
 			return http.StatusOK, apiaccount.Player{
 				PlayerID:    "p-x",
 				FirebaseUID: req.FirebaseUID,
-				Username:    "x",
+				Name:        "x",
 			}
 		}
 		h := NewAuthHandler(accountclient.New(fa.URL()))
@@ -268,16 +268,16 @@ func TestAuthHandler_Login(t *testing.T) {
 	})
 }
 
-func TestValidateUsername(t *testing.T) {
+func TestValidateName(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
-		assert.NoError(t, validateUsername("alice"))
-		assert.NoError(t, validateUsername("あいう"))
-		assert.NoError(t, validateUsername("a b c"))
+		assert.NoError(t, validateName("alice"))
+		assert.NoError(t, validateName("あいう"))
+		assert.NoError(t, validateName("a b c"))
 	})
 	t.Run("ng", func(t *testing.T) {
-		assert.Error(t, validateUsername(""))
-		assert.Error(t, validateUsername("   "))
-		assert.Error(t, validateUsername("a\nb"))
-		assert.Error(t, validateUsername(strings.Repeat("a", 51)))
+		assert.Error(t, validateName(""))
+		assert.Error(t, validateName("   "))
+		assert.Error(t, validateName("a\nb"))
+		assert.Error(t, validateName(strings.Repeat("a", 51)))
 	})
 }

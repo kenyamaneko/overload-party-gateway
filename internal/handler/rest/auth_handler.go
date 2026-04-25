@@ -14,22 +14,22 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
 )
 
-const maxUsernameRunes = 50
+const maxNameRunes = 50
 
-// validateUsername は gateway 段階で簡単に弾けるユーザー名の不正を検出する。
+// validateName は gateway 段階で簡単に弾けるプレイヤー名の不正を検出する。
 // 詳細な業務ルール（重複等）は account サービス側に委ねる。
-func validateUsername(s string) error {
+func validateName(s string) error {
 	if strings.TrimSpace(s) == "" {
-		return errors.New("username must not be empty or whitespace only")
+		return errors.New("name must not be empty or whitespace only")
 	}
 	n := utf8.RuneCountInString(s)
-	if n < 1 || n > maxUsernameRunes {
-		return errors.New("username must be 1-50 characters")
+	if n < 1 || n > maxNameRunes {
+		return errors.New("name must be 1-50 characters")
 	}
 	for _, r := range s {
 		// 制御文字（改行・タブ含む）は明らかに不正なので gateway で弾く。
 		if unicode.IsControl(r) {
-			return errors.New("username must not contain control characters")
+			return errors.New("name must not contain control characters")
 		}
 	}
 	return nil
@@ -52,7 +52,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := validateUsername(req.Username); err != nil {
+	if err := validateName(req.Name); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -63,7 +63,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing firebase uid"})
 		return
 	}
-	player, err := h.account.Register(c.Request.Context(), firebaseUID, req.Username)
+	player, err := h.account.Register(c.Request.Context(), firebaseUID, req.Name)
 	if err != nil {
 		if errors.Is(err, accountclient.ErrPlayerAlreadyRegistered) {
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})

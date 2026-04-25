@@ -18,7 +18,7 @@ type Handlers struct {
 	Shop         *rest.ShopHandler
 	Scenario     *rest.ScenarioHandler
 	Spectate     *rest.SpectateHandler
-	UserSettings *rest.UserSettingsHandler
+	PlayerSettings *rest.PlayerSettingsHandler
 	News         *rest.NewsHandler
 }
 
@@ -42,9 +42,9 @@ func RegisterAPIRoutes(api *gin.RouterGroup, h *Handlers) {
 	api.PUT("/player/decks/:deckId", h.Deck.UpdateDeck)
 	api.DELETE("/player/decks/:deckId", h.Deck.DeleteDeck)
 
-	// ユーザー設定
-	api.GET("/player/settings", h.UserSettings.GetSettings)
-	api.PUT("/player/settings", h.UserSettings.UpdateSettings)
+	// プレイヤー設定
+	api.GET("/player/settings", h.PlayerSettings.GetSettings)
+	api.PUT("/player/settings", h.PlayerSettings.UpdateSettings)
 
 	// カード
 	api.GET("/cards", h.Card.GetAllCards)

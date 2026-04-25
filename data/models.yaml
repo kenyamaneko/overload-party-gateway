@@ -405,7 +405,7 @@ files:
         fields:
           - {name: PlayerID, type: string, json: "player_id", doc: "プレイヤーID（UUID）"}
           - {name: FirebaseUID, type: string, json: "firebase_uid", doc: "Firebase UID"}
-          - {name: Username, type: string, json: "username", doc: "ユーザー名"}
+          - {name: Name, type: string, json: "name", doc: "プレイヤー名"}
           - {name: Level, type: int64, json: "level", doc: "プレイヤーレベル"}
           - {name: Exp, type: int64, json: "exp", doc: "累計経験値"}
           - {name: IsPremium, type: bool, json: "is_premium", doc: "プレミアム会員か"}
@@ -424,8 +424,8 @@ files:
           - {name: DailyBattleLimit, type: int64, json: "daily_battle_limit", doc: "デイリーバトル上限（`-1` で無制限 = プレミアム会員）"}
           - {name: CanBattle, type: bool, json: "can_battle", doc: "バトル可能か"}
 
-      - name: UserSettings
-        comment: "UserSettings holds per-player application settings."
+      - name: PlayerSettings
+        comment: "PlayerSettings holds per-player application settings."
         fields:
           - {name: PlayerID, type: string, json: "player_id", doc: "プレイヤーID"}
           - {name: Language, type: string, json: "language", doc: "言語（`ja` / `en`）"}
@@ -545,7 +545,7 @@ files:
       - name: RegisterRequest
         comment: "RegisterRequest is the request body for POST /auth/register."
         fields:
-          - {name: Username, type: string, json: "username", doc: "ユーザー名（1〜50文字）"}
+          - {name: Name, type: string, json: "name", doc: "プレイヤー名（1〜50文字）"}
 
       - name: PlayerNameRequest
         comment: "PlayerNameRequest is the request body for PUT /player/name."

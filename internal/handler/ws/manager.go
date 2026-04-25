@@ -79,7 +79,7 @@ func NewManager(
 		if p == nil {
 			return "", 0, nil
 		}
-		return p.Username, p.Level, nil
+		return p.Name, p.Level, nil
 	})
 
 	spectate := NewSpectateRelay(hub, battleClient, gamePlayerRepo, lookupFn)

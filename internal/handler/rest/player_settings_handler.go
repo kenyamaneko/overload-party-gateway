@@ -11,18 +11,18 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
 )
 
-// UserSettingsHandler はユーザー設定の REST エンドポイントを処理します
-type UserSettingsHandler struct {
+// PlayerSettingsHandler はプレイヤー設定の REST エンドポイントを処理します
+type PlayerSettingsHandler struct {
 	account *accountclient.Client
 }
 
-// NewUserSettingsHandler は UserSettingsHandler を生成します
-func NewUserSettingsHandler(account *accountclient.Client) *UserSettingsHandler {
-	return &UserSettingsHandler{account: account}
+// NewPlayerSettingsHandler は PlayerSettingsHandler を生成します
+func NewPlayerSettingsHandler(account *accountclient.Client) *PlayerSettingsHandler {
+	return &PlayerSettingsHandler{account: account}
 }
 
-// GetSettings はユーザー設定を返します
-func (h *UserSettingsHandler) GetSettings(c *gin.Context) {
+// GetSettings はプレイヤー設定を返します
+func (h *PlayerSettingsHandler) GetSettings(c *gin.Context) {
 	playerID := middleware.GetPlayerID(c)
 	settings, err := h.account.GetSettings(c.Request.Context(), playerID)
 	if err != nil {
@@ -32,9 +32,9 @@ func (h *UserSettingsHandler) GetSettings(c *gin.Context) {
 	c.JSON(http.StatusOK, settings)
 }
 
-// UpdateSettings はユーザー設定を部分更新します。
+// UpdateSettings はプレイヤー設定を部分更新します。
 // nil フィールドは現状維持。空リクエストは account 側で 400 を返す。
-func (h *UserSettingsHandler) UpdateSettings(c *gin.Context) {
+func (h *PlayerSettingsHandler) UpdateSettings(c *gin.Context) {
 	playerID := middleware.GetPlayerID(c)
 	var req apigateway.UpdateSettingsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

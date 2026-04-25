@@ -82,7 +82,7 @@ func main() {
 	handlers := &router.Handlers{
 		Auth:         rest.NewAuthHandler(accountClient),
 		Player:       rest.NewPlayerHandler(accountClient),
-		UserSettings: rest.NewUserSettingsHandler(accountClient),
+		PlayerSettings: rest.NewPlayerSettingsHandler(accountClient),
 		Spectate:     rest.NewSpectateHandler(wsManager),
 		Card:         rest.NewCardHandler(cardClient),
 		Deck:         rest.NewDeckHandler(cardClient),

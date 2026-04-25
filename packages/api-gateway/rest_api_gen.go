@@ -19,7 +19,7 @@ type VersionResponse struct {
 type PlayerResponse struct {
 	PlayerID         string     `json:"player_id"`
 	FirebaseUID      string     `json:"firebase_uid"`
-	Username         string     `json:"username"`
+	Name             string     `json:"name"`
 	Level            int64      `json:"level"`
 	Exp              int64      `json:"exp"`
 	IsPremium        bool       `json:"is_premium"`
@@ -39,8 +39,8 @@ type BattleLimitResponse struct {
 	CanBattle        bool  `json:"can_battle"`
 }
 
-// UserSettings holds per-player application settings.
-type UserSettings struct {
+// PlayerSettings holds per-player application settings.
+type PlayerSettings struct {
 	PlayerID    string    `json:"player_id"`
 	Language    string    `json:"language"`
 	BgmVolume   int64     `json:"bgm_volume"`
@@ -156,7 +156,7 @@ type PurchaseRequest struct {
 
 // RegisterRequest is the request body for POST /auth/register.
 type RegisterRequest struct {
-	Username string `json:"username"`
+	Name string `json:"name"`
 }
 
 // PlayerNameRequest is the request body for PUT /player/name.

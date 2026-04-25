@@ -39,7 +39,7 @@ func New(baseURL string) *Client {
 
 type registerRequest struct {
 	FirebaseUID string `json:"firebase_uid"`
-	Username    string `json:"username"`
+	Name        string `json:"name"`
 }
 
 type loginRequest struct {
@@ -51,7 +51,7 @@ type loginRequest struct {
 type Player struct {
 	PlayerID         string     `json:"player_id"`
 	FirebaseUID      string     `json:"firebase_uid"`
-	Username         string     `json:"username"`
+	Name             string     `json:"name"`
 	Level            int64      `json:"level"`
 	Exp              int64      `json:"exp"`
 	IsPremium        bool       `json:"is_premium"`
@@ -63,9 +63,9 @@ type Player struct {
 }
 
 // Register はプレイヤーを新規登録します
-func (c *Client) Register(ctx context.Context, firebaseUID, username string) (*Player, error) {
+func (c *Client) Register(ctx context.Context, firebaseUID, name string) (*Player, error) {
 	var out Player
-	if err := c.doJSON(ctx, http.MethodPost, "/internal/v1/auth/register", registerRequest{FirebaseUID: firebaseUID, Username: username}, &out); err != nil {
+	if err := c.doJSON(ctx, http.MethodPost, "/internal/v1/auth/register", registerRequest{FirebaseUID: firebaseUID, Name: name}, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -212,8 +212,8 @@ func (c *Client) AwardGameExp(ctx context.Context, p1ID, p2ID string, winnerNum 
 }
 
 // GetSettings はユーザー設定を取得します
-func (c *Client) GetSettings(ctx context.Context, playerID string) (*apiaccount.UserSettings, error) {
-	var out apiaccount.UserSettings
+func (c *Client) GetSettings(ctx context.Context, playerID string) (*apiaccount.PlayerSettings, error) {
+	var out apiaccount.PlayerSettings
 	path := "/internal/v1/players/" + url.PathEscape(playerID) + "/settings"
 	if err := c.doJSON(ctx, http.MethodGet, path, nil, &out); err != nil {
 		return nil, err
@@ -222,8 +222,8 @@ func (c *Client) GetSettings(ctx context.Context, playerID string) (*apiaccount.
 }
 
 // UpdateSettings はユーザー設定を更新します
-func (c *Client) UpdateSettings(ctx context.Context, playerID string, req apiaccount.UpdateSettingsRequest) (*apiaccount.UserSettings, error) {
-	var out apiaccount.UserSettings
+func (c *Client) UpdateSettings(ctx context.Context, playerID string, req apiaccount.UpdateSettingsRequest) (*apiaccount.PlayerSettings, error) {
+	var out apiaccount.PlayerSettings
 	path := "/internal/v1/players/" + url.PathEscape(playerID) + "/settings"
 	if err := c.doJSON(ctx, http.MethodPut, path, req, &out); err != nil {
 		return nil, err

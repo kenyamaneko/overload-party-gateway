@@ -56,7 +56,7 @@ func newStatefulAccountFake() *statefulAccountFake {
 		p := apiaccount.Player{
 			PlayerID:    "generated-" + req.FirebaseUID,
 			FirebaseUID: req.FirebaseUID,
-			Username:    req.Username,
+			Name:        req.Name,
 		}
 		s.players[req.FirebaseUID] = p
 		return http.StatusCreated, p

@@ -55,7 +55,7 @@ endpoint_groups:
         response_description: "`201 Created`"
         errors:
           - status: 400
-            description: username が空または 50 文字超
+            description: name が空または 50 文字超
           - status: 409
             description: 既に登録済み
 
@@ -154,17 +154,17 @@ endpoint_groups:
           - status: 404
             description: デッキが存在しない
 
-      # User settings
+      # Player settings
       - method: GET
         path: /api/v1/player/settings
-        summary: ユーザー設定を取得
-        response_type: UserSettings
+        summary: プレイヤー設定を取得
+        response_type: PlayerSettings
 
       - method: PUT
         path: /api/v1/player/settings
-        summary: ユーザー設定を更新
+        summary: プレイヤー設定を更新
         request_type: UpdateSettingsRequest
-        response_type: UserSettings
+        response_type: PlayerSettings
         errors:
           - status: 400
             description: バリデーションエラー
