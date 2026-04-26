@@ -162,52 +162,21 @@ func main() {
 	srvCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// 4 subscription 用の Stream を生成。subscriber は port.MessageStream
-	// 経由でメッセージを受け取り、Cloud Pub/Sub SDK 型依存は adapter に閉じる。
 	matchStream, err := pubsubadapter.NewStream(srvCtx, cfg.PubsubProjectID, cfg.MatchmakingSubscription)
 	if err != nil {
 		log.Fatalf("failed to create matchmaking stream: %v", err)
 	}
 	defer func() { _ = matchStream.Close() }()
 
-	onboardedStream, err := pubsubadapter.NewStream(srvCtx, cfg.PubsubProjectID, cfg.PlayerOnboardedSubscription)
-	if err != nil {
-		log.Fatalf("failed to create player-onboarded stream: %v", err)
-	}
-	defer func() { _ = onboardedStream.Close() }()
-
-	factionPurchasedStream, err := pubsubadapter.NewStream(srvCtx, cfg.PubsubProjectID, cfg.FactionPurchasedSubscription)
-	if err != nil {
-		log.Fatalf("failed to create faction-purchased stream: %v", err)
-	}
-	defer func() { _ = factionPurchasedStream.Close() }()
-
-	premiumUpdatedStream, err := pubsubadapter.NewStream(srvCtx, cfg.PubsubProjectID, cfg.PremiumUpdatedSubscription)
-	if err != nil {
-		log.Fatalf("failed to create premium-updated stream: %v", err)
-	}
-	defer func() { _ = premiumUpdatedStream.Close() }()
-
 	matchSub, err := pubsubadapter.NewMatchSubscriber(matchStream, wsManager)
 	if err != nil {
 		log.Fatalf("failed to create match subscriber: %v", err)
 	}
 
-	// クロスサービスイベント subscriber (player-onboarded, faction-purchased, premium-updated)。
-	// business fact 単位で 3 トピックに分解されており、subscriber も 1:1 に対応する。
-	// 接続中プレイヤーに WS 完了メッセージを push する。
-	wsPusher := &pubsubadapter.HubWSPusher{Hub: wsManager.Hub}
-
-	onboardedSub := pubsubadapter.NewPlayerOnboardedSubscriber(onboardedStream, wsPusher)
-	factionPurchasedSub := pubsubadapter.NewFactionPurchasedSubscriber(factionPurchasedStream, wsPusher)
-	premiumUpdatedSub := pubsubadapter.NewPremiumUpdatedSubscriber(premiumUpdatedStream, wsPusher)
-
-	// Why: graceful shutdown 時に全 subscriber と HTTP server が確実に停止するまで
-	// main を block させるため errgroup で束ねる。どれか 1 つが err を返すと
-	// gCtx がキャンセルされ、他の subscriber / server も停止する。
-	// subscriber の Receive は ctx キャンセルで nil を返す仕様なので、通常の
-	// graceful shutdown パスでは g.Wait が err=nil で抜ける。
-	if err := runServices(srvCtx, cfg, srv, matchSub, onboardedSub, factionPurchasedSub, premiumUpdatedSub); err != nil {
+	// Why: graceful shutdown 時に subscriber と HTTP server が確実に停止するまで
+	// main を block させるため errgroup で束ねる。どちらかが err を返すと
+	// gCtx がキャンセルされ、他方も停止する。
+	if err := runServices(srvCtx, cfg, srv, matchSub); err != nil {
 		log.Fatalf("server: %v", err)
 	}
 

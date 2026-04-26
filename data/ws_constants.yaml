@@ -33,9 +33,6 @@ ws_message_types:
   - spectate_ended
   - spectate_stamp_broadcast
   - game_state_restore
-  - onboarding_complete
-  - faction_purchase_complete
-  - premium_update_complete
   client:
   - game_enter
   - matchmaking_start

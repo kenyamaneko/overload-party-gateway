@@ -68,10 +68,11 @@ func RegisterAPIRoutes(api *gin.RouterGroup, h *Handlers) {
 	api.GET("/scenarios/:episodeId/script", h.Scenario.GetScript)
 	api.POST("/scenarios/:episodeId/complete", h.Scenario.CompleteEpisode)
 
-	// オンボーディング (scenario サービスへ proxy)
-	api.GET("/onboarding/status", h.Scenario.GetOnboardingStatus)
+	// オンボーディング (scenario サービスへ proxy)。
+	// 進行状態 (onboarding_status) は account の GetPlayer レスポンスに同梱されるため
+	// 専用 status / resume エンドポイントは持たない。
 	api.GET("/onboarding/script", h.Scenario.GetOnboardingScript)
-	api.GET("/onboarding/resume", h.Scenario.GetOnboardingResume)
 	api.PUT("/onboarding/name", h.Scenario.UpdateOnboardingName)
+	api.POST("/onboarding/faction", h.Scenario.SelectOnboardingFaction)
 	api.POST("/onboarding/complete", h.Scenario.CompleteOnboarding)
 }

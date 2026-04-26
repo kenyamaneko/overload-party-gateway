@@ -57,16 +57,6 @@ func (h *ScenarioHandler) CompleteEpisode(c *gin.Context) {
 }
 
 // GetOnboardingStatus はオンボーディング完了状態を返します。
-func (h *ScenarioHandler) GetOnboardingStatus(c *gin.Context) {
-	playerID := middleware.GetPlayerID(c)
-	status, err := h.client.GetOnboardingStatus(c.Request.Context(), playerID)
-	if err != nil {
-		respondScenarioErr(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, status)
-}
-
 // GetOnboardingScript はオンボーディングシナリオ本文を返します。
 func (h *ScenarioHandler) GetOnboardingScript(c *gin.Context) {
 	playerID := middleware.GetPlayerID(c)
@@ -79,19 +69,8 @@ func (h *ScenarioHandler) GetOnboardingScript(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"script": script})
 }
 
-// GetOnboardingResume はオンボーディング再開時の次の checkpoint を返します。
-func (h *ScenarioHandler) GetOnboardingResume(c *gin.Context) {
-	playerID := middleware.GetPlayerID(c)
-	resp, err := h.client.GetOnboardingResume(c.Request.Context(), playerID)
-	if err != nil {
-		respondScenarioErr(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, resp)
-}
-
-// UpdateOnboardingName はオンボード内 name 入力で受け取った表示名を確定します。
-// scenario が account の業務バリデーションを中継するため、400 はそのままユーザーへ返します。
+// UpdateOnboardingName はオンボード内 name 入力で受け取った表示名を scenario へ伝えます。
+// scenario が account の validate REST を中継するため、400 はそのままユーザーへ返します。
 func (h *ScenarioHandler) UpdateOnboardingName(c *gin.Context) {
 	playerID := middleware.GetPlayerID(c)
 	var req struct {
@@ -108,8 +87,8 @@ func (h *ScenarioHandler) UpdateOnboardingName(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-// CompleteOnboarding はオンボーディング完了を記録し player-onboarded を発行します。
-func (h *ScenarioHandler) CompleteOnboarding(c *gin.Context) {
+// SelectOnboardingFaction はオンボード内 faction 選択ステップを scenario へ伝えます。
+func (h *ScenarioHandler) SelectOnboardingFaction(c *gin.Context) {
 	playerID := middleware.GetPlayerID(c)
 	var req struct {
 		InitialFactionID string `json:"initial_faction_id"`
@@ -118,7 +97,18 @@ func (h *ScenarioHandler) CompleteOnboarding(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	resp, err := h.client.CompleteOnboarding(c.Request.Context(), playerID, req.InitialFactionID)
+	if err := h.client.SelectOnboardingFaction(c.Request.Context(), playerID, req.InitialFactionID); err != nil {
+		respondScenarioErr(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// CompleteOnboarding はオンボーディング完了を記録し player-onboarded を発行します。
+// faction は事前の SelectOnboardingFaction で account に永続化済みのため body は受け取りません。
+func (h *ScenarioHandler) CompleteOnboarding(c *gin.Context) {
+	playerID := middleware.GetPlayerID(c)
+	resp, err := h.client.CompleteOnboarding(c.Request.Context(), playerID)
 	if err != nil {
 		respondScenarioErr(c, err)
 		return

@@ -18,11 +18,8 @@ Gateway (このサービス, :9001)
   ├─ HTTP → shop      (:9006)  商品 / 購入 / サブスクリプション
   ├─ HTTP → scenario  (:9007)  エピソード / スクリプト
   ├─ PostgreSQL                 gateway.game_players (所有) + newsfeed.news_articles (read-only)
-  └─ Cloud Pub/Sub subscriber ×4
-        ├─ matchmaking-events-gateway         ← match_made
-        ├─ player-onboarded-gateway-sub       ← player_onboarded
-        ├─ faction-purchased-gateway-sub      ← faction_purchased
-        └─ premium-updated-gateway-sub        ← premium_updated
+  └─ Cloud Pub/Sub subscriber
+        └─ matchmaking-events-gateway         ← match_made
 ```
 
 エンドポイント一覧は [docs/API_REFERENCE.md](docs/API_REFERENCE.md) を参照。
@@ -55,9 +52,6 @@ Gateway (このサービス, :9001)
 | 変数名 | デフォルト | 説明 |
 |---|---|---|
 | `MATCHMAKING_SUBSCRIPTION` | `matchmaking-events-gateway` | matchmaking Pub/Sub サブスクリプション名 |
-| `PLAYER_ONBOARDED_SUBSCRIPTION` | `player-onboarded-gateway-sub` | player-onboarded Pub/Sub サブスクリプション名 |
-| `FACTION_PURCHASED_SUBSCRIPTION` | `faction-purchased-gateway-sub` | faction-purchased Pub/Sub サブスクリプション名 |
-| `PREMIUM_UPDATED_SUBSCRIPTION` | `premium-updated-gateway-sub` | premium-updated Pub/Sub サブスクリプション名 |
 
 **ConfigMap (アプリ挙動):**
 

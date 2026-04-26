@@ -78,11 +78,8 @@ gateway がドメイン状態を持たないと言いつつ 1 つだけ DB テ�
 | Subscription | 副作用 | 冪等性の担保 |
 |---|---|---|
 | `matchmaking-events-gateway` (Exactly-Once) | battle ゲーム作成 + `game_players` 挿入 + WS push | §4 の 3 層冪等性 |
-| `player-onboarded-gateway-sub` | WS `onboarding_complete` push のみ（該当接続なしは drop） | 一過性のため DB dedup なし |
-| `faction-purchased-gateway-sub` | WS `faction_purchase_complete` push のみ | 同上 |
-| `premium-updated-gateway-sub` | WS `premium_update_complete` push のみ | 同上 |
 
-subscription 名と publisher 側はこのリポジトリからは導けない。matchmaking / shop 側の publish 設定と併せて変更すること（subscription 再作成は過去メッセージの loss を伴う）。
+gateway は matchmaking-events 専用の subscriber として位置づけられ、他サービスが publish する topic を fan-out 用途で subscribe しない (ADR-027)。subscription 名と publisher 側はこのリポジトリからは導けない。matchmaking 側の publish 設定と併せて変更すること（subscription 再作成は過去メッセージの loss を伴う）。
 
 ### Graceful shutdown
 
@@ -93,4 +90,4 @@ SIGTERM 受信時、**HTTP / WS 新規受付停止 → 既存 WS への close �
 gateway の env は [internal/config/config.go](../internal/config/config.go) が SSoT。運用上の注意点のみ:
 
 - **`MATCHMAKING_TIMEOUT_SEC`**: マッチ待機タイムアウト。短すぎるとキューが浅い時間帯にユーザーが離脱しやすい。matchmaking サービスのキュー長メトリクスと併せて調整する
-- **Pub/Sub subscription 名** (`MATCHMAKING_SUBSCRIPTION` / `PLAYER_ONBOARDED_SUBSCRIPTION` / `FACTION_PURCHASED_SUBSCRIPTION` / `PREMIUM_UPDATED_SUBSCRIPTION`): 環境（dev/stg/prod）ごとに分離する。異環境の subscription を共有するとメッセージが競合してどちらの環境にも届かない事故が起きる
+- **Pub/Sub subscription 名** (`MATCHMAKING_SUBSCRIPTION`): 環境（dev/stg/prod）ごとに分離する。異環境の subscription を共有するとメッセージが競合してどちらの環境にも届かない事故が起きる

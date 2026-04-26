@@ -25,9 +25,6 @@ const (
 	WSServerMsgSpectateEnded = "spectate_ended"
 	WSServerMsgSpectateStampBroadcast = "spectate_stamp_broadcast"
 	WSServerMsgGameStateRestore = "game_state_restore"
-	WSServerMsgOnboardingComplete = "onboarding_complete"
-	WSServerMsgFactionPurchaseComplete = "faction_purchase_complete"
-	WSServerMsgPremiumUpdateComplete = "premium_update_complete"
 )
 
 // WS client message types.

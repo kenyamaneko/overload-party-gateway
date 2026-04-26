@@ -88,16 +88,6 @@ func (c *Client) CompleteEpisode(ctx context.Context, playerID, episodeID string
 	return c.doJSON(ctx, http.MethodPost, path, nil, nil)
 }
 
-// GetOnboardingStatus はオンボーディング完了状態を返します。
-func (c *Client) GetOnboardingStatus(ctx context.Context, playerID string) (apiscenario.OnboardingStatus, error) {
-	path := fmt.Sprintf("/internal/v1/players/%s/onboarding/status", url.PathEscape(playerID))
-	var out apiscenario.OnboardingStatus
-	if err := c.getJSON(ctx, path, &out); err != nil {
-		return apiscenario.OnboardingStatus{}, err
-	}
-	return out, nil
-}
-
 // GetOnboardingScript はオンボーディングシナリオ本文を返します。
 func (c *Client) GetOnboardingScript(ctx context.Context, playerID, lang string) (string, error) {
 	path := fmt.Sprintf("/internal/v1/players/%s/onboarding/script", url.PathEscape(playerID))
@@ -111,28 +101,27 @@ func (c *Client) GetOnboardingScript(ctx context.Context, playerID, lang string)
 	return out.Script, nil
 }
 
-// GetOnboardingResume はオンボーディング再開時の次の checkpoint を返します。
-func (c *Client) GetOnboardingResume(ctx context.Context, playerID string) (apiscenario.OnboardingResumeResponse, error) {
-	path := fmt.Sprintf("/internal/v1/players/%s/onboarding/resume", url.PathEscape(playerID))
-	var out apiscenario.OnboardingResumeResponse
-	if err := c.getJSON(ctx, path, &out); err != nil {
-		return apiscenario.OnboardingResumeResponse{}, err
-	}
-	return out, nil
-}
-
-// UpdateOnboardingName はオンボード内 name 入力で受け取った表示名を確定します。
-// scenario が account の業務バリデーションを中継するので 400 はそのまま伝搬します。
+// UpdateOnboardingName はオンボード内 name 入力で受け取った表示名を scenario に伝えます。
+// scenario が account の validate REST を中継するので 400 はそのまま伝搬します。
 func (c *Client) UpdateOnboardingName(ctx context.Context, playerID, name string) error {
 	path := fmt.Sprintf("/internal/v1/players/%s/onboarding/name", url.PathEscape(playerID))
 	return c.doJSON(ctx, http.MethodPut, path, apiscenario.OnboardingNameRequest{Name: name}, nil)
 }
 
+// SelectOnboardingFaction はオンボード内 faction 選択ステップを scenario に伝えます。
+// scenario が SelectableFactions による検証と onboarding-faction-set publish を行います。
+func (c *Client) SelectOnboardingFaction(ctx context.Context, playerID, initialFactionID string) error {
+	path := fmt.Sprintf("/internal/v1/players/%s/onboarding/faction", url.PathEscape(playerID))
+	return c.doJSON(ctx, http.MethodPost, path, apiscenario.OnboardingFactionRequest{InitialFactionID: initialFactionID}, nil)
+}
+
 // CompleteOnboarding はオンボーディング完了を記録し player-onboarded を発行します。
-func (c *Client) CompleteOnboarding(ctx context.Context, playerID, initialFactionID string) (apiscenario.OnboardingCompleteResponse, error) {
+// faction は事前の SelectOnboardingFaction で account に永続化済みである前提のため
+// 本リクエストは body を取りません。
+func (c *Client) CompleteOnboarding(ctx context.Context, playerID string) (apiscenario.OnboardingCompleteResponse, error) {
 	path := fmt.Sprintf("/internal/v1/players/%s/onboarding/complete", url.PathEscape(playerID))
 	var out apiscenario.OnboardingCompleteResponse
-	if err := c.doJSON(ctx, http.MethodPost, path, apiscenario.OnboardingCompleteRequest{InitialFactionID: initialFactionID}, &out); err != nil {
+	if err := c.doJSON(ctx, http.MethodPost, path, nil, &out); err != nil {
 		return apiscenario.OnboardingCompleteResponse{}, err
 	}
 	return out, nil
