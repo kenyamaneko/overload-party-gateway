@@ -161,6 +161,8 @@ github.com/kenyamaneko/overload-party-matchmaking/packages/api-matchmaking v0.1.
 github.com/kenyamaneko/overload-party-matchmaking/packages/api-matchmaking v0.1.2/go.mod h1:Qi0jgC2LqABv1fqCdFWgpW4kjN+LWp/GBrx3HVZPCYw=
 github.com/kenyamaneko/overload-party-scenario/packages/api-scenario v0.1.6 h1:huBh3CNjWFnPoPOXVbMpETTlKxVyYksWxs7mU2POejM=
 github.com/kenyamaneko/overload-party-scenario/packages/api-scenario v0.1.6/go.mod h1:AauRTtb5HBZSMgEDGKH1xej12CFznB22RQPxK+rhSNA=
+github.com/kenyamaneko/overload-party-scenario/packages/api-scenario v0.2.0 h1:4zRj49r78YP+/maYM/orYsSBrPEP03/zm/0X02lfrRM=
+github.com/kenyamaneko/overload-party-scenario/packages/api-scenario v0.2.0/go.mod h1:AauRTtb5HBZSMgEDGKH1xej12CFznB22RQPxK+rhSNA=
 github.com/kenyamaneko/overload-party-shop/packages/api-shop v0.1.9 h1:QAqzduZmQFWFBwk/l5SQOfXfNnF6P0oaZuhJvpUkFSk=
 github.com/kenyamaneko/overload-party-shop/packages/api-shop v0.1.9/go.mod h1:wzrluzr7Ec3j6O9AphMD9rSgKfAKy2GOFrk+yDmyybA=
 github.com/klauspost/cpuid/v2 v2.3.0 h1:S4CRMLnYUhGeDFDqkGriYKdfoFlDnMtqTiI/sFzhA9Y=
