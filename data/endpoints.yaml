@@ -280,3 +280,47 @@ endpoint_groups:
           - status: 404
             description: エピソードが存在しない
 
+      # Onboarding (gateway → scenario)
+      - method: GET
+        path: /api/v1/onboarding/status
+        summary: オンボーディング完了状態を取得
+        response_type: OnboardingStatus
+
+      - method: GET
+        path: /api/v1/onboarding/script
+        summary: オンボーディングシナリオ本文を取得（`?lang=ja`）
+        response_type: OnboardingScriptResponse
+        errors:
+          - status: 404
+            description: 要求言語のスクリプトが存在しない
+          - status: 409
+            description: 既にオンボーディング完了済み
+
+      - method: GET
+        path: /api/v1/onboarding/resume
+        summary: オンボーディング再開時の次の checkpoint を取得（account の業務真実から導出）
+        response_type: OnboardingResumeResponse
+        errors:
+          - status: 404
+            description: プレイヤーが account に存在しない（Register 未実施）
+
+      - method: PUT
+        path: /api/v1/onboarding/name
+        summary: オンボード内 name 入力ステップで表示名を確定（scenario が account に同期書込で中継）
+        request_type: OnboardingNameRequest
+        response_description: "`204 No Content`"
+        errors:
+          - status: 400
+            description: name が account のバリデーションに違反
+
+      - method: POST
+        path: /api/v1/onboarding/complete
+        summary: オンボーディング完了を記録し player-onboarded を発行
+        request_type: OnboardingCompleteRequest
+        response_type: OnboardingCompleteResponse
+        errors:
+          - status: 400
+            description: initial_faction_id の検証失敗
+          - status: 409
+            description: 既にオンボーディング完了済み
+

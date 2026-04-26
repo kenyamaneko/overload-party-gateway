@@ -56,12 +56,86 @@ func (h *ScenarioHandler) CompleteEpisode(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "episode completed", "episode_id": episodeID})
 }
 
+// GetOnboardingStatus はオンボーディング完了状態を返します。
+func (h *ScenarioHandler) GetOnboardingStatus(c *gin.Context) {
+	playerID := middleware.GetPlayerID(c)
+	status, err := h.client.GetOnboardingStatus(c.Request.Context(), playerID)
+	if err != nil {
+		respondScenarioErr(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, status)
+}
+
+// GetOnboardingScript はオンボーディングシナリオ本文を返します。
+func (h *ScenarioHandler) GetOnboardingScript(c *gin.Context) {
+	playerID := middleware.GetPlayerID(c)
+	lang := c.DefaultQuery("lang", "ja")
+	script, err := h.client.GetOnboardingScript(c.Request.Context(), playerID, lang)
+	if err != nil {
+		respondScenarioErr(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"script": script})
+}
+
+// GetOnboardingResume はオンボーディング再開時の次の checkpoint を返します。
+func (h *ScenarioHandler) GetOnboardingResume(c *gin.Context) {
+	playerID := middleware.GetPlayerID(c)
+	resp, err := h.client.GetOnboardingResume(c.Request.Context(), playerID)
+	if err != nil {
+		respondScenarioErr(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+// UpdateOnboardingName はオンボード内 name 入力で受け取った表示名を確定します。
+// scenario が account の業務バリデーションを中継するため、400 はそのままユーザーへ返します。
+func (h *ScenarioHandler) UpdateOnboardingName(c *gin.Context) {
+	playerID := middleware.GetPlayerID(c)
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.client.UpdateOnboardingName(c.Request.Context(), playerID, req.Name); err != nil {
+		respondScenarioErr(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// CompleteOnboarding はオンボーディング完了を記録し player-onboarded を発行します。
+func (h *ScenarioHandler) CompleteOnboarding(c *gin.Context) {
+	playerID := middleware.GetPlayerID(c)
+	var req struct {
+		InitialFactionID string `json:"initial_faction_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	resp, err := h.client.CompleteOnboarding(c.Request.Context(), playerID, req.InitialFactionID)
+	if err != nil {
+		respondScenarioErr(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
 func respondScenarioErr(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, scenarioclient.ErrNotFound):
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 	case errors.Is(err, scenarioclient.ErrLocked):
 		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+	case errors.Is(err, scenarioclient.ErrInvalidRequest):
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	case errors.Is(err, scenarioclient.ErrAlreadyOnboarded):
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 	default:
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 	}

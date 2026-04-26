@@ -5,7 +5,7 @@
 >
 > WebSocket プロトコル契約は [WS_REFERENCE.md](WS_REFERENCE.md) を参照。
 
-生成日時: `2026-04-26T02:31:48Z`
+生成日時: `2026-04-26T06:29:34Z`
 
 ## Public REST（認証不要）
 
@@ -653,5 +653,93 @@ NPC モデル一覧を取得（battle サーバーにプロキシ）
 |---|---|
 | `403` | エピソード未アンロック |
 | `404` | エピソードが存在しない |
+
+### `GET /api/v1/onboarding/status`
+
+オンボーディング完了状態を取得
+
+**レスポンス**: `OnboardingStatus`
+
+| フィールド | 型 | JSON | 説明 |
+|---|---|---|---|
+| PlayerID | `string` | `player_id` | プレイヤーID |
+| Onboarded | `boolean` | `onboarded` | オンボーディング完了済みか |
+| CompletedAt | `string (ISO 8601)?` | `completed_at` | 完了日時 (未完了時は省略) |
+
+### `GET /api/v1/onboarding/script`
+
+オンボーディングシナリオ本文を取得（`?lang=ja`）
+
+**レスポンス**: `OnboardingScriptResponse`
+
+| フィールド | 型 | JSON | 説明 |
+|---|---|---|---|
+| Script | `string` | `script` | オンボーディングスクリプト本文 (`.ks` 形式) |
+
+**エラー**:
+
+| ステータス | 説明 |
+|---|---|
+| `404` | 要求言語のスクリプトが存在しない |
+| `409` | 既にオンボーディング完了済み |
+
+### `GET /api/v1/onboarding/resume`
+
+オンボーディング再開時の次の checkpoint を取得（account の業務真実から導出）
+
+**レスポンス**: `OnboardingResumeResponse`
+
+| フィールド | 型 | JSON | 説明 |
+|---|---|---|---|
+| PlayerID | `string` | `player_id` | プレイヤーID |
+| NextCheckpoint | `string` | `next_checkpoint` | 次の checkpoint (`started` / `name_set` / `faction_set` / `completed`) |
+
+**エラー**:
+
+| ステータス | 説明 |
+|---|---|
+| `404` | プレイヤーが account に存在しない（Register 未実施） |
+
+### `PUT /api/v1/onboarding/name`
+
+オンボード内 name 入力ステップで表示名を確定（scenario が account に同期書込で中継）
+
+**リクエスト**: `OnboardingNameRequest`
+
+| フィールド | 型 | JSON | 説明 |
+|---|---|---|---|
+| Name | `string` | `name` | プレイヤー表示名 |
+
+**レスポンス**: `204 No Content`
+
+**エラー**:
+
+| ステータス | 説明 |
+|---|---|
+| `400` | name が account のバリデーションに違反 |
+
+### `POST /api/v1/onboarding/complete`
+
+オンボーディング完了を記録し player-onboarded を発行
+
+**リクエスト**: `OnboardingCompleteRequest`
+
+| フィールド | 型 | JSON | 説明 |
+|---|---|---|---|
+| InitialFactionID | `string` | `initial_faction_id` | 初期 faction (`SHE` / `Tenki` / `Sugar` / `Tuners`) |
+
+**レスポンス**: `OnboardingCompleteResponse`
+
+| フィールド | 型 | JSON | 説明 |
+|---|---|---|---|
+| Message | `string` | `message` | 結果メッセージ |
+| PlayerID | `string` | `player_id` | プレイヤーID |
+
+**エラー**:
+
+| ステータス | 説明 |
+|---|---|
+| `400` | initial_faction_id の検証失敗 |
+| `409` | 既にオンボーディング完了済み |
 
 ---

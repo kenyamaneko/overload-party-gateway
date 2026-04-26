@@ -570,6 +570,40 @@ files:
           - {name: Message, type: string, json: "message", doc: "結果メッセージ"}
           - {name: EpisodeID, type: string, json: "episode_id", doc: "エピソードID"}
 
+      - name: OnboardingStatus
+        comment: "OnboardingStatus is the API response for GET /onboarding/status."
+        fields:
+          - {name: PlayerID, type: string, json: "player_id", doc: "プレイヤーID"}
+          - {name: Onboarded, type: bool, json: "onboarded", doc: "オンボーディング完了済みか"}
+          - {name: CompletedAt, type: "*time.Time", json: "completed_at,omitempty", doc: "完了日時 (未完了時は省略)"}
+
+      - name: OnboardingScriptResponse
+        comment: "OnboardingScriptResponse is the API response for GET /onboarding/script."
+        fields:
+          - {name: Script, type: string, json: "script", doc: "オンボーディングスクリプト本文 (`.ks` 形式)"}
+
+      - name: OnboardingResumeResponse
+        comment: "OnboardingResumeResponse is the API response for GET /onboarding/resume."
+        fields:
+          - {name: PlayerID, type: string, json: "player_id", doc: "プレイヤーID"}
+          - {name: NextCheckpoint, type: string, json: "next_checkpoint", doc: "次の checkpoint (`started` / `name_set` / `faction_set` / `completed`)"}
+
+      - name: OnboardingNameRequest
+        comment: "OnboardingNameRequest is the request body for PUT /onboarding/name."
+        fields:
+          - {name: Name, type: string, json: "name", doc: "プレイヤー表示名"}
+
+      - name: OnboardingCompleteRequest
+        comment: "OnboardingCompleteRequest is the request body for POST /onboarding/complete."
+        fields:
+          - {name: InitialFactionID, type: string, json: "initial_faction_id", doc: "初期 faction (`SHE` / `Tenki` / `Sugar` / `Tuners`)"}
+
+      - name: OnboardingCompleteResponse
+        comment: "OnboardingCompleteResponse is the API response for POST /onboarding/complete."
+        fields:
+          - {name: Message, type: string, json: "message", doc: "結果メッセージ"}
+          - {name: PlayerID, type: string, json: "player_id", doc: "プレイヤーID"}
+
       - name: SelectFactionResponse
         comment: "SelectFactionResponse is the API response for POST /player/select-faction."
         fields:

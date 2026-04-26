@@ -182,6 +182,40 @@ type ScenarioCompleteResponse struct {
 	EpisodeID string `json:"episode_id"`
 }
 
+// OnboardingStatus is the API response for GET /onboarding/status.
+type OnboardingStatus struct {
+	PlayerID    string     `json:"player_id"`
+	Onboarded   bool       `json:"onboarded"`
+	CompletedAt *time.Time `json:"completed_at,omitempty"`
+}
+
+// OnboardingScriptResponse is the API response for GET /onboarding/script.
+type OnboardingScriptResponse struct {
+	Script string `json:"script"`
+}
+
+// OnboardingResumeResponse is the API response for GET /onboarding/resume.
+type OnboardingResumeResponse struct {
+	PlayerID       string `json:"player_id"`
+	NextCheckpoint string `json:"next_checkpoint"`
+}
+
+// OnboardingNameRequest is the request body for PUT /onboarding/name.
+type OnboardingNameRequest struct {
+	Name string `json:"name"`
+}
+
+// OnboardingCompleteRequest is the request body for POST /onboarding/complete.
+type OnboardingCompleteRequest struct {
+	InitialFactionID string `json:"initial_faction_id"`
+}
+
+// OnboardingCompleteResponse is the API response for POST /onboarding/complete.
+type OnboardingCompleteResponse struct {
+	Message  string `json:"message"`
+	PlayerID string `json:"player_id"`
+}
+
 // SelectFactionResponse is the API response for POST /player/select-faction.
 type SelectFactionResponse struct {
 	Message      string `json:"message"`

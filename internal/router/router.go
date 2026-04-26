@@ -67,4 +67,11 @@ func RegisterAPIRoutes(api *gin.RouterGroup, h *Handlers) {
 	api.GET("/scenarios", h.Scenario.ListEpisodes)
 	api.GET("/scenarios/:episodeId/script", h.Scenario.GetScript)
 	api.POST("/scenarios/:episodeId/complete", h.Scenario.CompleteEpisode)
+
+	// オンボーディング (scenario サービスへ proxy)
+	api.GET("/onboarding/status", h.Scenario.GetOnboardingStatus)
+	api.GET("/onboarding/script", h.Scenario.GetOnboardingScript)
+	api.GET("/onboarding/resume", h.Scenario.GetOnboardingResume)
+	api.PUT("/onboarding/name", h.Scenario.UpdateOnboardingName)
+	api.POST("/onboarding/complete", h.Scenario.CompleteOnboarding)
 }

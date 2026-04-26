@@ -21,6 +21,13 @@ var (
 	ErrNotFound = errors.New("scenarioclient: not found")
 	// ErrLocked はエピソードがロック状態の場合のエラーです
 	ErrLocked = errors.New("scenarioclient: episode locked")
+	// ErrInvalidRequest は scenario サービスが 400 を返した場合のエラーです。
+	// onboarding 内 name 入力で account のバリデーションが scenario 経由で
+	// 中継されるため、ユーザーへ 400 を伝えるのに使う。
+	ErrInvalidRequest = errors.New("scenarioclient: invalid request")
+	// ErrAlreadyOnboarded はオンボーディング完了済みプレイヤーが GET script や
+	// POST complete を呼んだ場合のエラーです (scenario が 409 を返す)。
+	ErrAlreadyOnboarded = errors.New("scenarioclient: already onboarded")
 )
 
 // Client は scenario サービスへの HTTP クライアントです
@@ -81,6 +88,56 @@ func (c *Client) CompleteEpisode(ctx context.Context, playerID, episodeID string
 	return c.doJSON(ctx, http.MethodPost, path, nil, nil)
 }
 
+// GetOnboardingStatus はオンボーディング完了状態を返します。
+func (c *Client) GetOnboardingStatus(ctx context.Context, playerID string) (apiscenario.OnboardingStatus, error) {
+	path := fmt.Sprintf("/internal/v1/players/%s/onboarding/status", url.PathEscape(playerID))
+	var out apiscenario.OnboardingStatus
+	if err := c.getJSON(ctx, path, &out); err != nil {
+		return apiscenario.OnboardingStatus{}, err
+	}
+	return out, nil
+}
+
+// GetOnboardingScript はオンボーディングシナリオ本文を返します。
+func (c *Client) GetOnboardingScript(ctx context.Context, playerID, lang string) (string, error) {
+	path := fmt.Sprintf("/internal/v1/players/%s/onboarding/script", url.PathEscape(playerID))
+	if lang != "" {
+		path += "?lang=" + url.QueryEscape(lang)
+	}
+	var out apiscenario.OnboardingScriptResponse
+	if err := c.getJSON(ctx, path, &out); err != nil {
+		return "", err
+	}
+	return out.Script, nil
+}
+
+// GetOnboardingResume はオンボーディング再開時の次の checkpoint を返します。
+func (c *Client) GetOnboardingResume(ctx context.Context, playerID string) (apiscenario.OnboardingResumeResponse, error) {
+	path := fmt.Sprintf("/internal/v1/players/%s/onboarding/resume", url.PathEscape(playerID))
+	var out apiscenario.OnboardingResumeResponse
+	if err := c.getJSON(ctx, path, &out); err != nil {
+		return apiscenario.OnboardingResumeResponse{}, err
+	}
+	return out, nil
+}
+
+// UpdateOnboardingName はオンボード内 name 入力で受け取った表示名を確定します。
+// scenario が account の業務バリデーションを中継するので 400 はそのまま伝搬します。
+func (c *Client) UpdateOnboardingName(ctx context.Context, playerID, name string) error {
+	path := fmt.Sprintf("/internal/v1/players/%s/onboarding/name", url.PathEscape(playerID))
+	return c.doJSON(ctx, http.MethodPut, path, apiscenario.OnboardingNameRequest{Name: name}, nil)
+}
+
+// CompleteOnboarding はオンボーディング完了を記録し player-onboarded を発行します。
+func (c *Client) CompleteOnboarding(ctx context.Context, playerID, initialFactionID string) (apiscenario.OnboardingCompleteResponse, error) {
+	path := fmt.Sprintf("/internal/v1/players/%s/onboarding/complete", url.PathEscape(playerID))
+	var out apiscenario.OnboardingCompleteResponse
+	if err := c.doJSON(ctx, http.MethodPost, path, apiscenario.OnboardingCompleteRequest{InitialFactionID: initialFactionID}, &out); err != nil {
+		return apiscenario.OnboardingCompleteResponse{}, err
+	}
+	return out, nil
+}
+
 func (c *Client) getJSON(ctx context.Context, path string, out any) error {
 	return c.doJSON(ctx, http.MethodGet, path, nil, out)
 }
@@ -116,10 +173,15 @@ func (c *Client) doJSON(ctx context.Context, method, path string, body any, out 
 			return fmt.Errorf("scenarioclient: decode: %w", err)
 		}
 		return nil
+	case http.StatusBadRequest:
+		raw, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("%w: %s", ErrInvalidRequest, string(raw))
 	case http.StatusNotFound:
 		return ErrNotFound
 	case http.StatusForbidden:
 		return ErrLocked
+	case http.StatusConflict:
+		return ErrAlreadyOnboarded
 	}
 	raw, _ := io.ReadAll(resp.Body)
 	return fmt.Errorf("scenarioclient: %s %s: status %d: %s", method, path, resp.StatusCode, string(raw))
