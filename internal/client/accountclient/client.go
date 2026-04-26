@@ -21,6 +21,10 @@ var (
 	ErrNotFound = errors.New("accountclient: not found")
 	// ErrPlayerAlreadyRegistered はプレイヤーが既に登録済みの場合のエラーです
 	ErrPlayerAlreadyRegistered = errors.New("accountclient: player already registered")
+	// ErrInvalidRequest は account サービスが 400 を返した場合のエラーです。
+	// gateway は業務バリデーションを持たず account を SSoT とする方針のため、
+	// account の判定をそのままユーザーに伝搬する用途で使う。
+	ErrInvalidRequest = errors.New("accountclient: invalid request")
 )
 
 // Client は account サービスへの HTTP クライアントです
@@ -39,7 +43,6 @@ func New(baseURL string) *Client {
 
 type registerRequest struct {
 	FirebaseUID string `json:"firebase_uid"`
-	Name        string `json:"name"`
 }
 
 type loginRequest struct {
@@ -51,7 +54,7 @@ type loginRequest struct {
 type Player struct {
 	PlayerID         string     `json:"player_id"`
 	FirebaseUID      string     `json:"firebase_uid"`
-	Name             string     `json:"name"`
+	Name             *string    `json:"name,omitempty"`
 	Level            int64      `json:"level"`
 	Exp              int64      `json:"exp"`
 	IsPremium        bool       `json:"is_premium"`
@@ -62,10 +65,11 @@ type Player struct {
 	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
-// Register はプレイヤーを新規登録します
-func (c *Client) Register(ctx context.Context, firebaseUID, name string) (*Player, error) {
+// Register はプレイヤーを新規登録します。表示名は Register では渡さず、
+// オンボーディング完了時の player-onboarded イベントで確定します。
+func (c *Client) Register(ctx context.Context, firebaseUID string) (*Player, error) {
 	var out Player
-	if err := c.doJSON(ctx, http.MethodPost, "/internal/v1/auth/register", registerRequest{FirebaseUID: firebaseUID, Name: name}, &out); err != nil {
+	if err := c.doJSON(ctx, http.MethodPost, "/internal/v1/auth/register", registerRequest{FirebaseUID: firebaseUID}, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -85,7 +89,7 @@ func (c *Client) Login(ctx context.Context, firebaseUID string) (*Player, error)
 // 「未登録」と「通信エラー」を区別するためにこのシグネチャに依存している。
 func (c *Client) FindByFirebaseUID(ctx context.Context, firebaseUID string) (*Player, error) {
 	var out Player
-	path := "/internal/v1/players/by-firebase-uid/" + url.PathEscape(firebaseUID)
+	path := "/internal/v1/auth/by-firebase-uid/" + url.PathEscape(firebaseUID)
 	if err := c.doJSON(ctx, http.MethodGet, path, nil, &out); err != nil {
 		if errors.Is(err, ErrNotFound) {
 			return nil, nil
@@ -262,6 +266,9 @@ func (c *Client) doJSON(ctx context.Context, method, path string, body, out any)
 			return fmt.Errorf("accountclient: decode: %w", err)
 		}
 		return nil
+	case http.StatusBadRequest:
+		raw, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("%w: %s", ErrInvalidRequest, string(raw))
 	case http.StatusNotFound:
 		return ErrNotFound
 	case http.StatusConflict:

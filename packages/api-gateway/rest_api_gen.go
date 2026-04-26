@@ -19,7 +19,7 @@ type VersionResponse struct {
 type PlayerResponse struct {
 	PlayerID         string     `json:"player_id"`
 	FirebaseUID      string     `json:"firebase_uid"`
-	Name             string     `json:"name"`
+	Name             *string    `json:"name,omitempty"`
 	Level            int64      `json:"level"`
 	Exp              int64      `json:"exp"`
 	IsPremium        bool       `json:"is_premium"`
@@ -152,11 +152,6 @@ type PurchaseRequest struct {
 	ProductID     string `json:"product_id"`
 	Platform      string `json:"platform"`
 	PurchaseToken string `json:"purchase_token"`
-}
-
-// RegisterRequest is the request body for POST /auth/register.
-type RegisterRequest struct {
-	Name string `json:"name"`
 }
 
 // PlayerNameRequest is the request body for PUT /player/name.

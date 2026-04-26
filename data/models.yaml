@@ -405,7 +405,7 @@ files:
         fields:
           - {name: PlayerID, type: string, json: "player_id", doc: "プレイヤーID（UUID）"}
           - {name: FirebaseUID, type: string, json: "firebase_uid", doc: "Firebase UID"}
-          - {name: Name, type: string, json: "name", doc: "プレイヤー名"}
+          - {name: Name, type: "*string", json: "name,omitempty", doc: "プレイヤー名（オンボーディング未完了時は null）"}
           - {name: Level, type: int64, json: "level", doc: "プレイヤーレベル"}
           - {name: Exp, type: int64, json: "exp", doc: "累計経験値"}
           - {name: IsPremium, type: bool, json: "is_premium", doc: "プレミアム会員か"}
@@ -541,11 +541,6 @@ files:
           - {name: ProductID, type: string, json: "product_id", doc: "商品ID"}
           - {name: Platform, type: string, json: "platform", doc: "プラットフォーム（`ios` / `android`）"}
           - {name: PurchaseToken, type: string, json: "purchase_token", doc: "購入トークン"}
-
-      - name: RegisterRequest
-        comment: "RegisterRequest is the request body for POST /auth/register."
-        fields:
-          - {name: Name, type: string, json: "name", doc: "プレイヤー名（1〜50文字）"}
 
       - name: PlayerNameRequest
         comment: "PlayerNameRequest is the request body for PUT /player/name."

@@ -79,7 +79,13 @@ func NewManager(
 		if p == nil {
 			return "", 0, nil
 		}
-		return p.Name, p.Level, nil
+		// オンボーディング未完了の場合 Name が nil。表示用メタデータの呼び出し元が
+		// 既に "" をプレースホルダ扱いしているのでここでも空文字に正規化する。
+		var name string
+		if p.Name != nil {
+			name = *p.Name
+		}
+		return name, p.Level, nil
 	})
 
 	spectate := NewSpectateRelay(hub, battleClient, gamePlayerRepo, lookupFn)

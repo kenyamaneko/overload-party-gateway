@@ -5,7 +5,7 @@
 >
 > WebSocket プロトコル契約は [WS_REFERENCE.md](WS_REFERENCE.md) を参照。
 
-生成日時: `2026-04-25T09:21:05Z`
+生成日時: `2026-04-26T02:31:48Z`
 
 ## Public REST（認証不要）
 
@@ -102,13 +102,7 @@ API ヘルスチェック
 
 ### `POST /api/v1/auth/register`
 
-新規プレイヤー登録
-
-**リクエスト**: `RegisterRequest`
-
-| フィールド | 型 | JSON | 説明 |
-|---|---|---|---|
-| Name | `string` | `name` | プレイヤー名（1〜50文字） |
+新規プレイヤー登録（name は受け取らず、オンボーディング完了時に確定）
 
 **レスポンス**: `201 Created`
 
@@ -116,7 +110,7 @@ API ヘルスチェック
 |---|---|---|---|
 | PlayerID | `string` | `player_id` | プレイヤーID（UUID） |
 | FirebaseUID | `string` | `firebase_uid` | Firebase UID |
-| Name | `string` | `name` | プレイヤー名 |
+| Name | `string?` | `name` | プレイヤー名（オンボーディング未完了時は null） |
 | Level | `number` | `level` | プレイヤーレベル |
 | Exp | `number` | `exp` | 累計経験値 |
 | IsPremium | `boolean` | `is_premium` | プレミアム会員か |
@@ -132,7 +126,6 @@ API ヘルスチェック
 
 | ステータス | 説明 |
 |---|---|
-| `400` | name が空または 50 文字超 |
 | `409` | 既に登録済み |
 
 ### `POST /api/v1/auth/login`
@@ -145,7 +138,7 @@ API ヘルスチェック
 |---|---|---|---|
 | PlayerID | `string` | `player_id` | プレイヤーID（UUID） |
 | FirebaseUID | `string` | `firebase_uid` | Firebase UID |
-| Name | `string` | `name` | プレイヤー名 |
+| Name | `string?` | `name` | プレイヤー名（オンボーディング未完了時は null） |
 | Level | `number` | `level` | プレイヤーレベル |
 | Exp | `number` | `exp` | 累計経験値 |
 | IsPremium | `boolean` | `is_premium` | プレミアム会員か |
@@ -184,7 +177,7 @@ Firebase Token 検証 + PlayerResolve ミドルウェア適用済み。
 |---|---|---|---|
 | PlayerID | `string` | `player_id` | プレイヤーID（UUID） |
 | FirebaseUID | `string` | `firebase_uid` | Firebase UID |
-| Name | `string` | `name` | プレイヤー名 |
+| Name | `string?` | `name` | プレイヤー名（オンボーディング未完了時は null） |
 | Level | `number` | `level` | プレイヤーレベル |
 | Exp | `number` | `exp` | 累計経験値 |
 | IsPremium | `boolean` | `is_premium` | プレミアム会員か |
@@ -218,7 +211,7 @@ Firebase Token 検証 + PlayerResolve ミドルウェア適用済み。
 |---|---|---|---|
 | PlayerID | `string` | `player_id` | プレイヤーID（UUID） |
 | FirebaseUID | `string` | `firebase_uid` | Firebase UID |
-| Name | `string` | `name` | プレイヤー名 |
+| Name | `string?` | `name` | プレイヤー名（オンボーディング未完了時は null） |
 | Level | `number` | `level` | プレイヤーレベル |
 | Exp | `number` | `exp` | 累計経験値 |
 | IsPremium | `boolean` | `is_premium` | プレミアム会員か |

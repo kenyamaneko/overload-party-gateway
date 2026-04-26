@@ -1,10 +1,8 @@
 package rest
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -33,14 +31,15 @@ func withFirebaseUID(uid string) gin.HandlerFunc {
 }
 
 func TestAuthHandler_Register(t *testing.T) {
-	t.Run("success returns 201 and player", func(t *testing.T) {
+	t.Run("success returns 201 with name unset", func(t *testing.T) {
 		fa := apiaccountserverfake.NewServer()
 		defer fa.Close()
 		fa.RegisterFn = func(req apiaccount.RegisterRequest) (int, any) {
 			return http.StatusCreated, apiaccount.Player{
 				PlayerID:    "p-" + req.FirebaseUID,
 				FirebaseUID: req.FirebaseUID,
-				Name:        req.Name,
+				// Name はオンボーディング完了まで nil。account 側も nil で挿入する契約。
+				Name: nil,
 			}
 		}
 		h := NewAuthHandler(accountclient.New(fa.URL()))
@@ -49,31 +48,14 @@ func TestAuthHandler_Register(t *testing.T) {
 		r.Use(withFirebaseUID("uid-new"))
 		r.POST("/register", h.Register)
 
-		req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{"name":"alice"}`))
-		req.Header.Set("Content-Type", "application/json")
+		req := httptest.NewRequest(http.MethodPost, "/register", nil)
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
 
 		require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 		assert.Contains(t, w.Body.String(), `"player_id":"p-uid-new"`)
-		assert.Contains(t, w.Body.String(), `"name":"alice"`)
-	})
-
-	t.Run("invalid JSON returns 400", func(t *testing.T) {
-		fa := apiaccountserverfake.NewServer()
-		defer fa.Close()
-		h := NewAuthHandler(accountclient.New(fa.URL()))
-
-		r := gin.New()
-		r.Use(withFirebaseUID("uid"))
-		r.POST("/register", h.Register)
-
-		req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{not json`))
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-
-		assert.Equal(t, http.StatusBadRequest, w.Code)
+		// name は omitempty なので JSON に出ない。
+		assert.NotContains(t, w.Body.String(), `"name":`)
 	})
 
 	t.Run("missing firebase uid returns 401", func(t *testing.T) {
@@ -84,8 +66,7 @@ func TestAuthHandler_Register(t *testing.T) {
 		r := gin.New()
 		r.POST("/register", h.Register)
 
-		req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{"name":"alice"}`))
-		req.Header.Set("Content-Type", "application/json")
+		req := httptest.NewRequest(http.MethodPost, "/register", nil)
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
 
@@ -104,8 +85,7 @@ func TestAuthHandler_Register(t *testing.T) {
 		r.Use(withFirebaseUID("uid-dup"))
 		r.POST("/register", h.Register)
 
-		req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{"name":"bob"}`))
-		req.Header.Set("Content-Type", "application/json")
+		req := httptest.NewRequest(http.MethodPost, "/register", nil)
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
 
@@ -124,68 +104,11 @@ func TestAuthHandler_Register(t *testing.T) {
 		r.Use(withFirebaseUID("uid-x"))
 		r.POST("/register", h.Register)
 
-		req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{"name":"x"}`))
-		req.Header.Set("Content-Type", "application/json")
+		req := httptest.NewRequest(http.MethodPost, "/register", nil)
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
-	})
-}
-
-func TestAuthHandler_Register_NameValidation(t *testing.T) {
-	tests := []struct {
-		caseName   string
-		playerName string
-	}{
-		{"empty", ""},
-		{"whitespace_only", "   "},
-		{"contains_newline", "ab\ncd"},
-		{"contains_tab", "ab\tcd"},
-		{"too_long", strings.Repeat("a", 51)},
-	}
-	for _, tt := range tests {
-		t.Run(tt.caseName, func(t *testing.T) {
-			fa := apiaccountserverfake.NewServer()
-			defer fa.Close()
-			h := NewAuthHandler(accountclient.New(fa.URL()))
-
-			r := gin.New()
-			r.Use(withFirebaseUID("uid"))
-			r.POST("/register", h.Register)
-
-			body, _ := json.Marshal(map[string]string{"name": tt.playerName})
-			req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(string(body)))
-			req.Header.Set("Content-Type", "application/json")
-			w := httptest.NewRecorder()
-			r.ServeHTTP(w, req)
-
-			assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
-		})
-	}
-}
-
-func TestAuthHandler_Register_BoundaryName(t *testing.T) {
-	t.Run("max length 50 multibyte runes ok", func(t *testing.T) {
-		fa := apiaccountserverfake.NewServer()
-		defer fa.Close()
-		// 既定の RegisterFn (nil) は空 Player を返すので、handler が 201 を
-		// そのまま返せば多バイト文字長チェックを通過した合図になる。
-		h := NewAuthHandler(accountclient.New(fa.URL()))
-
-		r := gin.New()
-		r.Use(withFirebaseUID("uid-50"))
-		r.POST("/register", h.Register)
-
-		// 50 ja runes (multibyte) — RuneCount でカウントされること
-		name := strings.Repeat("あ", 50)
-		body, _ := json.Marshal(map[string]string{"name": name})
-		req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(string(body)))
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-
-		require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 	})
 }
 
@@ -194,10 +117,11 @@ func TestAuthHandler_Login(t *testing.T) {
 		fa := apiaccountserverfake.NewServer()
 		defer fa.Close()
 		fa.LoginFn = func(req apiaccount.LoginRequest) (int, any) {
+			name := "x"
 			return http.StatusOK, apiaccount.Player{
 				PlayerID:    "p-x",
 				FirebaseUID: req.FirebaseUID,
-				Name:        "x",
+				Name:        &name,
 			}
 		}
 		h := NewAuthHandler(accountclient.New(fa.URL()))
@@ -268,16 +192,3 @@ func TestAuthHandler_Login(t *testing.T) {
 	})
 }
 
-func TestValidateName(t *testing.T) {
-	t.Run("ok", func(t *testing.T) {
-		assert.NoError(t, validateName("alice"))
-		assert.NoError(t, validateName("あいう"))
-		assert.NoError(t, validateName("a b c"))
-	})
-	t.Run("ng", func(t *testing.T) {
-		assert.Error(t, validateName(""))
-		assert.Error(t, validateName("   "))
-		assert.Error(t, validateName("a\nb"))
-		assert.Error(t, validateName(strings.Repeat("a", 51)))
-	})
-}

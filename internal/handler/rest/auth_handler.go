@@ -3,37 +3,12 @@ package rest
 import (
 	"errors"
 	"net/http"
-	"strings"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 
-	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
 )
-
-const maxNameRunes = 50
-
-// validateName は gateway 段階で簡単に弾けるプレイヤー名の不正を検出する。
-// 詳細な業務ルール（重複等）は account サービス側に委ねる。
-func validateName(s string) error {
-	if strings.TrimSpace(s) == "" {
-		return errors.New("name must not be empty or whitespace only")
-	}
-	n := utf8.RuneCountInString(s)
-	if n < 1 || n > maxNameRunes {
-		return errors.New("name must be 1-50 characters")
-	}
-	for _, r := range s {
-		// 制御文字（改行・タブ含む）は明らかに不正なので gateway で弾く。
-		if unicode.IsControl(r) {
-			return errors.New("name must not contain control characters")
-		}
-	}
-	return nil
-}
 
 // AuthHandler は認証関連の REST エンドポイントを処理します
 type AuthHandler struct {
@@ -45,25 +20,16 @@ func NewAuthHandler(account *accountclient.Client) *AuthHandler {
 	return &AuthHandler{account: account}
 }
 
-// Register はプレイヤー新規登録を処理します
+// Register はプレイヤー新規登録を処理します。表示名は受け取らず、
+// オンボーディングシナリオの中で player-onboarded イベント経由で確定します。
 func (h *AuthHandler) Register(c *gin.Context) {
-	var req apigateway.RegisterRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	if err := validateName(req.Name); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
 	firebaseUID := middleware.GetFirebaseUID(c)
 	if firebaseUID == "" {
 		// FirebaseAuth の後にチェインされる前提だが、防御的に 401 を返す。
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing firebase uid"})
 		return
 	}
-	player, err := h.account.Register(c.Request.Context(), firebaseUID, req.Name)
+	player, err := h.account.Register(c.Request.Context(), firebaseUID)
 	if err != nil {
 		if errors.Is(err, accountclient.ErrPlayerAlreadyRegistered) {
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})

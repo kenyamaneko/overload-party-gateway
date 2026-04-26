@@ -56,7 +56,8 @@ func newStatefulAccountFake() *statefulAccountFake {
 		p := apiaccount.Player{
 			PlayerID:    "generated-" + req.FirebaseUID,
 			FirebaseUID: req.FirebaseUID,
-			Name:        req.Name,
+			// Register 時点では name 未確定 (オンボーディング完了で確定する契約)。
+			Name: nil,
 		}
 		s.players[req.FirebaseUID] = p
 		return http.StatusCreated, p

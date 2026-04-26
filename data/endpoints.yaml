@@ -49,13 +49,10 @@ endpoint_groups:
     endpoints:
       - method: POST
         path: /api/v1/auth/register
-        summary: 新規プレイヤー登録
-        request_type: RegisterRequest
+        summary: 新規プレイヤー登録（name は受け取らず、オンボーディング完了時に確定）
         response_type: PlayerResponse
         response_description: "`201 Created`"
         errors:
-          - status: 400
-            description: name が空または 50 文字超
           - status: 409
             description: 既に登録済み
 

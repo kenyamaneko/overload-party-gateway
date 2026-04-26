@@ -96,8 +96,7 @@ func resolveOrCreateDevPlayer(ctx context.Context, accountClient *accountclient.
 		return player.PlayerID, false, nil
 	}
 
-	username := "Dev_" + firebaseUID
-	newPlayer, err := accountClient.Register(ctx, firebaseUID, username)
+	newPlayer, err := accountClient.Register(ctx, firebaseUID)
 	if err != nil {
 		// 並行リクエストとの競合時は FindByFirebaseUID にフォールバック
 		if errors.Is(err, accountclient.ErrPlayerAlreadyRegistered) {
@@ -112,7 +111,7 @@ func resolveOrCreateDevPlayer(ctx context.Context, accountClient *accountclient.
 		}
 		return "", false, fmt.Errorf("register dev player: %w", err)
 	}
-	log.Printf("auto-created dev player: uid=%s playerID=%s username=%s", firebaseUID, newPlayer.PlayerID, username)
+	log.Printf("auto-created dev player: uid=%s playerID=%s (name unset until onboarding)", firebaseUID, newPlayer.PlayerID)
 
 	return newPlayer.PlayerID, true, nil
 }

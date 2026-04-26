@@ -28,7 +28,6 @@ func TestPlayerOnboardedSubscriber_Consumes(t *testing.T) {
 			publish: func(ctx context.Context, pub *apiscenariofake.Publisher, _ *apiscenariofake.Broker) {
 				_ = apiscenariofake.PublishPlayerOnboarded(ctx, pub, apiscenario.PlayerOnboardedEvent{
 					PlayerID:         "p-1",
-					DisplayName:      "alice",
 					InitialFactionID: "SHE",
 				})
 			},
