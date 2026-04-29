@@ -23,7 +23,7 @@ type Config struct {
 	ScenarioServiceURL    string
 
 	// game_players / news_articles は gateway が直接 Postgres に接続して読み書きする
-	DatabaseURL string
+	DatabaseConn string
 
 	PubsubProjectID         string
 	MatchmakingSubscription string
@@ -57,7 +57,7 @@ func Load() *Config {
 		ShopServiceURL:        getEnv("SHOP_SERVICE_URL", "http://localhost:9006"),
 		ScenarioServiceURL:    getEnv("SCENARIO_SERVICE_URL", "http://localhost:9007"),
 
-		DatabaseURL: getEnv("DATABASE_URL", ""),
+		DatabaseConn: getEnv("DATABASE_CONN", ""),
 
 		PubsubProjectID:         getEnv("PUBSUB_PROJECT_ID", ""),
 		MatchmakingSubscription: getEnv("MATCHMAKING_SUBSCRIPTION", "matchmaking-events-gateway"),

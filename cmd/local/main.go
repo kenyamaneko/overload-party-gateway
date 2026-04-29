@@ -36,14 +36,14 @@ func main() {
 	log.Println("=== Overload Party Gateway (LOCAL MODE) ===")
 
 	cfg := config.Load()
-	if cfg.DatabaseURL == "" {
-		log.Fatal("DATABASE_URL must be set (gateway owns gateway.game_players and reads newsfeed.news_articles)")
+	if cfg.DatabaseConn == "" {
+		log.Fatal("DATABASE_CONN must be set (gateway owns gateway.game_players and reads newsfeed.news_articles)")
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	pool, err := pgxpool.New(ctx, cfg.DatabaseConn)
 	if err != nil {
 		log.Fatalf("failed to create pg pool: %v", err)
 	}

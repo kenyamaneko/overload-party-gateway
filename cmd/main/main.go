@@ -45,8 +45,8 @@ func main() {
 	if cfg.Env == "prod" && len(cfg.AllowedOrigins) == 0 {
 		log.Fatal("ALLOWED_ORIGINS must be set in production")
 	}
-	if cfg.DatabaseURL == "" {
-		log.Fatal("DATABASE_URL must be set")
+	if cfg.DatabaseConn == "" {
+		log.Fatal("DATABASE_CONN must be set")
 	}
 	if cfg.PubsubProjectID == "" {
 		log.Fatal("PUBSUB_PROJECT_ID must be set")
@@ -61,7 +61,7 @@ func main() {
 
 	// PostgreSQL 接続プール: gateway.game_players（gateway 所有）と
 	// newsfeed.news_articles（read-only クロススキーマプロキシ）に使用
-	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	pool, err := pgxpool.New(ctx, cfg.DatabaseConn)
 	if err != nil {
 		log.Fatalf("failed to create pg pool: %v", err)
 	}
