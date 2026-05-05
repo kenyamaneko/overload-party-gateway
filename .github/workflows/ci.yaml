@@ -27,12 +27,7 @@ jobs:
           go-version-file: go.mod
       - name: Configure Go private modules
         run: |
-          git config --global url."https://x-access-token:${{ secrets.COMMON_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-common".insteadOf "https://github.com/kenyamaneko/overload-party-common"
-          git config --global url."https://x-access-token:${{ secrets.BATTLE_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-battle".insteadOf "https://github.com/kenyamaneko/overload-party-battle"
-          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-card".insteadOf "https://github.com/kenyamaneko/overload-party-card"
-          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-account".insteadOf "https://github.com/kenyamaneko/overload-party-account"
-          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-shop".insteadOf "https://github.com/kenyamaneko/overload-party-shop"
-          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-scenario".insteadOf "https://github.com/kenyamaneko/overload-party-scenario"
+          git config --global url."https://x-access-token:${{ secrets.COMMON_GO_MODULES_FETCH }}@github.com/kenyamaneko/".insteadOf "https://github.com/kenyamaneko/"
         env:
           GOPRIVATE: github.com/kenyamaneko/*
           GONOSUMDB: github.com/kenyamaneko/*
@@ -52,12 +47,7 @@ jobs:
           go-version-file: go.mod
       - name: Configure Go private modules
         run: |
-          git config --global url."https://x-access-token:${{ secrets.COMMON_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-common".insteadOf "https://github.com/kenyamaneko/overload-party-common"
-          git config --global url."https://x-access-token:${{ secrets.BATTLE_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-battle".insteadOf "https://github.com/kenyamaneko/overload-party-battle"
-          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-card".insteadOf "https://github.com/kenyamaneko/overload-party-card"
-          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-account".insteadOf "https://github.com/kenyamaneko/overload-party-account"
-          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-shop".insteadOf "https://github.com/kenyamaneko/overload-party-shop"
-          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-scenario".insteadOf "https://github.com/kenyamaneko/overload-party-scenario"
+          git config --global url."https://x-access-token:${{ secrets.COMMON_GO_MODULES_FETCH }}@github.com/kenyamaneko/".insteadOf "https://github.com/kenyamaneko/"
         env:
           GOPRIVATE: github.com/kenyamaneko/*
           GONOSUMDB: github.com/kenyamaneko/*
@@ -92,12 +82,7 @@ jobs:
           echo "Firestore emulator failed to start"; cat /tmp/firestore.log; exit 1
       - name: Configure Go private modules
         run: |
-          git config --global url."https://x-access-token:${{ secrets.COMMON_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-common".insteadOf "https://github.com/kenyamaneko/overload-party-common"
-          git config --global url."https://x-access-token:${{ secrets.BATTLE_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-battle".insteadOf "https://github.com/kenyamaneko/overload-party-battle"
-          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-card".insteadOf "https://github.com/kenyamaneko/overload-party-card"
-          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-account".insteadOf "https://github.com/kenyamaneko/overload-party-account"
-          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-shop".insteadOf "https://github.com/kenyamaneko/overload-party-shop"
-          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-scenario".insteadOf "https://github.com/kenyamaneko/overload-party-scenario"
+          git config --global url."https://x-access-token:${{ secrets.COMMON_GO_MODULES_FETCH }}@github.com/kenyamaneko/".insteadOf "https://github.com/kenyamaneko/"
         env:
           GOPRIVATE: github.com/kenyamaneko/*
           GONOSUMDB: github.com/kenyamaneko/*
@@ -129,14 +114,10 @@ jobs:
         env:
           DOCKER_BUILDKIT: "1"
           COMMON_GO_MODULES_FETCH: ${{ secrets.COMMON_GO_MODULES_FETCH }}
-          BATTLE_GO_MODULES_FETCH: ${{ secrets.BATTLE_GO_MODULES_FETCH }}
-          SERVICES_GO_MODULES_FETCH: ${{ secrets.SERVICES_GO_MODULES_FETCH }}
         run: |
           IMAGE=${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}
           docker build \
             --secret id=COMMON_GO_MODULES_FETCH,env=COMMON_GO_MODULES_FETCH \
-            --secret id=BATTLE_GO_MODULES_FETCH,env=BATTLE_GO_MODULES_FETCH \
-            --secret id=SERVICES_GO_MODULES_FETCH,env=SERVICES_GO_MODULES_FETCH \
             -t ${IMAGE}:${{ github.sha }} -t ${IMAGE}:latest .
           docker push ${IMAGE}:${{ github.sha }}
           docker push ${IMAGE}:latest
