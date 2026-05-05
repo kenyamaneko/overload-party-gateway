@@ -298,11 +298,14 @@ func (r *GameRelay) sendActionPerformed(ctx context.Context, gameID, actingPlaye
 	}
 }
 
+// maxNpcTurnIterations は runNpcTurns の上限イテレーション数。
+// battle server が NpcPending をクリアしないバグへの安全弁。
+const maxNpcTurnIterations = 200
+
 // runNpcTurns は battle server が NpcPending=true を返す間 AdvanceNpcTurn を繰り返し呼び出す。
 // 各イテレーションのイベントは sendActionPerformed で中継され、プレイヤーは全 NPC アクションを順に受け取る。
 // battle server が NpcPending をクリアしないバグへの安全弁として maxNpcTurnIterations で上限を設ける。
 func (r *GameRelay) runNpcTurns(ctx context.Context, gameID, playerID string, current *service.ActionResult) *service.ActionResult {
-	const maxNpcTurnIterations = 200
 	for i := 0; current != nil && current.NpcPending && !current.GameOver; i++ {
 		if i >= maxNpcTurnIterations {
 			log.Printf("ERROR: runNpcTurns iteration cap reached (game=%s, player=%s) — possible battle server bug", gameID, playerID)
@@ -604,6 +607,9 @@ func (r *GameRelay) HandleUseStamp(conn *Connection, data json.RawMessage) {
 		return
 	}
 	pNum := r.resolvePlayerNum(conn.playerID)
+	if pNum == 0 {
+		return
+	}
 	r.BroadcastToGame(req.GameID, &WSMessage{
 		Type: genws.WSServerMsgStampUsed,
 		Data: mustMarshal(StampUsedMessage{

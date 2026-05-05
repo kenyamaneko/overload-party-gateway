@@ -17,17 +17,12 @@ var errFake = errors.New("fake battle error")
 // --- Mock BattleClient ---
 
 type mockBattleClient struct {
-	// getGameStateForPlayer returns the configured state per (gameID, playerNum).
-	states map[string]json.RawMessage
-	// processActionResult is returned by ProcessAction.
 	processActionResult *service.ActionResult
 	processActionErr    error
-	// turnControls is returned by GetTurnControlsForPlayer.
-	turnControls    json.RawMessage
-	turnControlsErr error
-	// advanceNpcResult is returned by AdvanceNpcTurn.
-	advanceNpcResult *service.ActionResult
-	advanceNpcErr    error
+	turnControls        json.RawMessage
+	turnControlsErr     error
+	advanceNpcResult    *service.ActionResult
+	advanceNpcErr       error
 	// advanceNpcQueue, if non-nil, is popped from on each AdvanceNpcTurn call
 	// (overrides advanceNpcResult). Enables tests that need successive results.
 	advanceNpcQueue []*service.ActionResult
@@ -35,15 +30,7 @@ type mockBattleClient struct {
 }
 
 func newMockBattleClient() *mockBattleClient {
-	return &mockBattleClient{
-		states: make(map[string]json.RawMessage),
-	}
-}
-
-func stateKey(gameID, playerID string) string { return gameID + ":" + playerID }
-
-func (m *mockBattleClient) SetState(gameID, playerID string, state json.RawMessage) {
-	m.states[stateKey(gameID, playerID)] = state
+	return &mockBattleClient{}
 }
 
 func (m *mockBattleClient) GetNPCModels(_ context.Context) (json.RawMessage, error) {
@@ -72,16 +59,18 @@ func (m *mockBattleClient) GetTurnControlsForPlayer(_ context.Context, _ string,
 
 func (m *mockBattleClient) AdvanceNpcTurn(_ context.Context, _ string) (*service.ActionResult, error) {
 	m.advanceNpcCalls++
+	// queue モードと固定エラーモードは排他。混在するとテストの意図が曖昧になるため、
+	// セットアップミスを早期検出する。
+	if m.advanceNpcQueue != nil && m.advanceNpcErr != nil {
+		panic("mockBattleClient: advanceNpcQueue と advanceNpcErr の同時セットは禁止（モード排他）")
+	}
 	if m.advanceNpcQueue != nil {
 		if len(m.advanceNpcQueue) == 0 {
-			if m.advanceNpcErr != nil {
-				return nil, m.advanceNpcErr
-			}
 			panic("mockBattleClient: advanceNpcQueue exhausted — test setup has fewer results than AdvanceNpcTurn calls")
 		}
 		r := m.advanceNpcQueue[0]
 		m.advanceNpcQueue = m.advanceNpcQueue[1:]
-		return r, m.advanceNpcErr
+		return r, nil
 	}
 	return m.advanceNpcResult, m.advanceNpcErr
 }
@@ -157,18 +146,6 @@ func TestBattleStateMeta_EmptyJSON(t *testing.T) {
 	assert.Equal(t, int64(0), meta.CurrentTurn)
 	assert.False(t, meta.IsMyTurn)
 	assert.Equal(t, int64(0), meta.MyView.TimeBank)
-}
-
-func TestGameState_PassthroughAsRawMessage(t *testing.T) {
-	// Verify that GetGameStateForPlayer returns raw JSON unchanged.
-	bc := newMockBattleClient()
-
-	ctx := context.Background()
-	state, err := bc.GetGameStateForPlayer(ctx, "game_1", 1)
-	require.NoError(t, err)
-
-	// The mock returns a static `{}` — the point is no transformation.
-	assert.JSONEq(t, `{}`, string(state))
 }
 
 // ========================================================================
@@ -256,10 +233,9 @@ func TestRunNpcTurns_IterationCapReached(t *testing.T) {
 	relay, bc := newTestRelay()
 	ctx := context.Background()
 
-	// Build a queue that exceeds the 200 iteration cap.
-	// The loop consumes one per iteration, so 201 entries means the cap
-	// fires at i==200 before popping the 201st element.
-	queue := make([]*service.ActionResult, 201)
+	// キューはループ上限を1つ超えるサイズで用意する。上限到達時に i==maxNpcTurnIterations で
+	// 抜けるため、最後の1件はポップされない。
+	queue := make([]*service.ActionResult, maxNpcTurnIterations+1)
 	for i := range queue {
 		queue[i] = &service.ActionResult{NpcPending: true}
 	}
@@ -270,7 +246,7 @@ func TestRunNpcTurns_IterationCapReached(t *testing.T) {
 
 	require.NotNil(t, result)
 	assert.True(t, result.NpcPending, "cap interrupts the loop so NpcPending remains true")
-	assert.Equal(t, 200, bc.advanceNpcCalls, "should stop after exactly maxNpcTurnIterations calls")
+	assert.Equal(t, maxNpcTurnIterations, bc.advanceNpcCalls, "should stop after exactly maxNpcTurnIterations calls")
 }
 
 // ========================================================================
