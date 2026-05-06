@@ -216,8 +216,8 @@ func (c *Client) AwardGameExp(ctx context.Context, p1ID, p2ID string, winnerNum 
 }
 
 // GetSettings はユーザー設定を取得します
-func (c *Client) GetSettings(ctx context.Context, playerID string) (*apiaccount.PlayerSettings, error) {
-	var out apiaccount.PlayerSettings
+func (c *Client) GetSettings(ctx context.Context, playerID string) (*apiaccount.PlayerSettingsResponse, error) {
+	var out apiaccount.PlayerSettingsResponse
 	path := "/internal/v1/players/" + url.PathEscape(playerID) + "/settings"
 	if err := c.doJSON(ctx, http.MethodGet, path, nil, &out); err != nil {
 		return nil, err
@@ -226,8 +226,8 @@ func (c *Client) GetSettings(ctx context.Context, playerID string) (*apiaccount.
 }
 
 // UpdateSettings はユーザー設定を更新します
-func (c *Client) UpdateSettings(ctx context.Context, playerID string, req apiaccount.UpdateSettingsRequest) (*apiaccount.PlayerSettings, error) {
-	var out apiaccount.PlayerSettings
+func (c *Client) UpdateSettings(ctx context.Context, playerID string, req apiaccount.UpdateSettingsRequest) (*apiaccount.PlayerSettingsResponse, error) {
+	var out apiaccount.PlayerSettingsResponse
 	path := "/internal/v1/players/" + url.PathEscape(playerID) + "/settings"
 	if err := c.doJSON(ctx, http.MethodPut, path, req, &out); err != nil {
 		return nil, err
