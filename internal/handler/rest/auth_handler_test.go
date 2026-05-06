@@ -35,7 +35,7 @@ func TestAuthHandler_Register(t *testing.T) {
 		fa := apiaccountserverfake.NewServer()
 		defer fa.Close()
 		fa.RegisterFn = func(req apiaccount.RegisterRequest) (int, any) {
-			return http.StatusCreated, apiaccount.Player{
+			return http.StatusCreated, apiaccount.PlayerResponse{
 				PlayerID:    "p-" + req.FirebaseUID,
 				FirebaseUID: req.FirebaseUID,
 				// Name はオンボーディング完了まで nil。account 側も nil で挿入する契約。
@@ -118,7 +118,7 @@ func TestAuthHandler_Login(t *testing.T) {
 		defer fa.Close()
 		fa.LoginFn = func(req apiaccount.LoginRequest) (int, any) {
 			name := "x"
-			return http.StatusOK, apiaccount.Player{
+			return http.StatusOK, apiaccount.PlayerResponse{
 				PlayerID:    "p-x",
 				FirebaseUID: req.FirebaseUID,
 				Name:        &name,

@@ -5,7 +5,7 @@
 >
 > WebSocket プロトコル契約は [WS_REFERENCE.md](WS_REFERENCE.md) を参照。
 
-生成日時: `2026-04-26T07:32:14Z`
+生成日時: `2026-05-06T10:00:06Z`
 
 ## Public REST（認証不要）
 
