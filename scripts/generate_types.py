@@ -19,7 +19,6 @@ Usage:
 import json
 import re
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 try:
@@ -410,7 +409,6 @@ def _render_type_table(lines: list[str], data: dict, type_name: str) -> None:
 
 def generate_api_reference(ep_data: dict, models_data: dict, output_path: Path) -> None:
     """Generate docs/API_REFERENCE.md from endpoints.yaml endpoint_groups + messages."""
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     lines = [
         "# API リファレンス",
         "",
@@ -418,8 +416,6 @@ def generate_api_reference(ep_data: dict, models_data: dict, output_path: Path) 
         "> `python3 scripts/generate_types.py` で生成される。",
         ">",
         "> WebSocket プロトコル契約は [WS_REFERENCE.md](WS_REFERENCE.md) を参照。",
-        "",
-        f"生成日時: `{now}`",
         "",
     ]
 
