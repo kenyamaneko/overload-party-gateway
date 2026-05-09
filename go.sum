@@ -147,8 +147,8 @@ github.com/jackc/puddle/v2 v2.2.2 h1:PR8nw+E/1w0GLuRFSmiioY6UooMp6KJv0/61nB7icHo
 github.com/jackc/puddle/v2 v2.2.2/go.mod h1:vriiEXHvEE654aYKXXjOvZM39qJ0q+azkZFrfEOc3H4=
 github.com/json-iterator/go v1.1.12 h1:PV8peI4a0ysnczrg+LtxykD8LfKY9ML6u2jnxaEnrnM=
 github.com/json-iterator/go v1.1.12/go.mod h1:e30LSqwooZae/UwlEbR2852Gd8hjQvJoHmT4TnhNGBo=
-github.com/kenyamaneko/overload-party-account/packages/api-account v0.1.1 h1:pXnYHsZ7AfgNGKbYSJGh1O68lFxFTvn4gtCIQA/DNOM=
-github.com/kenyamaneko/overload-party-account/packages/api-account v0.1.1/go.mod h1:pgrN14U543RyvovWNRaSSgpIYJDYxDIJ9rTjZv6vKRY=
+github.com/kenyamaneko/overload-party-account/packages/api-account v0.1.2 h1:StgsuLIHBHlRM4JK1fcFCKApbBW/eoZy5xk6Q94bJkQ=
+github.com/kenyamaneko/overload-party-account/packages/api-account v0.1.2/go.mod h1:pgrN14U543RyvovWNRaSSgpIYJDYxDIJ9rTjZv6vKRY=
 github.com/kenyamaneko/overload-party-battle/packages/api-battle-rpc-go v0.1.0 h1:zKReb9098Kz6GsMmG2NEdQIvgF/HGPQA9REEZhR2skQ=
 github.com/kenyamaneko/overload-party-battle/packages/api-battle-rpc-go v0.1.0/go.mod h1:TMk17tOXh+b9fDm92CdL5q4vgxqhvi+ciAyC7clxKvo=
 github.com/kenyamaneko/overload-party-battle/packages/game-logic-constants-go v0.1.0 h1:nxbYSBUkTerPTfy+9UugWeZYXOFzhsSxaVUgtgh8r+U=
@@ -159,10 +159,10 @@ github.com/kenyamaneko/overload-party-common/packages/game-design-constants v0.1
 github.com/kenyamaneko/overload-party-common/packages/game-design-constants v0.1.0/go.mod h1:4z5Ry1Y8LZQM4OKqLivo/OhVefKloLZP2vUDQ1Yo0UI=
 github.com/kenyamaneko/overload-party-matchmaking/packages/api-matchmaking v0.1.2 h1:xxjRuAcVnGwsI7vpyakhNBP5KRm8ijRCwOgfqu29HRU=
 github.com/kenyamaneko/overload-party-matchmaking/packages/api-matchmaking v0.1.2/go.mod h1:Qi0jgC2LqABv1fqCdFWgpW4kjN+LWp/GBrx3HVZPCYw=
-github.com/kenyamaneko/overload-party-scenario/packages/api-scenario v0.2.0 h1:4zRj49r78YP+/maYM/orYsSBrPEP03/zm/0X02lfrRM=
-github.com/kenyamaneko/overload-party-scenario/packages/api-scenario v0.2.0/go.mod h1:AauRTtb5HBZSMgEDGKH1xej12CFznB22RQPxK+rhSNA=
-github.com/kenyamaneko/overload-party-shop/packages/api-shop v0.1.9 h1:QAqzduZmQFWFBwk/l5SQOfXfNnF6P0oaZuhJvpUkFSk=
-github.com/kenyamaneko/overload-party-shop/packages/api-shop v0.1.9/go.mod h1:wzrluzr7Ec3j6O9AphMD9rSgKfAKy2GOFrk+yDmyybA=
+github.com/kenyamaneko/overload-party-scenario/packages/api-scenario v0.3.0 h1:+YFGW2nJD43VEs4jUXsFhxKi4SqdwaP47L93NtD6Tpc=
+github.com/kenyamaneko/overload-party-scenario/packages/api-scenario v0.3.0/go.mod h1:AauRTtb5HBZSMgEDGKH1xej12CFznB22RQPxK+rhSNA=
+github.com/kenyamaneko/overload-party-shop/packages/api-shop v1.0.0 h1:m+jQuwDPTgINnRCFTJi2sgdOZPkcv0X+TEsoEJLwPyk=
+github.com/kenyamaneko/overload-party-shop/packages/api-shop v1.0.0/go.mod h1:p28kjdqSBaEhYR4yA+I15rZtUJpMK7ikLuDmm9tNYMg=
 github.com/klauspost/cpuid/v2 v2.3.0 h1:S4CRMLnYUhGeDFDqkGriYKdfoFlDnMtqTiI/sFzhA9Y=
 github.com/klauspost/cpuid/v2 v2.3.0/go.mod h1:hqwkgyIinND0mEev00jJYCxPNVRVXFQeu1XKlok6oO0=
 github.com/kr/pretty v0.3.1 h1:flRD4NNwYAUpkphVc1HcthR4KEIFJ65n8Mw5qdRn3LE=

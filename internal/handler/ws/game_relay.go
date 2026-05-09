@@ -351,8 +351,8 @@ func (r *GameRelay) sendActionToPlayers(ctx context.Context, gameID string, pids
 			Data: mustMarshal(ActionPerformedMessage{
 				Sequence:   evt.Sequence,
 				ActionType: evt.EventType,
-				ActionData: evt.EventData,
-				State:      state,
+				ActionData: mustMarshal(evt.EventData),
+				State:      mustMarshal(state),
 			}),
 		})
 	}
