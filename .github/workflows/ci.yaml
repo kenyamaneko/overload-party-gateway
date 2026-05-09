@@ -108,6 +108,54 @@ jobs:
           FIRESTORE_EMULATOR_HOST: localhost:9041
           FIRESTORE_PROJECT_ID: overload-party-test
 
+  codegen-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install oapi-codegen
+        run: go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest
+      - name: Install asyncapi-codegen-tools
+        env:
+          GH_TOKEN: ${{ secrets.COMMON_GO_MODULES_FETCH }}
+        run: pip install "git+https://x-access-token:${GH_TOKEN}@github.com/kenyamaneko/overload-party-common@main#subdirectory=packages/asyncapi-codegen-tools"
+      - name: Regenerate types
+        run: bash scripts/generate_types.sh
+      - name: Verify no drift
+        run: |
+          if ! git diff --exit-code packages/api-gateway/openapi_gen.go packages/api-gateway/asyncapi_gen.go; then
+            echo "::error::data/{openapi,asyncapi}.yaml と packages/api-gateway/{openapi,asyncapi}_gen.go が drift しています。bash scripts/generate_types.sh を再実行して再生成結果を commit してください。"
+            exit 1
+          fi
+
+  spec-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (PR head)
+        uses: actions/checkout@v4
+        with:
+          path: head
+          fetch-depth: 0
+      - name: Checkout base ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.base_ref }}
+          path: base
+      - name: Install oasdiff
+        run: |
+          curl -sL https://github.com/oasdiff/oasdiff/releases/latest/download/oasdiff_linux_amd64.tar.gz | tar -xz -C /usr/local/bin oasdiff
+          chmod +x /usr/local/bin/oasdiff
+      - name: OpenAPI breaking changes
+        run: bash head/.github/scripts/ci/openapi-diff.sh base/data/openapi.yaml head/data/openapi.yaml
+
   build-and-push:
     needs: [lint, test-unit, test-integration]
     if: github.ref == 'refs/heads/main'
