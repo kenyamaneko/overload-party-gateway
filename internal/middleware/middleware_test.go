@@ -31,13 +31,13 @@ type statefulAccountFake struct {
 	server *apiaccountserverfake.Server
 	mu     sync.Mutex
 	// firebaseUID → Player
-	players map[string]apiaccount.Player
+	players map[string]apiaccount.PlayerResponse
 }
 
 func newStatefulAccountFake() *statefulAccountFake {
 	s := &statefulAccountFake{
 		server:  apiaccountserverfake.NewServer(),
-		players: map[string]apiaccount.Player{},
+		players: map[string]apiaccount.PlayerResponse{},
 	}
 	s.server.FindByFirebaseUIDFn = func(firebaseUID string) (int, any) {
 		s.mu.Lock()
@@ -53,7 +53,7 @@ func newStatefulAccountFake() *statefulAccountFake {
 		if _, exists := s.players[req.FirebaseUID]; exists {
 			return http.StatusConflict, nil
 		}
-		p := apiaccount.Player{
+		p := apiaccount.PlayerResponse{
 			PlayerID:    "generated-" + req.FirebaseUID,
 			FirebaseUID: req.FirebaseUID,
 			// Register 時点では name 未確定 (オンボーディング完了で確定する契約)。
@@ -71,7 +71,7 @@ func (s *statefulAccountFake) client() *accountclient.Client { return accountcli
 func (s *statefulAccountFake) seed(firebaseUID, playerID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.players[firebaseUID] = apiaccount.Player{
+	s.players[firebaseUID] = apiaccount.PlayerResponse{
 		PlayerID:    playerID,
 		FirebaseUID: firebaseUID,
 	}

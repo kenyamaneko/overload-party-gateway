@@ -82,10 +82,16 @@ func (c *battleClient) CreatePvPGame(ctx context.Context, deck1Cards, deck2Cards
 }
 
 func (c *battleClient) ProcessAction(ctx context.Context, gameID string, playerNum int, actionType string, data json.RawMessage) (*ActionResult, error) {
+	var dataMap map[string]interface{}
+	if len(data) > 0 {
+		if err := json.Unmarshal(data, &dataMap); err != nil {
+			return nil, fmt.Errorf("battleClient: unmarshal action data: %w", err)
+		}
+	}
 	body := &apibattle.GameActionRequest{
 		PlayerNum:  int64(playerNum),
 		ActionType: actionType,
-		Data:       data,
+		Data:       dataMap,
 	}
 	var result ActionResult
 	if err := c.post(ctx, fmt.Sprintf("/api/v1/games/%s/actions", gameID), body, &result); err != nil {

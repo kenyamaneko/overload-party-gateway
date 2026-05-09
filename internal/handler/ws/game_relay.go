@@ -290,8 +290,8 @@ func (r *GameRelay) sendActionPerformed(ctx context.Context, gameID, actingPlaye
 				Data: mustMarshal(ActionPerformedMessage{
 					Sequence:   evt.Sequence,
 					ActionType: evt.EventType,
-					ActionData: evt.EventData,
-					State:      evt.State,
+					ActionData: mustMarshal(evt.EventData),
+					State:      mustMarshal(evt.State),
 				}),
 			})
 		}
@@ -351,8 +351,8 @@ func (r *GameRelay) sendActionToPlayers(ctx context.Context, gameID string, pids
 			Data: mustMarshal(ActionPerformedMessage{
 				Sequence:   evt.Sequence,
 				ActionType: evt.EventType,
-				ActionData: evt.EventData,
-				State:      state,
+				ActionData: mustMarshal(evt.EventData),
+				State:      mustMarshal(state),
 			}),
 		})
 	}
