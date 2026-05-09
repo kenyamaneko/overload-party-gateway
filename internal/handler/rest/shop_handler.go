@@ -115,7 +115,7 @@ func (h *ShopHandler) Subscribe(c *gin.Context) {
 func toShopPurchaseRequest(req apigateway.PurchaseRequest) apishop.PurchaseRequest {
 	return apishop.PurchaseRequest{
 		ProductID:     req.ProductID,
-		Platform:      req.Platform,
+		Platform:      apishop.Platform(req.Platform),
 		PurchaseToken: req.PurchaseToken,
 	}
 }
