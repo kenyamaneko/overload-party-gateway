@@ -290,8 +290,8 @@ func (r *GameRelay) sendActionPerformed(ctx context.Context, gameID, actingPlaye
 				Data: mustMarshal(ActionPerformedMessage{
 					Sequence:   evt.Sequence,
 					ActionType: evt.EventType,
-					ActionData: mustMarshal(evt.EventData),
-					State:      mustMarshal(evt.State),
+					ActionData: evt.EventData,
+					State:      evt.State,
 				}),
 			})
 		}
