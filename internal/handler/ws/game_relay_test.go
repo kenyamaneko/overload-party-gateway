@@ -513,14 +513,14 @@ func TestMustMarshal(t *testing.T) {
 	})
 
 	t.Run("struct", func(t *testing.T) {
-		msg := ErrorMessage{Code: "test", Message: "hello", Retryable: true}
+		msg := ErrorMessage{ErrorCode: "test", Message: "hello", Retryable: true}
 		result := mustMarshal(msg)
 		require.NotNil(t, result)
 
 		var parsed ErrorMessage
 		err := json.Unmarshal(result, &parsed)
 		require.NoError(t, err)
-		assert.Equal(t, "test", parsed.Code)
+		assert.Equal(t, "test", parsed.ErrorCode)
 		assert.Equal(t, "hello", parsed.Message)
 		assert.True(t, parsed.Retryable)
 	})

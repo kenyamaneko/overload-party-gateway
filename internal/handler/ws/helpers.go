@@ -23,7 +23,7 @@ func mustMarshal(v interface{}) json.RawMessage {
 func sendError(conn *Connection, code, message string, retryable bool) {
 	conn.SendMessage(&WSMessage{
 		Type: genws.WSServerMsgError,
-		Data: mustMarshal(ErrorMessage{Code: code, Message: message, Retryable: retryable}),
+		Data: mustMarshal(ErrorMessage{ErrorCode: code, Message: message, Retryable: retryable}),
 	})
 }
 
@@ -31,6 +31,6 @@ func sendError(conn *Connection, code, message string, retryable bool) {
 func sendErrorToPlayer(hub *ConnectionHub, playerID, code, message string, retryable bool) {
 	hub.SendToPlayer(playerID, &WSMessage{
 		Type: genws.WSServerMsgError,
-		Data: mustMarshal(ErrorMessage{Code: code, Message: message, Retryable: retryable}),
+		Data: mustMarshal(ErrorMessage{ErrorCode: code, Message: message, Retryable: retryable}),
 	})
 }

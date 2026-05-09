@@ -14,3 +14,7 @@ asyncapi-codegen \
   --input data/asyncapi.yaml \
   --output packages/api-gateway/asyncapi_gen.go \
   --package apigateway
+
+# Post-process: WS で battle 由来の生 JSON を pass-through するフィールドを
+# json.RawMessage に置き換える (asyncapi-codegen-tools は x-go-type 未対応)。
+python3 scripts/postprocess_asyncapi_gen.py packages/api-gateway/asyncapi_gen.go

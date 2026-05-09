@@ -2,6 +2,10 @@
 
 package apigateway
 
+import (
+	"encoding/json"
+)
+
 // GameEnterMessage は 既存ゲームへ参加する要求 (PvP マッチ成立後の入室など)。
 type GameEnterMessage struct {
 	GameID string `json:"game_id"`
@@ -17,7 +21,7 @@ type MatchmakingStartMessage struct {
 type GameActionMessage struct {
 	GameID     string                 `json:"game_id"`
 	ActionType string                 `json:"action_type"`
-	Data       map[string]interface{} `json:"data"`
+	Data       json.RawMessage       `json:"data"`
 }
 
 // UseStampMessage は 対戦中のスタンプ送信。
@@ -78,8 +82,8 @@ type ActionRejectedMessage struct {
 type ActionPerformedMessage struct {
 	Sequence   int64                  `json:"sequence"`
 	ActionType string                 `json:"action_type"`
-	ActionData map[string]interface{} `json:"action_data"`
-	State      map[string]interface{} `json:"state"`
+	ActionData json.RawMessage       `json:"action_data"`
+	State      json.RawMessage       `json:"state"`
 }
 
 // StampUsedMessage は 対戦相手 (または自分) のスタンプ送信通知。
@@ -109,7 +113,7 @@ type SpectateJoinedMessage struct {
 	Player1Level int64                  `json:"player1_level"`
 	Player2Name  string                 `json:"player2_name"`
 	Player2Level int64                  `json:"player2_level"`
-	State        map[string]interface{} `json:"state"`
+	State        json.RawMessage       `json:"state"`
 }
 
 // SpectateErrorMessage は 観戦処理におけるエラー通知。

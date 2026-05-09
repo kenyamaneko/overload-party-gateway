@@ -112,7 +112,7 @@ func (h *DeckHandler) DeleteDeck(c *gin.Context) {
 func toCardCreateRequest(req apigateway.DeckCreateRequest) apicard.DeckCreateRequest {
 	cards := make([]apicard.DeckCardEntry, len(req.Cards))
 	for i, c := range req.Cards {
-		cards[i] = apicard.DeckCardEntry{CardID: c.CardID, ArtNo: c.ArtNo, Count: c.Count}
+		cards[i] = apicard.DeckCardEntry{CardID: c.CardID, ArtNo: c.ArtNo, Count: int(c.Count)}
 	}
 	return apicard.DeckCreateRequest{
 		DeckName:  req.DeckName,
@@ -126,7 +126,7 @@ func toCardCreateRequest(req apigateway.DeckCreateRequest) apicard.DeckCreateReq
 func toCardUpdateRequest(req apigateway.DeckUpdateRequest) apicard.DeckUpdateRequest {
 	cards := make([]apicard.DeckCardEntry, len(req.Cards))
 	for i, c := range req.Cards {
-		cards[i] = apicard.DeckCardEntry{CardID: c.CardID, ArtNo: c.ArtNo, Count: c.Count}
+		cards[i] = apicard.DeckCardEntry{CardID: c.CardID, ArtNo: c.ArtNo, Count: int(c.Count)}
 	}
 	return apicard.DeckUpdateRequest{
 		DeckName:  req.DeckName,
