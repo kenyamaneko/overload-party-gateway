@@ -26,16 +26,10 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Configure Go private modules
-        run: |
-          git config --global url."https://x-access-token:${{ secrets.COMMON_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-common".insteadOf "https://github.com/kenyamaneko/overload-party-common"
-          git config --global url."https://x-access-token:${{ secrets.BATTLE_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-battle".insteadOf "https://github.com/kenyamaneko/overload-party-battle"
-          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-card".insteadOf "https://github.com/kenyamaneko/overload-party-card"
-          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-account".insteadOf "https://github.com/kenyamaneko/overload-party-account"
-          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-shop".insteadOf "https://github.com/kenyamaneko/overload-party-shop"
-          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-scenario".insteadOf "https://github.com/kenyamaneko/overload-party-scenario"
-        env:
-          GOPRIVATE: github.com/kenyamaneko/*
-          GONOSUMDB: github.com/kenyamaneko/*
+        uses: kenyamaneko/overload-party-common/.github/actions/setup-go-private-modules@main
+        with:
+          app-id: ${{ vars.CROSS_REPO_DEPS_APP_ID }}
+          private-key: ${{ secrets.CROSS_REPO_DEPS_APP_PRIVATE_KEY }}
       # golangci-lint-action のビルド済みバイナリは Go 1.25 未対応のため
       # go install でソースからビルドして使う
       - run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
@@ -51,16 +45,10 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Configure Go private modules
-        run: |
-          git config --global url."https://x-access-token:${{ secrets.COMMON_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-common".insteadOf "https://github.com/kenyamaneko/overload-party-common"
-          git config --global url."https://x-access-token:${{ secrets.BATTLE_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-battle".insteadOf "https://github.com/kenyamaneko/overload-party-battle"
-          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-card".insteadOf "https://github.com/kenyamaneko/overload-party-card"
-          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-account".insteadOf "https://github.com/kenyamaneko/overload-party-account"
-          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-shop".insteadOf "https://github.com/kenyamaneko/overload-party-shop"
-          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-scenario".insteadOf "https://github.com/kenyamaneko/overload-party-scenario"
-        env:
-          GOPRIVATE: github.com/kenyamaneko/*
-          GONOSUMDB: github.com/kenyamaneko/*
+        uses: kenyamaneko/overload-party-common/.github/actions/setup-go-private-modules@main
+        with:
+          app-id: ${{ vars.CROSS_REPO_DEPS_APP_ID }}
+          private-key: ${{ secrets.CROSS_REPO_DEPS_APP_PRIVATE_KEY }}
       - name: Run unit tests
         run: go test -race ./internal/... -count=1
         env:
@@ -91,16 +79,10 @@ jobs:
           done
           echo "Firestore emulator failed to start"; cat /tmp/firestore.log; exit 1
       - name: Configure Go private modules
-        run: |
-          git config --global url."https://x-access-token:${{ secrets.COMMON_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-common".insteadOf "https://github.com/kenyamaneko/overload-party-common"
-          git config --global url."https://x-access-token:${{ secrets.BATTLE_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-battle".insteadOf "https://github.com/kenyamaneko/overload-party-battle"
-          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-card".insteadOf "https://github.com/kenyamaneko/overload-party-card"
-          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-account".insteadOf "https://github.com/kenyamaneko/overload-party-account"
-          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-shop".insteadOf "https://github.com/kenyamaneko/overload-party-shop"
-          git config --global url."https://x-access-token:${{ secrets.SERVICES_GO_MODULES_FETCH }}@github.com/kenyamaneko/overload-party-scenario".insteadOf "https://github.com/kenyamaneko/overload-party-scenario"
-        env:
-          GOPRIVATE: github.com/kenyamaneko/*
-          GONOSUMDB: github.com/kenyamaneko/*
+        uses: kenyamaneko/overload-party-common/.github/actions/setup-go-private-modules@main
+        with:
+          app-id: ${{ vars.CROSS_REPO_DEPS_APP_ID }}
+          private-key: ${{ secrets.CROSS_REPO_DEPS_APP_PRIVATE_KEY }}
       - name: Run integration tests
         run: go test -race -tags=integration ./internal/... -count=1
         env:
@@ -125,18 +107,22 @@ jobs:
 
       - run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
 
+      - name: Generate Cross-Repo Deps App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.CROSS_REPO_DEPS_APP_ID }}
+          private-key: ${{ secrets.CROSS_REPO_DEPS_APP_PRIVATE_KEY }}
+          owner: kenyamaneko
+
       - name: Build and push
         env:
           DOCKER_BUILDKIT: "1"
-          COMMON_GO_MODULES_FETCH: ${{ secrets.COMMON_GO_MODULES_FETCH }}
-          BATTLE_GO_MODULES_FETCH: ${{ secrets.BATTLE_GO_MODULES_FETCH }}
-          SERVICES_GO_MODULES_FETCH: ${{ secrets.SERVICES_GO_MODULES_FETCH }}
+          GO_MODULES_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           IMAGE=${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}
           docker build \
-            --secret id=COMMON_GO_MODULES_FETCH,env=COMMON_GO_MODULES_FETCH \
-            --secret id=BATTLE_GO_MODULES_FETCH,env=BATTLE_GO_MODULES_FETCH \
-            --secret id=SERVICES_GO_MODULES_FETCH,env=SERVICES_GO_MODULES_FETCH \
+            --secret id=GO_MODULES_TOKEN,env=GO_MODULES_TOKEN \
             -t ${IMAGE}:${{ github.sha }} -t ${IMAGE}:latest .
           docker push ${IMAGE}:${{ github.sha }}
           docker push ${IMAGE}:latest
