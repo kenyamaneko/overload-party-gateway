@@ -9,6 +9,7 @@ import (
 	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
+	"github.com/kenyamaneko/overload-party-gateway/internal/presenter"
 )
 
 // PlayerSettingsHandler はプレイヤー設定の REST エンドポイントを処理します
@@ -29,7 +30,7 @@ func (h *PlayerSettingsHandler) GetSettings(c *gin.Context) {
 		respondAccountErr(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, settings)
+	c.JSON(http.StatusOK, presenter.PlayerSettingsToWire(settings))
 }
 
 // UpdateSettings はプレイヤー設定を部分更新します。
@@ -46,7 +47,7 @@ func (h *PlayerSettingsHandler) UpdateSettings(c *gin.Context) {
 		respondAccountErr(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, settings)
+	c.JSON(http.StatusOK, presenter.PlayerSettingsToWire(settings))
 }
 
 // toAccountUpdateSettingsRequest は client 契約を内部 RPC 契約に変換します。
