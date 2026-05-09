@@ -1,0 +1,658 @@
+asyncapi: 3.0.0
+info:
+  title: overload-party-gateway WebSocket
+  version: 0.1.0
+  description: |
+    Gateway service が client と交換する WebSocket メッセージの契約。
+    本ファイルが SSoT。`packages/api-gateway` の WS メッセージ型と type 定数は
+    asyncapi-codegen が本ファイルから生成する。
+    各メッセージは type フィールド (string const) と data ペイロードを持つ
+    エンベロープに格納されて送受信される。
+
+channels:
+  # ─── Client → Server (gateway が receive 側) ──────────────────────
+  GameEnter:
+    address: game_enter
+    description: "既存ゲームへ参加する要求 (例: PvP マッチ成立後の入室)。"
+    messages:
+      GameEnterMessage:
+        $ref: "#/components/messages/GameEnterMessage"
+
+  MatchmakingStart:
+    address: matchmaking_start
+    description: マッチング待ち行列に登録する。
+    messages:
+      MatchmakingStartMessage:
+        $ref: "#/components/messages/MatchmakingStartMessage"
+
+  GameAction:
+    address: game_action
+    description: プレイヤーが実行したアクションを送信する。
+    messages:
+      GameActionMessage:
+        $ref: "#/components/messages/GameActionMessage"
+
+  UseStamp:
+    address: use_stamp
+    description: 対戦中のスタンプ送信。
+    messages:
+      UseStampMessage:
+        $ref: "#/components/messages/UseStampMessage"
+
+  NpcBattleStart:
+    address: npc_battle_start
+    description: NPC バトルを開始する。
+    messages:
+      NpcBattleStartMessage:
+        $ref: "#/components/messages/NpcBattleStartMessage"
+
+  SpectateJoin:
+    address: spectate_join
+    description: 観戦対象のゲームへ参加する。
+    messages:
+      SpectateJoinMessage:
+        $ref: "#/components/messages/SpectateJoinMessage"
+
+  SpectateLeave:
+    address: spectate_leave
+    description: 観戦から離脱する。
+    messages:
+      SpectateLeaveMessage:
+        $ref: "#/components/messages/SpectateLeaveMessage"
+
+  SpectateStamp:
+    address: spectate_stamp
+    description: 観戦中のスタンプ送信。
+    messages:
+      SpectateStampMessage:
+        $ref: "#/components/messages/SpectateStampMessage"
+
+  # ─── Server → Client (gateway が send 側) ─────────────────────────
+  Error:
+    address: error
+    description: WS 接続上で発生したサーバー側エラー通知。
+    messages:
+      ErrorMessage:
+        $ref: "#/components/messages/ErrorMessage"
+
+  MatchFound:
+    address: match_found
+    description: マッチング成立を通知。
+    messages:
+      MatchFoundMessage:
+        $ref: "#/components/messages/MatchFoundMessage"
+
+  GameOver:
+    address: game_over
+    description: ゲーム終了を通知 (勝敗確定)。
+    messages:
+      GameOverMessage:
+        $ref: "#/components/messages/GameOverMessage"
+
+  ActionRejected:
+    address: action_rejected
+    description: アクションが拒否された通知。
+    messages:
+      ActionRejectedMessage:
+        $ref: "#/components/messages/ActionRejectedMessage"
+
+  ActionPerformed:
+    address: action_performed
+    description: アクション実行とその結果のゲーム状態を通知。
+    messages:
+      ActionPerformedMessage:
+        $ref: "#/components/messages/ActionPerformedMessage"
+
+  StampUsed:
+    address: stamp_used
+    description: 対戦中のスタンプ送信を相手に通知。
+    messages:
+      StampUsedMessage:
+        $ref: "#/components/messages/StampUsedMessage"
+
+  NpcBattleCreated:
+    address: npc_battle_created
+    description: NPC バトルが作成され開始可能になったことを通知。
+    messages:
+      NpcBattleCreatedMessage:
+        $ref: "#/components/messages/NpcBattleCreatedMessage"
+
+  OpponentDisconnected:
+    address: opponent_disconnected
+    description: 対戦相手が切断したことを通知。
+    messages:
+      OpponentDisconnectedMessage:
+        $ref: "#/components/messages/OpponentDisconnectedMessage"
+
+  OpponentReconnected:
+    address: opponent_reconnected
+    description: 切断していた対戦相手が再接続したことを通知。
+    messages:
+      OpponentReconnectedMessage:
+        $ref: "#/components/messages/OpponentReconnectedMessage"
+
+  SpectateJoined:
+    address: spectate_joined
+    description: 観戦参加が成立し、初期ゲーム状態を通知。
+    messages:
+      SpectateJoinedMessage:
+        $ref: "#/components/messages/SpectateJoinedMessage"
+
+  SpectateError:
+    address: spectate_error
+    description: 観戦処理におけるエラー通知。
+    messages:
+      SpectateErrorMessage:
+        $ref: "#/components/messages/SpectateErrorMessage"
+
+  SpectateEnded:
+    address: spectate_ended
+    description: 観戦対象のゲーム終了通知。
+    messages:
+      SpectateEndedMessage:
+        $ref: "#/components/messages/SpectateEndedMessage"
+
+  SpectateStampBroadcast:
+    address: spectate_stamp_broadcast
+    description: 観戦者から送られたスタンプを他観戦者へ broadcast。
+    messages:
+      SpectateStampBroadcastMessage:
+        $ref: "#/components/messages/SpectateStampBroadcastMessage"
+
+operations:
+  # ─── Client → Server (gateway が receive する) ─────────────────────
+  receiveGameEnter:
+    action: receive
+    channel:
+      $ref: "#/channels/GameEnter"
+    summary: 既存ゲームへ参加する旨をクライアントから受信。
+
+  receiveMatchmakingStart:
+    action: receive
+    channel:
+      $ref: "#/channels/MatchmakingStart"
+    summary: マッチング開始要求をクライアントから受信。
+
+  receiveGameAction:
+    action: receive
+    channel:
+      $ref: "#/channels/GameAction"
+    summary: プレイヤーアクションをクライアントから受信。
+
+  receiveUseStamp:
+    action: receive
+    channel:
+      $ref: "#/channels/UseStamp"
+    summary: 対戦スタンプ送信要求をクライアントから受信。
+
+  receiveNpcBattleStart:
+    action: receive
+    channel:
+      $ref: "#/channels/NpcBattleStart"
+    summary: NPC バトル開始要求をクライアントから受信。
+
+  receiveSpectateJoin:
+    action: receive
+    channel:
+      $ref: "#/channels/SpectateJoin"
+    summary: 観戦参加要求をクライアントから受信。
+
+  receiveSpectateLeave:
+    action: receive
+    channel:
+      $ref: "#/channels/SpectateLeave"
+    summary: 観戦離脱要求をクライアントから受信。
+
+  receiveSpectateStamp:
+    action: receive
+    channel:
+      $ref: "#/channels/SpectateStamp"
+    summary: 観戦中のスタンプ送信要求をクライアントから受信。
+
+  # ─── Server → Client (gateway が send する) ───────────────────────
+  sendError:
+    action: send
+    channel:
+      $ref: "#/channels/Error"
+    summary: WS エラーをクライアントへ通知。
+
+  sendMatchFound:
+    action: send
+    channel:
+      $ref: "#/channels/MatchFound"
+    summary: マッチング成立をクライアントへ通知。
+
+  sendGameOver:
+    action: send
+    channel:
+      $ref: "#/channels/GameOver"
+    summary: ゲーム終了をクライアントへ通知。
+
+  sendActionRejected:
+    action: send
+    channel:
+      $ref: "#/channels/ActionRejected"
+    summary: アクション拒否をクライアントへ通知。
+
+  sendActionPerformed:
+    action: send
+    channel:
+      $ref: "#/channels/ActionPerformed"
+    summary: アクション実行結果をクライアントへ通知。
+
+  sendStampUsed:
+    action: send
+    channel:
+      $ref: "#/channels/StampUsed"
+    summary: 対戦相手のスタンプ送信を通知。
+
+  sendNpcBattleCreated:
+    action: send
+    channel:
+      $ref: "#/channels/NpcBattleCreated"
+    summary: NPC バトル作成完了を通知。
+
+  sendOpponentDisconnected:
+    action: send
+    channel:
+      $ref: "#/channels/OpponentDisconnected"
+    summary: 対戦相手の切断を通知。
+
+  sendOpponentReconnected:
+    action: send
+    channel:
+      $ref: "#/channels/OpponentReconnected"
+    summary: 対戦相手の再接続を通知。
+
+  sendSpectateJoined:
+    action: send
+    channel:
+      $ref: "#/channels/SpectateJoined"
+    summary: 観戦参加成立 + 初期状態を通知。
+
+  sendSpectateError:
+    action: send
+    channel:
+      $ref: "#/channels/SpectateError"
+    summary: 観戦エラーを通知。
+
+  sendSpectateEnded:
+    action: send
+    channel:
+      $ref: "#/channels/SpectateEnded"
+    summary: 観戦対象のゲーム終了を通知。
+
+  sendSpectateStampBroadcast:
+    action: send
+    channel:
+      $ref: "#/channels/SpectateStampBroadcast"
+    summary: 他観戦者に対するスタンプ broadcast を送信。
+
+components:
+  messages:
+    # ─── Client → Server messages ───────────────────────────────────
+    GameEnterMessage:
+      name: GameEnterMessage
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/GameEnterMessage"
+
+    MatchmakingStartMessage:
+      name: MatchmakingStartMessage
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/MatchmakingStartMessage"
+
+    GameActionMessage:
+      name: GameActionMessage
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/GameActionMessage"
+
+    UseStampMessage:
+      name: UseStampMessage
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/UseStampMessage"
+
+    NpcBattleStartMessage:
+      name: NpcBattleStartMessage
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/NpcBattleStartMessage"
+
+    SpectateJoinMessage:
+      name: SpectateJoinMessage
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/SpectateJoinMessage"
+
+    SpectateLeaveMessage:
+      name: SpectateLeaveMessage
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/SpectateLeaveMessage"
+
+    SpectateStampMessage:
+      name: SpectateStampMessage
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/SpectateStampMessage"
+
+    # ─── Server → Client messages ───────────────────────────────────
+    ErrorMessage:
+      name: ErrorMessage
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/ErrorMessage"
+
+    MatchFoundMessage:
+      name: MatchFoundMessage
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/MatchFoundMessage"
+
+    GameOverMessage:
+      name: GameOverMessage
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/GameOverMessage"
+
+    ActionRejectedMessage:
+      name: ActionRejectedMessage
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/ActionRejectedMessage"
+
+    ActionPerformedMessage:
+      name: ActionPerformedMessage
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/ActionPerformedMessage"
+
+    StampUsedMessage:
+      name: StampUsedMessage
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/StampUsedMessage"
+
+    NpcBattleCreatedMessage:
+      name: NpcBattleCreatedMessage
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/NpcBattleCreatedMessage"
+
+    OpponentDisconnectedMessage:
+      name: OpponentDisconnectedMessage
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/OpponentDisconnectedMessage"
+
+    OpponentReconnectedMessage:
+      name: OpponentReconnectedMessage
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/OpponentReconnectedMessage"
+
+    SpectateJoinedMessage:
+      name: SpectateJoinedMessage
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/SpectateJoinedMessage"
+
+    SpectateErrorMessage:
+      name: SpectateErrorMessage
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/SpectateErrorMessage"
+
+    SpectateEndedMessage:
+      name: SpectateEndedMessage
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/SpectateEndedMessage"
+
+    SpectateStampBroadcastMessage:
+      name: SpectateStampBroadcastMessage
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/SpectateStampBroadcastMessage"
+
+  schemas:
+    # ─── Client → Server payloads ───────────────────────────────────
+    GameEnterMessage:
+      type: object
+      description: 既存ゲームへ参加する要求 (PvP マッチ成立後の入室など)。
+      required: [game_id, deck_id]
+      properties:
+        game_id:
+          type: string
+        deck_id:
+          type: integer
+          format: int64
+
+    MatchmakingStartMessage:
+      type: object
+      description: マッチング待ち行列への登録要求。
+      required: [deck_id]
+      properties:
+        deck_id:
+          type: integer
+          format: int64
+
+    GameActionMessage:
+      type: object
+      description: プレイヤーが実行したアクションをサーバーへ送信する。
+      required: [game_id, action_type, data]
+      properties:
+        game_id:
+          type: string
+        action_type:
+          type: string
+        data:
+          type: object
+          additionalProperties: true
+          description: アクション固有データ (downstream battle に渡す raw JSON)
+
+    UseStampMessage:
+      type: object
+      description: 対戦中のスタンプ送信。
+      required: [game_id, stamp_no]
+      properties:
+        game_id:
+          type: string
+        stamp_no:
+          type: integer
+          format: int64
+
+    NpcBattleStartMessage:
+      type: object
+      description: NPC バトル開始要求。
+      required: [deck_id, npc_model]
+      properties:
+        deck_id:
+          type: integer
+          format: int64
+        npc_model:
+          type: string
+
+    SpectateJoinMessage:
+      type: object
+      description: 観戦対象のゲームへ参加する要求。
+      required: [game_id]
+      properties:
+        game_id:
+          type: string
+
+    SpectateLeaveMessage:
+      type: object
+      description: 観戦から離脱する要求。
+      required: [game_id]
+      properties:
+        game_id:
+          type: string
+
+    SpectateStampMessage:
+      type: object
+      description: 観戦中のスタンプ送信。
+      required: [game_id, stamp_no]
+      properties:
+        game_id:
+          type: string
+        stamp_no:
+          type: integer
+          format: int64
+
+    # ─── Server → Client payloads ───────────────────────────────────
+    ErrorMessage:
+      type: object
+      description: サーバー由来のエラー通知。
+      required: [error_code, message, retryable]
+      properties:
+        error_code:
+          type: string
+        message:
+          type: string
+        retryable:
+          type: boolean
+
+    MatchFoundMessage:
+      type: object
+      description: マッチング成立通知。
+      required: [game_id]
+      properties:
+        game_id:
+          type: string
+
+    GameOverMessage:
+      type: object
+      description: ゲーム終了通知。
+      required: [game_id, winning_player_num, win_reason]
+      properties:
+        game_id:
+          type: string
+        winning_player_num:
+          type: integer
+          format: int64
+        win_reason:
+          type: string
+
+    ActionRejectedMessage:
+      type: object
+      description: アクション拒否通知。
+      required: [game_id, action_type, reason]
+      properties:
+        game_id:
+          type: string
+        action_type:
+          type: string
+        reason:
+          type: string
+
+    ActionPerformedMessage:
+      type: object
+      description: アクション実行とその後の (情報秘匿適用済み) ゲーム状態通知。
+      required: [sequence, action_type, action_data, state]
+      properties:
+        sequence:
+          type: integer
+          format: int64
+        action_type:
+          type: string
+        action_data:
+          type: object
+          additionalProperties: true
+        state:
+          type: object
+          additionalProperties: true
+          description: アクション実行後のゲーム状態 (battle 由来 raw JSON)
+
+    StampUsedMessage:
+      type: object
+      description: 対戦相手 (または自分) のスタンプ送信通知。
+      required: [game_id, player_num, stamp_no]
+      properties:
+        game_id:
+          type: string
+        player_num:
+          type: integer
+          format: int64
+        stamp_no:
+          type: integer
+          format: int64
+
+    NpcBattleCreatedMessage:
+      type: object
+      description: NPC バトル作成完了通知。
+      required: [game_id]
+      properties:
+        game_id:
+          type: string
+
+    OpponentDisconnectedMessage:
+      type: object
+      description: 対戦相手の切断通知 (空ペイロード)。
+
+    OpponentReconnectedMessage:
+      type: object
+      description: 対戦相手の再接続通知 (空ペイロード)。
+
+    SpectateJoinedMessage:
+      type: object
+      description: 観戦参加成立 + 初期状態通知。
+      required: [game_id, player1_name, player1_level, player2_name, player2_level, state]
+      properties:
+        game_id:
+          type: string
+        player1_name:
+          type: string
+        player1_level:
+          type: integer
+          format: int64
+        player2_name:
+          type: string
+        player2_level:
+          type: integer
+          format: int64
+          description: NPC の場合は 0
+        state:
+          type: object
+          additionalProperties: true
+          description: 観戦者視点のゲーム状態 (battle 由来 raw JSON)
+
+    SpectateErrorMessage:
+      type: object
+      description: 観戦処理におけるエラー通知。
+      required: [error_code, message]
+      properties:
+        error_code:
+          type: string
+        message:
+          type: string
+
+    SpectateEndedMessage:
+      type: object
+      description: 観戦対象のゲーム終了通知。
+      required: [game_id, winning_player_num, win_reason]
+      properties:
+        game_id:
+          type: string
+        winning_player_num:
+          type: integer
+          format: int64
+        win_reason:
+          type: string
+
+    SpectateStampBroadcastMessage:
+      type: object
+      description: 観戦者からのスタンプ broadcast 通知。
+      required: [game_id, spectator_id, stamp_no]
+      properties:
+        game_id:
+          type: string
+        spectator_id:
+          type: string
+          x-go-name: SpectatorID
+        stamp_no:
+          type: integer
+          format: int64
