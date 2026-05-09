@@ -111,6 +111,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           pip install \
+            "overload-party-codegen-tools @ git+https://github.com/kenyamaneko/overload-party-common.git@main#subdirectory=packages/codegen-tools" \
             "overload-party-asyncapi-codegen-tools @ git+https://github.com/kenyamaneko/overload-party-common.git@main#subdirectory=packages/asyncapi-codegen-tools"
       - name: Install oapi-codegen
         run: go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.7.0
