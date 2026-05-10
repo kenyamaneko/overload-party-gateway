@@ -290,12 +290,27 @@ func (r *GameRelay) sendActionPerformed(ctx context.Context, gameID, actingPlaye
 				Data: mustMarshal(ActionPerformedMessage{
 					Sequence:   evt.Sequence,
 					ActionType: evt.EventType,
-					ActionData: evt.EventData,
-					State:      evt.State,
+					ActionData: mapToRaw(evt.EventData),
+					State:      mapToRaw(evt.State),
 				}),
 			})
 		}
 	}
+}
+
+// 原則に従ってパススルーしたいが、battle openapi が event_data / state を
+// additionalProperties: true で宣言しており api-battle-rpc-go が map[] を返すため、
+// WS 境界で json.RawMessage に変換する。空 map は nil で omitempty 扱い。
+func mapToRaw(m map[string]interface{}) json.RawMessage {
+	if len(m) == 0 {
+		return nil
+	}
+	raw, err := json.Marshal(m)
+	if err != nil {
+		log.Printf("ws: marshal action payload: %v", err)
+		return nil
+	}
+	return raw
 }
 
 // maxNpcTurnIterations は runNpcTurns の上限イテレーション数。

@@ -16,6 +16,9 @@ import (
 	apishop "github.com/kenyamaneko/overload-party-shop/packages/api-shop"
 )
 
+// playerIDHeader は shop の公開 API endpoint に gateway が付与する player_id ヘッダ名。
+const playerIDHeader = "X-Player-Id"
+
 var (
 	// ErrNotFound は shop サービスが 404 を返した場合のエラーです
 	ErrNotFound = errors.New("shopclient: not found")
@@ -71,9 +74,8 @@ type productsResponse struct {
 
 // GetProducts は商品一覧を取得します
 func (c *Client) GetProducts(ctx context.Context, playerID string) ([]apishop.ProductResponse, error) {
-	path := fmt.Sprintf("/internal/v1/players/%s/products", url.PathEscape(playerID))
 	var out productsResponse
-	if err := c.doJSON(ctx, http.MethodGet, path, nil, &out); err != nil {
+	if err := c.doShopAPI(ctx, http.MethodGet, "/api/v1/shop/products", playerID, nil, &out); err != nil {
 		return nil, err
 	}
 	return out.Products, nil
@@ -81,8 +83,7 @@ func (c *Client) GetProducts(ctx context.Context, playerID string) ([]apishop.Pr
 
 // Purchase は商品購入を処理します
 func (c *Client) Purchase(ctx context.Context, playerID string, req apishop.PurchaseRequest) error {
-	path := fmt.Sprintf("/internal/v1/players/%s/purchase", url.PathEscape(playerID))
-	return c.doJSON(ctx, http.MethodPost, path, req, nil)
+	return c.doShopAPI(ctx, http.MethodPost, "/api/v1/shop/purchase", playerID, req, nil)
 }
 
 type subscribeResponse struct {
@@ -92,15 +93,23 @@ type subscribeResponse struct {
 
 // Subscribe はサブスクリプション登録を処理します
 func (c *Client) Subscribe(ctx context.Context, playerID string, req apishop.PurchaseRequest) (*time.Time, error) {
-	path := fmt.Sprintf("/internal/v1/players/%s/subscribe", url.PathEscape(playerID))
 	var out subscribeResponse
-	if err := c.doJSON(ctx, http.MethodPost, path, req, &out); err != nil {
+	if err := c.doShopAPI(ctx, http.MethodPost, "/api/v1/shop/subscribe", playerID, req, &out); err != nil {
 		return nil, err
 	}
 	return out.ExpiresAt, nil
 }
 
+// doShopAPI は X-Player-Id ヘッダを必ず付与する shop 公開 API 用の HTTP ヘルパー。
+func (c *Client) doShopAPI(ctx context.Context, method, path, playerID string, body, out any) error {
+	return c.doRequest(ctx, method, path, http.Header{playerIDHeader: []string{playerID}}, body, out)
+}
+
 func (c *Client) doJSON(ctx context.Context, method, path string, body, out any) error {
+	return c.doRequest(ctx, method, path, nil, body, out)
+}
+
+func (c *Client) doRequest(ctx context.Context, method, path string, headers http.Header, body, out any) error {
 	var reqBody io.Reader
 	if body != nil {
 		buf, err := json.Marshal(body)
@@ -115,6 +124,9 @@ func (c *Client) doJSON(ctx context.Context, method, path string, body, out any)
 	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
+	}
+	for k, vs := range headers {
+		req.Header[k] = vs
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
