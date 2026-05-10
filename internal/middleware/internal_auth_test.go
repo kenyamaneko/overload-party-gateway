@@ -13,40 +13,66 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
 )
 
-func TestIssueInternalAuth(t *testing.T) {
-	const testSecret = "test-secret-32-bytes-long-xxxxxxxx"
-	signer := internalauth.NewSigner(
+const testSecret = "test-secret-32-bytes-long-xxxxxxxx"
+
+func newTestSigner() *internalauth.Signer {
+	return internalauth.NewSigner(
 		internalauth.StaticHS256Resolver([]byte(testSecret), internalauth.DefaultKeyID),
 		internalauth.DefaultKeyID,
 	)
+}
 
+func newErrorSigner() *internalauth.Signer {
+	return internalauth.NewSigner(
+		func(internalauth.KeyID) ([]byte, error) { return nil, errors.New("boom") },
+		internalauth.DefaultKeyID,
+	)
+}
+
+func TestIssueInternalAuth_TokenInjected(t *testing.T) {
+	engine := gin.New()
+	var observedToken string
+	var observedOK bool
+	engine.GET("/test",
+		func(c *gin.Context) {
+			c.Set(string(playerIDKey), "player-123")
+			c.Next()
+		},
+		IssueInternalAuth(newTestSigner()),
+		func(c *gin.Context) {
+			observedToken, observedOK = internalauth.TokenFrom(c.Request.Context())
+			c.Status(http.StatusOK)
+		},
+	)
+
+	rr := httptest.NewRecorder()
+	engine.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/test", nil))
+
+	require.Equal(t, http.StatusOK, rr.Code)
+	assert.True(t, observedOK)
+	assert.NotEmpty(t, observedToken)
+}
+
+func TestIssueInternalAuth_Failure(t *testing.T) {
 	cases := []struct {
-		name           string
-		setPlayerID    string
-		signer         *internalauth.Signer
-		wantStatus     int
-		wantTokenInCtx bool
+		name        string
+		setupPlayer gin.HandlerFunc
+		signer      *internalauth.Signer
+		wantStatus  int
 	}{
 		{
-			name:           "player_id present issues token into request context",
-			setPlayerID:    "player-123",
-			signer:         signer,
-			wantStatus:     http.StatusOK,
-			wantTokenInCtx: true,
-		},
-		{
-			name:        "missing player_id returns 401",
-			setPlayerID: "",
-			signer:      signer,
+			name:        "player_id 未設定で 401 を返す",
+			setupPlayer: func(c *gin.Context) { c.Next() },
+			signer:      newTestSigner(),
 			wantStatus:  http.StatusUnauthorized,
 		},
 		{
-			name:        "signer error returns 500",
-			setPlayerID: "player-123",
-			signer: internalauth.NewSigner(
-				func(internalauth.KeyID) ([]byte, error) { return nil, errors.New("boom") },
-				internalauth.DefaultKeyID,
-			),
+			name: "signer のエラーで 500 を返す",
+			setupPlayer: func(c *gin.Context) {
+				c.Set(string(playerIDKey), "player-123")
+				c.Next()
+			},
+			signer:     newErrorSigner(),
 			wantStatus: http.StatusInternalServerError,
 		},
 	}
@@ -54,33 +80,21 @@ func TestIssueInternalAuth(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			engine := gin.New()
-			var observedToken string
-			var observedOK bool
+			var sawDownstream bool
 			engine.GET("/test",
-				func(c *gin.Context) {
-					if tc.setPlayerID != "" {
-						c.Set(string(playerIDKey), tc.setPlayerID)
-					}
-					c.Next()
-				},
+				tc.setupPlayer,
 				IssueInternalAuth(tc.signer),
 				func(c *gin.Context) {
-					observedToken, observedOK = internalauth.TokenFrom(c.Request.Context())
+					sawDownstream = true
 					c.Status(http.StatusOK)
 				},
 			)
 
 			rr := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodGet, "/test", nil)
-			engine.ServeHTTP(rr, req)
+			engine.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/test", nil))
 
 			require.Equal(t, tc.wantStatus, rr.Code)
-			if tc.wantTokenInCtx {
-				assert.True(t, observedOK, "expected token in request context")
-				assert.NotEmpty(t, observedToken)
-			} else {
-				assert.False(t, observedOK, "expected no token in request context")
-			}
+			assert.False(t, sawDownstream)
 		})
 	}
 }

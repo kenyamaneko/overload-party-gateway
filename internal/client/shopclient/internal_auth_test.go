@@ -6,43 +6,44 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
 )
 
 func TestClient_InjectsInternalAuthHeader(t *testing.T) {
-	const wantToken = "test.jwt.token"
-	var got string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		got = r.Header.Get(internalauth.HeaderName)
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"products":[]}`))
-	}))
-	defer srv.Close()
-
-	c := New(srv.URL)
-	ctx := internalauth.WithToken(context.Background(), wantToken)
-	if _, err := c.GetProducts(ctx, "player-123"); err != nil {
-		t.Fatalf("GetProducts: %v", err)
+	cases := []struct {
+		name       string
+		ctx        context.Context
+		wantHeader string
+	}{
+		{
+			name:       "ctx に token があるとき X-Internal-Auth を付与する",
+			ctx:        internalauth.WithToken(context.Background(), "test.jwt.token"),
+			wantHeader: "test.jwt.token",
+		},
+		{
+			name:       "ctx に token がないとき header を付けない",
+			ctx:        context.Background(),
+			wantHeader: "",
+		},
 	}
-	if got != wantToken {
-		t.Errorf("X-Internal-Auth = %q, want %q", got, wantToken)
-	}
-}
 
-func TestClient_NoHeaderWhenCtxAbsent(t *testing.T) {
-	var got string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		got = r.Header.Get(internalauth.HeaderName)
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"products":[]}`))
-	}))
-	defer srv.Close()
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var got string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				got = r.Header.Get(internalauth.HeaderName)
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"products":[]}`))
+			}))
+			defer srv.Close()
 
-	c := New(srv.URL)
-	if _, err := c.GetProducts(context.Background(), "player-123"); err != nil {
-		t.Fatalf("GetProducts: %v", err)
-	}
-	if got != "" {
-		t.Errorf("X-Internal-Auth = %q, want empty", got)
+			c := New(srv.URL)
+			_, err := c.GetProducts(tc.ctx, "player-123")
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantHeader, got)
+		})
 	}
 }

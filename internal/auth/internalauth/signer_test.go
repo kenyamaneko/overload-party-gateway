@@ -6,115 +6,97 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestSigner_Issue(t *testing.T) {
+func TestSigner_Issue_Success(t *testing.T) {
 	secret := []byte("test-secret-32-bytes-long-xxxxxx")
 	fixedTime := time.Date(2026, 5, 10, 12, 0, 0, 0, time.UTC)
 
 	cases := []struct {
 		name      string
 		opts      []Option
-		playerID  string
-		resolver  KeyResolver
 		assertTok func(t *testing.T, parsed *jwt.Token, claims *jwt.RegisteredClaims)
-		wantErr   bool
 	}{
 		{
-			name:     "default options issue HS256 JWT with iss/sub/iat/exp/kid",
-			opts:     []Option{WithClock(func() time.Time { return fixedTime })},
-			playerID: "player-123",
-			resolver: StaticHS256Resolver(secret, DefaultKeyID),
+			name: "デフォルトのオプションで HS256 JWT を発行し iss/sub/iat/exp/kid が揃う",
+			opts: []Option{WithClock(func() time.Time { return fixedTime })},
 			assertTok: func(t *testing.T, parsed *jwt.Token, claims *jwt.RegisteredClaims) {
 				t.Helper()
-				if parsed.Method.Alg() != "HS256" {
-					t.Errorf("alg = %s, want HS256", parsed.Method.Alg())
-				}
-				if got, want := parsed.Header["kid"], string(DefaultKeyID); got != want {
-					t.Errorf("kid = %v, want %v", got, want)
-				}
-				if claims.Subject != "player-123" {
-					t.Errorf("sub = %s, want player-123", claims.Subject)
-				}
-				if claims.Issuer != Issuer {
-					t.Errorf("iss = %s, want %s", claims.Issuer, Issuer)
-				}
-				if !claims.IssuedAt.Time.Equal(fixedTime) {
-					t.Errorf("iat = %v, want %v", claims.IssuedAt.Time, fixedTime)
-				}
-				if got := claims.ExpiresAt.Time.Sub(claims.IssuedAt.Time); got != DefaultTTL {
-					t.Errorf("exp - iat = %v, want %v", got, DefaultTTL)
-				}
+				assert.Equal(t, "HS256", parsed.Method.Alg())
+				assert.Equal(t, string(DefaultKeyID), parsed.Header["kid"])
+				assert.Equal(t, "player-123", claims.Subject)
+				assert.Equal(t, Issuer, claims.Issuer)
+				assert.True(t, claims.IssuedAt.Time.Equal(fixedTime))
+				assert.Equal(t, DefaultTTL, claims.ExpiresAt.Time.Sub(claims.IssuedAt.Time))
 			},
 		},
 		{
-			name:     "WithTTL overrides exp - iat",
-			opts:     []Option{WithClock(func() time.Time { return fixedTime }), WithTTL(2 * time.Minute)},
-			playerID: "player-123",
-			resolver: StaticHS256Resolver(secret, DefaultKeyID),
+			name: "WithTTL で exp-iat を上書きできる",
+			opts: []Option{WithClock(func() time.Time { return fixedTime }), WithTTL(2 * time.Minute)},
 			assertTok: func(t *testing.T, _ *jwt.Token, claims *jwt.RegisteredClaims) {
 				t.Helper()
-				if got := claims.ExpiresAt.Time.Sub(claims.IssuedAt.Time); got != 2*time.Minute {
-					t.Errorf("ttl = %v, want 2m", got)
-				}
+				assert.Equal(t, 2*time.Minute, claims.ExpiresAt.Time.Sub(claims.IssuedAt.Time))
 			},
 		},
 		{
-			name:     "WithIssuer overrides iss",
-			opts:     []Option{WithClock(func() time.Time { return fixedTime }), WithIssuer("other-issuer")},
-			playerID: "player-123",
-			resolver: StaticHS256Resolver(secret, DefaultKeyID),
+			name: "WithIssuer で iss を上書きできる",
+			opts: []Option{WithClock(func() time.Time { return fixedTime }), WithIssuer("other-issuer")},
 			assertTok: func(t *testing.T, _ *jwt.Token, claims *jwt.RegisteredClaims) {
 				t.Helper()
-				if claims.Issuer != "other-issuer" {
-					t.Errorf("iss = %s, want other-issuer", claims.Issuer)
-				}
+				assert.Equal(t, "other-issuer", claims.Issuer)
 			},
-		},
-		{
-			name:     "empty playerID returns error",
-			playerID: "",
-			resolver: StaticHS256Resolver(secret, DefaultKeyID),
-			wantErr:  true,
-		},
-		{
-			name:     "resolver error is propagated",
-			playerID: "player-123",
-			resolver: func(KeyID) ([]byte, error) { return nil, errors.New("boom") },
-			wantErr:  true,
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			signer := NewSigner(tc.resolver, DefaultKeyID, tc.opts...)
-			token, err := signer.Issue(tc.playerID)
-			if tc.wantErr {
-				if err == nil {
-					t.Fatal("expected error, got nil")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			parsed, claims := parseAndAssertSignature(t, token, secret, fixedTime)
-			if tc.assertTok != nil {
-				tc.assertTok(t, parsed, claims)
-			}
+			signer := NewSigner(StaticHS256Resolver(secret, DefaultKeyID), DefaultKeyID, tc.opts...)
+			token, err := signer.Issue("player-123")
+			require.NoError(t, err)
+			parsed, claims := parseAndAssertSignature(t, token, secret)
+			tc.assertTok(t, parsed, claims)
+		})
+	}
+}
+
+func TestSigner_Issue_Error(t *testing.T) {
+	secret := []byte("test-secret-32-bytes-long-xxxxxx")
+
+	cases := []struct {
+		name     string
+		playerID string
+		resolver KeyResolver
+	}{
+		{
+			name:     "playerID が空のとき error を返す",
+			playerID: "",
+			resolver: StaticHS256Resolver(secret, DefaultKeyID),
+		},
+		{
+			name:     "resolver の error が伝搬する",
+			playerID: "player-123",
+			resolver: func(KeyID) ([]byte, error) { return nil, errors.New("boom") },
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			signer := NewSigner(tc.resolver, DefaultKeyID)
+			_, err := signer.Issue(tc.playerID)
+			require.Error(t, err)
 		})
 	}
 }
 
 func TestStaticHS256Resolver_RejectsUnknownKeyID(t *testing.T) {
-	secret := []byte("any-secret")
-	resolver := StaticHS256Resolver(secret, DefaultKeyID)
-	if _, err := resolver(KeyID("v2")); err == nil {
-		t.Fatal("expected error for unknown kid, got nil")
-	}
+	resolver := StaticHS256Resolver([]byte("any-secret"), DefaultKeyID)
+	_, err := resolver(KeyID("v2"))
+	require.Error(t, err)
 }
 
-func parseAndAssertSignature(t *testing.T, token string, secret []byte, _ time.Time) (*jwt.Token, *jwt.RegisteredClaims) {
+func parseAndAssertSignature(t *testing.T, token string, secret []byte) (*jwt.Token, *jwt.RegisteredClaims) {
 	t.Helper()
 	claims := &jwt.RegisteredClaims{}
 	// 固定時刻で発行した token を実時刻で検証すると iat/exp が衝突するため時刻検証を無効化する。
@@ -122,11 +104,7 @@ func parseAndAssertSignature(t *testing.T, token string, secret []byte, _ time.T
 	parsed, err := parser.ParseWithClaims(token, claims, func(*jwt.Token) (any, error) {
 		return secret, nil
 	})
-	if err != nil {
-		t.Fatalf("parse: %v", err)
-	}
-	if !parsed.Valid {
-		t.Fatal("parsed token is not valid")
-	}
+	require.NoError(t, err)
+	require.True(t, parsed.Valid)
 	return parsed, claims
 }

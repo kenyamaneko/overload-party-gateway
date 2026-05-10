@@ -13,8 +13,8 @@ func TestWithToken_RoundTrip(t *testing.T) {
 		wantToken string
 		wantOK    bool
 	}{
-		{name: "non-empty token round trips", token: "abc.def.ghi", wantToken: "abc.def.ghi", wantOK: true},
-		{name: "empty token reports absent", token: "", wantToken: "", wantOK: false},
+		{name: "空でない token は往復する", token: "abc.def.ghi", wantToken: "abc.def.ghi", wantOK: true},
+		{name: "空の token は欠落として報告される", token: "", wantToken: "", wantOK: false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -40,12 +40,12 @@ func TestInjectHeader(t *testing.T) {
 		wantHeader string
 	}{
 		{
-			name:       "ctx with token sets X-Internal-Auth",
+			name:       "token がある ctx は X-Internal-Auth を設定する",
 			ctx:        WithToken(context.Background(), "abc.def.ghi"),
 			wantHeader: "abc.def.ghi",
 		},
 		{
-			name:       "ctx without token leaves header empty",
+			name:       "token がない ctx は header を空のままにする",
 			ctx:        context.Background(),
 			wantHeader: "",
 		},
