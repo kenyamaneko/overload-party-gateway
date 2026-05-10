@@ -82,16 +82,34 @@ func (c *battleClient) CreatePvPGame(ctx context.Context, deck1Cards, deck2Cards
 }
 
 func (c *battleClient) ProcessAction(ctx context.Context, gameID string, playerNum int, actionType string, data json.RawMessage) (*ActionResult, error) {
+	dataMap, err := rawToMap(data)
+	if err != nil {
+		return nil, err
+	}
 	body := &apibattle.GameActionRequest{
 		PlayerNum:  int64(playerNum),
 		ActionType: actionType,
-		Data:       data,
+		Data:       dataMap,
 	}
 	var result ActionResult
 	if err := c.post(ctx, fmt.Sprintf("/api/v1/games/%s/actions", gameID), body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
+}
+
+// 原則に従ってパススルーしたいが、battle openapi が data を additionalProperties: true で
+// 宣言しており api-battle-rpc-go の Data が map[] を要求するため、battle RPC 境界で
+// map[string]interface{} に変換する。
+func rawToMap(raw json.RawMessage) (map[string]interface{}, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	var out map[string]interface{}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, fmt.Errorf("unmarshal action data: %w", err)
+	}
+	return out, nil
 }
 
 func (c *battleClient) AdvanceNpcTurn(ctx context.Context, gameID string) (*ActionResult, error) {
