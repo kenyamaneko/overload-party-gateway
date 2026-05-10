@@ -16,10 +16,8 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
 )
 
-// TestInternalAuth_E2E は ADR-037 Phase 1 の検収シナリオ:
-// gin engine の middleware チェーン (withPlayerID → IssueInternalAuth) を組み、
-// shop handler から呼び出した outbound HTTP に X-Internal-Auth が乗り、
-// claims (sub / iss / kid / alg / exp-iat) が ADR-037 §1 の仕様と一致することを検証する。
+// TestInternalAuth_E2E は middleware チェーン → handler → outbound HTTP の経路で
+// JWT claims が仕様通りに乗ることを end-to-end に検証する。
 func TestInternalAuth_E2E(t *testing.T) {
 	const (
 		secret    = "e2e-test-secret-32-bytes-or-longer"

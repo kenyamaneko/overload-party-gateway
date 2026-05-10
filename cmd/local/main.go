@@ -76,14 +76,11 @@ func main() {
 
 	newsService := service.NewNewsService(newsRepo)
 
-	// 内部認証 JWT signer (ADR-037 Phase 1)。ローカルでは INTERNAL_AUTH_SECRET 未設定時に
-	// dev 用固定鍵にフォールバックする。docker-compose / e2e と同一鍵を使うため git に乗せて良い。
-	internalAuthSecret := cfg.InternalAuthSecret
-	if internalAuthSecret == "" {
-		internalAuthSecret = "dev-internal-auth-secret-do-not-use-in-prod-xxxxx"
+	if cfg.InternalAuthSecret == "" {
+		log.Fatal("INTERNAL_AUTH_SECRET must be set")
 	}
 	internalSigner := internalauth.NewSigner(
-		internalauth.StaticHS256Resolver([]byte(internalAuthSecret), internalauth.DefaultKeyID),
+		internalauth.StaticHS256Resolver([]byte(cfg.InternalAuthSecret), internalauth.DefaultKeyID),
 		internalauth.DefaultKeyID,
 	)
 

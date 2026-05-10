@@ -117,9 +117,7 @@ func TestStaticHS256Resolver_RejectsUnknownKeyID(t *testing.T) {
 func parseAndAssertSignature(t *testing.T, token string, secret []byte, _ time.Time) (*jwt.Token, *jwt.RegisteredClaims) {
 	t.Helper()
 	claims := &jwt.RegisteredClaims{}
-	// 固定時刻で発行した token を実時刻で検証すると iat/exp が衝突するため、本テストでは
-	// 時刻バリデーションを無効化し、署名と claims の構造のみを検証する。時刻挙動は
-	// IssuedAt / ExpiresAt の差分でケース別に検証する。
+	// 固定時刻で発行した token を実時刻で検証すると iat/exp が衝突するため時刻検証を無効化する。
 	parser := jwt.NewParser(jwt.WithoutClaimsValidation())
 	parsed, err := parser.ParseWithClaims(token, claims, func(*jwt.Token) (any, error) {
 		return secret, nil

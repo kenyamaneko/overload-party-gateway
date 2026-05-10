@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -34,7 +35,6 @@ type Manager struct {
 	gamePlayerRepo    port.GamePlayerRepo
 
 	// internalSigner は WS 経路から各サービス client を呼ぶ前に X-Internal-Auth JWT を発行する。
-	// 各サービスが JWT 検証を始める Phase 2/3 まで実害はないが、Phase 1 から仕込んでおく。
 	internalSigner *internalauth.Signer
 
 	// matchmaking_start 後のプレイヤー単位の待機タイムアウト。
@@ -105,18 +105,13 @@ func NewManager(
 	return m
 }
 
-// authedContext は ADR-037 の内部認証 JWT を ctx に注入する。signer 未設定 / 発行失敗時は
-// ctx を素通しする。Phase 1 の verifying 対象は shop のみで WS 経路は呼ばないため失敗してもよい。
-// Phase 2 (card / news) 以降は WS 内の独立 ctx 経路 (GameRelay / SpectateRelay / exp_award /
-// turn_timer) も同様に wrap する必要があるが、本 issue (#29) のスコープ外。
+// authedContext は ctx に内部認証 JWT を注入した派生 context を返す。
 func (m *Manager) authedContext(ctx context.Context, playerID string) context.Context {
-	if m.internalSigner == nil || playerID == "" {
-		return ctx
-	}
 	token, err := m.internalSigner.Issue(playerID)
 	if err != nil {
-		log.Printf("internalauth: issue token for %s: %v", playerID, err)
-		return ctx
+		// Issue は起動時に検証済の resolver と非空 playerID で必ず成功するため、ここでの失敗は
+		// 起動時 invariants の違反 (programming error) を意味し panic で fail-fast する。
+		panic(fmt.Errorf("internalauth: issue: %w", err))
 	}
 	return internalauth.WithToken(ctx, token)
 }

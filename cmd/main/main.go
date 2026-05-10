@@ -56,7 +56,7 @@ func main() {
 		log.Fatal("FIRESTORE_PROJECT_ID must be set (game_config)")
 	}
 	if cfg.InternalAuthSecret == "" {
-		log.Fatal("INTERNAL_AUTH_SECRET must be set (ADR-037)")
+		log.Fatal("INTERNAL_AUTH_SECRET must be set")
 	}
 
 	if cfg.Env == "prod" {
@@ -100,7 +100,6 @@ func main() {
 
 	newsService := service.NewNewsService(newsRepo)
 
-	// 内部認証 JWT signer (ADR-037 Phase 1)
 	internalSigner := internalauth.NewSigner(
 		internalauth.StaticHS256Resolver([]byte(cfg.InternalAuthSecret), internalauth.DefaultKeyID),
 		internalauth.DefaultKeyID,

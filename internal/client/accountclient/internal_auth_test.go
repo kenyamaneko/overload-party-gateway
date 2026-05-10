@@ -9,8 +9,6 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
 )
 
-// TestClient_InjectsInternalAuthHeader は ADR-037 Phase 1 の検収項目:
-// ctx に token があれば outbound に X-Internal-Auth が付与されることを保証する。
 func TestClient_InjectsInternalAuthHeader(t *testing.T) {
 	const wantToken = "test.jwt.token"
 	var got string

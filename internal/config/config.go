@@ -40,8 +40,7 @@ type Config struct {
 	AppLatestVersion string
 	AppForceUpdate   bool
 
-	// InternalAuthSecret は ADR-037 の内部認証 JWT (HS256) の共有秘密鍵。
-	// 本番環境では起動時に必須化し、ローカル/CI では呼び出し側が dev 用 fallback を注入する。
+	// InternalAuthSecret は内部認証 JWT (HS256) の共有秘密鍵。
 	InternalAuthSecret string
 }
 
