@@ -15,6 +15,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	pubsubadapter "github.com/kenyamaneko/overload-party-gateway/internal/adapter/pubsub"
+	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/cardclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/matchmakingclient"
@@ -53,6 +54,9 @@ func main() {
 	}
 	if cfg.FirestoreProjectID == "" {
 		log.Fatal("FIRESTORE_PROJECT_ID must be set (game_config)")
+	}
+	if cfg.InternalAuthSecret == "" {
+		log.Fatal("INTERNAL_AUTH_SECRET must be set (ADR-037)")
 	}
 
 	if cfg.Env == "prod" {
@@ -96,10 +100,16 @@ func main() {
 
 	newsService := service.NewNewsService(newsRepo)
 
+	// 内部認証 JWT signer (ADR-037 Phase 1)
+	internalSigner := internalauth.NewSigner(
+		internalauth.StaticHS256Resolver([]byte(cfg.InternalAuthSecret), internalauth.DefaultKeyID),
+		internalauth.DefaultKeyID,
+	)
+
 	// Battle クライアント（HTTP → battle server）
 	battleClient := service.NewBattleClient(cfg.BattleServerURL)
 	matchmakingTimeout := time.Duration(cfg.MatchmakingTimeoutSec) * time.Second
-	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, matchmakingTimeout)
+	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, matchmakingTimeout, internalSigner)
 	wsHandler := ws.NewHandler(wsManager, authClient, accountClient, cfg.AllowedOrigins)
 
 	handlers := &router.Handlers{
@@ -152,6 +162,7 @@ func main() {
 
 	api := v1.Group("")
 	api.Use(middleware.PlayerResolve(accountClient))
+	api.Use(middleware.IssueInternalAuth(internalSigner))
 	router.RegisterAPIRoutes(api, handlers)
 
 	srv := &http.Server{

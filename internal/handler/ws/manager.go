@@ -10,6 +10,7 @@ import (
 
 	apimatchmaking "github.com/kenyamaneko/overload-party-matchmaking/packages/api-matchmaking"
 
+	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/cardclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/matchmakingclient"
@@ -32,6 +33,10 @@ type Manager struct {
 	matchmakingClient *matchmakingclient.Client
 	gamePlayerRepo    port.GamePlayerRepo
 
+	// internalSigner は WS 経路から各サービス client を呼ぶ前に X-Internal-Auth JWT を発行する。
+	// 各サービスが JWT 検証を始める Phase 2/3 まで実害はないが、Phase 1 から仕込んでおく。
+	internalSigner *internalauth.Signer
+
 	// matchmaking_start 後のプレイヤー単位の待機タイムアウト。
 	// 期限切れ時に matchmaking_error を push し上流をキャンセルする。
 	matchmakingTimeout time.Duration
@@ -50,6 +55,7 @@ func NewManager(
 	matchmakingClient *matchmakingclient.Client,
 	gamePlayerRepo port.GamePlayerRepo,
 	matchmakingTimeout time.Duration,
+	internalSigner *internalauth.Signer,
 ) *Manager {
 	m := &Manager{
 		battleClient:       battleClient,
@@ -57,6 +63,7 @@ func NewManager(
 		cardClient:         cardClient,
 		matchmakingClient:  matchmakingClient,
 		gamePlayerRepo:     gamePlayerRepo,
+		internalSigner:     internalSigner,
 		matchmakingTimeout: matchmakingTimeout,
 		matchWait:          make(map[string]*time.Timer),
 	}
@@ -96,6 +103,22 @@ func NewManager(
 	m.Spectate = spectate
 
 	return m
+}
+
+// authedContext は ADR-037 の内部認証 JWT を ctx に注入する。signer 未設定 / 発行失敗時は
+// ctx を素通しする。Phase 1 の verifying 対象は shop のみで WS 経路は呼ばないため失敗してもよい。
+// Phase 2 (card / news) 以降は WS 内の独立 ctx 経路 (GameRelay / SpectateRelay / exp_award /
+// turn_timer) も同様に wrap する必要があるが、本 issue (#29) のスコープ外。
+func (m *Manager) authedContext(ctx context.Context, playerID string) context.Context {
+	if m.internalSigner == nil || playerID == "" {
+		return ctx
+	}
+	token, err := m.internalSigner.Issue(playerID)
+	if err != nil {
+		log.Printf("internalauth: issue token for %s: %v", playerID, err)
+		return ctx
+	}
+	return internalauth.WithToken(ctx, token)
 }
 
 // cancelMatchmaking はプレイヤー切断時にマッチメイキングサービスへキャンセルを fire-and-forget する。
@@ -165,6 +188,7 @@ func (m *Manager) handleMatchWaitTimeout(playerID string) {
 func (m *Manager) HandleMessage(conn *Connection, msg *WSMessage) {
 	ctx, cancel := context.WithTimeout(conn.Context(), 30*time.Second)
 	defer cancel()
+	ctx = m.authedContext(ctx, conn.playerID)
 
 	switch msg.Type {
 	case genws.WSClientMsgGameEnter:
