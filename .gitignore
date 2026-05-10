@@ -21,4 +21,3 @@ coverage*.out
 
 # Claude
 .claude/
-CLAUDE.md
