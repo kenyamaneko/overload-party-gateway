@@ -8,6 +8,7 @@ import (
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
+	"github.com/kenyamaneko/overload-party-gateway/internal/presenter"
 )
 
 // PlayerHandler はプレイヤー情報の REST エンドポイントを処理します
@@ -28,7 +29,7 @@ func (h *PlayerHandler) GetPlayer(c *gin.Context) {
 		respondAccountErr(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, player)
+	c.JSON(http.StatusOK, presenter.PlayerToWire(player))
 }
 
 // UpdateName はプレイヤー名を変更します。
@@ -59,7 +60,7 @@ func (h *PlayerHandler) GetBattleLimit(c *gin.Context) {
 		respondAccountErr(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, limit)
+	c.JSON(http.StatusOK, presenter.BattleLimitToWire(limit))
 }
 
 func respondAccountErr(c *gin.Context, err error) {

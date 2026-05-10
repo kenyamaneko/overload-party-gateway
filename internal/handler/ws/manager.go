@@ -267,7 +267,7 @@ func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, da
 		return
 	}
 
-	game, err := m.battleClient.StartNPCBattle(ctx, cards, req.NPCModel)
+	game, err := m.battleClient.StartNPCBattle(ctx, cards, req.NpcModel)
 	if err != nil {
 		sendError(conn, "npc_battle_error", err.Error(), true)
 		return

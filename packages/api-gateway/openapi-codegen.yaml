@@ -1,0 +1,9 @@
+package: apigateway
+output: openapi_gen.go
+generate:
+  models: true
+  embedded-spec: false
+output-options:
+  skip-prune: true
+compatibility:
+  always-prefix-enum-values: true

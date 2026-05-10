@@ -16,7 +16,7 @@ type WSMessage struct {
 
 type MatchmakingStartMessage = apigateway.MatchmakingStartMessage
 type GameEnterMessage = apigateway.GameEnterMessage
-type NPCBattleStartMessage = apigateway.NPCBattleStartMessage
+type NPCBattleStartMessage = apigateway.NpcBattleStartMessage
 type GameActionMessage = apigateway.GameActionMessage
 type UseStampMessage = apigateway.UseStampMessage
 
@@ -28,7 +28,7 @@ type GameOverMessage = apigateway.GameOverMessage
 type ActionRejectedMessage = apigateway.ActionRejectedMessage
 type ActionPerformedMessage = apigateway.ActionPerformedMessage
 type StampUsedMessage = apigateway.StampUsedMessage
-type NPCBattleCreatedMessage = apigateway.NPCBattleCreatedMessage
+type NPCBattleCreatedMessage = apigateway.NpcBattleCreatedMessage
 
 // --- 観戦: クライアント → サーバー ---
 

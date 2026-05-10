@@ -304,6 +304,6 @@ func (sr *SpectateRelay) ActiveGames(parent context.Context) []apigateway.Specta
 func (sr *SpectateRelay) sendSpectateError(conn *Connection, code, message string) {
 	conn.SendMessage(&WSMessage{
 		Type: genws.WSServerMsgSpectateError,
-		Data: mustMarshal(SpectateErrorMessage{Code: code, Message: message}),
+		Data: mustMarshal(SpectateErrorMessage{ErrorCode: code, Message: message}),
 	})
 }
