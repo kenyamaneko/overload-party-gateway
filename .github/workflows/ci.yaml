@@ -3,8 +3,24 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.vscode/**'
+      - '.gitignore'
+      - 'LICENSE'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.vscode/**'
+      - '.gitignore'
+      - 'LICENSE'
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -20,9 +36,12 @@ env:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
       - name: Configure Go private modules
@@ -32,16 +51,21 @@ jobs:
           private-key: ${{ secrets.CROSS_REPO_DEPS_APP_PRIVATE_KEY }}
       # golangci-lint-action のビルド済みバイナリは Go 1.25 未対応のため
       # go install でソースからビルドして使う
-      - run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-      - run: golangci-lint run --timeout 5m ./...
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+      - name: Run lint
+        run: golangci-lint run --timeout 5m ./...
         env:
           GOPRIVATE: github.com/kenyamaneko/*
 
   test-unit:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
       - name: Configure Go private modules
@@ -56,9 +80,12 @@ jobs:
 
   test-integration:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
       - name: Set up Java (Firestore emulator runtime)
@@ -92,6 +119,7 @@ jobs:
 
   codegen-sync:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -122,6 +150,7 @@ jobs:
 
   spec-diff:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout PR head
         uses: actions/checkout@v4
@@ -150,18 +179,23 @@ jobs:
     needs: [lint, test-unit, test-integration]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - id: auth
+      - name: Authenticate to Google Cloud
+        id: auth
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.WIF_PROVIDER }}
           service_account: ${{ vars.CI_SERVICE_ACCOUNT }}
 
-      - uses: google-github-actions/setup-gcloud@v2
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
 
-      - run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
 
       - name: Generate Cross-Repo Deps App token
         id: app-token

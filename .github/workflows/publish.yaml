@@ -23,6 +23,11 @@ on:
         type: choice
         options: [patch, minor, major]
 
+concurrency:
+  group: publish-${{ github.ref }}
+  # タグの採番が競合しないように、先行ジョブの完了を待つ
+  cancel-in-progress: false
+
 permissions:
   contents: write
   packages: write
@@ -31,14 +36,17 @@ permissions:
 jobs:
   detect-changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       ws_constants_go: ${{ steps.filter.outputs.ws_constants_go }}
       api_gateway_go: ${{ steps.filter.outputs.api_gateway_go }}
       ws_constants_npm: ${{ steps.filter.outputs.ws_constants_npm }}
       api_gateway_npm: ${{ steps.filter.outputs.api_gateway_npm }}
     steps:
-      - uses: actions/checkout@v4
-      - id: filter
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Detect changed packages
+        id: filter
         uses: dorny/paths-filter@v3
         with:
           filters: |
@@ -54,12 +62,14 @@ jobs:
   tag-go-modules:
     needs: detect-changes
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: |
       needs.detect-changes.outputs.ws_constants_go == 'true' ||
       needs.detect-changes.outputs.api_gateway_go == 'true' ||
       github.event_name == 'workflow_dispatch'
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -89,13 +99,16 @@ jobs:
   publish-npm:
     needs: detect-changes
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     if: |
       needs.detect-changes.outputs.ws_constants_npm == 'true' ||
       needs.detect-changes.outputs.api_gateway_npm == 'true' ||
       github.event_name == 'workflow_dispatch'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: "20"
           registry-url: "https://npm.pkg.github.com"
