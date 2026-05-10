@@ -54,18 +54,18 @@ func (c *Client) ListAllCards(ctx context.Context) ([]*apicard.CardDefinition, e
 }
 
 // ListCardsWithOwnership はプレイヤーの所有状態付きカード一覧を取得します
-func (c *Client) ListCardsWithOwnership(ctx context.Context, playerID string) ([]*CardWithOwnership, error) {
+func (c *Client) ListCardsWithOwnership(ctx context.Context) ([]*CardWithOwnership, error) {
 	var out []*CardWithOwnership
-	if err := c.getJSON(ctx, "/internal/v1/players/"+playerID+"/cards/with-ownership", &out); err != nil {
+	if err := c.getJSON(ctx, "/api/v1/cards/cards/with-ownership", &out); err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
 // ListPlayerCards はプレイヤーの所持カード一覧を取得します
-func (c *Client) ListPlayerCards(ctx context.Context, playerID string) ([]*apicard.PlayerCardWithDef, error) {
+func (c *Client) ListPlayerCards(ctx context.Context) ([]*apicard.PlayerCardWithDef, error) {
 	var out []*apicard.PlayerCardWithDef
-	if err := c.getJSON(ctx, "/internal/v1/players/"+playerID+"/cards", &out); err != nil {
+	if err := c.getJSON(ctx, "/api/v1/cards/cards", &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -73,8 +73,8 @@ func (c *Client) ListPlayerCards(ctx context.Context, playerID string) ([]*apica
 
 // GetDeckCards はバトル用デッキ構成を取得します。
 // マッチ成立時や NPC バトル開始時にデッキを解決するために使用する。
-func (c *Client) GetDeckCards(ctx context.Context, playerID string, deckID int64) ([]apicard.DeckCard, error) {
-	_, cards, err := c.GetDeck(ctx, playerID, deckID)
+func (c *Client) GetDeckCards(ctx context.Context, deckID int64) ([]apicard.DeckCard, error) {
+	_, cards, err := c.GetDeck(ctx, deckID)
 	if err != nil {
 		return nil, err
 	}
@@ -82,23 +82,23 @@ func (c *Client) GetDeckCards(ctx context.Context, playerID string, deckID int64
 }
 
 // ListDecks はプレイヤーのデッキ一覧を取得します
-func (c *Client) ListDecks(ctx context.Context, playerID string) ([]*apicard.Deck, error) {
+func (c *Client) ListDecks(ctx context.Context) ([]*apicard.Deck, error) {
 	var out []*apicard.Deck
-	if err := c.getJSON(ctx, "/internal/v1/players/"+playerID+"/decks", &out); err != nil {
+	if err := c.getJSON(ctx, "/api/v1/cards/decks", &out); err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
 type deckWithCards struct {
-	Deck  *apicard.Deck       `json:"deck"`
-	Cards []apicard.DeckCard  `json:"cards"`
+	Deck  *apicard.Deck      `json:"deck"`
+	Cards []apicard.DeckCard `json:"cards"`
 }
 
 // GetDeck はデッキとカード構成を取得します
-func (c *Client) GetDeck(ctx context.Context, playerID string, deckID int64) (*apicard.Deck, []apicard.DeckCard, error) {
+func (c *Client) GetDeck(ctx context.Context, deckID int64) (*apicard.Deck, []apicard.DeckCard, error) {
 	var out deckWithCards
-	path := "/internal/v1/players/" + playerID + "/decks/" + strconv.FormatInt(deckID, 10)
+	path := "/api/v1/cards/decks/" + strconv.FormatInt(deckID, 10)
 	if err := c.getJSON(ctx, path, &out); err != nil {
 		return nil, nil, err
 	}
@@ -106,19 +106,18 @@ func (c *Client) GetDeck(ctx context.Context, playerID string, deckID int64) (*a
 }
 
 // CreateDeck はデッキを新規作成します
-func (c *Client) CreateDeck(ctx context.Context, playerID string, req apicard.DeckCreateRequest) (*apicard.Deck, error) {
+func (c *Client) CreateDeck(ctx context.Context, req apicard.DeckCreateRequest) (*apicard.Deck, error) {
 	var out apicard.Deck
-	path := "/internal/v1/players/" + playerID + "/decks"
-	if err := c.doJSON(ctx, http.MethodPost, path, req, &out); err != nil {
+	if err := c.doJSON(ctx, http.MethodPost, "/api/v1/cards/decks", req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
 // UpdateDeck はデッキを更新します
-func (c *Client) UpdateDeck(ctx context.Context, playerID string, deckID int64, req apicard.DeckUpdateRequest) (*apicard.Deck, error) {
+func (c *Client) UpdateDeck(ctx context.Context, deckID int64, req apicard.DeckUpdateRequest) (*apicard.Deck, error) {
 	var out apicard.Deck
-	path := "/internal/v1/players/" + playerID + "/decks/" + strconv.FormatInt(deckID, 10)
+	path := "/api/v1/cards/decks/" + strconv.FormatInt(deckID, 10)
 	if err := c.doJSON(ctx, http.MethodPut, path, req, &out); err != nil {
 		return nil, err
 	}
@@ -126,15 +125,15 @@ func (c *Client) UpdateDeck(ctx context.Context, playerID string, deckID int64, 
 }
 
 // DeleteDeck はデッキを削除します
-func (c *Client) DeleteDeck(ctx context.Context, playerID string, deckID int64) error {
-	path := "/internal/v1/players/" + playerID + "/decks/" + strconv.FormatInt(deckID, 10)
+func (c *Client) DeleteDeck(ctx context.Context, deckID int64) error {
+	path := "/api/v1/cards/decks/" + strconv.FormatInt(deckID, 10)
 	return c.doJSON(ctx, http.MethodDelete, path, nil, nil)
 }
 
 // ValidateDeckForBattle はデッキがバトルに使用可能か検証します。
 // 200 で nil、400 で ErrDeckInvalid（サービスのエラーメッセージ付き）を返す。
-func (c *Client) ValidateDeckForBattle(ctx context.Context, playerID string, deckID int64) error {
-	path := "/internal/v1/players/" + playerID + "/decks/" + strconv.FormatInt(deckID, 10) + "/validate-for-battle"
+func (c *Client) ValidateDeckForBattle(ctx context.Context, deckID int64) error {
+	path := "/api/v1/cards/decks/" + strconv.FormatInt(deckID, 10) + "/validate-for-battle"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, nil)
 	if err != nil {
 		return fmt.Errorf("cardclient: build request: %w", err)

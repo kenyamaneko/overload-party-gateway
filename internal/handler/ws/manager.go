@@ -246,7 +246,7 @@ func (m *Manager) handleMatchmakingStart(ctx context.Context, conn *Connection, 
 		return
 	}
 
-	if err := m.cardClient.ValidateDeckForBattle(ctx, conn.playerID, req.DeckID); err != nil {
+	if err := m.cardClient.ValidateDeckForBattle(ctx, req.DeckID); err != nil {
 		sendError(conn, "matchmaking_error", "deck validation failed: "+err.Error(), false)
 		return
 	}
@@ -275,7 +275,7 @@ func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, da
 		return
 	}
 
-	if err := m.cardClient.ValidateDeckForBattle(ctx, conn.playerID, req.DeckID); err != nil {
+	if err := m.cardClient.ValidateDeckForBattle(ctx, req.DeckID); err != nil {
 		sendError(conn, "npc_battle_error", "deck validation failed: "+err.Error(), false)
 		return
 	}
@@ -348,7 +348,7 @@ func (m *Manager) HandleMatchMade(ctx context.Context, event apimatchmaking.Matc
 }
 
 func (m *Manager) resolveDeckCards(ctx context.Context, playerID string, deckID int64) ([]service.BattleDeckCard, error) {
-	deckCards, err := m.cardClient.GetDeckCards(ctx, playerID, deckID)
+	deckCards, err := m.cardClient.GetDeckCards(ctx, deckID)
 	if err != nil {
 		return nil, err
 	}

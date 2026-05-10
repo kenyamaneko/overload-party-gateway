@@ -6,7 +6,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/cardclient"
-	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
 )
 
 // CardHandler はカード情報の REST エンドポイントを処理します
@@ -21,8 +20,7 @@ func NewCardHandler(card *cardclient.Client) *CardHandler {
 
 // GetAllCards は所有状態付きの全カード一覧を返します
 func (h *CardHandler) GetAllCards(c *gin.Context) {
-	playerID := middleware.GetPlayerID(c)
-	cards, err := h.card.ListCardsWithOwnership(c.Request.Context(), playerID)
+	cards, err := h.card.ListCardsWithOwnership(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
