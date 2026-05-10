@@ -14,6 +14,8 @@ import (
 	"time"
 
 	apishop "github.com/kenyamaneko/overload-party-shop/packages/api-shop"
+
+	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
 )
 
 // playerIDHeader は shop の公開 API endpoint に gateway が付与する player_id ヘッダ名。
@@ -128,6 +130,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, headers htt
 	for k, vs := range headers {
 		req.Header[k] = vs
 	}
+	internalauth.InjectHeader(ctx, req.Header)
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return fmt.Errorf("shopclient: do: %w", err)
