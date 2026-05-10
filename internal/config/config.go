@@ -39,6 +39,9 @@ type Config struct {
 	AppMinVersion    string
 	AppLatestVersion string
 	AppForceUpdate   bool
+
+	// InternalAuthSecret は内部認証 JWT (HS256) の共有秘密鍵。
+	InternalAuthSecret string
 }
 
 // Load は環境変数からサービス設定を読み込みます
@@ -69,6 +72,8 @@ func Load() *Config {
 		AppMinVersion:    getEnv("APP_MIN_VERSION", "0.1.0"),
 		AppLatestVersion: getEnv("APP_LATEST_VERSION", "0.1.0"),
 		AppForceUpdate:   getEnv("APP_FORCE_UPDATE", "false") == "true",
+
+		InternalAuthSecret: getEnv("INTERNAL_AUTH_SECRET", ""),
 	}
 }
 

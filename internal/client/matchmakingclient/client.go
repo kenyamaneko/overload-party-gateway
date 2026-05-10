@@ -12,6 +12,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
 )
 
 var (
@@ -69,6 +71,7 @@ func (c *Client) post(ctx context.Context, path string, body any) error {
 		return fmt.Errorf("matchmakingclient: new request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	internalauth.InjectHeader(ctx, req.Header)
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return fmt.Errorf("matchmakingclient: do: %w", err)

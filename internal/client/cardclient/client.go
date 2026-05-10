@@ -14,6 +14,8 @@ import (
 	"time"
 
 	apicard "github.com/kenyamaneko/overload-party-card/packages/api-card"
+
+	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
 )
 
 // ErrNotFound は card サービスが 404 を返した場合のエラーです
@@ -137,6 +139,7 @@ func (c *Client) ValidateDeckForBattle(ctx context.Context, playerID string, dec
 	if err != nil {
 		return fmt.Errorf("cardclient: build request: %w", err)
 	}
+	internalauth.InjectHeader(ctx, req.Header)
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return fmt.Errorf("cardclient: do: %w", err)
@@ -175,6 +178,7 @@ func (c *Client) doJSON(ctx context.Context, method, path string, body any, out 
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	internalauth.InjectHeader(ctx, req.Header)
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return fmt.Errorf("cardclient: do: %w", err)

@@ -25,6 +25,7 @@ func TestLoad_Defaults(t *testing.T) {
 	assert.Equal(t, "0.1.0", cfg.AppMinVersion)
 	assert.Equal(t, "0.1.0", cfg.AppLatestVersion)
 	assert.False(t, cfg.AppForceUpdate)
+	assert.Equal(t, "", cfg.InternalAuthSecret)
 }
 
 func TestLoad_CustomValues(t *testing.T) {
@@ -41,6 +42,7 @@ func TestLoad_CustomValues(t *testing.T) {
 	t.Setenv("APP_MIN_VERSION", "1.0.0")
 	t.Setenv("APP_LATEST_VERSION", "1.2.0")
 	t.Setenv("APP_FORCE_UPDATE", "true")
+	t.Setenv("INTERNAL_AUTH_SECRET", "test-internal-auth-secret-32-bytes-min")
 
 	cfg := Load()
 
@@ -57,6 +59,7 @@ func TestLoad_CustomValues(t *testing.T) {
 	assert.Equal(t, "1.0.0", cfg.AppMinVersion)
 	assert.Equal(t, "1.2.0", cfg.AppLatestVersion)
 	assert.True(t, cfg.AppForceUpdate)
+	assert.Equal(t, "test-internal-auth-secret-32-bytes-min", cfg.InternalAuthSecret)
 }
 
 func TestSplitCSV(t *testing.T) {

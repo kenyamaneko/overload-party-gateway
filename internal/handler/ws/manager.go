@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"sync"
 	"time"
 
 	apimatchmaking "github.com/kenyamaneko/overload-party-matchmaking/packages/api-matchmaking"
 
+	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/cardclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/matchmakingclient"
@@ -32,6 +34,9 @@ type Manager struct {
 	matchmakingClient *matchmakingclient.Client
 	gamePlayerRepo    port.GamePlayerRepo
 
+	// internalSigner は WS 経路から各サービス client を呼ぶ前に X-Internal-Auth JWT を発行する。
+	internalSigner *internalauth.Signer
+
 	// matchmaking_start 後のプレイヤー単位の待機タイムアウト。
 	// 期限切れ時に matchmaking_error を push し上流をキャンセルする。
 	matchmakingTimeout time.Duration
@@ -50,6 +55,7 @@ func NewManager(
 	matchmakingClient *matchmakingclient.Client,
 	gamePlayerRepo port.GamePlayerRepo,
 	matchmakingTimeout time.Duration,
+	internalSigner *internalauth.Signer,
 ) *Manager {
 	m := &Manager{
 		battleClient:       battleClient,
@@ -57,6 +63,7 @@ func NewManager(
 		cardClient:         cardClient,
 		matchmakingClient:  matchmakingClient,
 		gamePlayerRepo:     gamePlayerRepo,
+		internalSigner:     internalSigner,
 		matchmakingTimeout: matchmakingTimeout,
 		matchWait:          make(map[string]*time.Timer),
 	}
@@ -96,6 +103,17 @@ func NewManager(
 	m.Spectate = spectate
 
 	return m
+}
+
+// authedContext は ctx に内部認証 JWT を注入した派生 context を返す。
+func (m *Manager) authedContext(ctx context.Context, playerID string) context.Context {
+	token, err := m.internalSigner.Issue(playerID)
+	if err != nil {
+		// Issue は起動時に検証済の resolver と非空 playerID で必ず成功するため、ここでの失敗は
+		// 起動時 invariants の違反 (programming error) を意味し panic で fail-fast する。
+		panic(fmt.Errorf("internalauth: issue: %w", err))
+	}
+	return internalauth.WithToken(ctx, token)
 }
 
 // cancelMatchmaking はプレイヤー切断時にマッチメイキングサービスへキャンセルを fire-and-forget する。
@@ -165,6 +183,7 @@ func (m *Manager) handleMatchWaitTimeout(playerID string) {
 func (m *Manager) HandleMessage(conn *Connection, msg *WSMessage) {
 	ctx, cancel := context.WithTimeout(conn.Context(), 30*time.Second)
 	defer cancel()
+	ctx = m.authedContext(ctx, conn.playerID)
 
 	switch msg.Type {
 	case genws.WSClientMsgGameEnter:
