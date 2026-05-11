@@ -14,6 +14,8 @@ import (
 	"time"
 
 	apiaccount "github.com/kenyamaneko/overload-party-account/packages/api-account"
+
+	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
 )
 
 var (
@@ -251,6 +253,7 @@ func (c *Client) doJSON(ctx context.Context, method, path string, body, out any)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	internalauth.InjectHeader(ctx, req.Header)
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return fmt.Errorf("accountclient: do: %w", err)

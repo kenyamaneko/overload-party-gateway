@@ -17,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/cardclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/matchmakingclient"
@@ -75,9 +76,17 @@ func main() {
 
 	newsService := service.NewNewsService(newsRepo)
 
+	if cfg.InternalAuthSecret == "" {
+		log.Fatal("INTERNAL_AUTH_SECRET must be set")
+	}
+	internalSigner := internalauth.NewSigner(
+		internalauth.StaticHS256Resolver([]byte(cfg.InternalAuthSecret), internalauth.DefaultKeyID),
+		internalauth.DefaultKeyID,
+	)
+
 	battleClient := service.NewBattleClient(cfg.BattleServerURL)
 	matchmakingTimeout := time.Duration(cfg.MatchmakingTimeoutSec) * time.Second
-	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, matchmakingTimeout)
+	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, matchmakingTimeout, internalSigner)
 	wsHandler := ws.NewHandler(wsManager, nil, accountClient, nil)
 	handlers := &router.Handlers{
 		Auth:         rest.NewAuthHandler(accountClient),
@@ -122,6 +131,7 @@ func main() {
 	api := r.Group("/api/v1")
 	api.Use(middleware.DevAuthWithPlayerResolve(accountClient))
 	router.RegisterAuthRoutes(api, handlers)
+	api.Use(middleware.IssueInternalAuth(internalSigner))
 	router.RegisterAPIRoutes(api, handlers)
 
 	srv := &http.Server{
