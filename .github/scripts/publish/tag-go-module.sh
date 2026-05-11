@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
-# tag-go-module.sh: build a Go sub-module, compute next semver tag, push it.
+# Build a Go sub-module and push its next semver tag.
 # Usage: tag-go-module.sh <package_dir> <bump>
-#   package_dir: path to the Go module dir, e.g. packages/internalauth-go
-#   bump:        patch | minor | major (used only when prior tag exists)
-# Tag format is "<package_dir>/vX.Y.Z" — Go module proxy requires this layout
-# for sub-module versioning.
 
 set -euo pipefail
 

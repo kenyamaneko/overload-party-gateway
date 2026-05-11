@@ -1,7 +1,5 @@
 name: publish packages
 
-# ADR-015 Phase 6: gateway owns ws-constants + api-gateway (Go + npm).
-# ADR-039: gateway owns internalauth-go (Go).
 # On every push to main that touches packages/**, this workflow tags each
 # changed Go module with packages/<name>/vX.Y.Z and publishes the npm
 # packages to GitHub Packages.

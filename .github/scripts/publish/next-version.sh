@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
-# next-version.sh: compute next semver tag for a Go sub-module.
+# Compute the next semver tag for a Go sub-module.
 # Usage: next-version.sh <prefix> <bump>
-#   prefix: tag prefix without /vX.Y.Z, e.g. packages/internalauth-go
-#   bump:   patch | minor | major
-# Returns "vMAJOR.MINOR.PATCH" on stdout. When no prior tag exists, returns
-# v0.1.0 (the bump argument is ignored — first release is always v0.1.0).
 
 set -euo pipefail
 
