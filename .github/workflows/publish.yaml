@@ -1,6 +1,5 @@
 name: publish packages
 
-# ADR-015 Phase 6: gateway owns ws-constants + api-gateway (Go + npm).
 # On every push to main that touches packages/**, this workflow tags each
 # changed Go module with packages/<name>/vX.Y.Z and publishes the npm
 # packages to GitHub Packages.
@@ -40,6 +39,7 @@ jobs:
     outputs:
       ws_constants_go: ${{ steps.filter.outputs.ws_constants_go }}
       api_gateway_go: ${{ steps.filter.outputs.api_gateway_go }}
+      internalauth_go: ${{ steps.filter.outputs.internalauth_go }}
       ws_constants_npm: ${{ steps.filter.outputs.ws_constants_npm }}
       api_gateway_npm: ${{ steps.filter.outputs.api_gateway_npm }}
     steps:
@@ -54,6 +54,8 @@ jobs:
               - 'packages/ws-constants/**'
             api_gateway_go:
               - 'packages/api-gateway/**'
+            internalauth_go:
+              - 'packages/internalauth-go/**'
             ws_constants_npm:
               - 'packages/ws-constants-npm/**'
             api_gateway_npm:
@@ -66,6 +68,7 @@ jobs:
     if: |
       needs.detect-changes.outputs.ws_constants_go == 'true' ||
       needs.detect-changes.outputs.api_gateway_go == 'true' ||
+      needs.detect-changes.outputs.internalauth_go == 'true' ||
       github.event_name == 'workflow_dispatch'
     steps:
       - name: Checkout
@@ -79,22 +82,13 @@ jobs:
           go-version: "1.25"
       - name: Tag ws-constants
         if: needs.detect-changes.outputs.ws_constants_go == 'true' || github.event_name == 'workflow_dispatch'
-        run: |
-          set -euo pipefail
-          cd packages/ws-constants
-          go build ./...
-          NEXT=$(../../scripts/ci/next-version.sh packages/ws-constants "${{ inputs.bump || 'patch' }}")
-          git tag "packages/ws-constants/${NEXT}"
-          git push origin "packages/ws-constants/${NEXT}"
+        run: .github/scripts/publish/tag-go-module.sh packages/ws-constants "${{ inputs.bump || 'patch' }}"
       - name: Tag api-gateway
         if: needs.detect-changes.outputs.api_gateway_go == 'true' || github.event_name == 'workflow_dispatch'
-        run: |
-          set -euo pipefail
-          cd packages/api-gateway
-          go build ./...
-          NEXT=$(../../scripts/ci/next-version.sh packages/api-gateway "${{ inputs.bump || 'patch' }}")
-          git tag "packages/api-gateway/${NEXT}"
-          git push origin "packages/api-gateway/${NEXT}"
+        run: .github/scripts/publish/tag-go-module.sh packages/api-gateway "${{ inputs.bump || 'patch' }}"
+      - name: Tag internalauth-go
+        if: needs.detect-changes.outputs.internalauth_go == 'true' || github.event_name == 'workflow_dispatch'
+        run: .github/scripts/publish/tag-go-module.sh packages/internalauth-go "${{ inputs.bump || 'patch' }}"
 
   publish-npm:
     needs: detect-changes
