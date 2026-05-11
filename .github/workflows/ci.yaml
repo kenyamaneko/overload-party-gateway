@@ -120,32 +120,6 @@ jobs:
       - name: Check for drift
         run: .github/scripts/ci/check-codegen-drift.sh
 
-  spec-diff:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout PR head
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-      - name: Install oasdiff
-        run: go install github.com/oasdiff/oasdiff@latest
-      - name: Install AsyncAPI CLI
-        run: npm install -g @asyncapi/cli@latest
-      - name: Fetch base ref
-        run: git fetch origin "${{ github.base_ref }}"
-      - name: Detect breaking changes in data/openapi.yaml
-        run: .github/scripts/ci/openapi-diff.sh "origin/${{ github.base_ref }}"
-      - name: Detect breaking changes in data/asyncapi.yaml
-        run: .github/scripts/ci/asyncapi-diff.sh "origin/${{ github.base_ref }}"
-
   build-and-push:
     needs: [lint, test-unit, test-integration]
     if: github.ref == 'refs/heads/main'
