@@ -1,6 +1,7 @@
 name: publish packages
 
 # ADR-015 Phase 6: gateway owns ws-constants + api-gateway (Go + npm).
+# ADR-039: gateway owns internalauth-go (Go).
 # On every push to main that touches packages/**, this workflow tags each
 # changed Go module with packages/<name>/vX.Y.Z and publishes the npm
 # packages to GitHub Packages.
@@ -34,6 +35,7 @@ jobs:
     outputs:
       ws_constants_go: ${{ steps.filter.outputs.ws_constants_go }}
       api_gateway_go: ${{ steps.filter.outputs.api_gateway_go }}
+      internalauth_go: ${{ steps.filter.outputs.internalauth_go }}
       ws_constants_npm: ${{ steps.filter.outputs.ws_constants_npm }}
       api_gateway_npm: ${{ steps.filter.outputs.api_gateway_npm }}
     steps:
@@ -46,6 +48,8 @@ jobs:
               - 'packages/ws-constants/**'
             api_gateway_go:
               - 'packages/api-gateway/**'
+            internalauth_go:
+              - 'packages/internalauth-go/**'
             ws_constants_npm:
               - 'packages/ws-constants-npm/**'
             api_gateway_npm:
@@ -57,6 +61,7 @@ jobs:
     if: |
       needs.detect-changes.outputs.ws_constants_go == 'true' ||
       needs.detect-changes.outputs.api_gateway_go == 'true' ||
+      needs.detect-changes.outputs.internalauth_go == 'true' ||
       github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4
@@ -85,6 +90,15 @@ jobs:
           NEXT=$(../../scripts/ci/next-version.sh packages/api-gateway "${{ inputs.bump || 'patch' }}")
           git tag "packages/api-gateway/${NEXT}"
           git push origin "packages/api-gateway/${NEXT}"
+      - name: Tag internalauth-go
+        if: needs.detect-changes.outputs.internalauth_go == 'true' || github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          cd packages/internalauth-go
+          go build ./...
+          NEXT=$(../../scripts/ci/next-version.sh packages/internalauth-go "${{ inputs.bump || 'patch' }}")
+          git tag "packages/internalauth-go/${NEXT}"
+          git push origin "packages/internalauth-go/${NEXT}"
 
   publish-npm:
     needs: detect-changes
