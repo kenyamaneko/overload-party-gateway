@@ -84,8 +84,6 @@ func main() {
 	handlers := &router.Handlers{
 		Auth:     rest.NewAuthHandler(accountClient),
 		Spectate: rest.NewSpectateHandler(wsManager),
-		GameLog:  rest.NewGameLogHandler(battleClient),
-		NPC:      rest.NewNPCHandler(battleClient),
 	}
 
 	r := gin.Default()

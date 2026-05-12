@@ -5,8 +5,8 @@ info:
   description: |
     Gateway service の REST 契約 (client → gateway 公開 API)。
     本ファイルが SSoT。`packages/api-gateway` の Go 型は oapi-codegen が本ファイルから生成する。
-    gateway は固有のドメインロジックを持たず、認証 / 観戦 / battle proxy / 静的データを提供する。
-    各サービスの client 公開仕様は各サービスの openapi.yaml が SSoT。
+    gateway は固有のドメインロジックを持たず、認証 / 観戦 / 静的データ + 各サービスへの
+    path-prefix forwarder を提供する。client 公開仕様は各サービスの openapi.yaml が SSoT。
 
 paths:
   /api/v1/health:
@@ -63,57 +63,6 @@ paths:
         "404":
           description: プレイヤー未登録
 
-  /api/v1/games/{gameId}/log:
-    parameters:
-      - $ref: "#/components/parameters/GameIdPath"
-    get:
-      operationId: getGameLog
-      summary: ゲームログを JSON で取得 (battle サーバーにプロキシ)
-      responses:
-        "200":
-          description: ゲームログ JSON (battle 由来)
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: true
-        "404":
-          description: ゲームが存在しない
-        "500":
-          description: Battle サーバー接続エラー
-
-  /api/v1/games/{gameId}/log/text:
-    parameters:
-      - $ref: "#/components/parameters/GameIdPath"
-    get:
-      operationId: getGameLogText
-      summary: ゲームログをテキスト形式で取得
-      responses:
-        "200":
-          description: ゲームログ (text/plain)
-          content:
-            text/plain:
-              schema:
-                type: string
-        "404":
-          description: ゲームが存在しない
-
-  /api/v1/npc/models:
-    get:
-      operationId: listNpcModels
-      summary: NPC モデル一覧を取得 (battle サーバーにプロキシ)
-      responses:
-        "200":
-          description: NPC モデル一覧
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/NpcModel"
-        "404":
-          description: NPC モデルが存在しない
-
   /api/v1/spectate/games:
     get:
       operationId: listSpectateGames
@@ -129,14 +78,6 @@ paths:
                   $ref: "#/components/schemas/SpectateGameInfo"
 
 components:
-  parameters:
-    GameIdPath:
-      name: gameId
-      in: path
-      required: true
-      schema:
-        type: string
-
   schemas:
     HealthResponse:
       type: object
@@ -210,20 +151,6 @@ components:
           type: integer
           format: int64
           description: 次レベルまでの必要経験値
-
-    NpcModel:
-      type: object
-      required: [model, faction, difficulty, display_name]
-      properties:
-        model:
-          type: string
-        faction:
-          type: string
-        difficulty:
-          type: string
-          description: 難易度 (`easy` / `hard`)
-        display_name:
-          type: string
 
     SpectateGameInfo:
       type: object

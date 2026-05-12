@@ -9,11 +9,11 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/handler/rest"
 )
 
-// Handlers は全 REST ハンドラーをグループ化し、cmd/main と cmd/local でルート定義を共有します
+// Handlers は gateway 残置の REST ハンドラーをグループ化し、cmd/main と cmd/local
+// でルート定義を共有します。downstream サービス公開 path は RegisterForwardRoutes で
+// 別途扱う。
 type Handlers struct {
 	Auth     *rest.AuthHandler
-	GameLog  *rest.GameLogHandler
-	NPC      *rest.NPCHandler
 	Spectate *rest.SpectateHandler
 }
 
@@ -23,13 +23,8 @@ func RegisterAuthRoutes(group *gin.RouterGroup, h *Handlers) {
 	group.POST("/auth/login", h.Auth.Login)
 }
 
-// RegisterAPIRoutes は認証済み + プレイヤー解決済みの全エンドポイントを登録します
+// RegisterAPIRoutes は gateway 自身が応答する認証済みエンドポイントを登録します
 func RegisterAPIRoutes(api *gin.RouterGroup, h *Handlers) {
-	api.GET("/games/:gameId/log", h.GameLog.GetGameLog)
-	api.GET("/games/:gameId/log/text", h.GameLog.GetGameLogText)
-
-	api.GET("/npc/models", h.NPC.GetNPCModels)
-
 	api.GET("/spectate/games", h.Spectate.GetActiveGames)
 }
 
@@ -45,9 +40,10 @@ func RegisterForwardRoutes(api *gin.RouterGroup, cfg *config.Config) error {
 		{"/cards/*path", cfg.CardServiceURL},
 		{"/shop/*path", cfg.ShopServiceURL},
 		{"/scenarios/*path", cfg.ScenarioServiceURL},
-		{"/onboarding/*path", cfg.ScenarioServiceURL},
 		{"/news/*path", cfg.NewsServiceURL},
 		{"/support/*path", cfg.SupportServiceURL},
+		{"/games/*path", cfg.BattleServerURL},
+		{"/npc/*path", cfg.BattleServerURL},
 	}
 	for _, r := range routes {
 		h, err := rest.NewForwarder(r.targetURL)

@@ -26,16 +26,16 @@ type (
 // BattleClient は battle server REST API との通信インターフェースです。
 // gateway はゲーム作成、アクション処理、ステート取得をこのクライアントに委譲する。
 // プレイヤー向けメソッドは playerID ではなく playerNum (1/2) を使用する。
+//
+// client 公開 path (`/api/v1/games/{id}/log[/text]`, `/api/v1/npc/models`) は
+// gateway path-prefix forwarder が直接 forward するため本 interface には含めない。
 type BattleClient interface {
-	GetNPCModels(ctx context.Context) (json.RawMessage, error)
 	StartNPCBattle(ctx context.Context, deckCards []BattleDeckCard, npcModel string) (*GameCreatedResult, error)
 	CreatePvPGame(ctx context.Context, deck1Cards, deck2Cards []BattleDeckCard) (*GameCreatedResult, error)
 	ProcessAction(ctx context.Context, gameID string, playerNum int, actionType string, data json.RawMessage) (*ActionResult, error)
 	GetGameStateForPlayer(ctx context.Context, gameID string, playerNum int) (json.RawMessage, error)
 	GetTurnControlsForPlayer(ctx context.Context, gameID string, playerNum int) (json.RawMessage, error)
 	AdvanceNpcTurn(ctx context.Context, gameID string) (*ActionResult, error)
-	GetGameLog(ctx context.Context, gameID string) (json.RawMessage, error)
-	GetGameLogText(ctx context.Context, gameID string) ([]byte, error)
 }
 
 const battleClientTimeout = 30 * time.Second
@@ -51,10 +51,6 @@ func NewBattleClient(baseURL string) BattleClient {
 		baseURL: baseURL,
 		client:  &http.Client{Timeout: battleClientTimeout},
 	}
-}
-
-func (c *battleClient) GetNPCModels(ctx context.Context) (json.RawMessage, error) {
-	return c.getRaw(ctx, "/api/v1/npc/models")
 }
 
 func (c *battleClient) StartNPCBattle(ctx context.Context, deckCards []BattleDeckCard, npcModel string) (*GameCreatedResult, error) {
@@ -137,34 +133,6 @@ func (c *battleClient) GetTurnControlsForPlayer(ctx context.Context, gameID stri
 	return raw, nil
 }
 
-func (c *battleClient) GetGameLog(ctx context.Context, gameID string) (json.RawMessage, error) {
-	return c.getRaw(ctx, fmt.Sprintf("/api/v1/games/%s/log", gameID))
-}
-
-func (c *battleClient) GetGameLogText(ctx context.Context, gameID string) ([]byte, error) {
-	path := fmt.Sprintf("/api/v1/games/%s/log/text", gameID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("battle server request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, parseBattleError(resp.StatusCode, body)
-	}
-
-	return body, nil
-}
 
 // parseBattleError は battle server のレスポンスから構造化エラーメッセージを抽出します。
 // 抽出できない場合はステータスコードと body をそのまま含めたエラーを返す。

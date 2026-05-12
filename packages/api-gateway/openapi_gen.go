@@ -12,15 +12,6 @@ type HealthResponse struct {
 	Status string `json:"status"`
 }
 
-// NpcModel defines model for NpcModel.
-type NpcModel struct {
-	// Difficulty 難易度 (`easy` / `hard`)
-	Difficulty  string `json:"difficulty"`
-	DisplayName string `json:"display_name"`
-	Faction     string `json:"faction"`
-	Model       string `json:"model"`
-}
-
 // PlayerResponse defines model for PlayerResponse.
 type PlayerResponse struct {
 	CreatedAt      time.Time `json:"created_at"`
@@ -66,6 +57,3 @@ type VersionResponse struct {
 	// StoreURL ストア URL
 	StoreURL string `json:"storeUrl"`
 }
-
-// GameIdPath defines model for GameIdPath.
-type GameIdPath = string
