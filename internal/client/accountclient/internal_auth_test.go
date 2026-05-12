@@ -20,7 +20,7 @@ func TestClient_InjectsInternalAuthHeader(t *testing.T) {
 
 	c := New(srv.URL)
 	ctx := internalauth.WithToken(context.Background(), wantToken)
-	if err := c.IncrementBattleCount(ctx, "player-123"); err != nil {
+	if err := c.IncrementBattleCount(ctx); err != nil {
 		t.Fatalf("IncrementBattleCount: %v", err)
 	}
 	if got != wantToken {

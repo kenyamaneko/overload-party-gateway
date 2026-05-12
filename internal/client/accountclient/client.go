@@ -23,10 +23,6 @@ var (
 	ErrNotFound = errors.New("accountclient: not found")
 	// ErrPlayerAlreadyRegistered はプレイヤーが既に登録済みの場合のエラーです
 	ErrPlayerAlreadyRegistered = errors.New("accountclient: player already registered")
-	// ErrInvalidRequest は account サービスが 400 を返した場合のエラーです。
-	// gateway は業務バリデーションを持たず account を SSoT とする方針のため、
-	// account の判定をそのままユーザーに伝搬する用途で使う。
-	ErrInvalidRequest = errors.New("accountclient: invalid request")
 )
 
 // Client は account サービスへの HTTP クライアントです
@@ -111,95 +107,18 @@ func (c *Client) GetPlayer(ctx context.Context, playerID string) (*apiaccount.Pl
 	return &out, nil
 }
 
-type updateNameRequest struct {
-	Name string `json:"name"`
-}
-
-// UpdateName はプレイヤー名を更新します
-func (c *Client) UpdateName(ctx context.Context, playerID, name string) (*Player, error) {
-	var out Player
-	path := "/internal/v1/players/" + url.PathEscape(playerID) + "/name"
-	if err := c.doJSON(ctx, http.MethodPut, path, updateNameRequest{Name: name}, &out); err != nil {
-		return nil, err
-	}
-	return &out, nil
-}
-
 // GetBattleLimit はバトル回数制限情報を取得します
-func (c *Client) GetBattleLimit(ctx context.Context, playerID string) (*apiaccount.BattleLimitResponse, error) {
+func (c *Client) GetBattleLimit(ctx context.Context) (*apiaccount.BattleLimitResponse, error) {
 	var out apiaccount.BattleLimitResponse
-	path := "/internal/v1/players/" + url.PathEscape(playerID) + "/battle-limit"
-	if err := c.doJSON(ctx, http.MethodGet, path, nil, &out); err != nil {
+	if err := c.doJSON(ctx, http.MethodGet, "/api/v1/account/me/battle-limit", nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
 // IncrementBattleCount はバトル回数をインクリメントします
-func (c *Client) IncrementBattleCount(ctx context.Context, playerID string) error {
-	path := "/internal/v1/players/" + url.PathEscape(playerID) + "/battle-limit/increment"
-	return c.doJSON(ctx, http.MethodPost, path, nil, nil)
-}
-
-type updatePremiumRequest struct {
-	IsPremium       bool   `json:"is_premium"`
-	ExpiresAtMillis *int64 `json:"expires_at_millis,omitempty"`
-}
-
-// UpdatePremium はプレミアムステータスを更新します
-func (c *Client) UpdatePremium(ctx context.Context, playerID string, isPremium bool, expiresAt *time.Time) error {
-	body := updatePremiumRequest{IsPremium: isPremium}
-	if expiresAt != nil {
-		ms := expiresAt.UnixMilli()
-		body.ExpiresAtMillis = &ms
-	}
-	path := "/internal/v1/players/" + url.PathEscape(playerID) + "/premium"
-	return c.doJSON(ctx, http.MethodPut, path, body, nil)
-}
-
-type updateFactionRequest struct {
-	Faction string `json:"faction"`
-}
-
-// UpdateFaction はプレイヤーの選択ファクションを更新します
-func (c *Client) UpdateFaction(ctx context.Context, playerID, faction string) error {
-	path := "/internal/v1/players/" + url.PathEscape(playerID) + "/faction"
-	return c.doJSON(ctx, http.MethodPut, path, updateFactionRequest{Faction: faction}, nil)
-}
-
-type grantFactionRequest struct {
-	Faction string `json:"faction"`
-	Source  string `json:"source"`
-}
-
-// GrantFaction はプレイヤーにファクションを付与します
-func (c *Client) GrantFaction(ctx context.Context, playerID, faction, source string) error {
-	path := "/internal/v1/players/" + url.PathEscape(playerID) + "/factions"
-	return c.doJSON(ctx, http.MethodPost, path, grantFactionRequest{Faction: faction, Source: source}, nil)
-}
-
-type listFactionsResponse struct {
-	Factions []string `json:"factions"`
-}
-
-// ListFactions はプレイヤーの所持ファクション一覧を取得します
-func (c *Client) ListFactions(ctx context.Context, playerID string) ([]string, error) {
-	var out listFactionsResponse
-	path := "/internal/v1/players/" + url.PathEscape(playerID) + "/factions"
-	if err := c.doJSON(ctx, http.MethodGet, path, nil, &out); err != nil {
-		return nil, err
-	}
-	return out.Factions, nil
-}
-
-type addExpRequest struct {
-	ExpGain int64 `json:"exp_gain"`
-}
-
-// AddExp はプレイヤーに経験値を加算します
-func (c *Client) AddExp(ctx context.Context, playerID string, expGain int64) error {
-	path := "/internal/v1/players/" + url.PathEscape(playerID) + "/exp"
-	return c.doJSON(ctx, http.MethodPost, path, addExpRequest{ExpGain: expGain}, nil)
+func (c *Client) IncrementBattleCount(ctx context.Context) error {
+	return c.doJSON(ctx, http.MethodPost, "/api/v1/account/me/battle-limit/increment", nil, nil)
 }
 
 type awardGameExpRequest struct {
@@ -215,26 +134,6 @@ func (c *Client) AwardGameExp(ctx context.Context, p1ID, p2ID string, winnerNum 
 	return c.doJSON(ctx, http.MethodPost, "/internal/v1/players/award-game-exp", awardGameExpRequest{
 		Player1ID: p1ID, Player2ID: p2ID, WinnerNum: winnerNum, Reason: reason, MatchType: matchType,
 	}, nil)
-}
-
-// GetSettings はユーザー設定を取得します
-func (c *Client) GetSettings(ctx context.Context, playerID string) (*apiaccount.PlayerSettingsResponse, error) {
-	var out apiaccount.PlayerSettingsResponse
-	path := "/internal/v1/players/" + url.PathEscape(playerID) + "/settings"
-	if err := c.doJSON(ctx, http.MethodGet, path, nil, &out); err != nil {
-		return nil, err
-	}
-	return &out, nil
-}
-
-// UpdateSettings はユーザー設定を更新します
-func (c *Client) UpdateSettings(ctx context.Context, playerID string, req apiaccount.UpdateSettingsRequest) (*apiaccount.PlayerSettingsResponse, error) {
-	var out apiaccount.PlayerSettingsResponse
-	path := "/internal/v1/players/" + url.PathEscape(playerID) + "/settings"
-	if err := c.doJSON(ctx, http.MethodPut, path, req, &out); err != nil {
-		return nil, err
-	}
-	return &out, nil
 }
 
 func (c *Client) doJSON(ctx context.Context, method, path string, body, out any) error {
@@ -269,9 +168,6 @@ func (c *Client) doJSON(ctx context.Context, method, path string, body, out any)
 			return fmt.Errorf("accountclient: decode: %w", err)
 		}
 		return nil
-	case http.StatusBadRequest:
-		raw, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("%w: %s", ErrInvalidRequest, string(raw))
 	case http.StatusNotFound:
 		return ErrNotFound
 	case http.StatusConflict:
