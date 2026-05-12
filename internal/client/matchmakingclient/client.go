@@ -29,7 +29,7 @@ type Client struct {
 	http    *http.Client
 }
 
-// New は matchmaking サービス��ライアントを生成します
+// New は matchmaking サービスクライアントを生成します
 func New(baseURL string) *Client {
 	return &Client{
 		baseURL: baseURL,
@@ -38,23 +38,20 @@ func New(baseURL string) *Client {
 }
 
 type enqueueBody struct {
-	PlayerID string `json:"playerId"`
-	DeckID   int64  `json:"deckId"`
+	DeckID int64 `json:"deck_id"`
 }
 
-type cancelBody struct {
-	PlayerID string `json:"playerId"`
-}
-
-// Enqueue はプレイヤーをマッチメイキングキューに追加します
-func (c *Client) Enqueue(ctx context.Context, playerID string, deckID int64) error {
-	return c.post(ctx, "/internal/v1/enqueue", enqueueBody{PlayerID: playerID, DeckID: deckID})
+// Enqueue はプレイヤーをマッチメイキングキューに追加します。
+// player_id は X-Internal-Auth JWT の sub から matchmaking 側で解決される。
+func (c *Client) Enqueue(ctx context.Context, deckID int64) error {
+	return c.post(ctx, "/internal/v1/enqueue", enqueueBody{DeckID: deckID})
 }
 
 // Cancel はプレイヤーをキューから除去します。
 // 除去済みまたは未キュー時は nil を返し、通信エラーまたは 5xx の場合のみ non-nil を返す。
-func (c *Client) Cancel(ctx context.Context, playerID string) error {
-	err := c.post(ctx, "/internal/v1/cancel", cancelBody{PlayerID: playerID})
+// player_id は X-Internal-Auth JWT の sub から matchmaking 側で解決される。
+func (c *Client) Cancel(ctx context.Context) error {
+	err := c.post(ctx, "/internal/v1/cancel", nil)
 	if errors.Is(err, ErrNotFound) {
 		return nil
 	}
@@ -62,15 +59,21 @@ func (c *Client) Cancel(ctx context.Context, playerID string) error {
 }
 
 func (c *Client) post(ctx context.Context, path string, body any) error {
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return fmt.Errorf("matchmakingclient: marshal: %w", err)
+	var reqBody io.Reader
+	if body != nil {
+		buf, err := json.Marshal(body)
+		if err != nil {
+			return fmt.Errorf("matchmakingclient: marshal: %w", err)
+		}
+		reqBody = bytes.NewReader(buf)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(buf))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, reqBody)
 	if err != nil {
 		return fmt.Errorf("matchmakingclient: new request: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	internalauth.InjectHeader(ctx, req.Header)
 	resp, err := c.http.Do(req)
 	if err != nil {
