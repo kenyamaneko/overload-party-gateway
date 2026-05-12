@@ -10,7 +10,6 @@ import (
 	apicard "github.com/kenyamaneko/overload-party-card/packages/api-card"
 	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/cardclient"
-	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
 )
 
 // DeckHandler はデッキ CRUD の REST エンドポイントを処理します
@@ -25,8 +24,7 @@ func NewDeckHandler(card *cardclient.Client) *DeckHandler {
 
 // GetDecks はプレイヤーのデッキ一覧を返します
 func (h *DeckHandler) GetDecks(c *gin.Context) {
-	playerID := middleware.GetPlayerID(c)
-	decks, err := h.card.ListDecks(c.Request.Context(), playerID)
+	decks, err := h.card.ListDecks(c.Request.Context())
 	if err != nil {
 		respondCardErr(c, err)
 		return
@@ -36,14 +34,13 @@ func (h *DeckHandler) GetDecks(c *gin.Context) {
 
 // GetDeck は指定デッキの詳細を返します
 func (h *DeckHandler) GetDeck(c *gin.Context) {
-	playerID := middleware.GetPlayerID(c)
 	deckID, err := strconv.ParseInt(c.Param("deckId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid deck_id"})
 		return
 	}
 
-	deck, cards, err := h.card.GetDeck(c.Request.Context(), playerID, deckID)
+	deck, cards, err := h.card.GetDeck(c.Request.Context(), deckID)
 	if err != nil {
 		respondCardErr(c, err)
 		return
@@ -53,15 +50,13 @@ func (h *DeckHandler) GetDeck(c *gin.Context) {
 
 // CreateDeck は新しいデッキを作成します
 func (h *DeckHandler) CreateDeck(c *gin.Context) {
-	playerID := middleware.GetPlayerID(c)
-
 	var req apigateway.DeckCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	deck, err := h.card.CreateDeck(c.Request.Context(), playerID, toCardCreateRequest(req))
+	deck, err := h.card.CreateDeck(c.Request.Context(), toCardCreateRequest(req))
 	if err != nil {
 		respondCardErr(c, err)
 		return
@@ -71,7 +66,6 @@ func (h *DeckHandler) CreateDeck(c *gin.Context) {
 
 // UpdateDeck はデッキを更新します
 func (h *DeckHandler) UpdateDeck(c *gin.Context) {
-	playerID := middleware.GetPlayerID(c)
 	deckID, err := strconv.ParseInt(c.Param("deckId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid deck_id"})
@@ -84,7 +78,7 @@ func (h *DeckHandler) UpdateDeck(c *gin.Context) {
 		return
 	}
 
-	deck, err := h.card.UpdateDeck(c.Request.Context(), playerID, deckID, toCardUpdateRequest(req))
+	deck, err := h.card.UpdateDeck(c.Request.Context(), deckID, toCardUpdateRequest(req))
 	if err != nil {
 		respondCardErr(c, err)
 		return
@@ -94,14 +88,13 @@ func (h *DeckHandler) UpdateDeck(c *gin.Context) {
 
 // DeleteDeck はデッキを削除します
 func (h *DeckHandler) DeleteDeck(c *gin.Context) {
-	playerID := middleware.GetPlayerID(c)
 	deckID, err := strconv.ParseInt(c.Param("deckId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid deck_id"})
 		return
 	}
 
-	if err := h.card.DeleteDeck(c.Request.Context(), playerID, deckID); err != nil {
+	if err := h.card.DeleteDeck(c.Request.Context(), deckID); err != nil {
 		respondCardErr(c, err)
 		return
 	}

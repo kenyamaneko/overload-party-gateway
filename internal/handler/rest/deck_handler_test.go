@@ -61,7 +61,7 @@ func TestDeckHandler_GetDecks(t *testing.T) {
 	t.Run("success returns decks", func(t *testing.T) {
 		fc := apicardserverfake.NewServer()
 		defer fc.Close()
-		fc.ListDecksFn = func(_ string) (int, any) {
+		fc.ListDecksFn = func() (int, any) {
 			return http.StatusOK, []*apicard.Deck{{DeckID: 1, DeckName: "test"}}
 		}
 		h := NewDeckHandler(cardclient.New(fc.URL()))
@@ -81,7 +81,7 @@ func TestDeckHandler_GetDecks(t *testing.T) {
 	t.Run("downstream 500", func(t *testing.T) {
 		fc := apicardserverfake.NewServer()
 		defer fc.Close()
-		fc.ListDecksFn = func(_ string) (int, any) {
+		fc.ListDecksFn = func() (int, any) {
 			return http.StatusInternalServerError, nil
 		}
 		h := NewDeckHandler(cardclient.New(fc.URL()))
@@ -118,7 +118,7 @@ func TestDeckHandler_GetDeck(t *testing.T) {
 	t.Run("not found returns 404", func(t *testing.T) {
 		fc := apicardserverfake.NewServer()
 		defer fc.Close()
-		fc.GetDeckFn = func(_, _ string) (int, any) {
+		fc.GetDeckFn = func(_ string) (int, any) {
 			return http.StatusNotFound, nil
 		}
 		h := NewDeckHandler(cardclient.New(fc.URL()))
@@ -137,7 +137,7 @@ func TestDeckHandler_GetDeck(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		fc := apicardserverfake.NewServer()
 		defer fc.Close()
-		fc.GetDeckFn = func(_, _ string) (int, any) {
+		fc.GetDeckFn = func(_ string) (int, any) {
 			return http.StatusOK, apicardserverfake.DeckWithCardsResponse{
 				Deck:  &apicard.Deck{DeckID: 1, DeckName: "d"},
 				Cards: []apicard.DeckCard{},
@@ -181,7 +181,7 @@ func TestDeckHandler_CreateDeck(t *testing.T) {
 		fc := apicardserverfake.NewServer()
 		defer fc.Close()
 		rec := &cardFakeRecorder{}
-		fc.CreateDeckFn = func(_ string, req apicard.DeckCreateRequest) (int, any) {
+		fc.CreateDeckFn = func(req apicard.DeckCreateRequest) (int, any) {
 			rec.recordCreate(req)
 			return http.StatusCreated, apicard.Deck{DeckID: 7, DeckName: "newdeck"}
 		}
@@ -210,7 +210,7 @@ func TestDeckHandler_CreateDeck(t *testing.T) {
 	t.Run("downstream 404 returns 404", func(t *testing.T) {
 		fc := apicardserverfake.NewServer()
 		defer fc.Close()
-		fc.CreateDeckFn = func(_ string, _ apicard.DeckCreateRequest) (int, any) {
+		fc.CreateDeckFn = func(_ apicard.DeckCreateRequest) (int, any) {
 			return http.StatusNotFound, nil
 		}
 		h := NewDeckHandler(cardclient.New(fc.URL()))
@@ -249,7 +249,7 @@ func TestDeckHandler_UpdateDeck(t *testing.T) {
 		fc := apicardserverfake.NewServer()
 		defer fc.Close()
 		rec := &cardFakeRecorder{}
-		fc.UpdateDeckFn = func(_, _ string, req apicard.DeckUpdateRequest) (int, any) {
+		fc.UpdateDeckFn = func(_ string, req apicard.DeckUpdateRequest) (int, any) {
 			rec.recordUpdate(req)
 			return http.StatusOK, apicard.Deck{DeckID: 5, DeckName: "u"}
 		}
@@ -305,7 +305,7 @@ func TestDeckHandler_DeleteDeck(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {
 		fc := apicardserverfake.NewServer()
 		defer fc.Close()
-		fc.DeleteDeckFn = func(_, _ string) (int, any) {
+		fc.DeleteDeckFn = func(_ string) (int, any) {
 			return http.StatusNotFound, nil
 		}
 		h := NewDeckHandler(cardclient.New(fc.URL()))
