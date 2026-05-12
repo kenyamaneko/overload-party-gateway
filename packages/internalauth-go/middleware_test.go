@@ -47,6 +47,31 @@ func TestVerifyInternalAuth_Success(t *testing.T) {
 	assert.Equal(t, "player-123", *observed)
 }
 
+func TestVerifyInternalAuth_PreservesToken(t *testing.T) {
+	const sentToken = "any.signed.token"
+	verifier := &fakeVerifier{playerID: "player-123"}
+
+	r := gin.New()
+	var ginCtxToken string
+	var requestCtxToken string
+	var requestCtxOK bool
+	r.GET("/probe", VerifyInternalAuth(verifier), func(c *gin.Context) {
+		ginCtxToken = c.GetString(TokenContextKey)
+		requestCtxToken, requestCtxOK = TokenFrom(c.Request.Context())
+		c.Status(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/probe", nil)
+	req.Header.Set(HeaderName, sentToken)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	require.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, sentToken, ginCtxToken, "gin context に raw token が保存される")
+	assert.True(t, requestCtxOK, "Request.Context に token が伝搬する")
+	assert.Equal(t, sentToken, requestCtxToken)
+}
+
 func TestVerifyInternalAuth_Unauthorized(t *testing.T) {
 	cases := []struct {
 		name     string

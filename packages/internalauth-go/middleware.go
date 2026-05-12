@@ -25,6 +25,8 @@ func VerifyInternalAuth(verifier Verifier) gin.HandlerFunc {
 			return
 		}
 		c.Set(PlayerIDContextKey, playerID)
+		c.Set(TokenContextKey, token)
+		c.Request = c.Request.WithContext(WithToken(c.Request.Context(), token))
 		c.Next()
 	}
 }
