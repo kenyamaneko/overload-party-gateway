@@ -153,8 +153,8 @@ github.com/kenyamaneko/overload-party-battle/packages/api-battle-rpc-go v0.1.1 h
 github.com/kenyamaneko/overload-party-battle/packages/api-battle-rpc-go v0.1.1/go.mod h1:TMk17tOXh+b9fDm92CdL5q4vgxqhvi+ciAyC7clxKvo=
 github.com/kenyamaneko/overload-party-battle/packages/game-logic-constants-go v0.1.0 h1:nxbYSBUkTerPTfy+9UugWeZYXOFzhsSxaVUgtgh8r+U=
 github.com/kenyamaneko/overload-party-battle/packages/game-logic-constants-go v0.1.0/go.mod h1:p4GKIRMJjAwIIBEKFXKOBBmZPrvuTrNfEV8dzUPcF9E=
-github.com/kenyamaneko/overload-party-card/packages/api-card v0.1.4 h1:AfQqYdyHiO0GSzGMIgzXAaRVxskykVHWjoMqrcxo4Qc=
-github.com/kenyamaneko/overload-party-card/packages/api-card v0.1.4/go.mod h1:C2GcUjCyIKo2qNQQDsPJPw15pLEIhELwjJXGzS9VobQ=
+github.com/kenyamaneko/overload-party-card/packages/api-card v0.1.6 h1:qihc4MQFeIbi2Vb0ngKGCBgrOeJd/ujTbajIaw3ctd4=
+github.com/kenyamaneko/overload-party-card/packages/api-card v0.1.6/go.mod h1:C2GcUjCyIKo2qNQQDsPJPw15pLEIhELwjJXGzS9VobQ=
 github.com/kenyamaneko/overload-party-common/packages/game-design-constants v0.1.0 h1:1+9zGE1CWh+XkiQ0FYnNBIOXHyS9N+OjzVVvWIJRaXo=
 github.com/kenyamaneko/overload-party-common/packages/game-design-constants v0.1.0/go.mod h1:4z5Ry1Y8LZQM4OKqLivo/OhVefKloLZP2vUDQ1Yo0UI=
 github.com/kenyamaneko/overload-party-matchmaking/packages/api-matchmaking v0.1.2 h1:xxjRuAcVnGwsI7vpyakhNBP5KRm8ijRCwOgfqu29HRU=
