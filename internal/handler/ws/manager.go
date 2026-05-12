@@ -238,7 +238,7 @@ func (m *Manager) handleMatchmakingStart(ctx context.Context, conn *Connection, 
 		return
 	}
 
-	if msg, err := m.checkAndIncrementBattleLimit(ctx, conn.playerID); err != nil {
+	if msg, err := m.checkAndIncrementBattleLimit(ctx); err != nil {
 		sendError(conn, "matchmaking_error", err.Error(), false)
 		return
 	} else if msg != "" {
@@ -267,7 +267,7 @@ func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, da
 		return
 	}
 
-	if msg, err := m.checkAndIncrementBattleLimit(ctx, conn.playerID); err != nil {
+	if msg, err := m.checkAndIncrementBattleLimit(ctx); err != nil {
 		sendError(conn, "npc_battle_error", err.Error(), false)
 		return
 	} else if msg != "" {
@@ -370,18 +370,18 @@ func (m *Manager) ActiveSpectateGames(ctx context.Context) []apigateway.Spectate
 	return m.Spectate.ActiveGames(ctx)
 }
 
-func (m *Manager) checkAndIncrementBattleLimit(ctx context.Context, playerID string) (string, error) {
+func (m *Manager) checkAndIncrementBattleLimit(ctx context.Context) (string, error) {
 	if m.accountClient == nil {
 		return "", nil
 	}
-	limitResp, err := m.accountClient.GetBattleLimit(ctx, playerID)
+	limitResp, err := m.accountClient.GetBattleLimit(ctx)
 	if err != nil {
 		return "", err
 	}
 	if !limitResp.CanBattle {
 		return "daily battle limit reached", nil
 	}
-	if err := m.accountClient.IncrementBattleCount(ctx, playerID); err != nil {
+	if err := m.accountClient.IncrementBattleCount(ctx); err != nil {
 		return "", err
 	}
 	return "", nil
