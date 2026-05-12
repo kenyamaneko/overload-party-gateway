@@ -4,8 +4,10 @@
 // only talks to gateway, so every service-specific type that the client
 // consumes is re-exported here. Types are grouped by domain.
 
-import type { CardStats } from '@kenyamaneko/overload-party-card-types';
+import type { ComputeStats, DataStats } from '@kenyamaneko/overload-party-api-card';
 import type { CardType, FactionId, Restriction } from '@kenyamaneko/overload-party-game-design-constants';
+
+export type CardStats = ComputeStats | DataStats;
 
 // ================================================================
 // Gateway-native types

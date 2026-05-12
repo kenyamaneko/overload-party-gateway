@@ -21,7 +21,7 @@
     "directory": "packages/api-gateway-npm"
   },
   "dependencies": {
-    "@kenyamaneko/overload-party-card-types": "*",
+    "@kenyamaneko/overload-party-api-card": "^0.1.0",
     "@kenyamaneko/overload-party-game-design-constants": "*",
     "@kenyamaneko/overload-party-game-state": "*"
   },
