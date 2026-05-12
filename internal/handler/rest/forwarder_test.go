@@ -217,9 +217,7 @@ func TestNewForwarder(t *testing.T) {
 			gw := httptest.NewServer(r)
 			defer gw.Close()
 
-			var reqBody io.Reader
-			reqBody = strings.NewReader(tc.reqBody)
-			req, err := http.NewRequest(tc.method, gw.URL+tc.reqPath, reqBody)
+			req, err := http.NewRequest(tc.method, gw.URL+tc.reqPath, strings.NewReader(tc.reqBody))
 			require.NoError(t, err)
 			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
