@@ -21,6 +21,8 @@ type Config struct {
 	AccountServiceURL     string
 	ShopServiceURL        string
 	ScenarioServiceURL    string
+	NewsServiceURL        string
+	SupportServiceURL     string
 
 	// game_players / news_articles は gateway が直接 Postgres に接続して読み書きする
 	DatabaseConn string
@@ -59,6 +61,8 @@ func Load() *Config {
 		AccountServiceURL:     getEnv("ACCOUNT_SERVICE_URL", "http://localhost:9005"),
 		ShopServiceURL:        getEnv("SHOP_SERVICE_URL", "http://localhost:9006"),
 		ScenarioServiceURL:    getEnv("SCENARIO_SERVICE_URL", "http://localhost:9007"),
+		NewsServiceURL:        getEnv("NEWS_SERVICE_URL", "http://localhost:9008"),
+		SupportServiceURL:     getEnv("SUPPORT_SERVICE_URL", "http://localhost:9009"),
 
 		DatabaseConn: getEnv("DATABASE_CONN", ""),
 

@@ -111,6 +111,9 @@ func main() {
 	router.RegisterAuthRoutes(api, handlers)
 	api.Use(middleware.IssueInternalAuth(internalSigner))
 	router.RegisterAPIRoutes(api, handlers)
+	if err := router.RegisterForwardRoutes(api, cfg); err != nil {
+		log.Fatalf("failed to register forward routes: %v", err)
+	}
 
 	srv := &http.Server{
 		Addr:    ":9001",
