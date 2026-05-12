@@ -1,10 +1,11 @@
 // Overload Party gateway API types — the npm package for the client.
 //
 // Contains REST request/response types for gateway-owned endpoints
-// (auth / spectate / version / battle proxy). Service-specific contracts
-// (account / card / shop / scenario / news / support) are published by
-// each service in `@kenyamaneko/overload-party-api-<service>` and
-// consumed by the client directly.
+// (auth / spectate / version). Service-specific contracts
+// (account / card / shop / scenario / news / support / battle) are
+// published by each service in `@kenyamaneko/overload-party-api-<service>`
+// (battle 公開型は `@kenyamaneko/overload-party-game-state` を直接消費)
+// and consumed by the client directly.
 
 /** HealthResponse is the API response for GET /api/v1/health. */
 export interface HealthResponse {
@@ -34,14 +35,6 @@ export interface PlayerResponse {
   updated_at: string;
   level_exp_current: number;
   level_exp_required: number;
-}
-
-/** NpcModel is the API response element for GET /api/v1/npc/models (battle proxy). */
-export interface NpcModel {
-  model: string;
-  faction: string;
-  difficulty: string;
-  display_name: string;
 }
 
 /** SpectateGameInfo is the public view of an active game for the spectate list API. */

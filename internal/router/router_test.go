@@ -38,7 +38,7 @@ func newHitRecorder(t *testing.T) *hitRecorder {
 }
 
 // TestRegisterForwardRoutes は各 path prefix が正しい backend にルーティングされる
-// ことを 7 サービス (account / card / shop / scenario / onboarding / news / support)
+// ことを 7 サービス (account / card / shop / scenario / news / support / battle)
 // 全網羅で検証する。
 func TestRegisterForwardRoutes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -49,6 +49,7 @@ func TestRegisterForwardRoutes(t *testing.T) {
 	scenario := newHitRecorder(t)
 	news := newHitRecorder(t)
 	support := newHitRecorder(t)
+	battle := newHitRecorder(t)
 
 	cfg := &config.Config{
 		AccountServiceURL:  account.srv.URL,
@@ -57,6 +58,7 @@ func TestRegisterForwardRoutes(t *testing.T) {
 		ScenarioServiceURL: scenario.srv.URL,
 		NewsServiceURL:     news.srv.URL,
 		SupportServiceURL:  support.srv.URL,
+		BattleServerURL:    battle.srv.URL,
 	}
 
 	r := gin.New()
@@ -68,7 +70,7 @@ func TestRegisterForwardRoutes(t *testing.T) {
 	})
 	require.NoError(t, router.RegisterForwardRoutes(api, cfg))
 
-	// 各 prefix → 期待 backend のテーブル。onboarding は scenario に同居する。
+	// 各 prefix → 期待 backend のテーブル。/games/* と /npc/* はいずれも battle に向く。
 	cases := []struct {
 		name        string
 		path        string
@@ -79,9 +81,12 @@ func TestRegisterForwardRoutes(t *testing.T) {
 		{name: "/api/v1/cards/decks/1 → card", path: "/api/v1/cards/decks/1", wantBackend: card},
 		{name: "/api/v1/shop/products → shop", path: "/api/v1/shop/products", wantBackend: shop},
 		{name: "/api/v1/scenarios/episodes → scenario", path: "/api/v1/scenarios/episodes", wantBackend: scenario},
-		{name: "/api/v1/onboarding/script → scenario", path: "/api/v1/onboarding/script", wantBackend: scenario},
+		{name: "/api/v1/scenarios/onboarding/script → scenario", path: "/api/v1/scenarios/onboarding/script", wantBackend: scenario},
 		{name: "/api/v1/news/articles → news", path: "/api/v1/news/articles", wantBackend: news},
 		{name: "/api/v1/support/announcements → support", path: "/api/v1/support/announcements", wantBackend: support},
+		{name: "/api/v1/games/g1/log → battle", path: "/api/v1/games/g1/log", wantBackend: battle},
+		{name: "/api/v1/games/g1/log/text → battle", path: "/api/v1/games/g1/log/text", wantBackend: battle},
+		{name: "/api/v1/npc/models → battle", path: "/api/v1/npc/models", wantBackend: battle},
 	}
 
 	// ReverseProxy 内部で CloseNotify を呼ぶため、gateway 側も httptest.NewServer
@@ -116,6 +121,7 @@ func TestRegisterForwardRoutes_InvalidURL(t *testing.T) {
 		ScenarioServiceURL: "http://valid.example",
 		NewsServiceURL:     "://invalid",
 		SupportServiceURL:  "http://valid.example",
+		BattleServerURL:    "http://valid.example",
 	}
 
 	r := gin.New()
