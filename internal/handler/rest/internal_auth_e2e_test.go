@@ -12,23 +12,24 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
-	"github.com/kenyamaneko/overload-party-gateway/internal/client/shopclient"
+	"github.com/kenyamaneko/overload-party-gateway/internal/client/cardclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
 )
 
 // TestInternalAuth_E2E は middleware チェーン → handler → outbound HTTP の経路で
-// JWT claims が仕様通りに乗ることを end-to-end に検証する。
+// JWT claims が仕様通りに乗ることを end-to-end に検証する。cardclient を介して
+// downstream に X-Internal-Auth が転送されることを確認する。
 func TestInternalAuth_E2E(t *testing.T) {
 	const (
-		secret    = "e2e-test-secret-32-bytes-or-longer"
-		playerID  = "player-e2e-123"
+		secret   = "e2e-test-secret-32-bytes-or-longer"
+		playerID = "player-e2e-123"
 	)
 
 	var got string
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got = r.Header.Get(internalauth.HeaderName)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"products":[]}`))
+		_, _ = w.Write([]byte(`[]`))
 	}))
 	defer upstream.Close()
 
@@ -36,15 +37,24 @@ func TestInternalAuth_E2E(t *testing.T) {
 		internalauth.StaticHS256Resolver([]byte(secret), internalauth.DefaultKeyID),
 		internalauth.DefaultKeyID,
 	)
-	shopHandler := NewShopHandler(shopclient.New(upstream.URL))
+	cc := cardclient.New(upstream.URL)
 
 	r := gin.New()
-	r.Use(withPlayerID(playerID))
+	r.Use(func(c *gin.Context) {
+		c.Set("player_id", playerID)
+		c.Next()
+	})
 	r.Use(middleware.IssueInternalAuth(signer))
-	r.GET("/products", shopHandler.GetProducts)
+	r.GET("/cards", func(c *gin.Context) {
+		if _, err := cc.ListAllCards(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{})
+	})
 
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/products", nil)
+	req := httptest.NewRequest(http.MethodGet, "/cards", nil)
 	r.ServeHTTP(rr, req)
 
 	require.Equal(t, http.StatusOK, rr.Code, "handler returned non-200; body=%s", rr.Body.String())

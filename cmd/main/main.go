@@ -19,8 +19,6 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/cardclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/matchmakingclient"
-	"github.com/kenyamaneko/overload-party-gateway/internal/client/scenarioclient"
-	"github.com/kenyamaneko/overload-party-gateway/internal/client/shopclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/config"
 	"github.com/kenyamaneko/overload-party-gateway/internal/handler/rest"
 	ws "github.com/kenyamaneko/overload-party-gateway/internal/handler/ws"
@@ -84,8 +82,7 @@ func main() {
 		log.Fatalf("failed to create firebase auth client: %v", err)
 	}
 
-	// gateway 所有の game_players リポジトリ + read-only newsfeed プロキシ
-	newsRepo := repository.NewPgNewsRepository(pool)
+	// gateway 所有の game_players リポジトリ
 	gamePlayerRepo := repository.NewPgGamePlayerRepository(pool)
 	// game_config は現在 gateway の runtime パスから参照していない。
 	// クライアント到達性は起動時に検証するため、repo を生成だけしておく。
@@ -95,10 +92,6 @@ func main() {
 	cardClient := cardclient.New(cfg.CardServiceURL)
 	matchmakingClient := matchmakingclient.New(cfg.MatchmakingServiceURL)
 	accountClient := accountclient.New(cfg.AccountServiceURL)
-	shopClient := shopclient.New(cfg.ShopServiceURL)
-	scenarioClient := scenarioclient.New(cfg.ScenarioServiceURL)
-
-	newsService := service.NewNewsService(newsRepo)
 
 	internalSigner := internalauth.NewSigner(
 		internalauth.StaticHS256Resolver([]byte(cfg.InternalAuthSecret), internalauth.DefaultKeyID),
@@ -112,18 +105,10 @@ func main() {
 	wsHandler := ws.NewHandler(wsManager, authClient, accountClient, cfg.AllowedOrigins)
 
 	handlers := &router.Handlers{
-		Auth:         rest.NewAuthHandler(accountClient),
-		Player:       rest.NewPlayerHandler(accountClient),
-		PlayerSettings: rest.NewPlayerSettingsHandler(accountClient),
-		Spectate:     rest.NewSpectateHandler(wsManager),
-		Card:         rest.NewCardHandler(cardClient),
-		Deck:         rest.NewDeckHandler(cardClient),
-		PlayerCard:   rest.NewPlayerCardHandler(cardClient),
-		GameLog:      rest.NewGameLogHandler(battleClient),
-		NPC:          rest.NewNPCHandler(battleClient),
-		Shop:         rest.NewShopHandler(shopClient),
-		Scenario:     rest.NewScenarioHandler(scenarioClient),
-		News:         rest.NewNewsHandler(newsService),
+		Auth:     rest.NewAuthHandler(accountClient),
+		Spectate: rest.NewSpectateHandler(wsManager),
+		GameLog:  rest.NewGameLogHandler(battleClient),
+		NPC:      rest.NewNPCHandler(battleClient),
 	}
 
 	// ルーター
@@ -143,15 +128,8 @@ func main() {
 		pub.GET("/health", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"status": "ok"})
 		})
-		staticSvc, err := service.NewStaticService("data")
-		if err != nil {
-			log.Fatalf("failed to create static service: %v", err)
-		}
-		staticHandler := rest.NewStaticHandler(cfg, staticSvc)
+		staticHandler := rest.NewStaticHandler(cfg)
 		pub.GET("/version", staticHandler.GetVersion)
-		pub.GET("/announcements", staticHandler.GetAnnouncements)
-		pub.GET("/daily", staticHandler.GetDaily)
-		pub.GET("/cloud-news", handlers.News.GetCloudNews)
 	}
 
 	v1 := r.Group("/api/v1")
