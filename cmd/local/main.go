@@ -21,8 +21,6 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/cardclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/matchmakingclient"
-	"github.com/kenyamaneko/overload-party-gateway/internal/client/scenarioclient"
-	"github.com/kenyamaneko/overload-party-gateway/internal/client/shopclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/config"
 	pubsubadapter "github.com/kenyamaneko/overload-party-gateway/internal/adapter/pubsub"
 	"github.com/kenyamaneko/overload-party-gateway/internal/handler/rest"
@@ -50,7 +48,6 @@ func main() {
 	}
 	defer pool.Close()
 
-	newsRepo := repository.NewPgNewsRepository(pool)
 	gamePlayerRepo := repository.NewPgGamePlayerRepository(pool)
 
 	// Firestore クライアント (game_config)。
@@ -71,10 +68,6 @@ func main() {
 	cardClient := cardclient.New(cfg.CardServiceURL)
 	matchmakingClient := matchmakingclient.New(cfg.MatchmakingServiceURL)
 	accountClient := accountclient.New(cfg.AccountServiceURL)
-	shopClient := shopclient.New(cfg.ShopServiceURL)
-	scenarioClient := scenarioclient.New(cfg.ScenarioServiceURL)
-
-	newsService := service.NewNewsService(newsRepo)
 
 	if cfg.InternalAuthSecret == "" {
 		log.Fatal("INTERNAL_AUTH_SECRET must be set")
@@ -89,18 +82,10 @@ func main() {
 	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, matchmakingTimeout, internalSigner)
 	wsHandler := ws.NewHandler(wsManager, nil, accountClient, nil)
 	handlers := &router.Handlers{
-		Auth:         rest.NewAuthHandler(accountClient),
-		Player:       rest.NewPlayerHandler(accountClient),
-		PlayerSettings: rest.NewPlayerSettingsHandler(accountClient),
-		Spectate:     rest.NewSpectateHandler(wsManager),
-		Card:         rest.NewCardHandler(cardClient),
-		Deck:         rest.NewDeckHandler(cardClient),
-		PlayerCard:   rest.NewPlayerCardHandler(cardClient),
-		GameLog:      rest.NewGameLogHandler(battleClient),
-		NPC:          rest.NewNPCHandler(battleClient),
-		Shop:         rest.NewShopHandler(shopClient),
-		Scenario:     rest.NewScenarioHandler(scenarioClient),
-		News:         rest.NewNewsHandler(newsService),
+		Auth:     rest.NewAuthHandler(accountClient),
+		Spectate: rest.NewSpectateHandler(wsManager),
+		GameLog:  rest.NewGameLogHandler(battleClient),
+		NPC:      rest.NewNPCHandler(battleClient),
 	}
 
 	r := gin.Default()
@@ -117,15 +102,8 @@ func main() {
 		pub.GET("/health", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"status": "ok"})
 		})
-		staticSvc, err := service.NewStaticService("data")
-		if err != nil {
-			log.Fatalf("failed to create static service: %v", err)
-		}
-		staticHandler := rest.NewStaticHandler(cfg, staticSvc)
+		staticHandler := rest.NewStaticHandler(cfg)
 		pub.GET("/version", staticHandler.GetVersion)
-		pub.GET("/announcements", staticHandler.GetAnnouncements)
-		pub.GET("/daily", staticHandler.GetDaily)
-		pub.GET("/cloud-news", handlers.News.GetCloudNews)
 	}
 
 	api := r.Group("/api/v1")

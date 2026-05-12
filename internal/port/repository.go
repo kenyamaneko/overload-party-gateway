@@ -2,14 +2,7 @@ package port
 
 import (
 	"context"
-
-	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
 )
-
-// NewsRepo はクラウドニュース記事のデータアクセス契約を定義します
-type NewsRepo interface {
-	List(ctx context.Context, limit int, offset int) ([]*apigateway.NewsArticle, error)
-}
 
 // GamePlayerRepo はプレイヤーとゲームスロットの対応を管理します。
 // gateway.game_players テーブルは gateway が所有し、battle はスロット番号
