@@ -2,7 +2,7 @@ name: publish packages
 
 # On every push to main that touches packages/**, this workflow tags each
 # changed Go module with packages/<name>/vX.Y.Z and publishes the npm
-# packages to GitHub Packages.
+# packages to Cloudsmith.
 
 on:
   push:
@@ -29,7 +29,6 @@ concurrency:
 
 permissions:
   contents: write
-  packages: write
   id-token: write
 
 jobs:
@@ -105,25 +104,34 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@kenyamaneko"
-      - name: Publish ws-constants-npm
+      - name: Configure Cloudsmith auth (reader, for installs)
+        uses: kenyamaneko/overload-party-common/.github/actions/setup-cloudsmith-auth@main
+        with:
+          role: reader
+          formats: "npm"
+      - name: Build ws-constants-npm
         if: needs.detect-changes.outputs.ws_constants_npm == 'true' || github.event_name == 'workflow_dispatch'
         working-directory: packages/ws-constants-npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           rm -f package-lock.json
           npm install --no-package-lock
           npm run build
-          npm publish --access restricted
-      - name: Publish api-gateway-npm
+      - name: Publish ws-constants-npm to Cloudsmith
+        if: needs.detect-changes.outputs.ws_constants_npm == 'true' || github.event_name == 'workflow_dispatch'
+        uses: kenyamaneko/overload-party-common/.github/actions/publish-to-cloudsmith@main
+        with:
+          format: npm
+          package-path: packages/ws-constants-npm
+      - name: Build api-gateway-npm
         if: needs.detect-changes.outputs.api_gateway_npm == 'true' || github.event_name == 'workflow_dispatch'
         working-directory: packages/api-gateway-npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           rm -f package-lock.json
           npm install --no-package-lock
           npm run build
-          npm publish --access restricted
+      - name: Publish api-gateway-npm to Cloudsmith
+        if: needs.detect-changes.outputs.api_gateway_npm == 'true' || github.event_name == 'workflow_dispatch'
+        uses: kenyamaneko/overload-party-common/.github/actions/publish-to-cloudsmith@main
+        with:
+          format: npm
+          package-path: packages/api-gateway-npm
