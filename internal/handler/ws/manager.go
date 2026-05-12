@@ -123,7 +123,7 @@ func (m *Manager) cancelMatchmaking(playerID string) {
 	m.stopMatchWait(playerID)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	if err := m.matchmakingClient.Cancel(ctx, playerID); err != nil {
+	if err := m.matchmakingClient.Cancel(ctx); err != nil {
 		log.Printf("matchmaking cancel for %s: %v", playerID, err)
 	}
 }
@@ -172,7 +172,7 @@ func (m *Manager) handleMatchWaitTimeout(playerID string) {
 	// タイマー発火経路は WS リクエスト ctx を持たない。上流キャンセルは接続状態に依存せず完了させたい。
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	if err := m.matchmakingClient.Cancel(ctx, playerID); err != nil {
+	if err := m.matchmakingClient.Cancel(ctx); err != nil {
 		log.Printf("matchmaking: upstream cancel after timeout for %s: %v", playerID, err)
 	}
 }
@@ -194,7 +194,7 @@ func (m *Manager) HandleMessage(conn *Connection, msg *WSMessage) {
 
 	case genws.WSClientMsgMatchmakingCancel:
 		m.stopMatchWait(conn.playerID)
-		if err := m.matchmakingClient.Cancel(ctx, conn.playerID); err != nil {
+		if err := m.matchmakingClient.Cancel(ctx); err != nil {
 			sendError(conn, "matchmaking_error", "failed to cancel: "+err.Error(), true)
 			return
 		}
@@ -251,7 +251,7 @@ func (m *Manager) handleMatchmakingStart(ctx context.Context, conn *Connection, 
 		return
 	}
 
-	if err := m.matchmakingClient.Enqueue(ctx, conn.playerID, req.DeckID); err != nil {
+	if err := m.matchmakingClient.Enqueue(ctx, req.DeckID); err != nil {
 		retryable := errors.Is(err, matchmakingclient.ErrUnavailable)
 		sendError(conn, "matchmaking_error", "failed to enqueue: "+err.Error(), retryable)
 		return

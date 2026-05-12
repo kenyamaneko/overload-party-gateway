@@ -20,7 +20,7 @@ func TestClient_InjectsInternalAuthHeader(t *testing.T) {
 
 	c := New(srv.URL)
 	ctx := internalauth.WithToken(context.Background(), wantToken)
-	if err := c.Enqueue(ctx, "player-123", 42); err != nil {
+	if err := c.Enqueue(ctx, 42); err != nil {
 		t.Fatalf("Enqueue: %v", err)
 	}
 	if got != wantToken {
