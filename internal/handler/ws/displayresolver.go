@@ -72,7 +72,7 @@ func (r *DisplayResolver) tryAccount(ctx context.Context, gameID string, playerN
 		slog.Error("displayresolver: account returned profile with empty name", "player_id", playerID)
 		return port.DisplayMeta{}, false
 	}
-	meta := port.DisplayMeta{Name: profile.Name, Level: profile.Level}
+	meta := port.DisplayMeta(profile)
 	if r.cache != nil {
 		if err := r.cache.Put(ctx, gameID, playerNum, meta); err != nil {
 			slog.Error("displayresolver: cache write-back failed", "game_id", gameID, "player_num", playerNum, "error", err)

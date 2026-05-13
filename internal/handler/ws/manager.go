@@ -357,7 +357,7 @@ func (m *Manager) writeDisplayMetaSnapshot(ctx context.Context, gameID string, p
 		slog.Warn("match_made: account returned profile with empty name, skipping snapshot", "player_id", playerID)
 		return nil
 	}
-	meta := port.DisplayMeta{Name: profile.Name, Level: profile.Level}
+	meta := port.DisplayMeta(profile)
 	if err := m.displayCache.Put(ctx, gameID, playerNum, meta); err != nil {
 		slog.Error("match_made: cache put failed", "game_id", gameID, "player_num", playerNum, "error", err)
 	}
