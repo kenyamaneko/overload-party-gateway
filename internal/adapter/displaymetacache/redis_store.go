@@ -23,8 +23,6 @@ const (
 )
 
 // RedisStore は Upstash Redis に display meta snapshot を保持するアダプタ。
-// `game:{game_id}:player:{player_num}` を Hash key として `{name, level}` を
-// 保持する。
 type RedisStore struct {
 	client *redis.Client
 }
@@ -40,10 +38,11 @@ func (s *RedisStore) Put(ctx context.Context, gameID string, playerNum int, meta
 		return err
 	}
 	key := snapshotKey(gameID, playerNum)
-	if err := s.client.HSet(ctx, key,
-		hashFieldName, meta.Name,
-		hashFieldLevel, meta.Level,
-	).Err(); err != nil {
+	fields := map[string]any{
+		hashFieldName:  meta.Name,
+		hashFieldLevel: meta.Level,
+	}
+	if err := s.client.HSet(ctx, key, fields).Err(); err != nil {
 		return fmt.Errorf("redis hset %s: %w", key, err)
 	}
 	if err := s.client.Expire(ctx, key, snapshotTTL).Err(); err != nil {
@@ -52,8 +51,7 @@ func (s *RedisStore) Put(ctx context.Context, gameID string, playerNum int, meta
 	return nil
 }
 
-// Get は snapshot を Redis から読み出す。key 不在時は port.ErrNotFound を返し、
-// 空文字 / level=0 等の暗黙フォールバックは行わない。
+// Get は snapshot を Redis から読み出す。key 不在時は port.ErrNotFound を返す。
 func (s *RedisStore) Get(ctx context.Context, gameID string, playerNum int) (port.DisplayMeta, error) {
 	if err := validateKeyParts(gameID, playerNum); err != nil {
 		return port.DisplayMeta{}, err
