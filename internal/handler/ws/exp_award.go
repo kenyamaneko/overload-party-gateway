@@ -2,7 +2,7 @@ package ws
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"time"
 
 	gamedesign "github.com/kenyamaneko/overload-party-common/packages/game-design-constants"
@@ -32,8 +32,8 @@ func (r *GameRelay) awardGameExp(gameID string, winnerNum int64, reason string) 
 	if err != nil {
 		// 冪等フラグの書き込みに失敗。次回同じ game_id の awardGameExp が
 		// 走った場合、再度 MarkExpAwarded が呼ばれて成功すれば付与が走り、
-		// **二重付与のリスクがある**。運用で要監視（"ERROR:" プレフィクスで grep）。
-		log.Printf("ERROR: mark exp awarded for game %s (idempotency at risk): %v", gameID, err)
+		// **二重付与のリスクがある**。運用で要監視。
+		slog.Error("mark exp awarded failed (idempotency at risk)", "game_id", gameID, "error", err)
 		return
 	}
 	if !awarded {
@@ -44,7 +44,7 @@ func (r *GameRelay) awardGameExp(gameID string, winnerNum int64, reason string) 
 	if err != nil {
 		// MarkExpAwarded は成功済み（フラグ立った）なので、再試行しても二重付与にはならないが
 		// このゲームでの EXP は失われる。要監視。
-		log.Printf("ERROR: lookup game players for exp (game %s, exp lost): %v", gameID, err)
+		slog.Error("lookup game players for exp failed (exp lost)", "game_id", gameID, "error", err)
 		return
 	}
 
@@ -66,6 +66,6 @@ func (r *GameRelay) awardGameExp(gameID string, winnerNum int64, reason string) 
 	if err := r.accountClient.AwardGameExp(ctx, player1ID, player2ID, winnerNum, reason, matchType); err != nil {
 		// account への RPC 失敗。フラグは既に立っているので二重付与にはならないが
 		// EXP は付与されない。要監視。
-		log.Printf("ERROR: award game exp for game %s (exp lost): %v", gameID, err)
+		slog.Error("award game exp failed (exp lost)", "game_id", gameID, "error", err)
 	}
 }

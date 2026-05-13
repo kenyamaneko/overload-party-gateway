@@ -29,3 +29,16 @@ type DisplayMetaLookup interface {
 type DisplayResolver interface {
 	Resolve(ctx context.Context, gameID string, playerNum int, playerID string) DisplayMeta
 }
+
+// PlayerProfile は account から取得した player の表示用 profile。
+// name 未確定 (onboarding 未完了等) は Name == "" で表現する。
+type PlayerProfile struct {
+	Name  string
+	Level int
+}
+
+// PlayerProfileGetter は account から player profile を取得する境界。
+// player が存在しない場合は ErrNotFound を返す。
+type PlayerProfileGetter interface {
+	GetPlayerProfile(ctx context.Context, playerID string) (PlayerProfile, error)
+}

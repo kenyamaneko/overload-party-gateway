@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -28,12 +28,13 @@ type Manager struct {
 	Relay    *GameRelay
 	Spectate *SpectateRelay
 
-	battleClient      service.BattleClient
-	accountClient     *accountclient.Client
-	cardClient        *cardclient.Client
-	matchmakingClient *matchmakingclient.Client
-	gamePlayerRepo    port.GamePlayerRepo
-	displayCache      port.DisplayMetaStore
+	battleClient        service.BattleClient
+	accountClient       *accountclient.Client
+	cardClient          *cardclient.Client
+	matchmakingClient   *matchmakingclient.Client
+	gamePlayerRepo      port.GamePlayerRepo
+	displayCache        port.DisplayMetaStore
+	playerProfileGetter port.PlayerProfileGetter
 
 	// internalSigner は WS 経路から各サービス client を呼ぶ前に X-Internal-Auth JWT を発行する。
 	internalSigner *internalauth.Signer
@@ -56,19 +57,21 @@ func NewManager(
 	matchmakingClient *matchmakingclient.Client,
 	gamePlayerRepo port.GamePlayerRepo,
 	displayCache displayCache,
+	playerProfileGetter port.PlayerProfileGetter,
 	matchmakingTimeout time.Duration,
 	internalSigner *internalauth.Signer,
 ) *Manager {
 	m := &Manager{
-		battleClient:       battleClient,
-		accountClient:      accountClient,
-		cardClient:         cardClient,
-		matchmakingClient:  matchmakingClient,
-		gamePlayerRepo:     gamePlayerRepo,
-		displayCache:       displayCache,
-		internalSigner:     internalSigner,
-		matchmakingTimeout: matchmakingTimeout,
-		matchWait:          make(map[string]*time.Timer),
+		battleClient:        battleClient,
+		accountClient:       accountClient,
+		cardClient:          cardClient,
+		matchmakingClient:   matchmakingClient,
+		gamePlayerRepo:      gamePlayerRepo,
+		displayCache:        displayCache,
+		playerProfileGetter: playerProfileGetter,
+		internalSigner:      internalSigner,
+		matchmakingTimeout:  matchmakingTimeout,
+		matchWait:           make(map[string]*time.Timer),
 	}
 
 	// HubCallbacks は m.Relay / m.Spectate の後初期化を見込んで遅延参照する。
@@ -81,7 +84,7 @@ func NewManager(
 		OnGameReconnect:       func(playerID, gameID string) { m.Relay.NotifyOpponentReconnected(playerID, gameID) },
 	})
 
-	resolver := NewDisplayResolver(displayCache, accountClient)
+	resolver := NewDisplayResolver(displayCache, playerProfileGetter)
 	spectate := NewSpectateRelay(hub, battleClient, gamePlayerRepo, resolver)
 	relay := NewGameRelay(hub, battleClient, spectate, accountClient, gamePlayerRepo, resolver)
 
@@ -111,7 +114,7 @@ func (m *Manager) cancelMatchmaking(playerID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	if err := m.matchmakingClient.Cancel(ctx); err != nil {
-		log.Printf("matchmaking cancel for %s: %v", playerID, err)
+		slog.Error("matchmaking cancel failed", "player_id", playerID, "error", err)
 	}
 }
 
@@ -153,14 +156,14 @@ func (m *Manager) handleMatchWaitTimeout(playerID string) {
 	delete(m.matchWait, playerID)
 	m.matchWaitMu.Unlock()
 
-	log.Printf("matchmaking: wait timeout for player %s after %v", playerID, m.matchmakingTimeout)
+	slog.Warn("matchmaking: wait timeout", "player_id", playerID, "timeout", m.matchmakingTimeout)
 	sendErrorToPlayer(m.Hub, playerID, "matchmaking_error", "matchmaking timed out", true)
 
 	// タイマー発火経路は WS リクエスト ctx を持たない。上流キャンセルは接続状態に依存せず完了させたい。
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	if err := m.matchmakingClient.Cancel(ctx); err != nil {
-		log.Printf("matchmaking: upstream cancel after timeout for %s: %v", playerID, err)
+		slog.Error("matchmaking: upstream cancel after timeout failed", "player_id", playerID, "error", err)
 	}
 }
 
@@ -192,7 +195,7 @@ func (m *Manager) HandleMessage(conn *Connection, msg *WSMessage) {
 
 	case genws.WSClientMsgGameAction:
 		if m.Spectate.IsSpectator(conn.playerID) {
-			log.Printf("spectator %s tried to send game_action — ignored", conn.playerID)
+			slog.Warn("spectator tried to send game_action", "player_id", conn.playerID)
 			return
 		}
 		m.Relay.HandleGameAction(ctx, conn, msg.Data)
@@ -213,7 +216,7 @@ func (m *Manager) HandleMessage(conn *Connection, msg *WSMessage) {
 		conn.SendMessage(&WSMessage{Type: genws.WSServerMsgPong})
 
 	default:
-		log.Printf("unhandled message type: %s from player %s", msg.Type, conn.playerID)
+		slog.Warn("unhandled message type", "message_type", msg.Type, "player_id", conn.playerID)
 	}
 }
 
@@ -280,7 +283,7 @@ func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, da
 	}
 	if m.gamePlayerRepo != nil {
 		if err := m.gamePlayerRepo.InsertGamePlayer(ctx, game.GameID, 1, conn.playerID); err != nil {
-			log.Printf("npc battle: insert game_player: %v", err)
+			slog.Error("npc battle: insert game_player failed", "error", err)
 		}
 	}
 	m.Spectate.RegisterGame(game.GameID)
@@ -322,10 +325,10 @@ func (m *Manager) HandleMatchMade(ctx context.Context, event apimatchmaking.Matc
 
 	if m.gamePlayerRepo != nil {
 		if err := m.gamePlayerRepo.InsertGamePlayer(ctx, game.GameID, 1, event.Players[0].PlayerID); err != nil {
-			log.Printf("match_made: insert game_player p1: %v", err)
+			slog.Error("match_made: insert game_player failed", "player_num", 1, "error", err)
 		}
 		if err := m.gamePlayerRepo.InsertGamePlayer(ctx, game.GameID, 2, event.Players[1].PlayerID); err != nil {
-			log.Printf("match_made: insert game_player p2: %v", err)
+			slog.Error("match_made: insert game_player failed", "player_num", 2, "error", err)
 		}
 	}
 
@@ -341,27 +344,22 @@ func (m *Manager) HandleMatchMade(ctx context.Context, event apimatchmaking.Matc
 	return nil
 }
 
-// writeDisplayMetaSnapshot は match 成立時の player display meta を 2 段キャッシュへ
-// 書き込む。account 呼び出し失敗時は handler から error を返し Pub/Sub に再配信させる。
-// account が name 未確定の応答を返した場合は snapshot をスキップして継続する
-// (フォールバック表示値の書き込みは relay 経路の最終行に集約する設計のため、本箇所では
-// 行わない)。cache 書き込み失敗は試合継続に影響しないので Error ログのみで継続する
-// (relay 経路で必要時に再 lookup される)。
+// writeDisplayMetaSnapshot は match 成立時の player display meta を cache へ書き込む。
 func (m *Manager) writeDisplayMetaSnapshot(ctx context.Context, gameID string, playerNum int, playerID string) error {
-	if m.displayCache == nil {
+	if m.displayCache == nil || m.playerProfileGetter == nil {
 		return nil
 	}
-	p, err := m.accountClient.GetPlayer(ctx, playerID)
+	profile, err := m.playerProfileGetter.GetPlayerProfile(ctx, playerID)
 	if err != nil {
 		return fmt.Errorf("account lookup player=%s: %w", playerID, err)
 	}
-	if p == nil || p.Name == nil {
-		log.Printf("WARN: match_made: account returned incomplete profile for player=%s, skipping snapshot (relay will fall back)", playerID)
+	if profile.Name == "" {
+		slog.Warn("match_made: account returned profile with empty name, skipping snapshot", "player_id", playerID)
 		return nil
 	}
-	meta := port.DisplayMeta{Name: *p.Name, Level: int(p.Level)}
+	meta := port.DisplayMeta{Name: profile.Name, Level: profile.Level}
 	if err := m.displayCache.Put(ctx, gameID, playerNum, meta); err != nil {
-		log.Printf("ERROR: match_made: cache put game=%s player_num=%d (continuing, relay will re-lookup): %v", gameID, playerNum, err)
+		slog.Error("match_made: cache put failed", "game_id", gameID, "player_num", playerNum, "error", err)
 	}
 	return nil
 }

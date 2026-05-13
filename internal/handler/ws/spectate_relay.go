@@ -3,7 +3,7 @@ package ws
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -117,7 +117,7 @@ func (sr *SpectateRelay) HandleSpectateJoin(conn *Connection, data json.RawMessa
 	if sr.resolver != nil && sr.gamePlayerRepo != nil {
 		entries, err := sr.gamePlayerRepo.LookupGamePlayers(ctx, req.GameID)
 		if err != nil {
-			log.Printf("spectate: lookup game players for %s: %v", req.GameID, err)
+			slog.Error("spectate: lookup game players failed", "game_id", req.GameID, "error", err)
 		} else {
 			for _, e := range entries {
 				meta := sr.resolver.Resolve(ctx, req.GameID, e.PlayerNum, e.PlayerID)
@@ -156,7 +156,7 @@ func (sr *SpectateRelay) HandleSpectateJoin(conn *Connection, data json.RawMessa
 		}),
 	})
 
-	log.Printf("spectator %s joined game %s", conn.playerID, req.GameID)
+	slog.Info("spectator joined", "player_id", conn.playerID, "game_id", req.GameID)
 }
 
 // HandleSpectateLeave は spectate_leave メッセージを処理します
@@ -175,7 +175,7 @@ func (sr *SpectateRelay) HandleSpectateLeave(conn *Connection, data json.RawMess
 	}
 	sr.mu.Unlock()
 
-	log.Printf("spectator %s left game %s", conn.playerID, req.GameID)
+	slog.Info("spectator left", "player_id", conn.playerID, "game_id", req.GameID)
 }
 
 // RemoveSpectator は観戦中の全ゲームから観戦者を除去します。
@@ -221,7 +221,7 @@ func (sr *SpectateRelay) BroadcastStateUpdate(gameID string, state json.RawMessa
 	}
 	data, err := json.Marshal(msg)
 	if err != nil {
-		log.Printf("spectate: marshal update: %v", err)
+		slog.Error("spectate: marshal update failed", "error", err)
 		return
 	}
 
@@ -247,7 +247,7 @@ func (sr *SpectateRelay) IsSpectator(playerID string) bool {
 func (sr *SpectateRelay) broadcastToSpectators(gameID string, msg *WSMessage) {
 	data, err := json.Marshal(msg)
 	if err != nil {
-		log.Printf("spectate: marshal broadcast: %v", err)
+		slog.Error("spectate: marshal broadcast failed", "error", err)
 		return
 	}
 
@@ -284,7 +284,7 @@ func (sr *SpectateRelay) ActiveGames(parent context.Context) []apigateway.Specta
 		if sr.gamePlayerRepo != nil {
 			entries, err := sr.gamePlayerRepo.LookupGamePlayers(ctx, gameID)
 			if err != nil {
-				log.Printf("spectate: lookup players for active game %s: %v", gameID, err)
+				slog.Error("spectate: lookup players for active game failed", "game_id", gameID, "error", err)
 			} else {
 				for _, e := range entries {
 					switch e.PlayerNum {

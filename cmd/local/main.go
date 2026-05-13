@@ -17,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/kenyamaneko/overload-party-gateway/internal/adapter/accountprofile"
 	"github.com/kenyamaneko/overload-party-gateway/internal/adapter/displaymetacache"
 	pubsubadapter "github.com/kenyamaneko/overload-party-gateway/internal/adapter/pubsub"
 	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
@@ -84,7 +85,8 @@ func main() {
 	// meta cache を提供する。L2 不在は cache lookup の永続性が無くなるだけで resolver
 	// 経路は account 直接 lookup へフォールバックして動作する。
 	displayMetaCache := displaymetacache.NewMemoryStore()
-	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, displayMetaCache, matchmakingTimeout, internalSigner)
+	playerProfileGetter := accountprofile.New(accountClient)
+	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, displayMetaCache, playerProfileGetter, matchmakingTimeout, internalSigner)
 	wsHandler := ws.NewHandler(wsManager, nil, accountClient, nil)
 	handlers := &router.Handlers{
 		Auth:     rest.NewAuthHandler(accountClient),

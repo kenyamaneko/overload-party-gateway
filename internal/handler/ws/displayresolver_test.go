@@ -5,7 +5,6 @@ import (
 	"errors"
 	"testing"
 
-	apiaccount "github.com/kenyamaneko/overload-party-account/packages/api-account"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -13,14 +12,14 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
-// stubLookuper は固定応答を返す playerLookuper のテストダブル。
-type stubLookuper struct {
-	response *apiaccount.PlayerResponse
-	err      error
+// stubGetter は固定応答を返す port.PlayerProfileGetter のテストダブル。
+type stubGetter struct {
+	profile port.PlayerProfile
+	err     error
 }
 
-func (s *stubLookuper) GetPlayer(_ context.Context, _ string) (*apiaccount.PlayerResponse, error) {
-	return s.response, s.err
+func (s *stubGetter) GetPlayerProfile(_ context.Context, _ string) (port.PlayerProfile, error) {
+	return s.profile, s.err
 }
 
 // fakeCache は port.ErrNotFound 以外の任意のエラーを Get で返せる cache テストダブル。
@@ -37,9 +36,6 @@ func (f *fakeCache) Get(ctx context.Context, gameID string, playerNum int) (port
 	return f.MemoryStore.Get(ctx, gameID, playerNum)
 }
 
-// strPtr は string literal を *string にするテストヘルパ。
-func strPtr(s string) *string { return &s }
-
 // TestDisplayResolver_Resolve_ReturnsCacheValueOnHit は cache に snapshot が存在する場合、
 // account を叩かずに cache 値が返ることを検証する (高頻度 relay 経路で account 負荷を抑える要件)。
 func TestDisplayResolver_Resolve_ReturnsCacheValueOnHit(t *testing.T) {
@@ -48,8 +44,8 @@ func TestDisplayResolver_Resolve_ReturnsCacheValueOnHit(t *testing.T) {
 	want := port.DisplayMeta{Name: "alice", Level: 7}
 	require.NoError(t, cache.Put(ctx, "g1", 1, want))
 
-	lookuper := &stubLookuper{err: errors.New("must not be called")}
-	r := NewDisplayResolver(cache, lookuper)
+	getter := &stubGetter{err: errors.New("must not be called")}
+	r := NewDisplayResolver(cache, getter)
 
 	got := r.Resolve(ctx, "g1", 1, "p-1")
 	assert.Equal(t, want, got)
@@ -59,12 +55,8 @@ func TestDisplayResolver_Resolve_ReturnsCacheValueOnHit(t *testing.T) {
 // account 直接 lookup の値が返ることを検証する。
 func TestDisplayResolver_Resolve_FallsBackToAccountOnCacheMiss(t *testing.T) {
 	cache := displaymetacache.NewMemoryStore()
-	lookuper := &stubLookuper{response: &apiaccount.PlayerResponse{
-		PlayerID: "p-1",
-		Name:     strPtr("alice"),
-		Level:    7,
-	}}
-	r := NewDisplayResolver(cache, lookuper)
+	getter := &stubGetter{profile: port.PlayerProfile{Name: "alice", Level: 7}}
+	r := NewDisplayResolver(cache, getter)
 
 	got := r.Resolve(context.Background(), "g1", 1, "p-1")
 	assert.Equal(t, port.DisplayMeta{Name: "alice", Level: 7}, got)
@@ -74,12 +66,8 @@ func TestDisplayResolver_Resolve_FallsBackToAccountOnCacheMiss(t *testing.T) {
 // cache に書き戻され、次回以降の Get で hit することを検証する (繰り返し account を叩かない)。
 func TestDisplayResolver_Resolve_PromotesAccountResultToCache(t *testing.T) {
 	cache := displaymetacache.NewMemoryStore()
-	lookuper := &stubLookuper{response: &apiaccount.PlayerResponse{
-		PlayerID: "p-1",
-		Name:     strPtr("alice"),
-		Level:    7,
-	}}
-	r := NewDisplayResolver(cache, lookuper)
+	getter := &stubGetter{profile: port.PlayerProfile{Name: "alice", Level: 7}}
+	r := NewDisplayResolver(cache, getter)
 	ctx := context.Background()
 
 	_ = r.Resolve(ctx, "g1", 1, "p-1")
@@ -96,12 +84,8 @@ func TestDisplayResolver_Resolve_FallsBackToAccountOnCacheReadError(t *testing.T
 		MemoryStore: displaymetacache.NewMemoryStore(),
 		getErr:      errors.New("cache backend offline"),
 	}
-	lookuper := &stubLookuper{response: &apiaccount.PlayerResponse{
-		PlayerID: "p-1",
-		Name:     strPtr("alice"),
-		Level:    7,
-	}}
-	r := NewDisplayResolver(cache, lookuper)
+	getter := &stubGetter{profile: port.PlayerProfile{Name: "alice", Level: 7}}
+	r := NewDisplayResolver(cache, getter)
 
 	got := r.Resolve(context.Background(), "g1", 1, "p-1")
 	assert.Equal(t, port.DisplayMeta{Name: "alice", Level: 7}, got)
@@ -112,8 +96,8 @@ func TestDisplayResolver_Resolve_FallsBackToAccountOnCacheReadError(t *testing.T
 // (空文字での silent fallback を避け、UI 上で失敗を識別可能にする要件)。
 func TestDisplayResolver_Resolve_WritesFallbackValueWhenAccountFails(t *testing.T) {
 	cache := displaymetacache.NewMemoryStore()
-	lookuper := &stubLookuper{err: errors.New("account offline")}
-	r := NewDisplayResolver(cache, lookuper)
+	getter := &stubGetter{err: errors.New("account offline")}
+	r := NewDisplayResolver(cache, getter)
 
 	got := r.Resolve(context.Background(), "g1", 1, "abc123def456")
 	assert.Equal(t, port.DisplayMeta{Name: "Player abc123", Level: 0}, got)
@@ -123,8 +107,8 @@ func TestDisplayResolver_Resolve_WritesFallbackValueWhenAccountFails(t *testing.
 // フォールバック表示値が cache に残り、後続呼び出しで account を叩かないことを検証する。
 func TestDisplayResolver_Resolve_PersistsFallbackValueToCache(t *testing.T) {
 	cache := displaymetacache.NewMemoryStore()
-	lookuper := &stubLookuper{err: errors.New("account offline")}
-	r := NewDisplayResolver(cache, lookuper)
+	getter := &stubGetter{err: errors.New("account offline")}
+	r := NewDisplayResolver(cache, getter)
 	ctx := context.Background()
 
 	_ = r.Resolve(ctx, "g1", 1, "abc123def456")
@@ -134,17 +118,23 @@ func TestDisplayResolver_Resolve_PersistsFallbackValueToCache(t *testing.T) {
 	assert.Equal(t, port.DisplayMeta{Name: "Player abc123", Level: 0}, got)
 }
 
-// TestDisplayResolver_Resolve_TreatsNilNameAsAccountFailure は account 応答に name が
-// 含まれない (onboarding 未完了等の異常) 場合もフォールバック表示値を返すことを検証する
-// (Name nil を silent に空文字に倒さない — gateway#47 で報告された問題への直接の修正)。
-func TestDisplayResolver_Resolve_TreatsNilNameAsAccountFailure(t *testing.T) {
+// TestDisplayResolver_Resolve_TreatsEmptyNameAsAccountFailure は account 応答に name が
+// 含まれない (Name="") 場合もフォールバック表示値を返すことを検証する (silent な空文字
+// fallback を避ける要件)。
+func TestDisplayResolver_Resolve_TreatsEmptyNameAsAccountFailure(t *testing.T) {
 	cache := displaymetacache.NewMemoryStore()
-	lookuper := &stubLookuper{response: &apiaccount.PlayerResponse{
-		PlayerID: "p-1",
-		Name:     nil,
-		Level:    7,
-	}}
-	r := NewDisplayResolver(cache, lookuper)
+	getter := &stubGetter{profile: port.PlayerProfile{Name: "", Level: 7}}
+	r := NewDisplayResolver(cache, getter)
+
+	got := r.Resolve(context.Background(), "g1", 1, "abc123def456")
+	assert.Equal(t, port.DisplayMeta{Name: "Player abc123", Level: 0}, got)
+}
+
+// TestDisplayResolver_Resolve_WritesFallbackWhenGetterNil は getter 未注入時にも
+// resolver が常に表示可能な値 (フォールバック表示値) を返す契約を満たすことを検証する。
+func TestDisplayResolver_Resolve_WritesFallbackWhenGetterNil(t *testing.T) {
+	cache := displaymetacache.NewMemoryStore()
+	r := NewDisplayResolver(cache, nil)
 
 	got := r.Resolve(context.Background(), "g1", 1, "abc123def456")
 	assert.Equal(t, port.DisplayMeta{Name: "Player abc123", Level: 0}, got)
