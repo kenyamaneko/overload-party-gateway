@@ -3,7 +3,6 @@ package displaymetacache
 import (
 	"context"
 	"errors"
-	"strconv"
 	"testing"
 	"time"
 
@@ -16,218 +15,113 @@ import (
 )
 
 // newTestRedisStore は miniredis backed の RedisStore を構築する。
+// TTL 検証のためテスト側で miniredis 本体も返す。MaxRetries=-1 は
+// 障害注入 (miniredis.Close 後) で retry のログを抑制するため。
 func newTestRedisStore(t *testing.T) (*RedisStore, *miniredis.Miniredis) {
 	t.Helper()
 	mr := miniredis.RunT(t)
-	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	client := redis.NewClient(&redis.Options{
+		Addr:       mr.Addr(),
+		MaxRetries: -1,
+	})
 	t.Cleanup(func() { _ = client.Close() })
 	return NewRedisStore(client), mr
 }
 
-func TestRedisStore_Put_Hash項目とTTLを書き込む(t *testing.T) {
-	cases := []struct {
-		name string
-		meta port.DisplayMeta
-	}{
-		{
-			name: "通常レベル",
-			meta: port.DisplayMeta{Name: "alice", Level: 7},
-		},
-		{
-			name: "レベル0",
-			meta: port.DisplayMeta{Name: "bob", Level: 0},
-		},
-		{
-			name: "日本語名",
-			meta: port.DisplayMeta{Name: "山田太郎", Level: 99},
-		},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			store, mr := newTestRedisStore(t)
-			ctx := context.Background()
-			require.NoError(t, store.Put(ctx, "g1", 1, c.meta))
+// TestRedisStore_PutWritesHashAndTTL は Put が指定 key に name / level の
+// Hash field を書き、TTL = 1h を設定することを検証する (key 規約 + 試合終了で
+// 自然消滅させる TTL 設計の担保)。
+func TestRedisStore_PutWritesHashAndTTL(t *testing.T) {
+	store, mr := newTestRedisStore(t)
+	ctx := context.Background()
 
-			assert.Equal(t, c.meta.Name, mr.HGet("game:g1:player:1", "name"))
-			assert.Equal(t, strconv.Itoa(c.meta.Level), mr.HGet("game:g1:player:1", "level"))
-			assert.Equal(t, time.Hour, mr.TTL("game:g1:player:1"))
-		})
-	}
+	require.NoError(t, store.Put(ctx, "g1", 1, port.DisplayMeta{Name: "alice", Level: 7}))
+
+	key := "game:g1:player:1"
+	require.True(t, mr.Exists(key))
+	require.Equal(t, "alice", mr.HGet(key, "name"))
+	require.Equal(t, "7", mr.HGet(key, "level"))
+	require.Equal(t, time.Hour, mr.TTL(key))
 }
 
-func TestRedisStore_Put_既存keyを上書きする(t *testing.T) {
-	cases := []struct {
-		name      string
-		first     port.DisplayMeta
-		overwrite port.DisplayMeta
-	}{
-		{
-			name:      "nameとlevelの両方を変更",
-			first:     port.DisplayMeta{Name: "alice", Level: 1},
-			overwrite: port.DisplayMeta{Name: "alice2", Level: 9},
-		},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			store, _ := newTestRedisStore(t)
-			ctx := context.Background()
-			require.NoError(t, store.Put(ctx, "g1", 1, c.first))
-			require.NoError(t, store.Put(ctx, "g1", 1, c.overwrite))
-
-			got, err := store.Get(ctx, "g1", 1)
-			require.NoError(t, err)
-			assert.Equal(t, c.overwrite, got)
-		})
-	}
-}
-
-func TestRedisStore_Get_書き込んだメタを返す(t *testing.T) {
-	cases := []struct {
-		name string
-		meta port.DisplayMeta
-	}{
-		{
-			name: "通常レベル",
-			meta: port.DisplayMeta{Name: "alice", Level: 7},
-		},
-		{
-			name: "レベル0",
-			meta: port.DisplayMeta{Name: "bob", Level: 0},
-		},
-		{
-			name: "日本語名",
-			meta: port.DisplayMeta{Name: "山田太郎", Level: 99},
-		},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			store, _ := newTestRedisStore(t)
-			ctx := context.Background()
-			require.NoError(t, store.Put(ctx, "g1", 1, c.meta))
-
-			got, err := store.Get(ctx, "g1", 1)
-			require.NoError(t, err)
-			assert.Equal(t, c.meta, got)
-		})
-	}
-}
-
-func TestRedisStore_Get_書き込みがない場合はErrNotFoundを返す(t *testing.T) {
-	cases := []struct {
-		name      string
-		gameID    string
-		playerNum int
-	}{
-		{
-			name:      "playerNum1",
-			gameID:    "g1",
-			playerNum: 1,
-		},
-		{
-			name:      "playerNum2",
-			gameID:    "g1",
-			playerNum: 2,
-		},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			store, _ := newTestRedisStore(t)
-			_, err := store.Get(context.Background(), c.gameID, c.playerNum)
-			assert.ErrorIs(t, err, port.ErrNotFound)
-		})
-	}
-}
-
-func TestRedisStore_Get_TTL経過後はErrNotFoundを返す(t *testing.T) {
-	cases := []struct {
-		name    string
-		advance time.Duration
-	}{
-		{
-			name:    "TTLの1秒後",
-			advance: snapshotTTL + time.Second,
-		},
-		{
-			name:    "TTLの1時間後",
-			advance: snapshotTTL + time.Hour,
-		},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			store, mr := newTestRedisStore(t)
-			ctx := context.Background()
-			require.NoError(t, store.Put(ctx, "g1", 1, port.DisplayMeta{Name: "alice", Level: 7}))
-			mr.FastForward(c.advance)
-
-			_, err := store.Get(ctx, "g1", 1)
-			assert.ErrorIs(t, err, port.ErrNotFound)
-		})
-	}
-}
-
-func TestRedisStore_Get_gameIDとplayerNumで別keyに分離される(t *testing.T) {
+// TestRedisStore_PutOverwrites は同一 key への 2 回目の Put が後勝ちで
+// 上書きされ、Get で最新値が返ることを検証する。
+func TestRedisStore_PutOverwrites(t *testing.T) {
 	store, _ := newTestRedisStore(t)
 	ctx := context.Background()
-	seeds := []struct {
-		gameID    string
-		playerNum int
-		meta      port.DisplayMeta
-	}{
-		{
-			gameID:    "g1",
-			playerNum: 1,
-			meta:      port.DisplayMeta{Name: "alice", Level: 1},
-		},
-		{
-			gameID:    "g1",
-			playerNum: 2,
-			meta:      port.DisplayMeta{Name: "bob", Level: 2},
-		},
-		{
-			gameID:    "g2",
-			playerNum: 1,
-			meta:      port.DisplayMeta{Name: "carol", Level: 3},
-		},
-	}
-	for _, s := range seeds {
-		require.NoError(t, store.Put(ctx, s.gameID, s.playerNum, s.meta))
-	}
 
-	cases := []struct {
-		name      string
-		gameID    string
-		playerNum int
-		want      port.DisplayMeta
-	}{
-		{
-			name:      "g1のplayer1はaliceを返す",
-			gameID:    "g1",
-			playerNum: 1,
-			want:      port.DisplayMeta{Name: "alice", Level: 1},
-		},
-		{
-			name:      "g1のplayer2はbobを返す",
-			gameID:    "g1",
-			playerNum: 2,
-			want:      port.DisplayMeta{Name: "bob", Level: 2},
-		},
-		{
-			name:      "g2のplayer1はcarolを返す",
-			gameID:    "g2",
-			playerNum: 1,
-			want:      port.DisplayMeta{Name: "carol", Level: 3},
-		},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			got, err := store.Get(ctx, c.gameID, c.playerNum)
-			require.NoError(t, err)
-			assert.Equal(t, c.want, got)
-		})
-	}
+	require.NoError(t, store.Put(ctx, "g1", 1, port.DisplayMeta{Name: "alice", Level: 1}))
+	require.NoError(t, store.Put(ctx, "g1", 1, port.DisplayMeta{Name: "alice", Level: 9}))
+
+	got, err := store.Get(ctx, "g1", 1)
+	require.NoError(t, err)
+	require.Equal(t, port.DisplayMeta{Name: "alice", Level: 9}, got)
 }
 
-func TestRedisStore_Put_入力検証エラーを返す(t *testing.T) {
+// TestRedisStore_GetReturnsStoredMeta は Put 直後の Get が同じ name / level を
+// 返すことを検証する (HSet と HGetAll の往復が parse 含めて整合していること)。
+func TestRedisStore_GetReturnsStoredMeta(t *testing.T) {
+	store, _ := newTestRedisStore(t)
+	ctx := context.Background()
+	meta := port.DisplayMeta{Name: "bob", Level: 12}
+
+	require.NoError(t, store.Put(ctx, "g1", 2, meta))
+
+	got, err := store.Get(ctx, "g1", 2)
+	require.NoError(t, err)
+	require.Equal(t, meta, got)
+}
+
+// TestRedisStore_GetReturnsNotFoundWhenAbsent は未書き込み key への Get が
+// port.ErrNotFound を返すことを検証する (空文字 / level=0 等の silent fallback 禁止)。
+func TestRedisStore_GetReturnsNotFoundWhenAbsent(t *testing.T) {
+	store, _ := newTestRedisStore(t)
+
+	_, err := store.Get(context.Background(), "g1", 1)
+	require.ErrorIs(t, err, port.ErrNotFound)
+}
+
+// TestRedisStore_GetReturnsNotFoundAfterTTLExpired は TTL 経過後の Get が
+// port.ErrNotFound を返すことを検証する (1h TTL が機能し、試合終了後に
+// 自然消滅する設計の担保)。
+func TestRedisStore_GetReturnsNotFoundAfterTTLExpired(t *testing.T) {
+	store, mr := newTestRedisStore(t)
+	ctx := context.Background()
+
+	require.NoError(t, store.Put(ctx, "g1", 1, port.DisplayMeta{Name: "alice", Level: 7}))
+	mr.FastForward(snapshotTTL + time.Second)
+
+	_, err := store.Get(ctx, "g1", 1)
+	require.ErrorIs(t, err, port.ErrNotFound)
+}
+
+// TestRedisStore_KeysAreSeparatedByGameAndPlayer は (gameID, playerNum) の
+// 組み合わせごとに別 key へマッピングされ、互いに干渉しないことを検証する
+// (同時進行ゲームや同 game 内の player1 / player2 が混ざらないこと)。
+func TestRedisStore_KeysAreSeparatedByGameAndPlayer(t *testing.T) {
+	store, _ := newTestRedisStore(t)
+	ctx := context.Background()
+
+	require.NoError(t, store.Put(ctx, "g1", 1, port.DisplayMeta{Name: "alice", Level: 1}))
+	require.NoError(t, store.Put(ctx, "g1", 2, port.DisplayMeta{Name: "bob", Level: 2}))
+	require.NoError(t, store.Put(ctx, "g2", 1, port.DisplayMeta{Name: "carol", Level: 3}))
+
+	got, err := store.Get(ctx, "g1", 1)
+	require.NoError(t, err)
+	require.Equal(t, port.DisplayMeta{Name: "alice", Level: 1}, got)
+
+	got, err = store.Get(ctx, "g1", 2)
+	require.NoError(t, err)
+	require.Equal(t, port.DisplayMeta{Name: "bob", Level: 2}, got)
+
+	got, err = store.Get(ctx, "g2", 1)
+	require.NoError(t, err)
+	require.Equal(t, port.DisplayMeta{Name: "carol", Level: 3}, got)
+}
+
+// TestRedisStore_PutRejectsInvalidKeyParts は空 gameID / 非正 playerNum で
+// Put が fail-fast に error を返し Redis を呼ばないことを検証する。
+func TestRedisStore_PutRejectsInvalidKeyParts(t *testing.T) {
 	cases := []struct {
 		name      string
 		gameID    string
@@ -249,16 +143,19 @@ func TestRedisStore_Put_入力検証エラーを返す(t *testing.T) {
 			playerNum: -1,
 		},
 	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
 			store, _ := newTestRedisStore(t)
-			err := store.Put(context.Background(), c.gameID, c.playerNum, port.DisplayMeta{Name: "x", Level: 1})
+			err := store.Put(context.Background(), tc.gameID, tc.playerNum, port.DisplayMeta{Name: "x", Level: 1})
 			assert.Error(t, err)
 		})
 	}
 }
 
-func TestRedisStore_Get_入力検証エラーを返す(t *testing.T) {
+// TestRedisStore_GetRejectsInvalidKeyParts は空 gameID / 非正 playerNum で
+// Get が fail-fast に error を返し、入力検証 error と not-found を区別することを
+// 検証する (silent fallback と取り違えないため)。
+func TestRedisStore_GetRejectsInvalidKeyParts(t *testing.T) {
 	cases := []struct {
 		name      string
 		gameID    string
@@ -280,10 +177,10 @@ func TestRedisStore_Get_入力検証エラーを返す(t *testing.T) {
 			playerNum: -1,
 		},
 	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
 			store, _ := newTestRedisStore(t)
-			_, err := store.Get(context.Background(), c.gameID, c.playerNum)
+			_, err := store.Get(context.Background(), tc.gameID, tc.playerNum)
 			require.Error(t, err)
 			assert.False(t, errors.Is(err, port.ErrNotFound))
 		})

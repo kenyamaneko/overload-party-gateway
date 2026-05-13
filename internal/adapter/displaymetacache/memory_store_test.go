@@ -10,143 +10,67 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
-func TestMemoryStore_Put_書き込んだメタをGetで取得できる(t *testing.T) {
-	cases := []struct {
-		name string
-		meta port.DisplayMeta
-	}{
-		{
-			name: "通常レベル",
-			meta: port.DisplayMeta{Name: "alice", Level: 7},
-		},
-		{
-			name: "レベル0",
-			meta: port.DisplayMeta{Name: "bob", Level: 0},
-		},
-		{
-			name: "日本語名",
-			meta: port.DisplayMeta{Name: "山田太郎", Level: 99},
-		},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			s := NewMemoryStore()
-			ctx := context.Background()
-			require.NoError(t, s.Put(ctx, "g1", 1, c.meta))
+// TestMemoryStore_PutGetRoundTrip は Put した snapshot を直後の Get で
+// 同値として取得できることを検証する。
+func TestMemoryStore_PutGetRoundTrip(t *testing.T) {
+	s := NewMemoryStore()
+	ctx := context.Background()
+	meta := port.DisplayMeta{Name: "alice", Level: 7}
 
-			got, err := s.Get(ctx, "g1", 1)
-			require.NoError(t, err)
-			assert.Equal(t, c.meta, got)
-		})
-	}
+	require.NoError(t, s.Put(ctx, "g1", 1, meta))
+
+	got, err := s.Get(ctx, "g1", 1)
+	require.NoError(t, err)
+	require.Equal(t, meta, got)
 }
 
-func TestMemoryStore_Put_既存keyを上書きする(t *testing.T) {
-	cases := []struct {
-		name      string
-		first     port.DisplayMeta
-		overwrite port.DisplayMeta
-	}{
-		{
-			name:      "nameとlevelの両方を変更",
-			first:     port.DisplayMeta{Name: "alice", Level: 1},
-			overwrite: port.DisplayMeta{Name: "alice2", Level: 9},
-		},
-		{
-			name:      "levelのみ変更",
-			first:     port.DisplayMeta{Name: "alice", Level: 1},
-			overwrite: port.DisplayMeta{Name: "alice", Level: 9},
-		},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			s := NewMemoryStore()
-			ctx := context.Background()
-			require.NoError(t, s.Put(ctx, "g1", 1, c.first))
-			require.NoError(t, s.Put(ctx, "g1", 1, c.overwrite))
+// TestMemoryStore_PutOverwrites は同一 key への 2 回目の Put が後勝ちで
+// 上書きされることを検証する (match_made の再配信で同 game に再書き込みされ得るため)。
+func TestMemoryStore_PutOverwrites(t *testing.T) {
+	s := NewMemoryStore()
+	ctx := context.Background()
 
-			got, err := s.Get(ctx, "g1", 1)
-			require.NoError(t, err)
-			assert.Equal(t, c.overwrite, got)
-		})
-	}
+	require.NoError(t, s.Put(ctx, "g1", 1, port.DisplayMeta{Name: "alice", Level: 1}))
+	require.NoError(t, s.Put(ctx, "g1", 1, port.DisplayMeta{Name: "alice", Level: 9}))
+
+	got, err := s.Get(ctx, "g1", 1)
+	require.NoError(t, err)
+	require.Equal(t, port.DisplayMeta{Name: "alice", Level: 9}, got)
 }
 
-func TestMemoryStore_Get_書き込みがない場合はErrNotFoundを返す(t *testing.T) {
-	cases := []struct {
-		name      string
-		gameID    string
-		playerNum int
-	}{
-		{
-			name:      "playerNum1",
-			gameID:    "g1",
-			playerNum: 1,
-		},
-		{
-			name:      "playerNum2",
-			gameID:    "g1",
-			playerNum: 2,
-		},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			s := NewMemoryStore()
-			_, err := s.Get(context.Background(), c.gameID, c.playerNum)
-			assert.ErrorIs(t, err, port.ErrNotFound)
-		})
-	}
+// TestMemoryStore_GetReturnsNotFoundWhenAbsent は未書き込み key への Get が
+// port.ErrNotFound を返すことを検証する (空文字 / level=0 等の silent fallback 禁止)。
+func TestMemoryStore_GetReturnsNotFoundWhenAbsent(t *testing.T) {
+	s := NewMemoryStore()
+
+	_, err := s.Get(context.Background(), "g1", 1)
+	require.ErrorIs(t, err, port.ErrNotFound)
 }
 
-func TestMemoryStore_Evict_書き込み済みkeyを削除する(t *testing.T) {
-	cases := []struct {
-		name string
-		meta port.DisplayMeta
-	}{
-		{
-			name: "通常レベル",
-			meta: port.DisplayMeta{Name: "alice", Level: 7},
-		},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			s := NewMemoryStore()
-			ctx := context.Background()
-			require.NoError(t, s.Put(ctx, "g1", 1, c.meta))
-			require.NoError(t, s.Evict(ctx, "g1", 1))
+// TestMemoryStore_EvictRemovesStoredKey は Put 後に Evict すると以降の Get が
+// port.ErrNotFound を返すことを検証する (TwoTier の L2 失敗時 rollback の支え)。
+func TestMemoryStore_EvictRemovesStoredKey(t *testing.T) {
+	s := NewMemoryStore()
+	ctx := context.Background()
 
-			_, err := s.Get(ctx, "g1", 1)
-			assert.ErrorIs(t, err, port.ErrNotFound)
-		})
-	}
+	require.NoError(t, s.Put(ctx, "g1", 1, port.DisplayMeta{Name: "alice", Level: 7}))
+	require.NoError(t, s.Evict(ctx, "g1", 1))
+
+	_, err := s.Get(ctx, "g1", 1)
+	require.ErrorIs(t, err, port.ErrNotFound)
 }
 
-func TestMemoryStore_Evict_未書き込みkeyに対しても成功する(t *testing.T) {
-	cases := []struct {
-		name      string
-		gameID    string
-		playerNum int
-	}{
-		{
-			name:      "playerNum1",
-			gameID:    "g1",
-			playerNum: 1,
-		},
-		{
-			name:      "playerNum2",
-			gameID:    "g1",
-			playerNum: 2,
-		},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			s := NewMemoryStore()
-			assert.NoError(t, s.Evict(context.Background(), c.gameID, c.playerNum))
-		})
-	}
+// TestMemoryStore_EvictIsIdempotent は未書き込み key への Evict が error に
+// ならないことを検証する (rollback 経路が同 key を再 Evict しても安全であるため)。
+func TestMemoryStore_EvictIsIdempotent(t *testing.T) {
+	s := NewMemoryStore()
+
+	require.NoError(t, s.Evict(context.Background(), "g1", 1))
 }
 
-func TestMemoryStore_Put_入力検証エラーを返す(t *testing.T) {
+// TestMemoryStore_PutRejectsInvalidKeyParts は空 gameID / 非正 playerNum で
+// Put が fail-fast に error を返すことを検証する。
+func TestMemoryStore_PutRejectsInvalidKeyParts(t *testing.T) {
 	cases := []struct {
 		name      string
 		gameID    string
@@ -168,16 +92,18 @@ func TestMemoryStore_Put_入力検証エラーを返す(t *testing.T) {
 			playerNum: -1,
 		},
 	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
 			s := NewMemoryStore()
-			err := s.Put(context.Background(), c.gameID, c.playerNum, port.DisplayMeta{Name: "x", Level: 1})
+			err := s.Put(context.Background(), tc.gameID, tc.playerNum, port.DisplayMeta{Name: "x", Level: 1})
 			assert.Error(t, err)
 		})
 	}
 }
 
-func TestMemoryStore_Get_入力検証エラーを返す(t *testing.T) {
+// TestMemoryStore_GetRejectsInvalidKeyParts は空 gameID / 非正 playerNum で
+// Get が fail-fast に error を返すことを検証する。
+func TestMemoryStore_GetRejectsInvalidKeyParts(t *testing.T) {
 	cases := []struct {
 		name      string
 		gameID    string
@@ -199,16 +125,18 @@ func TestMemoryStore_Get_入力検証エラーを返す(t *testing.T) {
 			playerNum: -1,
 		},
 	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
 			s := NewMemoryStore()
-			_, err := s.Get(context.Background(), c.gameID, c.playerNum)
+			_, err := s.Get(context.Background(), tc.gameID, tc.playerNum)
 			assert.Error(t, err)
 		})
 	}
 }
 
-func TestMemoryStore_Evict_入力検証エラーを返す(t *testing.T) {
+// TestMemoryStore_EvictRejectsInvalidKeyParts は空 gameID / 非正 playerNum で
+// Evict が fail-fast に error を返すことを検証する。
+func TestMemoryStore_EvictRejectsInvalidKeyParts(t *testing.T) {
 	cases := []struct {
 		name      string
 		gameID    string
@@ -230,10 +158,10 @@ func TestMemoryStore_Evict_入力検証エラーを返す(t *testing.T) {
 			playerNum: -1,
 		},
 	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
 			s := NewMemoryStore()
-			err := s.Evict(context.Background(), c.gameID, c.playerNum)
+			err := s.Evict(context.Background(), tc.gameID, tc.playerNum)
 			assert.Error(t, err)
 		})
 	}
