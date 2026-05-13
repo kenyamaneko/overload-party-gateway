@@ -17,12 +17,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	pubsubadapter "github.com/kenyamaneko/overload-party-gateway/internal/adapter/pubsub"
 	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/cardclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/matchmakingclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/config"
-	pubsubadapter "github.com/kenyamaneko/overload-party-gateway/internal/adapter/pubsub"
 	"github.com/kenyamaneko/overload-party-gateway/internal/handler/rest"
 	ws "github.com/kenyamaneko/overload-party-gateway/internal/handler/ws"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
