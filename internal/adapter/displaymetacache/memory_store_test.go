@@ -10,32 +10,41 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
-// TestMemoryStore_Put_PersistsValue は Put した snapshot を直後の Get で
-// 同値として取得できることを検証する。
-func TestMemoryStore_Put_PersistsValue(t *testing.T) {
-	s := NewMemoryStore()
-	ctx := context.Background()
-	meta := port.DisplayMeta{Name: "alice", Level: 7}
-
-	require.NoError(t, s.Put(ctx, "g1", 1, meta))
-
-	got, err := s.Get(ctx, "g1", 1)
-	require.NoError(t, err)
-	require.Equal(t, meta, got)
-}
-
-// TestMemoryStore_Put_Overwrites は同一 key への 2 回目の Put が後勝ちで
-// 上書きされることを検証する (match_made の再配信で同 game に再書き込みされ得るため)。
-func TestMemoryStore_Put_Overwrites(t *testing.T) {
-	s := NewMemoryStore()
-	ctx := context.Background()
-
-	require.NoError(t, s.Put(ctx, "g1", 1, port.DisplayMeta{Name: "alice", Level: 1}))
-	require.NoError(t, s.Put(ctx, "g1", 1, port.DisplayMeta{Name: "alice", Level: 9}))
-
-	got, err := s.Get(ctx, "g1", 1)
-	require.NoError(t, err)
-	require.Equal(t, port.DisplayMeta{Name: "alice", Level: 9}, got)
+// TestMemoryStore_Put_StoresLatestValue は Put 後の Get が最後に Put した値を
+// 返すことを検証する。複数回 Put した場合の後勝ち挙動は match_made の再配信で
+// 同 game に再書き込みされ得るため要件である。
+func TestMemoryStore_Put_StoresLatestValue(t *testing.T) {
+	cases := []struct {
+		name string
+		puts []port.DisplayMeta
+		want port.DisplayMeta
+	}{
+		{
+			name: "1 回 Put すると書き込んだ値が取得できる",
+			puts: []port.DisplayMeta{{Name: "alice", Level: 7}},
+			want: port.DisplayMeta{Name: "alice", Level: 7},
+		},
+		{
+			name: "複数回 Put すると最後の値が取得できる",
+			puts: []port.DisplayMeta{
+				{Name: "alice", Level: 1},
+				{Name: "alice", Level: 9},
+			},
+			want: port.DisplayMeta{Name: "alice", Level: 9},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := NewMemoryStore()
+			ctx := context.Background()
+			for _, m := range tc.puts {
+				require.NoError(t, s.Put(ctx, "g1", 1, m))
+			}
+			got, err := s.Get(ctx, "g1", 1)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, got)
+		})
+	}
 }
 
 // TestMemoryStore_Get_ReturnsNotFoundWhenAbsent は未書き込み key への Get が
@@ -47,25 +56,36 @@ func TestMemoryStore_Get_ReturnsNotFoundWhenAbsent(t *testing.T) {
 	require.ErrorIs(t, err, port.ErrNotFound)
 }
 
-// TestMemoryStore_Evict_RemovesStoredKey は Put 後に Evict すると以降の Get が
-// port.ErrNotFound を返すことを検証する (TwoTier の L2 失敗時 rollback の支え)。
-func TestMemoryStore_Evict_RemovesStoredKey(t *testing.T) {
-	s := NewMemoryStore()
-	ctx := context.Background()
-
-	require.NoError(t, s.Put(ctx, "g1", 1, port.DisplayMeta{Name: "alice", Level: 7}))
-	require.NoError(t, s.Evict(ctx, "g1", 1))
-
-	_, err := s.Get(ctx, "g1", 1)
-	require.ErrorIs(t, err, port.ErrNotFound)
-}
-
-// TestMemoryStore_Evict_IsIdempotent は未書き込み key への Evict が error に
-// ならないことを検証する (rollback 経路が同 key を再 Evict しても安全であるため)。
-func TestMemoryStore_Evict_IsIdempotent(t *testing.T) {
-	s := NewMemoryStore()
-
-	require.NoError(t, s.Evict(context.Background(), "g1", 1))
+// TestMemoryStore_Evict_LeavesKeyAbsent は事前状態を問わず Evict が error を
+// 返さず、以降の Get が port.ErrNotFound を返すことを検証する。未書き込み key
+// への idempotent 性は TwoTier の L2 失敗時 rollback が同 key を再 Evict しても
+// 安全である要件のために必要である。
+func TestMemoryStore_Evict_LeavesKeyAbsent(t *testing.T) {
+	cases := []struct {
+		name string
+		puts []port.DisplayMeta
+	}{
+		{
+			name: "書き込み済み key を Evict すると以降の Get が NotFound を返す",
+			puts: []port.DisplayMeta{{Name: "alice", Level: 7}},
+		},
+		{
+			name: "未書き込み key への Evict は idempotent に成功し以降の Get も NotFound を返す",
+			puts: nil,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := NewMemoryStore()
+			ctx := context.Background()
+			for _, m := range tc.puts {
+				require.NoError(t, s.Put(ctx, "g1", 1, m))
+			}
+			require.NoError(t, s.Evict(ctx, "g1", 1))
+			_, err := s.Get(ctx, "g1", 1)
+			require.ErrorIs(t, err, port.ErrNotFound)
+		})
+	}
 }
 
 // TestMemoryStore_Put_RejectsInvalidKeyParts は空 gameID / 非正 playerNum で
