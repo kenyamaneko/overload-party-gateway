@@ -5,7 +5,9 @@ go 1.25.10
 require (
 	cloud.google.com/go/firestore v1.21.0
 	cloud.google.com/go/pubsub/v2 v2.0.0
+	cloud.google.com/go/secretmanager v1.16.0
 	firebase.google.com/go/v4 v4.19.0
+	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/gin-gonic/gin v1.11.0
 	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/gorilla/websocket v1.5.3
@@ -18,6 +20,7 @@ require (
 	github.com/kenyamaneko/overload-party-gateway/packages/api-gateway v0.0.0-00010101000000-000000000000
 	github.com/kenyamaneko/overload-party-gateway/packages/ws-constants v0.0.0-00010101000000-000000000000
 	github.com/kenyamaneko/overload-party-matchmaking/packages/api-matchmaking v0.1.2
+	github.com/redis/go-redis/v9 v9.19.0
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/sync v0.19.0
 	google.golang.org/grpc v1.79.1
@@ -84,6 +87,7 @@ require (
 	github.com/spiffe/go-spiffe/v2 v2.6.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.0 // indirect
+	github.com/yuin/gopher-lua v1.1.1 // indirect
 	go.einride.tech/aip v0.73.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
@@ -95,6 +99,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.39.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.39.0 // indirect
 	go.opentelemetry.io/otel/trace v1.39.0 // indirect
+	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/mock v0.5.0 // indirect
 	golang.org/x/arch v0.20.0 // indirect
 	golang.org/x/crypto v0.47.0 // indirect
