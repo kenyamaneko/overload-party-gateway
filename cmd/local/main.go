@@ -81,9 +81,7 @@ func main() {
 
 	battleClient := service.NewBattleClient(cfg.BattleServerURL)
 	matchmakingTimeout := time.Duration(cfg.MatchmakingTimeoutSec) * time.Second
-	// ローカルモードでは Upstash Redis を使わず L1 (pod-local in-memory) のみで display
-	// meta cache を提供する。L2 不在は cache lookup の永続性が無くなるだけで resolver
-	// 経路は account 直接 lookup へフォールバックして動作する。
+	// ローカル開発で Upstash Redis を立てる手間を避けるため L1 のみで動かす。
 	displayMetaCache := displaymetacache.NewMemoryStore()
 	playerProfileGetter := accountprofile.New(accountClient)
 	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, displayMetaCache, playerProfileGetter, matchmakingTimeout, internalSigner)

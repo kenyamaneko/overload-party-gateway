@@ -36,108 +36,136 @@ func (f *fakeCache) Get(ctx context.Context, gameID string, playerNum int) (port
 	return f.MemoryStore.Get(ctx, gameID, playerNum)
 }
 
-// TestDisplayResolver_Resolve_ReturnsCacheValueOnHit は cache に snapshot が存在する場合、
-// account を叩かずに cache 値が返ることを検証する (高頻度 relay 経路で account 負荷を抑える要件)。
-func TestDisplayResolver_Resolve_ReturnsCacheValueOnHit(t *testing.T) {
-	cache := displaymetacache.NewMemoryStore()
-	ctx := context.Background()
-	want := port.DisplayMeta{Name: "alice", Level: 7}
-	require.NoError(t, cache.Put(ctx, "g1", 1, want))
+// testGameID / testPlayerNum は cache key を構成する固定値。cache の key 解決ロジックは
+// displaymetacache 側で検証済みのため、resolver test では (gameID, playerNum) の組み合わせ
+// 自体を変えるのは観点外。
+const (
+	testGameID    = "g1"
+	testPlayerNum = 1
+)
 
-	getter := &stubGetter{err: errors.New("must not be called")}
-	r := NewDisplayResolver(cache, getter)
+// 短縮対象の長い playerID と、それを fallback したときの期待表示値。
+const (
+	longPlayerID    = "abc123def456"
+	fallbackForLong = "Player abc123"
+)
 
-	got := r.Resolve(ctx, "g1", 1, "p-1")
-	assert.Equal(t, want, got)
-}
+// TestDisplayResolver_Resolve_ReturnsExpectedMeta は (cache 状態, getter 状態) の各組み合わせで
+// Resolve が常に表示可能な DisplayMeta を返す契約を検証する。各ケースは「どこで失敗を吸収する
+// 経路に切り替わるか」のシナリオを表す。
+func TestDisplayResolver_Resolve_ReturnsExpectedMeta(t *testing.T) {
+	cachedAlice := port.DisplayMeta{Name: "alice-from-cache", Level: 1}
+	accountAlice := port.PlayerProfile{Name: "alice-from-account", Level: 7}
+	fallback := port.DisplayMeta{Name: fallbackForLong, Level: 0}
 
-// TestDisplayResolver_Resolve_FallsBackToAccountOnCacheMiss は cache miss 時に
-// account 直接 lookup の値が返ることを検証する。
-func TestDisplayResolver_Resolve_FallsBackToAccountOnCacheMiss(t *testing.T) {
-	cache := displaymetacache.NewMemoryStore()
-	getter := &stubGetter{profile: port.PlayerProfile{Name: "alice", Level: 7}}
-	r := NewDisplayResolver(cache, getter)
-
-	got := r.Resolve(context.Background(), "g1", 1, "p-1")
-	assert.Equal(t, port.DisplayMeta{Name: "alice", Level: 7}, got)
-}
-
-// TestDisplayResolver_Resolve_PromotesAccountResultToCache は account fallback で得た値が
-// cache に書き戻され、次回以降の Get で hit することを検証する (繰り返し account を叩かない)。
-func TestDisplayResolver_Resolve_PromotesAccountResultToCache(t *testing.T) {
-	cache := displaymetacache.NewMemoryStore()
-	getter := &stubGetter{profile: port.PlayerProfile{Name: "alice", Level: 7}}
-	r := NewDisplayResolver(cache, getter)
-	ctx := context.Background()
-
-	_ = r.Resolve(ctx, "g1", 1, "p-1")
-
-	got, err := cache.Get(ctx, "g1", 1)
-	require.NoError(t, err)
-	assert.Equal(t, port.DisplayMeta{Name: "alice", Level: 7}, got)
-}
-
-// TestDisplayResolver_Resolve_FallsBackToAccountOnCacheReadError は cache 自体の read 失敗
-// (NotFound 以外) でも account 直接 lookup へフォールバックして表示可能な値を返すことを検証する。
-func TestDisplayResolver_Resolve_FallsBackToAccountOnCacheReadError(t *testing.T) {
-	cache := &fakeCache{
-		MemoryStore: displaymetacache.NewMemoryStore(),
-		getErr:      errors.New("cache backend offline"),
+	cases := []struct {
+		name     string
+		setup    func() (displayCache, port.PlayerProfileGetter)
+		playerID string
+		want     port.DisplayMeta
+	}{
+		{
+			name: "cache hit では cache の値を返し account を呼ばない",
+			setup: func() (displayCache, port.PlayerProfileGetter) {
+				cache := displaymetacache.NewMemoryStore()
+				_ = cache.Put(context.Background(), testGameID, testPlayerNum, cachedAlice)
+				return cache, &stubGetter{err: errors.New("must not be called")}
+			},
+			playerID: "any-player-id-cache-hit",
+			want:     cachedAlice,
+		},
+		{
+			name: "cache miss では account の値を返す",
+			setup: func() (displayCache, port.PlayerProfileGetter) {
+				return displaymetacache.NewMemoryStore(), &stubGetter{profile: accountAlice}
+			},
+			playerID: "any-player-id-cache-miss",
+			want:     port.DisplayMeta(accountAlice),
+		},
+		{
+			name: "cache read エラーでも account の値を返す",
+			setup: func() (displayCache, port.PlayerProfileGetter) {
+				cache := &fakeCache{
+					MemoryStore: displaymetacache.NewMemoryStore(),
+					getErr:      errors.New("cache backend offline"),
+				}
+				return cache, &stubGetter{profile: accountAlice}
+			},
+			playerID: "any-player-id-cache-read-error",
+			want:     port.DisplayMeta(accountAlice),
+		},
+		{
+			name: "account 失敗時はフォールバック表示値を返す",
+			setup: func() (displayCache, port.PlayerProfileGetter) {
+				return displaymetacache.NewMemoryStore(), &stubGetter{err: errors.New("account offline")}
+			},
+			playerID: longPlayerID,
+			want:     fallback,
+		},
+		{
+			name: "account 応答に name 無し (Name=\"\") はフォールバック表示値を返す",
+			setup: func() (displayCache, port.PlayerProfileGetter) {
+				return displaymetacache.NewMemoryStore(), &stubGetter{profile: port.PlayerProfile{Name: "", Level: 7}}
+			},
+			playerID: longPlayerID,
+			want:     fallback,
+		},
+		{
+			name: "getter 未注入でもフォールバック表示値を返す",
+			setup: func() (displayCache, port.PlayerProfileGetter) {
+				return displaymetacache.NewMemoryStore(), nil
+			},
+			playerID: longPlayerID,
+			want:     fallback,
+		},
 	}
-	getter := &stubGetter{profile: port.PlayerProfile{Name: "alice", Level: 7}}
-	r := NewDisplayResolver(cache, getter)
-
-	got := r.Resolve(context.Background(), "g1", 1, "p-1")
-	assert.Equal(t, port.DisplayMeta{Name: "alice", Level: 7}, got)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cache, getter := tc.setup()
+			r := NewDisplayResolver(cache, getter)
+			got := r.Resolve(context.Background(), testGameID, testPlayerNum, tc.playerID)
+			assert.Equal(t, tc.want, got)
+		})
+	}
 }
 
-// TestDisplayResolver_Resolve_WritesFallbackValueWhenAccountFails は account 直接 lookup
-// も失敗した場合に「Player {playerID 短縮}」形式のフォールバック表示値を返すことを検証する
-// (空文字での silent fallback を避け、UI 上で失敗を識別可能にする要件)。
-func TestDisplayResolver_Resolve_WritesFallbackValueWhenAccountFails(t *testing.T) {
-	cache := displaymetacache.NewMemoryStore()
-	getter := &stubGetter{err: errors.New("account offline")}
-	r := NewDisplayResolver(cache, getter)
+// TestDisplayResolver_Resolve_PersistsResolvedMetaToCache は Resolve が account にフォールバック
+// したケースで結果値を cache に書き戻すことを検証する (相手 player の毎 relay 都度 account 直接
+// lookup を抑える要件)。
+func TestDisplayResolver_Resolve_PersistsResolvedMetaToCache(t *testing.T) {
+	accountAlice := port.PlayerProfile{Name: "alice", Level: 7}
 
-	got := r.Resolve(context.Background(), "g1", 1, "abc123def456")
-	assert.Equal(t, port.DisplayMeta{Name: "Player abc123", Level: 0}, got)
-}
+	cases := []struct {
+		name       string
+		getter     port.PlayerProfileGetter
+		playerID   string
+		wantCached port.DisplayMeta
+	}{
+		{
+			name:       "account fallback で得た値を cache に書き戻す",
+			getter:     &stubGetter{profile: accountAlice},
+			playerID:   "any-player-id-account-success",
+			wantCached: port.DisplayMeta(accountAlice),
+		},
+		{
+			name:       "account 失敗時にフォールバック表示値を cache に書き込む",
+			getter:     &stubGetter{err: errors.New("account offline")},
+			playerID:   longPlayerID,
+			wantCached: port.DisplayMeta{Name: fallbackForLong, Level: 0},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cache := displaymetacache.NewMemoryStore()
+			r := NewDisplayResolver(cache, tc.getter)
+			ctx := context.Background()
+			_ = r.Resolve(ctx, testGameID, testPlayerNum, tc.playerID)
 
-// TestDisplayResolver_Resolve_PersistsFallbackValueToCache は account 失敗時に書き込まれた
-// フォールバック表示値が cache に残り、後続呼び出しで account を叩かないことを検証する。
-func TestDisplayResolver_Resolve_PersistsFallbackValueToCache(t *testing.T) {
-	cache := displaymetacache.NewMemoryStore()
-	getter := &stubGetter{err: errors.New("account offline")}
-	r := NewDisplayResolver(cache, getter)
-	ctx := context.Background()
-
-	_ = r.Resolve(ctx, "g1", 1, "abc123def456")
-
-	got, err := cache.Get(ctx, "g1", 1)
-	require.NoError(t, err)
-	assert.Equal(t, port.DisplayMeta{Name: "Player abc123", Level: 0}, got)
-}
-
-// TestDisplayResolver_Resolve_TreatsEmptyNameAsAccountFailure は account 応答に name が
-// 含まれない (Name="") 場合もフォールバック表示値を返すことを検証する (silent な空文字
-// fallback を避ける要件)。
-func TestDisplayResolver_Resolve_TreatsEmptyNameAsAccountFailure(t *testing.T) {
-	cache := displaymetacache.NewMemoryStore()
-	getter := &stubGetter{profile: port.PlayerProfile{Name: "", Level: 7}}
-	r := NewDisplayResolver(cache, getter)
-
-	got := r.Resolve(context.Background(), "g1", 1, "abc123def456")
-	assert.Equal(t, port.DisplayMeta{Name: "Player abc123", Level: 0}, got)
-}
-
-// TestDisplayResolver_Resolve_WritesFallbackWhenGetterNil は getter 未注入時にも
-// resolver が常に表示可能な値 (フォールバック表示値) を返す契約を満たすことを検証する。
-func TestDisplayResolver_Resolve_WritesFallbackWhenGetterNil(t *testing.T) {
-	cache := displaymetacache.NewMemoryStore()
-	r := NewDisplayResolver(cache, nil)
-
-	got := r.Resolve(context.Background(), "g1", 1, "abc123def456")
-	assert.Equal(t, port.DisplayMeta{Name: "Player abc123", Level: 0}, got)
+			got, err := cache.Get(ctx, testGameID, testPlayerNum)
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantCached, got)
+		})
+	}
 }
 
 // TestFallbackDisplayMeta_TruncatesLongPlayerID は playerID の長さに応じた短縮挙動を
@@ -160,8 +188,8 @@ func TestFallbackDisplayMeta_TruncatesLongPlayerID(t *testing.T) {
 		},
 		{
 			name:     "prefix 長を超える playerID は先頭 6 文字に短縮する",
-			playerID: "abc123def456",
-			want:     "Player abc123",
+			playerID: longPlayerID,
+			want:     fallbackForLong,
 		},
 		{
 			name:     "空 playerID はそのまま使う",
