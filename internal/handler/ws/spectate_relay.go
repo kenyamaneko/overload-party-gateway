@@ -26,7 +26,7 @@ type SpectateRelay struct {
 	hub            *ConnectionHub
 	battleClient   service.BattleClient
 	gamePlayerRepo port.GamePlayerRepo
-	playerLookup   PlayerLookupFunc // spectate_joined バナーデータ用。nil 可
+	resolver       port.DisplayResolver // spectate_joined バナーデータ用。nil 可
 
 	mu          sync.RWMutex
 	spectators  map[string]map[string]*spectatorInfo // gameID → spectatorID → spectatorInfo
@@ -34,18 +34,18 @@ type SpectateRelay struct {
 }
 
 // NewSpectateRelay は SpectateRelay を生成します。
-// gamePlayerRepo / playerLookup は nil 可（mock モード / テスト用）。
+// gamePlayerRepo / resolver は nil 可（mock モード / テスト用）。
 func NewSpectateRelay(
 	hub *ConnectionHub,
 	battleClient service.BattleClient,
 	gamePlayerRepo port.GamePlayerRepo,
-	playerLookup PlayerLookupFunc,
+	resolver port.DisplayResolver,
 ) *SpectateRelay {
 	return &SpectateRelay{
 		hub:            hub,
 		battleClient:   battleClient,
 		gamePlayerRepo: gamePlayerRepo,
-		playerLookup:   playerLookup,
+		resolver:       resolver,
 		spectators:     make(map[string]map[string]*spectatorInfo),
 		activeGames:    make(map[string]time.Time),
 	}
@@ -111,21 +111,21 @@ func (sr *SpectateRelay) HandleSpectateJoin(conn *Connection, data json.RawMessa
 		return
 	}
 
-	// DB からプレイヤー名とレベルを解決
+	// プレイヤー名とレベルを resolver 経由で解決 (cache hit が期待値、miss 時は account フォールバック)
 	var p1Name, p2Name string
 	var p1Level, p2Level int64
-	if sr.playerLookup != nil && sr.gamePlayerRepo != nil {
+	if sr.resolver != nil && sr.gamePlayerRepo != nil {
 		entries, err := sr.gamePlayerRepo.LookupGamePlayers(ctx, req.GameID)
 		if err != nil {
 			log.Printf("spectate: lookup game players for %s: %v", req.GameID, err)
 		} else {
 			for _, e := range entries {
-				name, level, _ := sr.playerLookup(ctx, e.PlayerID)
+				meta := sr.resolver.Resolve(ctx, req.GameID, e.PlayerNum, e.PlayerID)
 				switch e.PlayerNum {
 				case 1:
-					p1Name, p1Level = name, level
+					p1Name, p1Level = meta.Name, int64(meta.Level)
 				case 2:
-					p2Name, p2Level = name, level
+					p2Name, p2Level = meta.Name, int64(meta.Level)
 				}
 			}
 			if len(entries) == 1 {

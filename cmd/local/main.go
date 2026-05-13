@@ -17,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/kenyamaneko/overload-party-gateway/internal/adapter/displaymetacache"
 	pubsubadapter "github.com/kenyamaneko/overload-party-gateway/internal/adapter/pubsub"
 	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
@@ -79,7 +80,11 @@ func main() {
 
 	battleClient := service.NewBattleClient(cfg.BattleServerURL)
 	matchmakingTimeout := time.Duration(cfg.MatchmakingTimeoutSec) * time.Second
-	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, matchmakingTimeout, internalSigner)
+	// ローカルモードでは Upstash Redis を使わず L1 (pod-local in-memory) のみで display
+	// meta cache を提供する。L2 不在は cache lookup の永続性が無くなるだけで resolver
+	// 経路は account 直接 lookup へフォールバックして動作する。
+	displayMetaCache := displaymetacache.NewMemoryStore()
+	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, displayMetaCache, matchmakingTimeout, internalSigner)
 	wsHandler := ws.NewHandler(wsManager, nil, accountClient, nil)
 	handlers := &router.Handlers{
 		Auth:     rest.NewAuthHandler(accountClient),

@@ -12,7 +12,7 @@ require (
 	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/gorilla/websocket v1.5.3
 	github.com/jackc/pgx/v5 v5.8.0
-	github.com/kenyamaneko/overload-party-account/packages/api-account v0.1.2
+	github.com/kenyamaneko/overload-party-account/packages/api-account v0.1.3
 	github.com/kenyamaneko/overload-party-battle/packages/api-battle-rpc-go v0.1.1
 	github.com/kenyamaneko/overload-party-battle/packages/game-logic-constants-go v0.1.0
 	github.com/kenyamaneko/overload-party-card/packages/api-card v0.1.6

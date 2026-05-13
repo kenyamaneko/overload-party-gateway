@@ -21,3 +21,11 @@ type DisplayMetaStore interface {
 type DisplayMetaLookup interface {
 	Get(ctx context.Context, gameID string, playerNum int) (DisplayMeta, error)
 }
+
+// DisplayResolver は player の表示用 DisplayMeta を返す境界。
+// cache (L1/L2) を優先参照し、miss / read 失敗時は account への直接 lookup へ
+// フォールバックし、それも失敗した場合はフォールバック表示値を Redis に書き込み
+// かつ返す。常に表示可能な値を返すため呼び出し側は error ハンドリング不要。
+type DisplayResolver interface {
+	Resolve(ctx context.Context, gameID string, playerNum int, playerID string) DisplayMeta
+}

@@ -16,6 +16,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/kenyamaneko/overload-party-gateway/internal/adapter/displaymetacache"
 	pubsubadapter "github.com/kenyamaneko/overload-party-gateway/internal/adapter/pubsub"
 	"github.com/kenyamaneko/overload-party-gateway/internal/adapter/secretmanager"
 	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
@@ -118,7 +119,8 @@ func main() {
 	// Battle クライアント（HTTP → battle server）
 	battleClient := service.NewBattleClient(cfg.BattleServerURL)
 	matchmakingTimeout := time.Duration(cfg.MatchmakingTimeoutSec) * time.Second
-	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, matchmakingTimeout, internalSigner)
+	displayMetaCache := displaymetacache.New(displaymetacache.NewMemoryStore(), displaymetacache.NewRedisStore(displayMetaRedis))
+	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, displayMetaCache, matchmakingTimeout, internalSigner)
 	wsHandler := ws.NewHandler(wsManager, authClient, accountClient, cfg.AllowedOrigins)
 
 	handlers := &router.Handlers{

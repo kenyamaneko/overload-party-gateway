@@ -32,21 +32,19 @@ type playerSession struct {
 	playerNum int
 }
 
-// PlayerLookupFunc はプレイヤー ID から表示名とレベルを解決する関数型です
-type PlayerLookupFunc func(ctx context.Context, playerID string) (name string, level int64, err error)
 
 // 下流呼び出しの既定タイムアウト。WS コネクション ctx を親に持たせた上で
 // 個別呼び出しの上限として使用する。
 const downstreamCallTimeout = 10 * time.Second
 
 // GameRelay はゲームメンバーシップを管理し、プレイヤーと battle server 間のアクション/状態を中継します。
-// 依存は全て NewGameRelay で注入する。accountClient / gamePlayerRepo / playerLookup は nil 許容で、
+// 依存は全て NewGameRelay で注入する。accountClient / gamePlayerRepo / resolver は nil 許容で、
 // nil の場合は EXP 付与や表示名解決をスキップする（ローカル開発 / テスト向け）。
 type GameRelay struct {
 	hub            *ConnectionHub
 	battleClient   service.BattleClient
 	spectateRelay  *SpectateRelay
-	playerLookup   PlayerLookupFunc
+	resolver       port.DisplayResolver
 	accountClient  *accountclient.Client
 	gamePlayerRepo port.GamePlayerRepo
 
@@ -59,14 +57,14 @@ type GameRelay struct {
 }
 
 // NewGameRelay は GameRelay を生成します。
-// accountClient / gamePlayerRepo / playerLookup は nil 可（mock モード / テスト用）。
+// accountClient / gamePlayerRepo / resolver は nil 可（mock モード / テスト用）。
 func NewGameRelay(
 	hub *ConnectionHub,
 	battleClient service.BattleClient,
 	spectateRelay *SpectateRelay,
 	accountClient *accountclient.Client,
 	gamePlayerRepo port.GamePlayerRepo,
-	playerLookup PlayerLookupFunc,
+	resolver port.DisplayResolver,
 ) *GameRelay {
 	return &GameRelay{
 		hub:            hub,
@@ -74,7 +72,7 @@ func NewGameRelay(
 		spectateRelay:  spectateRelay,
 		accountClient:  accountClient,
 		gamePlayerRepo: gamePlayerRepo,
-		playerLookup:   playerLookup,
+		resolver:       resolver,
 		gameMembers:    make(map[string][]string),
 		playerGames:    make(map[string]playerSession),
 		turnTimers:     make(map[string]*turnTimerInfo),
@@ -497,14 +495,14 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 		"match_type": matchType,
 	}
 
-	myName, myLevel := r.lookupPlayer(ctx, conn.playerID)
+	myName, myLevel := r.lookupPlayer(ctx, gameID, pNum, conn.playerID)
 	var oppName string
 	var oppLevel int64
 	if matchType == gamedesign.MatchTypeNpc {
 		oppName, oppLevel = "NPC", 0
 	} else {
 		opponentID := r.findOpponent(entries, conn.playerID)
-		oppName, oppLevel = r.lookupPlayer(ctx, opponentID)
+		oppName, oppLevel = r.lookupPlayer(ctx, gameID, opponentPlayerNum(pNum), opponentID)
 	}
 
 	battleStartData["my_name"] = myName
@@ -545,19 +543,20 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 	})
 }
 
-// lookupPlayer はプレイヤーの表示名とレベルを解決する。
-// 表示用メタデータの解決失敗は battle 進行をブロックしないので、エラー時は空値で続行する
-// （クライアントは "" / 0 をプレースホルダとして表示）。
-func (r *GameRelay) lookupPlayer(ctx context.Context, playerID string) (string, int64) {
-	if r.playerLookup == nil {
+// lookupPlayer はプレイヤーの表示名とレベルを resolver 経由で解決する。
+// resolver は失敗時もフォールバック表示値を返すので呼び出し側は error ハンドリング不要。
+// resolver 未注入時 (mock モード) は空値で続行する。
+func (r *GameRelay) lookupPlayer(ctx context.Context, gameID string, playerNum int, playerID string) (string, int64) {
+	if r.resolver == nil {
 		return "", 0
 	}
-	name, level, err := r.playerLookup(ctx, playerID)
-	if err != nil {
-		log.Printf("lookup player %s (continuing with empty profile): %v", playerID, err)
-		return "", 0
-	}
-	return name, level
+	meta := r.resolver.Resolve(ctx, gameID, playerNum, playerID)
+	return meta.Name, int64(meta.Level)
+}
+
+// opponentPlayerNum は PvP の自分の slot 番号 (1 or 2) から相手の slot 番号を返す。
+func opponentPlayerNum(self int) int {
+	return 3 - self
 }
 
 // HandleGameAction は game_action メッセージを処理します

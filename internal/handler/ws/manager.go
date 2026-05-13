@@ -33,6 +33,7 @@ type Manager struct {
 	cardClient        *cardclient.Client
 	matchmakingClient *matchmakingclient.Client
 	gamePlayerRepo    port.GamePlayerRepo
+	displayCache      port.DisplayMetaStore
 
 	// internalSigner は WS 経路から各サービス client を呼ぶ前に X-Internal-Auth JWT を発行する。
 	internalSigner *internalauth.Signer
@@ -54,6 +55,7 @@ func NewManager(
 	cardClient *cardclient.Client,
 	matchmakingClient *matchmakingclient.Client,
 	gamePlayerRepo port.GamePlayerRepo,
+	displayCache displayCache,
 	matchmakingTimeout time.Duration,
 	internalSigner *internalauth.Signer,
 ) *Manager {
@@ -63,6 +65,7 @@ func NewManager(
 		cardClient:         cardClient,
 		matchmakingClient:  matchmakingClient,
 		gamePlayerRepo:     gamePlayerRepo,
+		displayCache:       displayCache,
 		internalSigner:     internalSigner,
 		matchmakingTimeout: matchmakingTimeout,
 		matchWait:          make(map[string]*time.Timer),
@@ -78,25 +81,9 @@ func NewManager(
 		OnGameReconnect:       func(playerID, gameID string) { m.Relay.NotifyOpponentReconnected(playerID, gameID) },
 	})
 
-	lookupFn := PlayerLookupFunc(func(ctx context.Context, playerID string) (string, int64, error) {
-		p, err := accountClient.GetPlayer(ctx, playerID)
-		if err != nil {
-			return "", 0, err
-		}
-		if p == nil {
-			return "", 0, nil
-		}
-		// オンボーディング未完了の場合 Name が nil。表示用メタデータの呼び出し元が
-		// 既に "" をプレースホルダ扱いしているのでここでも空文字に正規化する。
-		var name string
-		if p.Name != nil {
-			name = *p.Name
-		}
-		return name, p.Level, nil
-	})
-
-	spectate := NewSpectateRelay(hub, battleClient, gamePlayerRepo, lookupFn)
-	relay := NewGameRelay(hub, battleClient, spectate, accountClient, gamePlayerRepo, lookupFn)
+	resolver := NewDisplayResolver(displayCache, accountClient)
+	spectate := NewSpectateRelay(hub, battleClient, gamePlayerRepo, resolver)
+	relay := NewGameRelay(hub, battleClient, spectate, accountClient, gamePlayerRepo, resolver)
 
 	m.Hub = hub
 	m.Relay = relay
@@ -342,8 +329,40 @@ func (m *Manager) HandleMatchMade(ctx context.Context, event apimatchmaking.Matc
 		}
 	}
 
+	if err := m.writeDisplayMetaSnapshot(ctx, game.GameID, 1, event.Players[0].PlayerID); err != nil {
+		return fmt.Errorf("match_made: snapshot p1: %w", err)
+	}
+	if err := m.writeDisplayMetaSnapshot(ctx, game.GameID, 2, event.Players[1].PlayerID); err != nil {
+		return fmt.Errorf("match_made: snapshot p2: %w", err)
+	}
+
 	m.Spectate.RegisterGame(game.GameID)
 	m.Relay.NotifyMatchFound(game.GameID, event.Players[0].PlayerID, event.Players[1].PlayerID)
+	return nil
+}
+
+// writeDisplayMetaSnapshot は match 成立時の player display meta を 2 段キャッシュへ
+// 書き込む。account 呼び出し失敗時は handler から error を返し Pub/Sub に再配信させる。
+// account が name 未確定の応答を返した場合は snapshot をスキップして継続する
+// (フォールバック表示値の書き込みは relay 経路の最終行に集約する設計のため、本箇所では
+// 行わない)。cache 書き込み失敗は試合継続に影響しないので Error ログのみで継続する
+// (relay 経路で必要時に再 lookup される)。
+func (m *Manager) writeDisplayMetaSnapshot(ctx context.Context, gameID string, playerNum int, playerID string) error {
+	if m.displayCache == nil {
+		return nil
+	}
+	p, err := m.accountClient.GetPlayer(ctx, playerID)
+	if err != nil {
+		return fmt.Errorf("account lookup player=%s: %w", playerID, err)
+	}
+	if p == nil || p.Name == nil {
+		log.Printf("WARN: match_made: account returned incomplete profile for player=%s, skipping snapshot (relay will fall back)", playerID)
+		return nil
+	}
+	meta := port.DisplayMeta{Name: *p.Name, Level: int(p.Level)}
+	if err := m.displayCache.Put(ctx, gameID, playerNum, meta); err != nil {
+		log.Printf("ERROR: match_made: cache put game=%s player_num=%d (continuing, relay will re-lookup): %v", gameID, playerNum, err)
+	}
 	return nil
 }
 
