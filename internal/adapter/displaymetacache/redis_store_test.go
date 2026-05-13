@@ -14,9 +14,9 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
-// newTestRedisStore は miniredis backed の RedisStore を構築する。
-// TTL 検証のためテスト側で miniredis 本体も返す。MaxRetries=-1 は
-// 障害注入 (miniredis.Close 後) で retry のログを抑制するため。
+// newTestRedisStore は miniredis backed の RedisStore を構築する。TTL 検証の
+// ためテスト側で miniredis 本体も返す。MaxRetries=-1 は障害注入 (miniredis.Close 後)
+// で retry のログを抑制するため。
 func newTestRedisStore(t *testing.T) (*RedisStore, *miniredis.Miniredis) {
 	t.Helper()
 	mr := miniredis.RunT(t)
@@ -28,10 +28,10 @@ func newTestRedisStore(t *testing.T) (*RedisStore, *miniredis.Miniredis) {
 	return NewRedisStore(client), mr
 }
 
-// TestRedisStore_PutWritesHashAndTTL は Put が指定 key に name / level の
+// TestRedisStore_Put_WritesHashAndTTL は Put が指定 key に name / level の
 // Hash field を書き、TTL = 1h を設定することを検証する (key 規約 + 試合終了で
 // 自然消滅させる TTL 設計の担保)。
-func TestRedisStore_PutWritesHashAndTTL(t *testing.T) {
+func TestRedisStore_Put_WritesHashAndTTL(t *testing.T) {
 	store, mr := newTestRedisStore(t)
 	ctx := context.Background()
 
@@ -44,9 +44,9 @@ func TestRedisStore_PutWritesHashAndTTL(t *testing.T) {
 	require.Equal(t, time.Hour, mr.TTL(key))
 }
 
-// TestRedisStore_PutOverwrites は同一 key への 2 回目の Put が後勝ちで
+// TestRedisStore_Put_Overwrites は同一 key への 2 回目の Put が後勝ちで
 // 上書きされ、Get で最新値が返ることを検証する。
-func TestRedisStore_PutOverwrites(t *testing.T) {
+func TestRedisStore_Put_Overwrites(t *testing.T) {
 	store, _ := newTestRedisStore(t)
 	ctx := context.Background()
 
@@ -58,9 +58,9 @@ func TestRedisStore_PutOverwrites(t *testing.T) {
 	require.Equal(t, port.DisplayMeta{Name: "alice", Level: 9}, got)
 }
 
-// TestRedisStore_GetReturnsStoredMeta は Put 直後の Get が同じ name / level を
+// TestRedisStore_Get_ReturnsStoredMeta は Put 直後の Get が同じ name / level を
 // 返すことを検証する (HSet と HGetAll の往復が parse 含めて整合していること)。
-func TestRedisStore_GetReturnsStoredMeta(t *testing.T) {
+func TestRedisStore_Get_ReturnsStoredMeta(t *testing.T) {
 	store, _ := newTestRedisStore(t)
 	ctx := context.Background()
 	meta := port.DisplayMeta{Name: "bob", Level: 12}
@@ -72,19 +72,19 @@ func TestRedisStore_GetReturnsStoredMeta(t *testing.T) {
 	require.Equal(t, meta, got)
 }
 
-// TestRedisStore_GetReturnsNotFoundWhenAbsent は未書き込み key への Get が
+// TestRedisStore_Get_ReturnsNotFoundWhenAbsent は未書き込み key への Get が
 // port.ErrNotFound を返すことを検証する (空文字 / level=0 等の silent fallback 禁止)。
-func TestRedisStore_GetReturnsNotFoundWhenAbsent(t *testing.T) {
+func TestRedisStore_Get_ReturnsNotFoundWhenAbsent(t *testing.T) {
 	store, _ := newTestRedisStore(t)
 
 	_, err := store.Get(context.Background(), "g1", 1)
 	require.ErrorIs(t, err, port.ErrNotFound)
 }
 
-// TestRedisStore_GetReturnsNotFoundAfterTTLExpired は TTL 経過後の Get が
+// TestRedisStore_Get_ReturnsNotFoundAfterTTLExpired は TTL 経過後の Get が
 // port.ErrNotFound を返すことを検証する (1h TTL が機能し、試合終了後に
 // 自然消滅する設計の担保)。
-func TestRedisStore_GetReturnsNotFoundAfterTTLExpired(t *testing.T) {
+func TestRedisStore_Get_ReturnsNotFoundAfterTTLExpired(t *testing.T) {
 	store, mr := newTestRedisStore(t)
 	ctx := context.Background()
 
@@ -95,50 +95,70 @@ func TestRedisStore_GetReturnsNotFoundAfterTTLExpired(t *testing.T) {
 	require.ErrorIs(t, err, port.ErrNotFound)
 }
 
-// TestRedisStore_KeysAreSeparatedByGameAndPlayer は (gameID, playerNum) の
+// TestRedisStore_Get_SeparatesKeysByGameAndPlayer は (gameID, playerNum) の
 // 組み合わせごとに別 key へマッピングされ、互いに干渉しないことを検証する
 // (同時進行ゲームや同 game 内の player1 / player2 が混ざらないこと)。
-func TestRedisStore_KeysAreSeparatedByGameAndPlayer(t *testing.T) {
+func TestRedisStore_Get_SeparatesKeysByGameAndPlayer(t *testing.T) {
 	store, _ := newTestRedisStore(t)
 	ctx := context.Background()
-
 	require.NoError(t, store.Put(ctx, "g1", 1, port.DisplayMeta{Name: "alice", Level: 1}))
 	require.NoError(t, store.Put(ctx, "g1", 2, port.DisplayMeta{Name: "bob", Level: 2}))
 	require.NoError(t, store.Put(ctx, "g2", 1, port.DisplayMeta{Name: "carol", Level: 3}))
 
-	got, err := store.Get(ctx, "g1", 1)
-	require.NoError(t, err)
-	require.Equal(t, port.DisplayMeta{Name: "alice", Level: 1}, got)
-
-	got, err = store.Get(ctx, "g1", 2)
-	require.NoError(t, err)
-	require.Equal(t, port.DisplayMeta{Name: "bob", Level: 2}, got)
-
-	got, err = store.Get(ctx, "g2", 1)
-	require.NoError(t, err)
-	require.Equal(t, port.DisplayMeta{Name: "carol", Level: 3}, got)
+	cases := []struct {
+		name      string
+		gameID    string
+		playerNum int
+		want      port.DisplayMeta
+	}{
+		{
+			name:      "g1 の player 1 では alice を返す",
+			gameID:    "g1",
+			playerNum: 1,
+			want:      port.DisplayMeta{Name: "alice", Level: 1},
+		},
+		{
+			name:      "g1 の player 2 では bob を返す",
+			gameID:    "g1",
+			playerNum: 2,
+			want:      port.DisplayMeta{Name: "bob", Level: 2},
+		},
+		{
+			name:      "g2 の player 1 では carol を返す",
+			gameID:    "g2",
+			playerNum: 1,
+			want:      port.DisplayMeta{Name: "carol", Level: 3},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := store.Get(ctx, tc.gameID, tc.playerNum)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, got)
+		})
+	}
 }
 
-// TestRedisStore_PutRejectsInvalidKeyParts は空 gameID / 非正 playerNum で
+// TestRedisStore_Put_RejectsInvalidKeyParts は空 gameID / 非正 playerNum で
 // Put が fail-fast に error を返し Redis を呼ばないことを検証する。
-func TestRedisStore_PutRejectsInvalidKeyParts(t *testing.T) {
+func TestRedisStore_Put_RejectsInvalidKeyParts(t *testing.T) {
 	cases := []struct {
 		name      string
 		gameID    string
 		playerNum int
 	}{
 		{
-			name:      "空のgameID",
+			name:      "空の gameID では error を返す",
 			gameID:    "",
 			playerNum: 1,
 		},
 		{
-			name:      "playerNumが0",
+			name:      "playerNum が 0 では error を返す",
 			gameID:    "g1",
 			playerNum: 0,
 		},
 		{
-			name:      "playerNumが負",
+			name:      "playerNum が負の値では error を返す",
 			gameID:    "g1",
 			playerNum: -1,
 		},
@@ -152,27 +172,27 @@ func TestRedisStore_PutRejectsInvalidKeyParts(t *testing.T) {
 	}
 }
 
-// TestRedisStore_GetRejectsInvalidKeyParts は空 gameID / 非正 playerNum で
+// TestRedisStore_Get_RejectsInvalidKeyParts は空 gameID / 非正 playerNum で
 // Get が fail-fast に error を返し、入力検証 error と not-found を区別することを
 // 検証する (silent fallback と取り違えないため)。
-func TestRedisStore_GetRejectsInvalidKeyParts(t *testing.T) {
+func TestRedisStore_Get_RejectsInvalidKeyParts(t *testing.T) {
 	cases := []struct {
 		name      string
 		gameID    string
 		playerNum int
 	}{
 		{
-			name:      "空のgameID",
+			name:      "空の gameID では not-found ではない error を返す",
 			gameID:    "",
 			playerNum: 1,
 		},
 		{
-			name:      "playerNumが0",
+			name:      "playerNum が 0 では not-found ではない error を返す",
 			gameID:    "g1",
 			playerNum: 0,
 		},
 		{
-			name:      "playerNumが負",
+			name:      "playerNum が負の値では not-found ではない error を返す",
 			gameID:    "g1",
 			playerNum: -1,
 		},
