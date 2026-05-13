@@ -16,7 +16,6 @@ import (
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/kenyamaneko/overload-party-gateway/internal/adapter/displaymetacache"
 	pubsubadapter "github.com/kenyamaneko/overload-party-gateway/internal/adapter/pubsub"
 	"github.com/kenyamaneko/overload-party-gateway/internal/adapter/secretmanager"
 	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
@@ -89,9 +88,8 @@ func main() {
 		log.Fatalf("failed to create firebase auth client: %v", err)
 	}
 
-	// display meta cache (L1 in-memory + L2 Upstash Redis の 2 段)。
-	// 本 PR は基盤整備のみで wsManager / handler への配線は後続 PR で行う。
-	// ここでは初期化と起動疎通だけ済ませて、後続 PR の DI 受け口を用意する。
+	// 起動時に display meta cache 用 Upstash Redis の到達性を検証する。
+	// production rollout で接続不能時に fail-fast させるため。
 	displayMetaRedis, err := newDisplayMetaRedisClient(ctx, cfg)
 	if err != nil {
 		log.Fatalf("failed to create display meta cache redis client: %v", err)
@@ -100,10 +98,6 @@ func main() {
 	if err := displayMetaRedis.Ping(ctx).Err(); err != nil {
 		log.Fatalf("display meta cache redis ping failed: %v", err)
 	}
-	_ = displaymetacache.New(
-		displaymetacache.NewMemoryStore(),
-		displaymetacache.NewRedisStore(displayMetaRedis),
-	)
 
 	// gateway 所有の game_players リポジトリ
 	gamePlayerRepo := repository.NewPgGamePlayerRepository(pool)

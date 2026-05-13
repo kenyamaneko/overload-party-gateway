@@ -9,10 +9,6 @@ import (
 
 // MemoryStore は pod-local in-memory な display meta snapshot 保持。
 // 2 段キャッシュの L1 として用いる。
-//
-// 本層は TTL を持たない。pod 寿命内の有限ゲーム数で growth が bound される
-// ため明示削除は行わない (新試合の Put で同 key を上書き、不要 entry は pod
-// restart で消える)。
 type MemoryStore struct {
 	mu      sync.RWMutex
 	entries map[string]port.DisplayMeta

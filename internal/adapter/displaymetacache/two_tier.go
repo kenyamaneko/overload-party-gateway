@@ -23,8 +23,7 @@ type l2Tier interface {
 }
 
 // TwoTier は L1 (pod-local in-memory) と L2 (Upstash Redis) を合成した
-// 2 段キャッシュ。Get は L1 を優先し、miss 時のみ L2 を参照して L1 へ昇格
-// させる。Put は L1 / L2 双方へ書き込み、L2 失敗時は L1 を巻き戻す。
+// 2 段キャッシュ。
 type TwoTier struct {
 	l1 l1Tier
 	l2 l2Tier

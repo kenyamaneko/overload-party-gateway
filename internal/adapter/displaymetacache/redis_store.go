@@ -14,11 +14,9 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
-// snapshotTTL は Redis に書き込む display meta snapshot の有効期間。
-// 試合最長時間 + buffer。試合終了後は明示削除せず TTL 切れで自然消滅させる。
+// snapshotTTL は display meta snapshot の有効期間。試合最長時間 + buffer。
 const snapshotTTL = time.Hour
 
-// Hash フィールド名。
 const (
 	hashFieldName  = "name"
 	hashFieldLevel = "level"

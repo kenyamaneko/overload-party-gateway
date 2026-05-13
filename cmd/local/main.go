@@ -16,9 +16,7 @@ import (
 	"cloud.google.com/go/firestore"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/redis/go-redis/v9"
 
-	"github.com/kenyamaneko/overload-party-gateway/internal/adapter/displaymetacache"
 	pubsubadapter "github.com/kenyamaneko/overload-party-gateway/internal/adapter/pubsub"
 	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
@@ -51,30 +49,6 @@ func main() {
 	defer pool.Close()
 
 	gamePlayerRepo := repository.NewPgGamePlayerRepository(pool)
-
-	// display meta cache (L1 in-memory + L2 Upstash Redis)。
-	// ローカルモードでは UPSTASH_REDIS_URL_GATEWAY 未設定で L2 を skip し L1 のみで
-	// 動かす (NPC バトル中心の local 開発を Redis 必須にしないため)。本 PR は基盤
-	// 整備のみで wsManager / handler への配線はしないため、初期化結果は破棄して
-	// 起動が壊れないことだけ担保する。
-	if cfg.RedisURL == "" {
-		log.Println("UPSTASH_REDIS_URL_GATEWAY is unset; display meta cache runs with in-memory L1 only (L2 Redis skipped)")
-		_ = displaymetacache.NewMemoryStore()
-	} else {
-		opt, err := redis.ParseURL(cfg.RedisURL)
-		if err != nil {
-			log.Fatalf("failed to parse UPSTASH_REDIS_URL_GATEWAY: %v", err)
-		}
-		displayMetaRedis := redis.NewClient(opt)
-		defer func() { _ = displayMetaRedis.Close() }()
-		if err := displayMetaRedis.Ping(ctx).Err(); err != nil {
-			log.Fatalf("display meta cache redis ping failed: %v", err)
-		}
-		_ = displaymetacache.New(
-			displaymetacache.NewMemoryStore(),
-			displaymetacache.NewRedisStore(displayMetaRedis),
-		)
-	}
 
 	// ローカルモードでは Firestore (game_config) と matchmaking Pub/Sub subscriber は optional。
 	// GOOGLE_CLOUD_PROJECT_ID が未設定なら両方スキップする (NPC バトルがメインワークフロー)。

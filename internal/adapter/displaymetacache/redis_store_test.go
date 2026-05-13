@@ -3,6 +3,8 @@ package displaymetacache
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -15,7 +17,7 @@ import (
 )
 
 // newTestRedisStore は miniredis backed の RedisStore を構築する。
-// FastForward で TTL 検証を行うためテスト側で miniredis 本体も返す。
+// TTL 検証のため miniredis 本体も返す。
 func newTestRedisStore(t *testing.T) (*RedisStore, *miniredis.Miniredis) {
 	t.Helper()
 	mr := miniredis.RunT(t)
@@ -24,107 +26,241 @@ func newTestRedisStore(t *testing.T) (*RedisStore, *miniredis.Miniredis) {
 	return NewRedisStore(client), mr
 }
 
-// TestRedisStore_Put_StoresHashWithTTL は「Hash key =
-// game:{game_id}:player:{player_num}, fields = {name, level}, TTL = 1h」を
-// Put が満たすことを固定する。
-func TestRedisStore_Put_StoresHashWithTTL(t *testing.T) {
-	store, mr := newTestRedisStore(t)
-	ctx := context.Background()
-
-	require.NoError(t, store.Put(ctx, "g1", 1, port.DisplayMeta{Name: "alice", Level: 7}))
-
-	key := "game:g1:player:1"
-	assert.True(t, mr.Exists(key))
-	assert.Equal(t, "alice", mr.HGet(key, "name"))
-	assert.Equal(t, "7", mr.HGet(key, "level"))
-	assert.Equal(t, time.Hour, mr.TTL(key))
-}
-
-// TestRedisStore_Get_ReturnsStoredMeta は Put 直後に Get が同じ
-// name / level を返すことを固定する (正常系の往復)。
-func TestRedisStore_Get_ReturnsStoredMeta(t *testing.T) {
-	store, _ := newTestRedisStore(t)
-	ctx := context.Background()
-
-	require.NoError(t, store.Put(ctx, "g1", 2, port.DisplayMeta{Name: "bob", Level: 12}))
-
-	got, err := store.Get(ctx, "g1", 2)
-	require.NoError(t, err)
-	assert.Equal(t, port.DisplayMeta{Name: "bob", Level: 12}, got)
-}
-
-// TestRedisStore_Get_MissReturnsNotFound は key 未書き込み時に
-// port.ErrNotFound が返り、空文字や level=0 などの silent fallback を
-// 行わないことを固定する。
-func TestRedisStore_Get_MissReturnsNotFound(t *testing.T) {
-	store, _ := newTestRedisStore(t)
-	ctx := context.Background()
-
-	_, err := store.Get(ctx, "g-missing", 1)
-	assert.ErrorIs(t, err, port.ErrNotFound)
-}
-
-// TestRedisStore_Get_ExpiredKeyReturnsNotFound は TTL 経過後の key も
-// not found 相当として扱われることを固定する (1h TTL が機能している)。
-func TestRedisStore_Get_ExpiredKeyReturnsNotFound(t *testing.T) {
-	store, mr := newTestRedisStore(t)
-	ctx := context.Background()
-
-	require.NoError(t, store.Put(ctx, "g1", 1, port.DisplayMeta{Name: "alice", Level: 7}))
-	mr.FastForward(snapshotTTL + time.Second)
-
-	_, err := store.Get(ctx, "g1", 1)
-	assert.ErrorIs(t, err, port.ErrNotFound)
-}
-
-// TestRedisStore_KeySeparatesGameAndPlayer は (gameID, playerNum) の組が
-// 別 key にマッピングされ互いに干渉しないことを固定する (key 設計の事故防止)。
-func TestRedisStore_KeySeparatesGameAndPlayer(t *testing.T) {
-	store, _ := newTestRedisStore(t)
-	ctx := context.Background()
-
-	require.NoError(t, store.Put(ctx, "g1", 1, port.DisplayMeta{Name: "alice", Level: 1}))
-	require.NoError(t, store.Put(ctx, "g1", 2, port.DisplayMeta{Name: "bob", Level: 2}))
-	require.NoError(t, store.Put(ctx, "g2", 1, port.DisplayMeta{Name: "carol", Level: 3}))
-
+func TestRedisStore_Put_WritesHashFieldsWithTTL(t *testing.T) {
 	cases := []struct {
+		name      string
 		gameID    string
 		playerNum int
-		want      port.DisplayMeta
+		meta      port.DisplayMeta
 	}{
-		{"g1", 1, port.DisplayMeta{Name: "alice", Level: 1}},
-		{"g1", 2, port.DisplayMeta{Name: "bob", Level: 2}},
-		{"g2", 1, port.DisplayMeta{Name: "carol", Level: 3}},
+		{
+			name:      "single digit level",
+			gameID:    "g1",
+			playerNum: 1,
+			meta:      port.DisplayMeta{Name: "alice", Level: 7},
+		},
+		{
+			name:      "double digit level",
+			gameID:    "g1",
+			playerNum: 2,
+			meta:      port.DisplayMeta{Name: "bob", Level: 42},
+		},
+		{
+			name:      "japanese name",
+			gameID:    "g-jp",
+			playerNum: 1,
+			meta:      port.DisplayMeta{Name: "山田太郎", Level: 1},
+		},
 	}
 	for _, c := range cases {
-		got, err := store.Get(ctx, c.gameID, c.playerNum)
-		require.NoError(t, err)
-		assert.Equal(t, c.want, got)
+		t.Run(c.name, func(t *testing.T) {
+			store, mr := newTestRedisStore(t)
+			ctx := context.Background()
+
+			require.NoError(t, store.Put(ctx, c.gameID, c.playerNum, c.meta))
+
+			key := fmt.Sprintf("game:%s:player:%d", c.gameID, c.playerNum)
+			assert.True(t, mr.Exists(key))
+			assert.Equal(t, c.meta.Name, mr.HGet(key, "name"))
+			assert.Equal(t, strconv.Itoa(c.meta.Level), mr.HGet(key, "level"))
+			assert.Equal(t, time.Hour, mr.TTL(key))
+		})
 	}
 }
 
-// TestRedisStore_InvalidKeyParts は空 gameID / 非正 playerNum が
-// fail-fast で error になり Redis を呼ばないことを固定する。
-func TestRedisStore_InvalidKeyParts(t *testing.T) {
+func TestRedisStore_Get_Success(t *testing.T) {
+	cases := []struct {
+		name      string
+		gameID    string
+		playerNum int
+		meta      port.DisplayMeta
+	}{
+		{
+			name:      "small level",
+			gameID:    "g1",
+			playerNum: 2,
+			meta:      port.DisplayMeta{Name: "bob", Level: 12},
+		},
+		{
+			name:      "zero level",
+			gameID:    "g2",
+			playerNum: 1,
+			meta:      port.DisplayMeta{Name: "carol", Level: 0},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			store, _ := newTestRedisStore(t)
+			ctx := context.Background()
+			require.NoError(t, store.Put(ctx, c.gameID, c.playerNum, c.meta))
+
+			got, err := store.Get(ctx, c.gameID, c.playerNum)
+			require.NoError(t, err)
+			assert.Equal(t, c.meta, got)
+		})
+	}
+}
+
+func TestRedisStore_Get_NotFound(t *testing.T) {
+	cases := []struct {
+		name      string
+		seed      func(t *testing.T, store *RedisStore, mr *miniredis.Miniredis, ctx context.Context)
+		gameID    string
+		playerNum int
+	}{
+		{
+			name:      "key never written",
+			seed:      func(t *testing.T, store *RedisStore, mr *miniredis.Miniredis, ctx context.Context) {},
+			gameID:    "g-missing",
+			playerNum: 1,
+		},
+		{
+			name: "key expired after TTL",
+			seed: func(t *testing.T, store *RedisStore, mr *miniredis.Miniredis, ctx context.Context) {
+				require.NoError(t, store.Put(ctx, "g1", 1, port.DisplayMeta{Name: "alice", Level: 7}))
+				mr.FastForward(snapshotTTL + time.Second)
+			},
+			gameID:    "g1",
+			playerNum: 1,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			store, mr := newTestRedisStore(t)
+			ctx := context.Background()
+			c.seed(t, store, mr, ctx)
+
+			_, err := store.Get(ctx, c.gameID, c.playerNum)
+			assert.ErrorIs(t, err, port.ErrNotFound)
+		})
+	}
+}
+
+func TestRedisStore_Get_KeysSeparatedByGameAndPlayer(t *testing.T) {
 	store, _ := newTestRedisStore(t)
 	ctx := context.Background()
-	meta := port.DisplayMeta{Name: "x", Level: 1}
+
+	seeds := []struct {
+		gameID    string
+		playerNum int
+		meta      port.DisplayMeta
+	}{
+		{
+			gameID:    "g1",
+			playerNum: 1,
+			meta:      port.DisplayMeta{Name: "alice", Level: 1},
+		},
+		{
+			gameID:    "g1",
+			playerNum: 2,
+			meta:      port.DisplayMeta{Name: "bob", Level: 2},
+		},
+		{
+			gameID:    "g2",
+			playerNum: 1,
+			meta:      port.DisplayMeta{Name: "carol", Level: 3},
+		},
+	}
+	for _, s := range seeds {
+		require.NoError(t, store.Put(ctx, s.gameID, s.playerNum, s.meta))
+	}
 
 	cases := []struct {
 		name      string
 		gameID    string
 		playerNum int
+		want      port.DisplayMeta
 	}{
-		{"empty gameID", "", 1},
-		{"zero playerNum", "g1", 0},
-		{"negative playerNum", "g1", -1},
+		{
+			name:      "g1/p1 retrieves alice",
+			gameID:    "g1",
+			playerNum: 1,
+			want:      port.DisplayMeta{Name: "alice", Level: 1},
+		},
+		{
+			name:      "g1/p2 retrieves bob",
+			gameID:    "g1",
+			playerNum: 2,
+			want:      port.DisplayMeta{Name: "bob", Level: 2},
+		},
+		{
+			name:      "g2/p1 retrieves carol",
+			gameID:    "g2",
+			playerNum: 1,
+			want:      port.DisplayMeta{Name: "carol", Level: 3},
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			got, err := store.Get(ctx, c.gameID, c.playerNum)
+			require.NoError(t, err)
+			assert.Equal(t, c.want, got)
+		})
+	}
+}
+
+func TestRedisStore_Put_InvalidKeyParts(t *testing.T) {
+	cases := []struct {
+		name      string
+		gameID    string
+		playerNum int
+	}{
+		{
+			name:      "empty gameID",
+			gameID:    "",
+			playerNum: 1,
+		},
+		{
+			name:      "zero playerNum",
+			gameID:    "g1",
+			playerNum: 0,
+		},
+		{
+			name:      "negative playerNum",
+			gameID:    "g1",
+			playerNum: -1,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			store, _ := newTestRedisStore(t)
+			ctx := context.Background()
+			meta := port.DisplayMeta{Name: "x", Level: 1}
+
 			assert.Error(t, store.Put(ctx, c.gameID, c.playerNum, meta))
+		})
+	}
+}
+
+func TestRedisStore_Get_InvalidKeyParts(t *testing.T) {
+	cases := []struct {
+		name      string
+		gameID    string
+		playerNum int
+	}{
+		{
+			name:      "empty gameID",
+			gameID:    "",
+			playerNum: 1,
+		},
+		{
+			name:      "zero playerNum",
+			gameID:    "g1",
+			playerNum: 0,
+		},
+		{
+			name:      "negative playerNum",
+			gameID:    "g1",
+			playerNum: -1,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			store, _ := newTestRedisStore(t)
+			ctx := context.Background()
+
 			_, err := store.Get(ctx, c.gameID, c.playerNum)
-			assert.Error(t, err)
-			// not-found ではなく入力 validation エラーであること
+			require.Error(t, err)
 			assert.False(t, errors.Is(err, port.ErrNotFound))
 		})
 	}

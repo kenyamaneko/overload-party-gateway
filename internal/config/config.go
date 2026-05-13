@@ -7,8 +7,8 @@ import (
 	"strings"
 )
 
-// APP_ENV の許容値。display meta cache 用 Upstash Redis の接続経路 (local =
-// URL 直結 / production = Secret Manager 取得) を切り替える。
+// APP_ENV の許容値。display meta cache 用 Upstash Redis の接続経路
+// (local: URL 直結 / production: Secret Manager 取得) を切り替えるため。
 const (
 	AppEnvLocal      = "local"
 	AppEnvProduction = "production"
@@ -51,12 +51,10 @@ type Config struct {
 	InternalAuthSecret string
 
 	// AppEnv は display meta cache 用 Upstash Redis の接続経路を切り替えるフラグ。
-	// AppEnvLocal / AppEnvProduction のいずれか。production では Secret Manager
-	// 経由で endpoint / password を取得し、local では RedisURL を直接使う。
+	// AppEnvLocal / AppEnvProduction のいずれか。
 	AppEnv string
 
-	// RedisURL は AppEnv=local 時に display meta cache が利用する Upstash 互換 URL。
-	// AppEnv=production では Secret Manager から取得するため未使用。
+	// RedisURL は AppEnv=local 時に利用する Upstash 互換 URL。
 	RedisURL string
 }
 
