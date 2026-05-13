@@ -27,12 +27,10 @@ type Config struct {
 	// game_players / news_articles は gateway が直接 Postgres に接続して読み書きする
 	DatabaseConn string
 
-	PubsubProjectID         string
-	MatchmakingSubscription string
-
-	// FirestoreProjectID は game_config コレクションの読み取り先プロジェクト ID。
+	// GoogleCloudProjectID は Pub/Sub および Firestore (game_config) の対象プロジェクト ID。
 	// ローカル/CI では FIRESTORE_EMULATOR_HOST を別途設定することでエミュレーターに接続する。
-	FirestoreProjectID string
+	GoogleCloudProjectID    string
+	MatchmakingSubscription string
 
 	// matchmaking_start 後のプレイヤー待機タイムアウト（秒）。
 	// タイムアウト時に gateway がエラーを push し、上流の enqueue をキャンセルする。
@@ -66,10 +64,8 @@ func Load() *Config {
 
 		DatabaseConn: getEnv("DATABASE_CONN", ""),
 
-		PubsubProjectID:         getEnv("PUBSUB_PROJECT_ID", ""),
+		GoogleCloudProjectID:    getEnv("GOOGLE_CLOUD_PROJECT_ID", ""),
 		MatchmakingSubscription: getEnv("MATCHMAKING_SUBSCRIPTION", "matchmaking-events-gateway"),
-
-		FirestoreProjectID: getEnv("FIRESTORE_PROJECT_ID", ""),
 
 		MatchmakingTimeoutSec: getEnvInt("MATCHMAKING_TIMEOUT_SEC", 60),
 

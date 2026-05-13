@@ -50,19 +50,19 @@ func main() {
 
 	gamePlayerRepo := repository.NewPgGamePlayerRepository(pool)
 
-	// Firestore クライアント (game_config)。
-	// ローカルモードでは optional: FIRESTORE_PROJECT_ID が未設定ならスキップ。
+	// ローカルモードでは Firestore (game_config) と matchmaking Pub/Sub subscriber は optional。
+	// GOOGLE_CLOUD_PROJECT_ID が未設定なら両方スキップする (NPC バトルがメインワークフロー)。
 	// FIRESTORE_EMULATOR_HOST が設定されていれば公式クライアントが自動的に
 	// エミュレーターへルーティングする。
-	if cfg.FirestoreProjectID != "" {
-		fsClient, err := firestore.NewClient(ctx, cfg.FirestoreProjectID)
+	if cfg.GoogleCloudProjectID != "" {
+		fsClient, err := firestore.NewClient(ctx, cfg.GoogleCloudProjectID)
 		if err != nil {
 			log.Fatalf("failed to create firestore client: %v", err)
 		}
 		defer func() { _ = fsClient.Close() }()
 		_ = repository.NewFirestoreGameConfigRepository(fsClient)
 	} else {
-		log.Println("FIRESTORE_PROJECT_ID is unset; skipping Firestore client (game_config not read at runtime)")
+		log.Println("GOOGLE_CLOUD_PROJECT_ID is unset; skipping Firestore client and matchmaking Pub/Sub subscriber")
 	}
 
 	cardClient := cardclient.New(cfg.CardServiceURL)
@@ -121,10 +121,10 @@ func main() {
 	srvCtx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// ローカルモードでは Pub/Sub subscriber はオプション。
-	// NPC バトルがメインワークフローであり match_made イベントは不要。
-	if cfg.PubsubProjectID != "" {
-		stream, err := pubsubadapter.NewStream(srvCtx, cfg.PubsubProjectID, cfg.MatchmakingSubscription)
+	// matchmaking Pub/Sub subscriber も GOOGLE_CLOUD_PROJECT_ID が設定されたときだけ起動する。
+	// 未設定時のスキップログは Firestore 側の分岐で出力済み。
+	if cfg.GoogleCloudProjectID != "" {
+		stream, err := pubsubadapter.NewStream(srvCtx, cfg.GoogleCloudProjectID, cfg.MatchmakingSubscription)
 		if err != nil {
 			log.Fatalf("failed to create matchmaking stream: %v", err)
 		}
@@ -138,8 +138,6 @@ func main() {
 				log.Fatalf("match subscriber error: %v", err)
 			}
 		}()
-	} else {
-		log.Println("PUBSUB_PROJECT_ID is unset; skipping matchmaking Pub/Sub subscriber (NPC battles only)")
 	}
 
 	go func() {

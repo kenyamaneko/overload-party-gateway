@@ -101,7 +101,7 @@ jobs:
         env:
           GOPRIVATE: github.com/kenyamaneko/*
           FIRESTORE_EMULATOR_HOST: localhost:9041
-          FIRESTORE_PROJECT_ID: overload-party-test
+          GOOGLE_CLOUD_PROJECT_ID: overload-party-test
 
   codegen-sync:
     runs-on: ubicloud-standard-2

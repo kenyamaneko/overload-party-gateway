@@ -47,11 +47,8 @@ func main() {
 	if cfg.DatabaseConn == "" {
 		log.Fatal("DATABASE_CONN must be set")
 	}
-	if cfg.PubsubProjectID == "" {
-		log.Fatal("PUBSUB_PROJECT_ID must be set")
-	}
-	if cfg.FirestoreProjectID == "" {
-		log.Fatal("FIRESTORE_PROJECT_ID must be set (game_config)")
+	if cfg.GoogleCloudProjectID == "" {
+		log.Fatal("GOOGLE_CLOUD_PROJECT_ID must be set")
 	}
 	if cfg.InternalAuthSecret == "" {
 		log.Fatal("INTERNAL_AUTH_SECRET must be set")
@@ -70,7 +67,7 @@ func main() {
 	defer pool.Close()
 
 	// Firestore クライアント (game_config)
-	fsClient, err := firestore.NewClient(ctx, cfg.FirestoreProjectID)
+	fsClient, err := firestore.NewClient(ctx, cfg.GoogleCloudProjectID)
 	if err != nil {
 		log.Fatalf("failed to create firestore client: %v", err)
 	}
@@ -151,7 +148,7 @@ func main() {
 	srvCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	matchStream, err := pubsubadapter.NewStream(srvCtx, cfg.PubsubProjectID, cfg.MatchmakingSubscription)
+	matchStream, err := pubsubadapter.NewStream(srvCtx, cfg.GoogleCloudProjectID, cfg.MatchmakingSubscription)
 	if err != nil {
 		log.Fatalf("failed to create matchmaking stream: %v", err)
 	}
