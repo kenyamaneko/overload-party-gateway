@@ -96,45 +96,40 @@ func TestRedisStore_Get_ReturnsNotFoundAfterTTLExpired(t *testing.T) {
 }
 
 // TestRedisStore_Get_SeparatesKeysByGameAndPlayer は (gameID, playerNum) の
-// 組み合わせごとに別 key へマッピングされ、互いに干渉しないことを検証する
-// (同時進行ゲームや同 game 内の player1 / player2 が混ざらないこと)。
+// 各次元で key が分離され、別 (gameID, playerNum) に書き込んだ distractor が
+// target の Get に干渉しないことを検証する (同時進行ゲームや同 game 内の
+// player1 / player2 が混ざらないこと)。
 func TestRedisStore_Get_SeparatesKeysByGameAndPlayer(t *testing.T) {
-	store, _ := newTestRedisStore(t)
-	ctx := context.Background()
-	require.NoError(t, store.Put(ctx, "g1", 1, port.DisplayMeta{Name: "alice", Level: 1}))
-	require.NoError(t, store.Put(ctx, "g1", 2, port.DisplayMeta{Name: "bob", Level: 2}))
-	require.NoError(t, store.Put(ctx, "g2", 1, port.DisplayMeta{Name: "carol", Level: 3}))
-
+	target := port.DisplayMeta{Name: "alice", Level: 1}
 	cases := []struct {
-		name      string
-		gameID    string
-		playerNum int
-		want      port.DisplayMeta
+		name                string
+		distractorGameID    string
+		distractorPlayerNum int
+		distractor          port.DisplayMeta
 	}{
 		{
-			name:      "g1 の player 1 では alice を返す",
-			gameID:    "g1",
-			playerNum: 1,
-			want:      port.DisplayMeta{Name: "alice", Level: 1},
+			name:                "playerNum 違いは別 key に分離される",
+			distractorGameID:    "g1",
+			distractorPlayerNum: 2,
+			distractor:          port.DisplayMeta{Name: "bob", Level: 2},
 		},
 		{
-			name:      "g1 の player 2 では bob を返す",
-			gameID:    "g1",
-			playerNum: 2,
-			want:      port.DisplayMeta{Name: "bob", Level: 2},
-		},
-		{
-			name:      "g2 の player 1 では carol を返す",
-			gameID:    "g2",
-			playerNum: 1,
-			want:      port.DisplayMeta{Name: "carol", Level: 3},
+			name:                "gameID 違いは別 key に分離される",
+			distractorGameID:    "g2",
+			distractorPlayerNum: 1,
+			distractor:          port.DisplayMeta{Name: "carol", Level: 3},
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := store.Get(ctx, tc.gameID, tc.playerNum)
+			store, _ := newTestRedisStore(t)
+			ctx := context.Background()
+			require.NoError(t, store.Put(ctx, "g1", 1, target))
+			require.NoError(t, store.Put(ctx, tc.distractorGameID, tc.distractorPlayerNum, tc.distractor))
+
+			got, err := store.Get(ctx, "g1", 1)
 			require.NoError(t, err)
-			require.Equal(t, tc.want, got)
+			require.Equal(t, target, got)
 		})
 	}
 }
