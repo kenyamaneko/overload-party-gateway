@@ -45,8 +45,6 @@ type enqueueBody struct {
 
 // Enqueue はプレイヤーをマッチメイキングキューに追加します。
 // player_id は X-Internal-Auth JWT の sub から matchmaking 側で解決される。
-// name / level は呼び出し側 (gateway) が /me で取得した player summary snapshot。
-// matchmaking 側は account を呼ばず、与えられた値を queue entry + match_made event に伝搬する。
 func (c *Client) Enqueue(ctx context.Context, deckID int64, name string, level int64) error {
 	return c.post(ctx, "/internal/v1/enqueue", enqueueBody{DeckID: deckID, Name: name, Level: level})
 }

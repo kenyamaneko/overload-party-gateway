@@ -215,8 +215,6 @@ func (m *Manager) HandleMessage(conn *Connection, msg *WSMessage) {
 }
 
 // handleMatchmakingStart はデッキを検証し（card サービス経由）、マッチメイキングサービスに enqueue する。
-// /me 経由で onboarding 完了を確認した上で、対戦当時の player summary (name / level) を
-// matchmaking キューに同梱して渡す。
 func (m *Manager) handleMatchmakingStart(ctx context.Context, conn *Connection, data json.RawMessage) {
 	var req MatchmakingStartMessage
 	if err := json.Unmarshal(data, &req); err != nil {
@@ -247,7 +245,10 @@ func (m *Manager) handleMatchmakingStart(ctx context.Context, conn *Connection, 
 		return
 	}
 
-	name := derefName(me.Name)
+	var name string
+	if me.Name != nil {
+		name = *me.Name
+	}
 	if err := m.matchmakingClient.Enqueue(ctx, req.DeckID, name, me.Level); err != nil {
 		retryable := errors.Is(err, matchmakingclient.ErrUnavailable)
 		sendError(conn, "matchmaking_error", "failed to enqueue: "+err.Error(), retryable)
@@ -255,15 +256,6 @@ func (m *Manager) handleMatchmakingStart(ctx context.Context, conn *Connection, 
 	}
 	m.startMatchWait(conn.playerID)
 	conn.SendMessage(&WSMessage{Type: genws.WSServerMsgMatchmakingStarted})
-}
-
-// derefName は PlayerResponse.Name (nullable) を空文字に正規化する。onboarding_status ==
-// completed を上流で確認している前提のため通常は non-nil だが、防御のため。
-func derefName(n *string) string {
-	if n == nil {
-		return ""
-	}
-	return *n
 }
 
 func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, data json.RawMessage) {
@@ -308,7 +300,11 @@ func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, da
 		return
 	}
 
-	player1Summary := service.PlayerSummaryRequest{Name: derefName(me.Name), Level: &me.Level}
+	var meName string
+	if me.Name != nil {
+		meName = *me.Name
+	}
+	player1Summary := service.PlayerSummaryRequest{Name: meName, Level: &me.Level}
 	player2Summary := service.PlayerSummaryRequest{Name: npcDisplayName}
 
 	game, err := m.battleClient.StartNPCBattle(ctx, cards, req.NpcModel, player1Summary, player2Summary)
@@ -375,9 +371,6 @@ func (m *Manager) HandleMatchMade(ctx context.Context, event apimatchmaking.Matc
 	return nil
 }
 
-// resolveNpcDisplayName は battle の listNpcModels から指定 npc_model の display_name を返す。
-// gateway は表示名の SSoT を battle に置くため、CreateNpcGame に渡す player2 summary の name を
-// ここで解決する。指定 model が見つからない場合は error。
 func (m *Manager) resolveNpcDisplayName(ctx context.Context, npcModel string) (string, error) {
 	models, err := m.battleClient.ListNpcModels(ctx)
 	if err != nil {
@@ -391,8 +384,6 @@ func (m *Manager) resolveNpcDisplayName(ctx context.Context, npcModel string) (s
 	return "", fmt.Errorf("npc model not found: %s", npcModel)
 }
 
-// matchedPlayerToSummary は match_made event の MatchedPlayer を battle に渡す PlayerSummaryRequest に
-// 変換する。matchmaking キューに gateway が同梱した name / level を battle にそのまま流す。
 func matchedPlayerToSummary(p apimatchmaking.MatchedPlayer) service.PlayerSummaryRequest {
 	level := p.Level
 	return service.PlayerSummaryRequest{Name: p.Name, Level: &level}

@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	apibattle "github.com/kenyamaneko/overload-party-battle/packages/api-battle-rpc-go"
 	gamelogic "github.com/kenyamaneko/overload-party-battle/packages/game-logic-constants-go"
 	gamedesign "github.com/kenyamaneko/overload-party-common/packages/game-design-constants"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
@@ -37,8 +38,6 @@ type playerSession struct {
 const downstreamCallTimeout = 10 * time.Second
 
 // GameRelay はゲームメンバーシップを管理し、プレイヤーと battle server 間のアクション/状態を中継します。
-// 依存は全て NewGameRelay で注入する。accountClient / gamePlayerRepo は nil 許容で、
-// nil の場合は EXP 付与をスキップする（ローカル開発 / テスト向け）。
 type GameRelay struct {
 	hub            *ConnectionHub
 	battleClient   service.BattleClient
@@ -487,22 +486,33 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 		matchType = gamedesign.MatchTypeNpc
 	}
 
-	// battle response の player1Summary / player2Summary を読み取って battle_start payload に詰める。
-	// 表示情報の SSoT は battle 側、gateway は pass-through する。
-	var stateView clientGameStateView
-	if err := json.Unmarshal(rawState, &stateView); err != nil {
+	var clientState apibattle.ClientGameState
+	if err := json.Unmarshal(rawState, &clientState); err != nil {
 		log.Printf("ERROR: parse client game state for battle_start (game %s): %v", gameID, err)
 		sendErrorToPlayer(r.hub, conn.playerID, "game_state_error", "failed to parse game state", true)
 		return
 	}
-	mySummary, oppSummary := stateView.summariesFor(pNum)
+	mySummary, oppSummary := clientState.Player1Summary, clientState.Player2Summary
+	if pNum == 2 {
+		mySummary, oppSummary = clientState.Player2Summary, clientState.Player1Summary
+	}
+
+	// NPC は level を持たないため呼び出し側で 0 に正規化する (legacy client contract で
+	// level は number 必須のため null を 0 として渡す)。
+	var myLevel, oppLevel int64
+	if mySummary.Level != nil {
+		myLevel = *mySummary.Level
+	}
+	if oppSummary.Level != nil {
+		oppLevel = *oppSummary.Level
+	}
 
 	battleStartData := map[string]interface{}{
 		"match_type":     matchType,
 		"my_name":        mySummary.Name,
-		"my_level":       mySummary.levelOrZero(),
+		"my_level":       myLevel,
 		"opponent_name":  oppSummary.Name,
-		"opponent_level": oppSummary.levelOrZero(),
+		"opponent_level": oppLevel,
 	}
 
 	// Sequence 0: battle_start / turn_start は gateway 合成イベントであり battle server のイベントシーケンスに含まれない
@@ -538,35 +548,6 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 	})
 }
 
-// clientGameStateView は battle response (ClientGameState) の player summary 部分のみを
-// 抽出する最小射影。gateway は battle response 全体を raw のまま pass-through するため
-// この型は battle_start payload 組み立てのためだけに局所的に使う。
-type clientGameStateView struct {
-	Player1Summary playerSummaryView `json:"player1Summary"`
-	Player2Summary playerSummaryView `json:"player2Summary"`
-}
-
-type playerSummaryView struct {
-	Name  string `json:"name"`
-	Level *int64 `json:"level,omitempty"`
-}
-
-// levelOrZero は NPC など level を持たない player では 0 を返す (legacy client contract で
-// level は number 必須のため null を 0 に正規化する)。
-func (p playerSummaryView) levelOrZero() int64 {
-	if p.Level == nil {
-		return 0
-	}
-	return *p.Level
-}
-
-// summariesFor は要求 player 視点で (self, opponent) の summary を返す。
-func (s clientGameStateView) summariesFor(playerNum int) (playerSummaryView, playerSummaryView) {
-	if playerNum == 1 {
-		return s.Player1Summary, s.Player2Summary
-	}
-	return s.Player2Summary, s.Player1Summary
-}
 
 // HandleGameAction は game_action メッセージを処理します
 func (r *GameRelay) HandleGameAction(ctx context.Context, conn *Connection, data json.RawMessage) {

@@ -98,7 +98,6 @@ func (c *Client) FindByFirebaseUID(ctx context.Context, firebaseUID string) (*Pl
 }
 
 // GetMe は呼び出し主体 (JWT sub) の player 情報を取得します。
-// onboarding_status / name / level を読み取って matchmaking_start や npc_battle_start で利用する。
 func (c *Client) GetMe(ctx context.Context) (*apiaccount.PlayerResponse, error) {
 	var out apiaccount.PlayerResponse
 	if err := c.doJSON(ctx, http.MethodGet, "/api/v1/account/me", nil, &out); err != nil {

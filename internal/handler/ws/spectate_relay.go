@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	apibattle "github.com/kenyamaneko/overload-party-battle/packages/api-battle-rpc-go"
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
@@ -108,18 +109,23 @@ func (sr *SpectateRelay) HandleSpectateJoin(conn *Connection, data json.RawMessa
 		return
 	}
 
-	// battle response の player1Summary / player2Summary を spectate_joined のバナーデータとして
-	// pass-through する。表示情報の SSoT は battle 側。
-	var stateView clientGameStateView
-	if err := json.Unmarshal(rawState, &stateView); err != nil {
+	var clientState apibattle.ClientGameState
+	if err := json.Unmarshal(rawState, &clientState); err != nil {
 		log.Printf("spectate: parse client game state for %s: %v", req.GameID, err)
 		sr.sendSpectateError(conn, "state_unavailable", "could not parse game state")
 		return
 	}
-	p1Name := stateView.Player1Summary.Name
-	p1Level := stateView.Player1Summary.levelOrZero()
-	p2Name := stateView.Player2Summary.Name
-	p2Level := stateView.Player2Summary.levelOrZero()
+	// NPC は level を持たないため呼び出し側で 0 に正規化する (legacy client contract で
+	// level は number 必須のため null を 0 として渡す)。
+	var p1Level, p2Level int64
+	if clientState.Player1Summary.Level != nil {
+		p1Level = *clientState.Player1Summary.Level
+	}
+	if clientState.Player2Summary.Level != nil {
+		p2Level = *clientState.Player2Summary.Level
+	}
+	p1Name := clientState.Player1Summary.Name
+	p2Name := clientState.Player2Summary.Name
 
 	sr.mu.Lock()
 	if sr.spectators[req.GameID] == nil {
