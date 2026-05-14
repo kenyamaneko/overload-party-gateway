@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"log"
 	"net/http"
@@ -13,11 +12,9 @@ import (
 	"cloud.google.com/go/firestore"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/redis/go-redis/v9"
 	"golang.org/x/sync/errgroup"
 
 	pubsubadapter "github.com/kenyamaneko/overload-party-gateway/internal/adapter/pubsub"
-	"github.com/kenyamaneko/overload-party-gateway/internal/adapter/secretmanager"
 	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/cardclient"
@@ -32,12 +29,6 @@ import (
 )
 
 const serverShutdownTimeout = 10 * time.Second
-
-// display meta cache 用 Upstash Redis の認証情報を保管している Secret Manager 上の secret ID。
-const (
-	secretIDDisplayMetaRedisEndpoint = "gateway-upstash-redis-endpoint"
-	secretIDDisplayMetaRedisPassword = "gateway-upstash-redis-password"
-)
 
 // subscriberRunner は errgroup で束ねる subscriber の最小契約。
 // stream ライフサイクルは caller 側で defer Close しているため、subscriber は
@@ -86,17 +77,6 @@ func main() {
 	authClient, err := middleware.NewFirebaseAuthClient(ctx)
 	if err != nil {
 		log.Fatalf("failed to create firebase auth client: %v", err)
-	}
-
-	// 起動時に display meta cache 用 Upstash Redis の到達性を検証する。
-	// production rollout で接続不能時に fail-fast させるため。
-	displayMetaRedis, err := newDisplayMetaRedisClient(ctx, cfg)
-	if err != nil {
-		log.Fatalf("failed to create display meta cache redis client: %v", err)
-	}
-	defer func() { _ = displayMetaRedis.Close() }()
-	if err := displayMetaRedis.Ping(ctx).Err(); err != nil {
-		log.Fatalf("display meta cache redis ping failed: %v", err)
 	}
 
 	// gateway 所有の game_players リポジトリ
@@ -230,45 +210,4 @@ func runServices(
 	})
 
 	return g.Wait()
-}
-
-// newDisplayMetaRedisClient は APP_ENV に応じて display meta cache 用の
-// Upstash Redis クライアントを構築する。local は URL 直結、production は
-// Secret Manager から endpoint / password を取得して TLS 接続する。
-func newDisplayMetaRedisClient(ctx context.Context, cfg *config.Config) (*redis.Client, error) {
-	switch cfg.AppEnv {
-	case config.AppEnvLocal:
-		if cfg.RedisURL == "" {
-			return nil, fmt.Errorf("config: UPSTASH_REDIS_URL_GATEWAY is required when APP_ENV=%q", config.AppEnvLocal)
-		}
-		opt, err := redis.ParseURL(cfg.RedisURL)
-		if err != nil {
-			return nil, fmt.Errorf("parse redis url: %w", err)
-		}
-		return redis.NewClient(opt), nil
-
-	case config.AppEnvProduction:
-		sm, err := secretmanager.NewClient(ctx, cfg.GoogleCloudProjectID)
-		if err != nil {
-			return nil, err
-		}
-		defer func() { _ = sm.Close() }()
-
-		endpoint, err := sm.AccessLatest(ctx, secretIDDisplayMetaRedisEndpoint)
-		if err != nil {
-			return nil, err
-		}
-		password, err := sm.AccessLatest(ctx, secretIDDisplayMetaRedisPassword)
-		if err != nil {
-			return nil, err
-		}
-		return redis.NewClient(&redis.Options{
-			Addr:      endpoint,
-			Password:  password,
-			TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12},
-		}), nil
-
-	default:
-		return nil, fmt.Errorf("unsupported APP_ENV: %q (expected %q or %q)", cfg.AppEnv, config.AppEnvLocal, config.AppEnvProduction)
-	}
 }

@@ -32,21 +32,17 @@ type playerSession struct {
 	playerNum int
 }
 
-// PlayerLookupFunc はプレイヤー ID から表示名とレベルを解決する関数型です
-type PlayerLookupFunc func(ctx context.Context, playerID string) (name string, level int64, err error)
-
 // 下流呼び出しの既定タイムアウト。WS コネクション ctx を親に持たせた上で
 // 個別呼び出しの上限として使用する。
 const downstreamCallTimeout = 10 * time.Second
 
 // GameRelay はゲームメンバーシップを管理し、プレイヤーと battle server 間のアクション/状態を中継します。
-// 依存は全て NewGameRelay で注入する。accountClient / gamePlayerRepo / playerLookup は nil 許容で、
-// nil の場合は EXP 付与や表示名解決をスキップする（ローカル開発 / テスト向け）。
+// 依存は全て NewGameRelay で注入する。accountClient / gamePlayerRepo は nil 許容で、
+// nil の場合は EXP 付与をスキップする（ローカル開発 / テスト向け）。
 type GameRelay struct {
 	hub            *ConnectionHub
 	battleClient   service.BattleClient
 	spectateRelay  *SpectateRelay
-	playerLookup   PlayerLookupFunc
 	accountClient  *accountclient.Client
 	gamePlayerRepo port.GamePlayerRepo
 
@@ -59,14 +55,13 @@ type GameRelay struct {
 }
 
 // NewGameRelay は GameRelay を生成します。
-// accountClient / gamePlayerRepo / playerLookup は nil 可（mock モード / テスト用）。
+// accountClient / gamePlayerRepo は nil 可（mock モード / テスト用）。
 func NewGameRelay(
 	hub *ConnectionHub,
 	battleClient service.BattleClient,
 	spectateRelay *SpectateRelay,
 	accountClient *accountclient.Client,
 	gamePlayerRepo port.GamePlayerRepo,
-	playerLookup PlayerLookupFunc,
 ) *GameRelay {
 	return &GameRelay{
 		hub:            hub,
@@ -74,7 +69,6 @@ func NewGameRelay(
 		spectateRelay:  spectateRelay,
 		accountClient:  accountClient,
 		gamePlayerRepo: gamePlayerRepo,
-		playerLookup:   playerLookup,
 		gameMembers:    make(map[string][]string),
 		playerGames:    make(map[string]playerSession),
 		turnTimers:     make(map[string]*turnTimerInfo),
@@ -493,24 +487,23 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 		matchType = gamedesign.MatchTypeNpc
 	}
 
+	// battle response の player1Summary / player2Summary を読み取って battle_start payload に詰める。
+	// 表示情報の SSoT は battle 側、gateway は pass-through する。
+	var stateView clientGameStateView
+	if err := json.Unmarshal(rawState, &stateView); err != nil {
+		log.Printf("ERROR: parse client game state for battle_start (game %s): %v", gameID, err)
+		sendErrorToPlayer(r.hub, conn.playerID, "game_state_error", "failed to parse game state", true)
+		return
+	}
+	mySummary, oppSummary := stateView.summariesFor(pNum)
+
 	battleStartData := map[string]interface{}{
-		"match_type": matchType,
+		"match_type":     matchType,
+		"my_name":        mySummary.Name,
+		"my_level":       mySummary.levelOrZero(),
+		"opponent_name":  oppSummary.Name,
+		"opponent_level": oppSummary.levelOrZero(),
 	}
-
-	myName, myLevel := r.lookupPlayer(ctx, conn.playerID)
-	var oppName string
-	var oppLevel int64
-	if matchType == gamedesign.MatchTypeNpc {
-		oppName, oppLevel = "NPC", 0
-	} else {
-		opponentID := r.findOpponent(entries, conn.playerID)
-		oppName, oppLevel = r.lookupPlayer(ctx, opponentID)
-	}
-
-	battleStartData["my_name"] = myName
-	battleStartData["my_level"] = myLevel
-	battleStartData["opponent_name"] = oppName
-	battleStartData["opponent_level"] = oppLevel
 
 	// Sequence 0: battle_start / turn_start は gateway 合成イベントであり battle server のイベントシーケンスに含まれない
 	conn.SendMessage(&WSMessage{
@@ -545,19 +538,34 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 	})
 }
 
-// lookupPlayer はプレイヤーの表示名とレベルを解決する。
-// 表示用メタデータの解決失敗は battle 進行をブロックしないので、エラー時は空値で続行する
-// （クライアントは "" / 0 をプレースホルダとして表示）。
-func (r *GameRelay) lookupPlayer(ctx context.Context, playerID string) (string, int64) {
-	if r.playerLookup == nil {
-		return "", 0
+// clientGameStateView は battle response (ClientGameState) の player summary 部分のみを
+// 抽出する最小射影。gateway は battle response 全体を raw のまま pass-through するため
+// この型は battle_start payload 組み立てのためだけに局所的に使う。
+type clientGameStateView struct {
+	Player1Summary playerSummaryView `json:"player1Summary"`
+	Player2Summary playerSummaryView `json:"player2Summary"`
+}
+
+type playerSummaryView struct {
+	Name  string `json:"name"`
+	Level *int64 `json:"level,omitempty"`
+}
+
+// levelOrZero は NPC など level を持たない player では 0 を返す (legacy client contract で
+// level は number 必須のため null を 0 に正規化する)。
+func (p playerSummaryView) levelOrZero() int64 {
+	if p.Level == nil {
+		return 0
 	}
-	name, level, err := r.playerLookup(ctx, playerID)
-	if err != nil {
-		log.Printf("lookup player %s (continuing with empty profile): %v", playerID, err)
-		return "", 0
+	return *p.Level
+}
+
+// summariesFor は要求 player 視点で (self, opponent) の summary を返す。
+func (s clientGameStateView) summariesFor(playerNum int) (playerSummaryView, playerSummaryView) {
+	if playerNum == 1 {
+		return s.Player1Summary, s.Player2Summary
 	}
-	return name, level
+	return s.Player2Summary, s.Player1Summary
 }
 
 // HandleGameAction は game_action メッセージを処理します
@@ -700,16 +708,6 @@ func (r *GameRelay) lookupMatchType(ctx context.Context, gameID string) string {
 		return gamedesign.MatchTypeNpc
 	}
 	return gamedesign.MatchTypePvp
-}
-
-// findOpponent は game_players エントリから対戦相手の playerID を返す。
-func (r *GameRelay) findOpponent(entries []port.GamePlayerEntry, selfID string) string {
-	for _, e := range entries {
-		if e.PlayerID != selfID {
-			return e.PlayerID
-		}
-	}
-	return ""
 }
 
 func appendUnique(slice []string, s string) []string {

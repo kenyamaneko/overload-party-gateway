@@ -26,7 +26,6 @@ type SpectateRelay struct {
 	hub            *ConnectionHub
 	battleClient   service.BattleClient
 	gamePlayerRepo port.GamePlayerRepo
-	playerLookup   PlayerLookupFunc // spectate_joined バナーデータ用。nil 可
 
 	mu          sync.RWMutex
 	spectators  map[string]map[string]*spectatorInfo // gameID → spectatorID → spectatorInfo
@@ -34,18 +33,16 @@ type SpectateRelay struct {
 }
 
 // NewSpectateRelay は SpectateRelay を生成します。
-// gamePlayerRepo / playerLookup は nil 可（mock モード / テスト用）。
+// gamePlayerRepo は nil 可（mock モード / テスト用）。
 func NewSpectateRelay(
 	hub *ConnectionHub,
 	battleClient service.BattleClient,
 	gamePlayerRepo port.GamePlayerRepo,
-	playerLookup PlayerLookupFunc,
 ) *SpectateRelay {
 	return &SpectateRelay{
 		hub:            hub,
 		battleClient:   battleClient,
 		gamePlayerRepo: gamePlayerRepo,
-		playerLookup:   playerLookup,
 		spectators:     make(map[string]map[string]*spectatorInfo),
 		activeGames:    make(map[string]time.Time),
 	}
@@ -111,28 +108,18 @@ func (sr *SpectateRelay) HandleSpectateJoin(conn *Connection, data json.RawMessa
 		return
 	}
 
-	// DB からプレイヤー名とレベルを解決
-	var p1Name, p2Name string
-	var p1Level, p2Level int64
-	if sr.playerLookup != nil && sr.gamePlayerRepo != nil {
-		entries, err := sr.gamePlayerRepo.LookupGamePlayers(ctx, req.GameID)
-		if err != nil {
-			log.Printf("spectate: lookup game players for %s: %v", req.GameID, err)
-		} else {
-			for _, e := range entries {
-				name, level, _ := sr.playerLookup(ctx, e.PlayerID)
-				switch e.PlayerNum {
-				case 1:
-					p1Name, p1Level = name, level
-				case 2:
-					p2Name, p2Level = name, level
-				}
-			}
-			if len(entries) == 1 {
-				p2Name = "NPC"
-			}
-		}
+	// battle response の player1Summary / player2Summary を spectate_joined のバナーデータとして
+	// pass-through する。表示情報の SSoT は battle 側。
+	var stateView clientGameStateView
+	if err := json.Unmarshal(rawState, &stateView); err != nil {
+		log.Printf("spectate: parse client game state for %s: %v", req.GameID, err)
+		sr.sendSpectateError(conn, "state_unavailable", "could not parse game state")
+		return
 	}
+	p1Name := stateView.Player1Summary.Name
+	p1Level := stateView.Player1Summary.levelOrZero()
+	p2Name := stateView.Player2Summary.Name
+	p2Level := stateView.Player2Summary.levelOrZero()
 
 	sr.mu.Lock()
 	if sr.spectators[req.GameID] == nil {

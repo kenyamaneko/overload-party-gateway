@@ -97,11 +97,11 @@ func (c *Client) FindByFirebaseUID(ctx context.Context, firebaseUID string) (*Pl
 	return &out, nil
 }
 
-// GetPlayer はプレイヤー情報を取得します
-func (c *Client) GetPlayer(ctx context.Context, playerID string) (*apiaccount.PlayerResponse, error) {
+// GetMe は呼び出し主体 (JWT sub) の player 情報を取得します。
+// onboarding_status / name / level を読み取って matchmaking_start や npc_battle_start で利用する。
+func (c *Client) GetMe(ctx context.Context) (*apiaccount.PlayerResponse, error) {
 	var out apiaccount.PlayerResponse
-	path := "/internal/v1/players/" + url.PathEscape(playerID)
-	if err := c.doJSON(ctx, http.MethodGet, path, nil, &out); err != nil {
+	if err := c.doJSON(ctx, http.MethodGet, "/api/v1/account/me", nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

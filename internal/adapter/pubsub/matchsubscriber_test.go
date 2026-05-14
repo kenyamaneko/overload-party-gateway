@@ -14,6 +14,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// matchMadeTopic は apimatchmakingfake.PublishMatchMade が内部で使う topic 名と一致させた
+// テスト用ローカル定数。低レベル broker.Publish 経由で raw payload を投げるケースで使う。
+const matchMadeTopic = "match-made"
+
 // fakeMatchHandler は port.MatchEventHandler のテスト用スタブ。
 // 受信した event と error を記録し、テストから振る舞いを制御できる。
 type fakeMatchHandler struct {
@@ -63,7 +67,7 @@ func TestMatchSubscriber_Consumes(t *testing.T) {
 			assertHandler: func(t *testing.T, h *fakeMatchHandler) {
 				require.Equal(t, 1, h.count())
 				assert.Equal(t, "mch_1", h.received[0].MatchID)
-				assert.Equal(t, apimatchmaking.EventTypeMatchMade, h.received[0].Type)
+				assert.Equal(t, apimatchmaking.EventTypeMatchMade, h.received[0].EventType)
 				require.Len(t, h.received[0].Players, 2)
 				assert.Equal(t, "p-1", h.received[0].Players[0].PlayerID)
 			},
@@ -71,7 +75,7 @@ func TestMatchSubscriber_Consumes(t *testing.T) {
 		{
 			name: "不正 JSON: 握りつぶさず NACK (handler 未呼び出し)",
 			publish: func(_ context.Context, _ *apimatchmakingfake.Publisher, broker *apimatchmakingfake.Broker) {
-				broker.Publish(apimatchmaking.TopicMatchmakingEvents, []byte("not-json"))
+				broker.Publish(matchMadeTopic, []byte("not-json"))
 			},
 			wantAck: false,
 			assertHandler: func(t *testing.T, h *fakeMatchHandler) {
@@ -82,11 +86,11 @@ func TestMatchSubscriber_Consumes(t *testing.T) {
 			name: "未知の event type: 責務外として ACK (handler 未呼び出し)",
 			publish: func(_ context.Context, _ *apimatchmakingfake.Publisher, broker *apimatchmakingfake.Broker) {
 				payload, _ := json.Marshal(apimatchmaking.MatchMadeEvent{
-					Type:    "unknown",
+					EventType: "unknown",
 					MatchID: "mch_unk",
 					Players: validPlayers,
 				})
-				broker.Publish(apimatchmaking.TopicMatchmakingEvents, payload)
+				broker.Publish(matchMadeTopic, payload)
 			},
 			wantAck: true,
 			assertHandler: func(t *testing.T, h *fakeMatchHandler) {
@@ -115,7 +119,7 @@ func TestMatchSubscriber_Consumes(t *testing.T) {
 			pub := apimatchmakingfake.NewPublisher(broker)
 			stream := apimatchmakingfake.NewStream(
 				apimatchmakingfake.NewSubscriber(broker),
-				apimatchmaking.TopicMatchmakingEvents,
+				matchMadeTopic,
 			)
 
 			handler := &fakeMatchHandler{err: tt.handlerErr}
@@ -150,7 +154,7 @@ func TestMatchSubscriber_DeduplicatesSameMatchID(t *testing.T) {
 	pub := apimatchmakingfake.NewPublisher(broker)
 	stream := apimatchmakingfake.NewStream(
 		apimatchmakingfake.NewSubscriber(broker),
-		apimatchmaking.TopicMatchmakingEvents,
+		matchMadeTopic,
 	)
 	handler := &fakeMatchHandler{}
 	sub, err := NewMatchSubscriber(stream, handler)

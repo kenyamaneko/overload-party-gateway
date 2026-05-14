@@ -58,8 +58,8 @@ func (s *MatchSubscriber) processEvent(ctx context.Context, data []byte) error {
 		slog.Error("matchsubscriber: bad payload (nack)", "error", err, "payload_len", len(data))
 		return fmt.Errorf("matchsubscriber: bad payload: %w", err)
 	}
-	if event.Type != apimatchmaking.EventTypeMatchMade {
-		slog.Warn("matchsubscriber: unknown event type, acking", "event_type", event.Type)
+	if event.EventType != apimatchmaking.EventTypeMatchMade {
+		slog.Warn("matchsubscriber: unknown event type, acking", "event_type", event.EventType)
 		return nil
 	}
 
