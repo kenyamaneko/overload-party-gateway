@@ -7,13 +7,6 @@ import (
 	"strings"
 )
 
-// APP_ENV の許容値。display meta cache 用 Upstash Redis の接続経路
-// (local: URL 直結 / production: Secret Manager 取得) を切り替えるため。
-const (
-	AppEnvLocal      = "local"
-	AppEnvProduction = "production"
-)
-
 // Config は gateway サービスの設定を保持します
 type Config struct {
 	Port     string
@@ -49,13 +42,6 @@ type Config struct {
 
 	// InternalAuthSecret は内部認証 JWT (HS256) の共有秘密鍵。
 	InternalAuthSecret string
-
-	// AppEnv は display meta cache 用 Upstash Redis の接続経路を切り替えるフラグ。
-	// AppEnvLocal / AppEnvProduction のいずれか。
-	AppEnv string
-
-	// RedisURL は AppEnv=local 時に利用する Upstash 互換 URL。
-	RedisURL string
 }
 
 // Load は環境変数からサービス設定を読み込みます
@@ -88,9 +74,6 @@ func Load() *Config {
 		AppForceUpdate:   getEnv("APP_FORCE_UPDATE", "false") == "true",
 
 		InternalAuthSecret: getEnv("INTERNAL_AUTH_SECRET", ""),
-
-		AppEnv:   getEnv("APP_ENV", ""),
-		RedisURL: getEnv("UPSTASH_REDIS_URL_GATEWAY", ""),
 	}
 }
 

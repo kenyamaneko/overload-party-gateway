@@ -38,13 +38,15 @@ func New(baseURL string) *Client {
 }
 
 type enqueueBody struct {
-	DeckID int64 `json:"deck_id"`
+	DeckID int64  `json:"deck_id"`
+	Name   string `json:"name"`
+	Level  int64  `json:"level"`
 }
 
 // Enqueue はプレイヤーをマッチメイキングキューに追加します。
 // player_id は X-Internal-Auth JWT の sub から matchmaking 側で解決される。
-func (c *Client) Enqueue(ctx context.Context, deckID int64) error {
-	return c.post(ctx, "/internal/v1/enqueue", enqueueBody{DeckID: deckID})
+func (c *Client) Enqueue(ctx context.Context, deckID int64, name string, level int64) error {
+	return c.post(ctx, "/internal/v1/enqueue", enqueueBody{DeckID: deckID, Name: name, Level: level})
 }
 
 // Cancel はプレイヤーをキューから除去します。

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	apiaccount "github.com/kenyamaneko/overload-party-account/packages/api-account"
 	apimatchmaking "github.com/kenyamaneko/overload-party-matchmaking/packages/api-matchmaking"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
@@ -78,25 +79,8 @@ func NewManager(
 		OnGameReconnect:       func(playerID, gameID string) { m.Relay.NotifyOpponentReconnected(playerID, gameID) },
 	})
 
-	lookupFn := PlayerLookupFunc(func(ctx context.Context, playerID string) (string, int64, error) {
-		p, err := accountClient.GetPlayer(ctx, playerID)
-		if err != nil {
-			return "", 0, err
-		}
-		if p == nil {
-			return "", 0, nil
-		}
-		// オンボーディング未完了の場合 Name が nil。表示用メタデータの呼び出し元が
-		// 既に "" をプレースホルダ扱いしているのでここでも空文字に正規化する。
-		var name string
-		if p.Name != nil {
-			name = *p.Name
-		}
-		return name, p.Level, nil
-	})
-
-	spectate := NewSpectateRelay(hub, battleClient, gamePlayerRepo, lookupFn)
-	relay := NewGameRelay(hub, battleClient, spectate, accountClient, gamePlayerRepo, lookupFn)
+	spectate := NewSpectateRelay(hub, battleClient, gamePlayerRepo)
+	relay := NewGameRelay(hub, battleClient, spectate, accountClient, gamePlayerRepo)
 
 	m.Hub = hub
 	m.Relay = relay
@@ -238,6 +222,16 @@ func (m *Manager) handleMatchmakingStart(ctx context.Context, conn *Connection, 
 		return
 	}
 
+	me, err := m.accountClient.GetMe(ctx)
+	if err != nil {
+		sendError(conn, "matchmaking_error", "failed to fetch player profile: "+err.Error(), true)
+		return
+	}
+	if me.OnboardingStatus != apiaccount.OnboardingStatusCompleted {
+		sendError(conn, "matchmaking_error", "onboarding not completed", false)
+		return
+	}
+
 	if msg, err := m.checkAndIncrementBattleLimit(ctx); err != nil {
 		sendError(conn, "matchmaking_error", err.Error(), false)
 		return
@@ -251,7 +245,11 @@ func (m *Manager) handleMatchmakingStart(ctx context.Context, conn *Connection, 
 		return
 	}
 
-	if err := m.matchmakingClient.Enqueue(ctx, req.DeckID); err != nil {
+	var name string
+	if me.Name != nil {
+		name = *me.Name
+	}
+	if err := m.matchmakingClient.Enqueue(ctx, req.DeckID, name, me.Level); err != nil {
 		retryable := errors.Is(err, matchmakingclient.ErrUnavailable)
 		sendError(conn, "matchmaking_error", "failed to enqueue: "+err.Error(), retryable)
 		return
@@ -264,6 +262,16 @@ func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, da
 	var req NPCBattleStartMessage
 	if err := json.Unmarshal(data, &req); err != nil {
 		sendError(conn, "invalid_data", "invalid npc_battle_start data", false)
+		return
+	}
+
+	me, err := m.accountClient.GetMe(ctx)
+	if err != nil {
+		sendError(conn, "npc_battle_error", "failed to fetch player profile: "+err.Error(), true)
+		return
+	}
+	if me.OnboardingStatus != apiaccount.OnboardingStatusCompleted {
+		sendError(conn, "npc_battle_error", "onboarding not completed", false)
 		return
 	}
 
@@ -286,7 +294,20 @@ func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, da
 		return
 	}
 
-	game, err := m.battleClient.StartNPCBattle(ctx, cards, req.NpcModel)
+	npcDisplayName, err := m.resolveNpcDisplayName(ctx, req.NpcModel)
+	if err != nil {
+		sendError(conn, "npc_battle_error", "failed to resolve npc model: "+err.Error(), true)
+		return
+	}
+
+	var meName string
+	if me.Name != nil {
+		meName = *me.Name
+	}
+	player1Summary := service.PlayerSummaryRequest{Name: meName, Level: &me.Level}
+	player2Summary := service.PlayerSummaryRequest{Name: npcDisplayName}
+
+	game, err := m.battleClient.StartNPCBattle(ctx, cards, req.NpcModel, player1Summary, player2Summary)
 	if err != nil {
 		sendError(conn, "npc_battle_error", err.Error(), true)
 		return
@@ -328,7 +349,10 @@ func (m *Manager) HandleMatchMade(ctx context.Context, event apimatchmaking.Matc
 		return err
 	}
 
-	game, err := m.battleClient.CreatePvPGame(ctx, p1Cards, p2Cards)
+	p1Summary := matchedPlayerToSummary(event.Players[0])
+	p2Summary := matchedPlayerToSummary(event.Players[1])
+
+	game, err := m.battleClient.CreatePvPGame(ctx, p1Cards, p2Cards, p1Summary, p2Summary)
 	if err != nil {
 		return err
 	}
@@ -345,6 +369,24 @@ func (m *Manager) HandleMatchMade(ctx context.Context, event apimatchmaking.Matc
 	m.Spectate.RegisterGame(game.GameID)
 	m.Relay.NotifyMatchFound(game.GameID, event.Players[0].PlayerID, event.Players[1].PlayerID)
 	return nil
+}
+
+func (m *Manager) resolveNpcDisplayName(ctx context.Context, npcModel string) (string, error) {
+	models, err := m.battleClient.ListNpcModels(ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, e := range models {
+		if e.Model == npcModel {
+			return e.DisplayName, nil
+		}
+	}
+	return "", fmt.Errorf("npc model not found: %s", npcModel)
+}
+
+func matchedPlayerToSummary(p apimatchmaking.MatchedPlayer) service.PlayerSummaryRequest {
+	level := p.Level
+	return service.PlayerSummaryRequest{Name: p.Name, Level: &level}
 }
 
 func (m *Manager) resolveDeckCards(ctx context.Context, playerID string, deckID int64) ([]service.BattleDeckCard, error) {

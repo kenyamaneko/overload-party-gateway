@@ -37,11 +37,15 @@ func (m *mockBattleClient) GetNPCModels(_ context.Context) (json.RawMessage, err
 	return json.RawMessage(`[]`), nil
 }
 
-func (m *mockBattleClient) StartNPCBattle(_ context.Context, _ []service.BattleDeckCard, _ string) (*service.GameCreatedResult, error) {
+func (m *mockBattleClient) ListNpcModels(_ context.Context) ([]service.NpcModelEntry, error) {
 	return nil, nil
 }
 
-func (m *mockBattleClient) CreatePvPGame(_ context.Context, _, _ []service.BattleDeckCard) (*service.GameCreatedResult, error) {
+func (m *mockBattleClient) StartNPCBattle(_ context.Context, _ []service.BattleDeckCard, _ string, _, _ service.PlayerSummaryRequest) (*service.GameCreatedResult, error) {
+	return nil, nil
+}
+
+func (m *mockBattleClient) CreatePvPGame(_ context.Context, _, _ []service.BattleDeckCard, _, _ service.PlayerSummaryRequest) (*service.GameCreatedResult, error) {
 	return nil, nil
 }
 
@@ -94,7 +98,7 @@ func newTestRelay() (*GameRelay, *mockBattleClient) {
 		GetGameID:           func(string) (string, bool) { return "", false },
 		OnDisconnectTimeout: func(string, string) {},
 	})
-	relay := NewGameRelay(hub, bc, nil, nil, nil, nil)
+	relay := NewGameRelay(hub, bc, nil, nil, nil)
 	return relay, bc
 }
 

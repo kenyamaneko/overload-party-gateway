@@ -17,10 +17,12 @@ import (
 // 生成済み battle RPC 型の re-export。
 // 呼び出し側が service.ActionResult 等をそのまま使えるようにする。
 type (
-	BattleDeckCard    = apibattle.BattleDeckCard
-	GameCreatedResult = apibattle.GameCreatedResult
-	ActionEvent       = apibattle.ActionEvent
-	ActionResult      = apibattle.ActionResult
+	BattleDeckCard       = apibattle.BattleDeckCard
+	GameCreatedResult    = apibattle.GameCreatedResult
+	ActionEvent          = apibattle.ActionEvent
+	ActionResult         = apibattle.ActionResult
+	PlayerSummaryRequest = apibattle.PlayerSummaryRequest
+	NpcModelEntry        = apibattle.NpcModelEntry
 )
 
 // BattleClient は battle server REST API との通信インターフェースです。
@@ -30,12 +32,13 @@ type (
 // client 公開 path (`/api/v1/games/{id}/log[/text]`, `/api/v1/npc/models`) は
 // gateway path-prefix forwarder が直接 forward するため本 interface には含めない。
 type BattleClient interface {
-	StartNPCBattle(ctx context.Context, deckCards []BattleDeckCard, npcModel string) (*GameCreatedResult, error)
-	CreatePvPGame(ctx context.Context, deck1Cards, deck2Cards []BattleDeckCard) (*GameCreatedResult, error)
+	StartNPCBattle(ctx context.Context, deckCards []BattleDeckCard, npcModel string, player1Summary, player2Summary PlayerSummaryRequest) (*GameCreatedResult, error)
+	CreatePvPGame(ctx context.Context, deck1Cards, deck2Cards []BattleDeckCard, player1Summary, player2Summary PlayerSummaryRequest) (*GameCreatedResult, error)
 	ProcessAction(ctx context.Context, gameID string, playerNum int, actionType string, data json.RawMessage) (*ActionResult, error)
 	GetGameStateForPlayer(ctx context.Context, gameID string, playerNum int) (json.RawMessage, error)
 	GetTurnControlsForPlayer(ctx context.Context, gameID string, playerNum int) (json.RawMessage, error)
 	AdvanceNpcTurn(ctx context.Context, gameID string) (*ActionResult, error)
+	ListNpcModels(ctx context.Context) ([]NpcModelEntry, error)
 }
 
 const battleClientTimeout = 30 * time.Second
@@ -53,10 +56,12 @@ func NewBattleClient(baseURL string) BattleClient {
 	}
 }
 
-func (c *battleClient) StartNPCBattle(ctx context.Context, deckCards []BattleDeckCard, npcModel string) (*GameCreatedResult, error) {
+func (c *battleClient) StartNPCBattle(ctx context.Context, deckCards []BattleDeckCard, npcModel string, player1Summary, player2Summary PlayerSummaryRequest) (*GameCreatedResult, error) {
 	body := &apibattle.NpcBattleRequest{
-		DeckCards: deckCards,
-		NpcModel:  npcModel,
+		DeckCards:      deckCards,
+		NpcModel:       npcModel,
+		Player1Summary: player1Summary,
+		Player2Summary: player2Summary,
 	}
 	var result GameCreatedResult
 	if err := c.post(ctx, "/api/v1/games/npc", body, &result); err != nil {
@@ -65,16 +70,30 @@ func (c *battleClient) StartNPCBattle(ctx context.Context, deckCards []BattleDec
 	return &result, nil
 }
 
-func (c *battleClient) CreatePvPGame(ctx context.Context, deck1Cards, deck2Cards []BattleDeckCard) (*GameCreatedResult, error) {
+func (c *battleClient) CreatePvPGame(ctx context.Context, deck1Cards, deck2Cards []BattleDeckCard, player1Summary, player2Summary PlayerSummaryRequest) (*GameCreatedResult, error) {
 	body := &apibattle.PvpBattleRequest{
-		Deck1Cards: deck1Cards,
-		Deck2Cards: deck2Cards,
+		Deck1Cards:     deck1Cards,
+		Deck2Cards:     deck2Cards,
+		Player1Summary: player1Summary,
+		Player2Summary: player2Summary,
 	}
 	var result GameCreatedResult
 	if err := c.post(ctx, "/api/v1/games/pvp", body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
+}
+
+func (c *battleClient) ListNpcModels(ctx context.Context) ([]NpcModelEntry, error) {
+	raw, err := c.getRaw(ctx, "/api/v1/npc/models")
+	if err != nil {
+		return nil, err
+	}
+	var resp apibattle.NpcModelsResponse
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, fmt.Errorf("unmarshal npc models: %w", err)
+	}
+	return resp.Models, nil
 }
 
 func (c *battleClient) ProcessAction(ctx context.Context, gameID string, playerNum int, actionType string, data json.RawMessage) (*ActionResult, error) {

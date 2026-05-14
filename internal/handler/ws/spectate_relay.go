@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	apibattle "github.com/kenyamaneko/overload-party-battle/packages/api-battle-rpc-go"
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
@@ -26,7 +27,6 @@ type SpectateRelay struct {
 	hub            *ConnectionHub
 	battleClient   service.BattleClient
 	gamePlayerRepo port.GamePlayerRepo
-	playerLookup   PlayerLookupFunc // spectate_joined バナーデータ用。nil 可
 
 	mu          sync.RWMutex
 	spectators  map[string]map[string]*spectatorInfo // gameID → spectatorID → spectatorInfo
@@ -34,18 +34,16 @@ type SpectateRelay struct {
 }
 
 // NewSpectateRelay は SpectateRelay を生成します。
-// gamePlayerRepo / playerLookup は nil 可（mock モード / テスト用）。
+// gamePlayerRepo は nil 可（mock モード / テスト用）。
 func NewSpectateRelay(
 	hub *ConnectionHub,
 	battleClient service.BattleClient,
 	gamePlayerRepo port.GamePlayerRepo,
-	playerLookup PlayerLookupFunc,
 ) *SpectateRelay {
 	return &SpectateRelay{
 		hub:            hub,
 		battleClient:   battleClient,
 		gamePlayerRepo: gamePlayerRepo,
-		playerLookup:   playerLookup,
 		spectators:     make(map[string]map[string]*spectatorInfo),
 		activeGames:    make(map[string]time.Time),
 	}
@@ -111,28 +109,23 @@ func (sr *SpectateRelay) HandleSpectateJoin(conn *Connection, data json.RawMessa
 		return
 	}
 
-	// DB からプレイヤー名とレベルを解決
-	var p1Name, p2Name string
-	var p1Level, p2Level int64
-	if sr.playerLookup != nil && sr.gamePlayerRepo != nil {
-		entries, err := sr.gamePlayerRepo.LookupGamePlayers(ctx, req.GameID)
-		if err != nil {
-			log.Printf("spectate: lookup game players for %s: %v", req.GameID, err)
-		} else {
-			for _, e := range entries {
-				name, level, _ := sr.playerLookup(ctx, e.PlayerID)
-				switch e.PlayerNum {
-				case 1:
-					p1Name, p1Level = name, level
-				case 2:
-					p2Name, p2Level = name, level
-				}
-			}
-			if len(entries) == 1 {
-				p2Name = "NPC"
-			}
-		}
+	var clientState apibattle.ClientGameState
+	if err := json.Unmarshal(rawState, &clientState); err != nil {
+		log.Printf("spectate: parse client game state for %s: %v", req.GameID, err)
+		sr.sendSpectateError(conn, "state_unavailable", "could not parse game state")
+		return
 	}
+	// NPC は level を持たないため呼び出し側で 0 に正規化する (legacy client contract で
+	// level は number 必須のため null を 0 として渡す)。
+	var p1Level, p2Level int64
+	if clientState.Player1Summary.Level != nil {
+		p1Level = *clientState.Player1Summary.Level
+	}
+	if clientState.Player2Summary.Level != nil {
+		p2Level = *clientState.Player2Summary.Level
+	}
+	p1Name := clientState.Player1Summary.Name
+	p2Name := clientState.Player2Summary.Name
 
 	sr.mu.Lock()
 	if sr.spectators[req.GameID] == nil {
