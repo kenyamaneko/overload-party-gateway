@@ -1,12 +1,6 @@
 // Package cardclient は card サービスへの HTTP クライアントを提供する。
 // gateway 内部で必要な 3 endpoint (ListAllCards / ValidateDeckForBattle /
 // GetDeckCards) のみを公開し、内部は apicardclient SDK に委譲する。
-//
-// gateway を薄く保つ方針で client (TS) が card サービスへ直接 import する形に
-// 切替わったため、gateway がプロキシしていた deck CRUD 系 method
-// (ListPlayerCards / ListCardsWithOwnership / ListDecks / GetDeck (full) /
-// CreateDeck / UpdateDeck / DeleteDeck) は production caller を失い、本パッケージから
-// 削除した。
 package cardclient
 
 import (
@@ -40,7 +34,7 @@ func New(baseURL string) *Client {
 	return &Client{api: api}
 }
 
-// ListAllCards は全カード定義を取得する。test 用途。
+// ListAllCards は test 用途で internalauth 注入の経路検証に使う。
 func (c *Client) ListAllCards(ctx context.Context) ([]*apicard.CardDefinition, error) {
 	cards, err := c.api.ListCards(ctx)
 	if err != nil {
@@ -53,8 +47,7 @@ func (c *Client) ListAllCards(ctx context.Context) ([]*apicard.CardDefinition, e
 	return out, nil
 }
 
-// GetDeckCards はバトル用デッキ構成を取得する。
-// マッチ成立時や NPC バトル開始時に gateway がデッキを resolve するために使用する。
+// GetDeckCards はマッチ成立時や NPC バトル開始時に gateway がデッキを resolve するために使う。
 func (c *Client) GetDeckCards(ctx context.Context, deckID int64) ([]apicard.DeckCard, error) {
 	_, cards, err := c.api.GetDeck(ctx, deckID)
 	if err != nil {
@@ -63,8 +56,7 @@ func (c *Client) GetDeckCards(ctx context.Context, deckID int64) ([]apicard.Deck
 	return cards, nil
 }
 
-// ValidateDeckForBattle はデッキがバトル使用可能か検証する。
-// SDK が 400 を ErrDeckInvalid に変換して返す (sentinel は SDK 側で持つ)。
+// ValidateDeckForBattle は ws/manager の matchmaking_start / npc_battle 受付時の前段検査に使う。
 func (c *Client) ValidateDeckForBattle(ctx context.Context, deckID int64) error {
 	return c.api.ValidateDeckForBattle(ctx, deckID)
 }
