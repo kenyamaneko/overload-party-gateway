@@ -13,7 +13,7 @@ require (
 	github.com/kenyamaneko/overload-party-account/packages/api-account v0.1.3
 	github.com/kenyamaneko/overload-party-battle/packages/api-battle-rpc-go v0.2.1
 	github.com/kenyamaneko/overload-party-battle/packages/game-logic-constants-go v0.1.0
-	github.com/kenyamaneko/overload-party-card/packages/api-card v0.1.6
+	github.com/kenyamaneko/overload-party-card/packages/api-card v0.2.0
 	github.com/kenyamaneko/overload-party-common/packages/game-design-constants v0.1.0
 	github.com/kenyamaneko/overload-party-gateway/packages/api-gateway v0.0.0-00010101000000-000000000000
 	github.com/kenyamaneko/overload-party-gateway/packages/ws-constants v0.0.0-00010101000000-000000000000
