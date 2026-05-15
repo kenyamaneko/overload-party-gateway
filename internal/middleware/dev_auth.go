@@ -10,7 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 // DevAuth は Firebase なしで dev トークンを受け付ける Gin middleware を返します。
@@ -45,7 +45,7 @@ type DevPlayerSetup func(ctx context.Context, playerID string) error
 
 // DevAuthWithPlayerResolve は dev トークン認証と firebase_uid → playerID 解決を行う Gin middleware を返します。
 // プレイヤーが未登録の場合は account サービス経由で自動作成する。
-func DevAuthWithPlayerResolve(accountClient *accountclient.Client, onCreated ...DevPlayerSetup) gin.HandlerFunc {
+func DevAuthWithPlayerResolve(accountClient port.AccountClient, onCreated ...DevPlayerSetup) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -87,7 +87,7 @@ func DevAuthWithPlayerResolve(accountClient *accountclient.Client, onCreated ...
 	}
 }
 
-func resolveOrCreateDevPlayer(ctx context.Context, accountClient *accountclient.Client, firebaseUID string) (string, bool, error) {
+func resolveOrCreateDevPlayer(ctx context.Context, accountClient port.AccountClient, firebaseUID string) (string, bool, error) {
 	player, err := accountClient.FindByFirebaseUID(ctx, firebaseUID)
 	if err != nil {
 		return "", false, fmt.Errorf("find by firebase uid: %w", err)
@@ -99,7 +99,7 @@ func resolveOrCreateDevPlayer(ctx context.Context, accountClient *accountclient.
 	newPlayer, err := accountClient.Register(ctx, firebaseUID)
 	if err != nil {
 		// 並行リクエストとの競合時は FindByFirebaseUID にフォールバック
-		if errors.Is(err, accountclient.ErrPlayerAlreadyRegistered) {
+		if errors.Is(err, port.ErrPlayerAlreadyRegistered) {
 			existing, lerr := accountClient.FindByFirebaseUID(ctx, firebaseUID)
 			if lerr != nil {
 				return "", false, fmt.Errorf("recover from race: %w", lerr)

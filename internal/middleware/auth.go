@@ -9,7 +9,7 @@ import (
 	"firebase.google.com/go/v4/auth"
 	"github.com/gin-gonic/gin"
 
-	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 type contextKey string
@@ -67,7 +67,7 @@ func GetPlayerID(c *gin.Context) string {
 
 // PlayerResolve は認証済み Firebase UID を account サービス経由でプレイヤー UUID に解決する Gin middleware を返します。
 // FirebaseAuth の後にチェインする必要がある。
-func PlayerResolve(accountClient *accountclient.Client) gin.HandlerFunc {
+func PlayerResolve(accountClient port.AccountClient) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		uid := GetFirebaseUID(c)
 		if uid == "" {

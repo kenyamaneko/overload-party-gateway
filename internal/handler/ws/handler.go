@@ -9,20 +9,20 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 
-	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 // Handler は HTTP 接続を WebSocket にアップグレードし Manager に引き渡します
 type Handler struct {
 	manager       *Manager
 	authClient    *auth.Client // nil in local/dev mode
-	accountClient *accountclient.Client
+	accountClient port.AccountClient
 	upgrader      websocket.Upgrader
 }
 
 // NewHandler は WebSocket Handler を生成します
-func NewHandler(manager *Manager, authClient *auth.Client, accountClient *accountclient.Client, allowedOrigins []string) *Handler {
+func NewHandler(manager *Manager, authClient *auth.Client, accountClient port.AccountClient, allowedOrigins []string) *Handler {
 	origins := make(map[string]struct{}, len(allowedOrigins))
 	for _, o := range allowedOrigins {
 		origins[o] = struct{}{}

@@ -12,13 +12,15 @@ import (
 	"github.com/kenyamaneko/overload-party-card/packages/api-card/apicardclient"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
-// Client は card サービスへの HTTP クライアント。apicardclient SDK の薄ラッパで、
-// X-Internal-Auth header 注入と gateway 内部利用 method の絞り込みを担う。
+// Client は card サービスへの HTTP クライアント。
 type Client struct {
 	api *apicardclient.Client
 }
+
+var _ port.CardClient = (*Client)(nil)
 
 // New は card サービスクライアントを生成する。baseURL の解析失敗は実行不可なので panic する。
 func New(baseURL string) *Client {
