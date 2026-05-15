@@ -1,96 +1,61 @@
-// Package matchmakingclient は matchmaking マイクロサービスへの HTTP クライアントを提供します。
-// gateway はこのクライアント経由でプレイヤーの enqueue / cancel を行い、
-// マッチ結果は Pub/Sub で非同期に受信する。
+// Package matchmakingclient は matchmaking サービスへの HTTP クライアントを提供する。
+// gateway 内部で必要な 2 endpoint (Enqueue / Cancel) のみを公開し、内部は
+// apimatchmakingclient SDK に委譲する。
 package matchmakingclient
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
-	"time"
+
+	apimatchmaking "github.com/kenyamaneko/overload-party-matchmaking/packages/api-matchmaking"
+	"github.com/kenyamaneko/overload-party-matchmaking/packages/api-matchmaking/apimatchmakingclient"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
 )
 
-var (
-	// ErrNotFound は matchmaking サービスが 404 を返した場合のエラーです
-	ErrNotFound = errors.New("matchmakingclient: not found")
-	// ErrUnavailable は matchmaking サービスが 503 を返した場合のエラーです
-	ErrUnavailable = errors.New("matchmakingclient: service unavailable")
-)
+// ErrUnavailable は matchmaking サービスが 503 を返した場合の retryable 判定用。
+// SDK の ErrServiceUnavailable を re-export し、ws/manager の matchmaking_start
+// 失敗時 retry 経路から errors.Is で参照される。
+var ErrUnavailable = apimatchmakingclient.ErrServiceUnavailable
 
-// Client は matchmaking サービスへの HTTP クライアントです
+// Client は matchmaking サービスへの HTTP クライアント。apimatchmakingclient SDK
+// の薄ラッパで、X-Internal-Auth header 注入と gateway 内部利用 method の絞り込みを担う。
 type Client struct {
-	baseURL string
-	http    *http.Client
+	api *apimatchmakingclient.Client
 }
 
-// New は matchmaking サービスクライアントを生成します
+// New は matchmaking サービスクライアントを生成する。baseURL の解析失敗は実行不可なので panic する。
 func New(baseURL string) *Client {
-	return &Client{
-		baseURL: baseURL,
-		http:    &http.Client{Timeout: 5 * time.Second},
+	api, err := apimatchmakingclient.New(baseURL,
+		apimatchmakingclient.WithRequestEditorFn(func(ctx context.Context, req *http.Request) error {
+			internalauth.InjectHeader(ctx, req.Header)
+			return nil
+		}),
+	)
+	if err != nil {
+		panic(fmt.Sprintf("matchmakingclient: %v", err))
 	}
+	return &Client{api: api}
 }
 
-type enqueueBody struct {
-	DeckID int64  `json:"deck_id"`
-	Name   string `json:"name"`
-	Level  int64  `json:"level"`
-}
-
-// Enqueue はプレイヤーをマッチメイキングキューに追加します。
-// player_id は X-Internal-Auth JWT の sub から matchmaking 側で解決される。
+// Enqueue は ws/manager の matchmaking_start 受付時に呼ぶ。player_id は
+// X-Internal-Auth JWT の sub から matchmaking 側で解決される (gateway は渡さない)。
 func (c *Client) Enqueue(ctx context.Context, deckID int64, name string, level int64) error {
-	return c.post(ctx, "/internal/v1/enqueue", enqueueBody{DeckID: deckID, Name: name, Level: level})
+	return c.api.EnqueuePlayer(ctx, apimatchmaking.EnqueueRequest{
+		DeckID: deckID,
+		Name:   name,
+		Level:  level,
+	})
 }
 
-// Cancel はプレイヤーをキューから除去します。
-// 除去済みまたは未キュー時は nil を返し、通信エラーまたは 5xx の場合のみ non-nil を返す。
-// player_id は X-Internal-Auth JWT の sub から matchmaking 側で解決される。
+// Cancel は ws/manager の matchmaking_cancel / disconnect 経路から呼ぶ。
+// 除去済みまたは未キュー時は nil を返す (404 を no-op 扱い、retry を抑える)。
 func (c *Client) Cancel(ctx context.Context) error {
-	err := c.post(ctx, "/internal/v1/cancel", nil)
-	if errors.Is(err, ErrNotFound) {
+	err := c.api.CancelPlayer(ctx)
+	if errors.Is(err, apimatchmakingclient.ErrNotFound) {
 		return nil
 	}
 	return err
-}
-
-func (c *Client) post(ctx context.Context, path string, body any) error {
-	var reqBody io.Reader
-	if body != nil {
-		buf, err := json.Marshal(body)
-		if err != nil {
-			return fmt.Errorf("matchmakingclient: marshal: %w", err)
-		}
-		reqBody = bytes.NewReader(buf)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, reqBody)
-	if err != nil {
-		return fmt.Errorf("matchmakingclient: new request: %w", err)
-	}
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	internalauth.InjectHeader(ctx, req.Header)
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return fmt.Errorf("matchmakingclient: do: %w", err)
-	}
-	defer resp.Body.Close()
-
-	switch {
-	case resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusAccepted:
-		return nil
-	case resp.StatusCode == http.StatusNotFound:
-		return ErrNotFound
-	case resp.StatusCode == http.StatusServiceUnavailable:
-		return ErrUnavailable
-	}
-	raw, _ := io.ReadAll(resp.Body)
-	return fmt.Errorf("matchmakingclient: %s: status %d: %s", path, resp.StatusCode, string(raw))
 }

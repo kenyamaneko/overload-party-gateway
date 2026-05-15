@@ -162,6 +162,8 @@ github.com/kenyamaneko/overload-party-card/packages/api-card v0.2.0 h1:x3CYTM+Yt
 github.com/kenyamaneko/overload-party-card/packages/api-card v0.2.0/go.mod h1:3OLEy5qNLPANClSmxHc2siCssAbxcK/QI3udwgOU0sA=
 github.com/kenyamaneko/overload-party-common/packages/game-design-constants v0.1.0 h1:1+9zGE1CWh+XkiQ0FYnNBIOXHyS9N+OjzVVvWIJRaXo=
 github.com/kenyamaneko/overload-party-common/packages/game-design-constants v0.1.0/go.mod h1:4z5Ry1Y8LZQM4OKqLivo/OhVefKloLZP2vUDQ1Yo0UI=
+github.com/kenyamaneko/overload-party-matchmaking/packages/api-matchmaking v0.1.6 h1:4S0RbXD6boTxA/evWiEPRdu0CPQvfHnnwbwvsdkMra4=
+github.com/kenyamaneko/overload-party-matchmaking/packages/api-matchmaking v0.1.6/go.mod h1:Qi0jgC2LqABv1fqCdFWgpW4kjN+LWp/GBrx3HVZPCYw=
 github.com/kenyamaneko/overload-party-matchmaking/packages/api-matchmaking v0.1.7 h1:nN0GUtuvUqPXxQXdKQdhl131/wmBN72r2FrcnDvdEwI=
 github.com/kenyamaneko/overload-party-matchmaking/packages/api-matchmaking v0.1.7/go.mod h1:Qi0jgC2LqABv1fqCdFWgpW4kjN+LWp/GBrx3HVZPCYw=
 github.com/klauspost/cpuid/v2 v2.3.0 h1:S4CRMLnYUhGeDFDqkGriYKdfoFlDnMtqTiI/sFzhA9Y=
