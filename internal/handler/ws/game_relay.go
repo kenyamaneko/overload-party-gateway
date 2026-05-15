@@ -10,7 +10,6 @@ import (
 	apibattle "github.com/kenyamaneko/overload-party-battle/packages/api-battle-rpc-go"
 	gamelogic "github.com/kenyamaneko/overload-party-battle/packages/game-logic-constants-go"
 	gamedesign "github.com/kenyamaneko/overload-party-common/packages/game-design-constants"
-	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 	genws "github.com/kenyamaneko/overload-party-gateway/packages/ws-constants"
@@ -42,7 +41,7 @@ type GameRelay struct {
 	hub            *ConnectionHub
 	battleClient   service.BattleClient
 	spectateRelay  *SpectateRelay
-	accountClient  *accountclient.Client
+	accountClient  port.AccountClient
 	gamePlayerRepo port.GamePlayerRepo
 
 	mu          sync.RWMutex
@@ -59,7 +58,7 @@ func NewGameRelay(
 	hub *ConnectionHub,
 	battleClient service.BattleClient,
 	spectateRelay *SpectateRelay,
-	accountClient *accountclient.Client,
+	accountClient port.AccountClient,
 	gamePlayerRepo port.GamePlayerRepo,
 ) *GameRelay {
 	return &GameRelay{
@@ -547,7 +546,6 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 		}),
 	})
 }
-
 
 // HandleGameAction は game_action メッセージを処理します
 func (r *GameRelay) HandleGameAction(ctx context.Context, conn *Connection, data json.RawMessage) {

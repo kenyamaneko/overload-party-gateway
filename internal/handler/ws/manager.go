@@ -13,9 +13,6 @@ import (
 	apimatchmaking "github.com/kenyamaneko/overload-party-matchmaking/packages/api-matchmaking"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
-	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
-	"github.com/kenyamaneko/overload-party-gateway/internal/client/cardclient"
-	"github.com/kenyamaneko/overload-party-gateway/internal/client/matchmakingclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
@@ -30,9 +27,9 @@ type Manager struct {
 	Spectate *SpectateRelay
 
 	battleClient      service.BattleClient
-	accountClient     *accountclient.Client
-	cardClient        *cardclient.Client
-	matchmakingClient *matchmakingclient.Client
+	accountClient     port.AccountClient
+	cardClient        port.CardClient
+	matchmakingClient port.MatchmakingClient
 	gamePlayerRepo    port.GamePlayerRepo
 
 	// internalSigner は WS 経路から各サービス client を呼ぶ前に X-Internal-Auth JWT を発行する。
@@ -51,9 +48,9 @@ type Manager struct {
 // NewManager は WebSocket Manager を生成します
 func NewManager(
 	battleClient service.BattleClient,
-	accountClient *accountclient.Client,
-	cardClient *cardclient.Client,
-	matchmakingClient *matchmakingclient.Client,
+	accountClient port.AccountClient,
+	cardClient port.CardClient,
+	matchmakingClient port.MatchmakingClient,
 	gamePlayerRepo port.GamePlayerRepo,
 	matchmakingTimeout time.Duration,
 	internalSigner *internalauth.Signer,
@@ -250,7 +247,7 @@ func (m *Manager) handleMatchmakingStart(ctx context.Context, conn *Connection, 
 		name = *me.Name
 	}
 	if err := m.matchmakingClient.Enqueue(ctx, req.DeckID, name, me.Level); err != nil {
-		retryable := errors.Is(err, matchmakingclient.ErrUnavailable)
+		retryable := errors.Is(err, port.ErrMatchmakingUnavailable)
 		sendError(conn, "matchmaking_error", "failed to enqueue: "+err.Error(), retryable)
 		return
 	}

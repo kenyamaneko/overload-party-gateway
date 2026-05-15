@@ -6,17 +6,17 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 // AuthHandler は認証関連の REST エンドポイントを処理します
 type AuthHandler struct {
-	account *accountclient.Client
+	account port.AccountClient
 }
 
 // NewAuthHandler は AuthHandler を生成します
-func NewAuthHandler(account *accountclient.Client) *AuthHandler {
+func NewAuthHandler(account port.AccountClient) *AuthHandler {
 	return &AuthHandler{account: account}
 }
 
@@ -31,7 +31,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 	player, err := h.account.Register(c.Request.Context(), firebaseUID)
 	if err != nil {
-		if errors.Is(err, accountclient.ErrPlayerAlreadyRegistered) {
+		if errors.Is(err, port.ErrPlayerAlreadyRegistered) {
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 			return
 		}
@@ -50,7 +50,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 	player, err := h.account.Login(c.Request.Context(), firebaseUID)
 	if err != nil {
-		if errors.Is(err, accountclient.ErrNotFound) {
+		if errors.Is(err, port.ErrAccountNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
 		}
