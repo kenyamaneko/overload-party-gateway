@@ -166,7 +166,7 @@ func (c *Connection) Close() {
 		}
 		close(c.send)
 		if c.conn != nil {
-			c.conn.Close()
+			_ = c.conn.Close()
 		}
 	}
 }

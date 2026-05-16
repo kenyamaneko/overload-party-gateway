@@ -185,7 +185,7 @@ func (c *battleClient) post(ctx context.Context, path string, body any, result a
 	if err != nil {
 		return fmt.Errorf("battle server request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, err := io.ReadAll(resp.Body)
@@ -214,7 +214,7 @@ func (c *battleClient) getRaw(ctx context.Context, path string) (json.RawMessage
 	if err != nil {
 		return nil, fmt.Errorf("battle server request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

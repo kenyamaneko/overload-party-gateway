@@ -28,8 +28,8 @@ func TestSigner_Issue_Success(t *testing.T) {
 				assert.Equal(t, string(DefaultKeyID), parsed.Header["kid"])
 				assert.Equal(t, "player-123", claims.Subject)
 				assert.Equal(t, Issuer, claims.Issuer)
-				assert.True(t, claims.IssuedAt.Time.Equal(fixedTime))
-				assert.Equal(t, DefaultTTL, claims.ExpiresAt.Time.Sub(claims.IssuedAt.Time))
+				assert.True(t, claims.IssuedAt.Equal(fixedTime))
+				assert.Equal(t, DefaultTTL, claims.ExpiresAt.Sub(claims.IssuedAt.Time))
 			},
 		},
 		{
@@ -37,7 +37,7 @@ func TestSigner_Issue_Success(t *testing.T) {
 			opts: []Option{WithClock(func() time.Time { return fixedTime }), WithTTL(2 * time.Minute)},
 			assertTok: func(t *testing.T, _ *jwt.Token, claims *jwt.RegisteredClaims) {
 				t.Helper()
-				assert.Equal(t, 2*time.Minute, claims.ExpiresAt.Time.Sub(claims.IssuedAt.Time))
+				assert.Equal(t, 2*time.Minute, claims.ExpiresAt.Sub(claims.IssuedAt.Time))
 			},
 		},
 		{
