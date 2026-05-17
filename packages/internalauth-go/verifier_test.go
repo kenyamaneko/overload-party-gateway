@@ -16,13 +16,19 @@ const (
 )
 
 // signWithKid は HS256 で kid header 付き JWT を組み立てる test helper。
-// kid が空文字なら header をセットしない (kid 欠落ケース用)。
 func signWithKid(t *testing.T, secret []byte, kid string, claims jwt.RegisteredClaims) string {
 	t.Helper()
 	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	if kid != "" {
-		tok.Header["kid"] = kid
-	}
+	tok.Header["kid"] = kid
+	signed, err := tok.SignedString(secret)
+	require.NoError(t, err)
+	return signed
+}
+
+// signWithoutKid は kid header を持たない HS256 JWT を組み立てる test helper。
+func signWithoutKid(t *testing.T, secret []byte, claims jwt.RegisteredClaims) string {
+	t.Helper()
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	signed, err := tok.SignedString(secret)
 	require.NoError(t, err)
 	return signed
@@ -91,7 +97,7 @@ func TestVerifier_Verify_Error(t *testing.T) {
 		},
 		{
 			name:  "kid header が無い token は拒否される",
-			token: signWithKid(t, secret, "", validClaims(now)),
+			token: signWithoutKid(t, secret, validClaims(now)),
 		},
 		{
 			name:  "未知の kid は拒否される",
