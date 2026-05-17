@@ -152,7 +152,6 @@ func (c *battleClient) GetTurnControlsForPlayer(ctx context.Context, gameID stri
 	return raw, nil
 }
 
-
 // parseBattleError は battle server のレスポンスから構造化エラーメッセージを抽出します。
 // 抽出できない場合はステータスコードと body をそのまま含めたエラーを返す。
 func parseBattleError(statusCode int, body []byte) error {
