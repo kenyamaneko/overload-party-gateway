@@ -100,7 +100,7 @@ func TestRegisterForwardRoutes(t *testing.T) {
 			beforeHits := tc.wantBackend.hits
 			resp, err := http.Get(gw.URL + tc.path)
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 			assert.Equal(t, beforeHits+1, tc.wantBackend.hits, "期待 backend が呼ばれていない")

@@ -221,7 +221,7 @@ func TestNewForwarder(t *testing.T) {
 			require.NoError(t, err)
 			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			respBody, _ := io.ReadAll(resp.Body)
 

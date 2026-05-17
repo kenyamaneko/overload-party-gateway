@@ -74,6 +74,6 @@ func TestInternalAuth_E2E(t *testing.T) {
 	assert.Equal(t, internalauth.Issuer, claims.Issuer, "iss")
 	require.NotNil(t, claims.IssuedAt, "iat present")
 	require.NotNil(t, claims.ExpiresAt, "exp present")
-	assert.Equal(t, internalauth.DefaultTTL, claims.ExpiresAt.Time.Sub(claims.IssuedAt.Time), "exp - iat == TTL")
+	assert.Equal(t, internalauth.DefaultTTL, claims.ExpiresAt.Sub(claims.IssuedAt.Time), "exp - iat == TTL")
 	assert.WithinDuration(t, time.Now(), claims.IssuedAt.Time, 5*time.Second, "iat near now")
 }
