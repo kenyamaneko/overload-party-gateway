@@ -15,16 +15,14 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
-	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
 	genws "github.com/kenyamaneko/overload-party-gateway/packages/ws-constants"
 )
 
-// Manager は受信 WebSocket メッセージをルーティングし、Hub / GameRelay / SpectateRelay を調整します。
+// Manager は受信 WebSocket メッセージをルーティングし、Hub / GameRelay を調整します。
 // Manager 自体はゲームや接続の状態を持たない。
 type Manager struct {
-	Hub      *ConnectionHub
-	Relay    *GameRelay
-	Spectate *SpectateRelay
+	Hub   *ConnectionHub
+	Relay *GameRelay
 
 	battleClient      service.BattleClient
 	accountClient     port.AccountClient
@@ -66,22 +64,19 @@ func NewManager(
 		matchWait:          make(map[string]*time.Timer),
 	}
 
-	// HubCallbacks は m.Relay / m.Spectate の後初期化を見込んで遅延参照する。
+	// HubCallbacks は m.Relay の後初期化を見込んで遅延参照する。
 	hub := NewConnectionHub(HubCallbacks{
-		GetGameID:             func(playerID string) (string, bool) { return m.Relay.GameIDForPlayer(playerID) },
-		OnDisconnectTimeout:   func(playerID, gameID string) { m.Relay.HandleDisconnectTimeout(playerID, gameID) },
-		OnSpectatorDisconnect: func(playerID string) { m.Spectate.RemoveSpectator(playerID) },
-		OnMatchmakingLeave:    m.cancelMatchmaking,
-		OnGameDisconnect:      func(playerID, gameID string) { m.Relay.NotifyOpponentDisconnected(playerID, gameID) },
-		OnGameReconnect:       func(playerID, gameID string) { m.Relay.NotifyOpponentReconnected(playerID, gameID) },
+		GetGameID:           func(playerID string) (string, bool) { return m.Relay.GameIDForPlayer(playerID) },
+		OnDisconnectTimeout: func(playerID, gameID string) { m.Relay.HandleDisconnectTimeout(playerID, gameID) },
+		OnMatchmakingLeave:  m.cancelMatchmaking,
+		OnGameDisconnect:    func(playerID, gameID string) { m.Relay.NotifyOpponentDisconnected(playerID, gameID) },
+		OnGameReconnect:     func(playerID, gameID string) { m.Relay.NotifyOpponentReconnected(playerID, gameID) },
 	})
 
-	spectate := NewSpectateRelay(hub, battleClient, gamePlayerRepo)
-	relay := NewGameRelay(hub, battleClient, spectate, accountClient, gamePlayerRepo)
+	relay := NewGameRelay(hub, battleClient, accountClient, gamePlayerRepo)
 
 	m.Hub = hub
 	m.Relay = relay
-	m.Spectate = spectate
 
 	return m
 }
@@ -185,23 +180,10 @@ func (m *Manager) HandleMessage(conn *Connection, msg *WSMessage) {
 		m.handleNpcBattleStart(ctx, conn, msg.Data)
 
 	case genws.WSClientMsgGameAction:
-		if m.Spectate.IsSpectator(conn.playerID) {
-			log.Printf("spectator %s tried to send game_action — ignored", conn.playerID)
-			return
-		}
 		m.Relay.HandleGameAction(ctx, conn, msg.Data)
 
 	case genws.WSClientMsgUseStamp:
 		m.Relay.HandleUseStamp(conn, msg.Data)
-
-	case genws.WSClientMsgSpectateJoin:
-		m.Spectate.HandleSpectateJoin(conn, msg.Data)
-
-	case genws.WSClientMsgSpectateLeave:
-		m.Spectate.HandleSpectateLeave(conn, msg.Data)
-
-	case genws.WSClientMsgSpectateStamp:
-		m.Spectate.HandleSpectateStamp(conn, msg.Data)
 
 	case genws.WSClientMsgPing:
 		conn.SendMessage(&WSMessage{Type: genws.WSServerMsgPong})
@@ -314,7 +296,6 @@ func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, da
 			log.Printf("npc battle: insert game_player: %v", err)
 		}
 	}
-	m.Spectate.RegisterGame(game.GameID)
 	conn.SendMessage(&WSMessage{
 		Type: genws.WSServerMsgNpcBattleCreated,
 		Data: mustMarshal(NPCBattleCreatedMessage{
@@ -363,7 +344,6 @@ func (m *Manager) HandleMatchMade(ctx context.Context, event apimatchmaking.Matc
 		}
 	}
 
-	m.Spectate.RegisterGame(game.GameID)
 	m.Relay.NotifyMatchFound(game.GameID, event.Players[0].PlayerID, event.Players[1].PlayerID)
 	return nil
 }
@@ -402,11 +382,6 @@ func (m *Manager) resolveDeckCards(ctx context.Context, playerID string, deckID 
 		}
 	}
 	return cards, nil
-}
-
-// ActiveSpectateGames は現在観戦可能なゲーム一覧を返します
-func (m *Manager) ActiveSpectateGames(ctx context.Context) []apigateway.SpectateGameInfo {
-	return m.Spectate.ActiveGames(ctx)
 }
 
 func (m *Manager) checkAndIncrementBattleLimit(ctx context.Context) (string, error) {

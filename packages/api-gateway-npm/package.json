@@ -1,7 +1,7 @@
 {
   "name": "@kenyamaneko/overload-party-api-gateway",
   "version": "0.0.0",
-  "description": "Overload Party gateway API types — auth / spectate / version / battle proxy の REST 型と WS message envelope。サービス固有の型は @kenyamaneko/overload-party-api-<service> から取得する。",
+  "description": "Overload Party gateway API types — auth / version / battle proxy の REST 型と WS message envelope。サービス固有の型は @kenyamaneko/overload-party-api-<service> から取得する。",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

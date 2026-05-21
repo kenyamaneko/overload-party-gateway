@@ -81,11 +81,6 @@ func wsMessageTypeConstants() []string {
 		genws.WSServerMsgNpcBattleCreated,
 		genws.WSServerMsgOpponentDisconnected,
 		genws.WSServerMsgOpponentReconnected,
-		genws.WSServerMsgSpectateJoined,
-		genws.WSServerMsgSpectateError,
-		genws.WSServerMsgSpectateUpdate,
-		genws.WSServerMsgSpectateEnded,
-		genws.WSServerMsgSpectateStampBroadcast,
 		genws.WSServerMsgGameStateRestore,
 		// client
 		genws.WSClientMsgGameEnter,
@@ -95,8 +90,5 @@ func wsMessageTypeConstants() []string {
 		genws.WSClientMsgUseStamp,
 		genws.WSClientMsgPing,
 		genws.WSClientMsgNpcBattleStart,
-		genws.WSClientMsgSpectateJoin,
-		genws.WSClientMsgSpectateLeave,
-		genws.WSClientMsgSpectateStamp,
 	}
 }

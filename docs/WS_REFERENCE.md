@@ -11,14 +11,12 @@
    - [Matchmaking](#matchmaking)
    - [Game](#game)
    - [NPC Battle](#npc-battle)
-   - [Spectate](#spectate)
    - [Ping](#ping)
 5. [Server → Client メッセージ](#5-server--client-メッセージ)
    - [Matchmaking](#matchmaking-1)
    - [Game State](#game-state)
    - [Game Flow](#game-flow)
    - [NPC Battle](#npc-battle-1)
-   - [Spectate](#spectate-1)
    - [Connection Status](#connection-status)
    - [Pong](#pong)
 6. [メッセージ一覧](#6-メッセージ一覧)
@@ -27,7 +25,7 @@
 
 ## 1. 概要
 
-Gateway Server が提供する WebSocket API。リアルタイムのゲーム通信（マッチメイキング、ゲーム状態同期、観戦）に使用する。
+Gateway Server が提供する WebSocket API。リアルタイムのゲーム通信（マッチメイキング、ゲーム状態同期）に使用する。
 
 - REST API 契約: [API_REFERENCE.md](API_REFERENCE.md)
 - サービス責務・契約: [FEATURE_SPEC.md](FEATURE_SPEC.md)
@@ -199,49 +197,6 @@ NPC 対戦開始。即座にゲームが作成される（マッチメイキン�
 エラー時は `error` メッセージが返る。
 
 ゲーム開始後は PvP と同じ `game_action` メッセージでアクションを送信する。NPC は自動応答する。ゲーム状態は `game_enter` → `game_state` メッセージで取得可能。
-
----
-
-### Spectate
-
-#### `spectate_join` — 観戦参加
-
-<!-- BEGIN GENERATED: SpectateJoinMessage -->
-```jsonc
-{
-  "game_id": "string" // 観戦対象のゲームID
-}
-```
-<!-- END GENERATED: SpectateJoinMessage -->
-
-**応答:** `spectate_joined` / `spectate_error`
-
----
-
-#### `spectate_leave` — 観戦離脱
-
-<!-- BEGIN GENERATED: SpectateLeaveMessage -->
-```jsonc
-{
-  "game_id": "string" // 離脱するゲームID
-}
-```
-<!-- END GENERATED: SpectateLeaveMessage -->
-
----
-
-#### `spectate_stamp` — 観戦スタンプ送信
-
-<!-- BEGIN GENERATED: SpectateStampMessage -->
-```jsonc
-{
-  "game_id": "string" // ゲームID,
-  "stamp_no": 0 // スタンプ番号
-}
-```
-<!-- END GENERATED: SpectateStampMessage -->
-
-**応答:** `spectate_stamp_broadcast`（観戦者全員にブロードキャスト）
 
 ---
 
@@ -628,60 +583,6 @@ NPC 表示名:
 
 ---
 
-### Spectate
-
-#### `spectate_joined` — 観戦参加完了
-
-<!-- BEGIN GENERATED: SpectateJoinedMessage -->
-```jsonc
-{
-  "game_id": "string" // ゲームID,
-  "player1_name": "string" // プレイヤー1 表示名,
-  "player1_level": 0 // プレイヤー1 レベル,
-  "player2_name": "string" // プレイヤー2 表示名（NPC の場合は NPC モデル表示名）,
-  "player2_level": 0 // プレイヤー2 レベル（NPC の場合は 0）,
-  "state": {} // 現在のゲーム状態（観戦者視点）
-}
-```
-<!-- END GENERATED: SpectateJoinedMessage -->
-
-#### `spectate_error` — 観戦エラー
-
-<!-- BEGIN GENERATED: SpectateErrorMessage -->
-```jsonc
-{
-  "error_code": "string" // エラーコード,
-  "message": "string" // エラー詳細メッセージ
-}
-```
-<!-- END GENERATED: SpectateErrorMessage -->
-
-#### `spectate_ended` — 観戦中のゲーム終了
-
-<!-- BEGIN GENERATED: SpectateEndedMessage -->
-```jsonc
-{
-  "game_id": "string" // ゲームID,
-  "winning_player_num": 0 // 勝者のプレイヤー番号,
-  "win_reason": "string" // 勝因
-}
-```
-<!-- END GENERATED: SpectateEndedMessage -->
-
-#### `spectate_stamp_broadcast` — 観戦スタンプ受信
-
-<!-- BEGIN GENERATED: SpectateStampBroadcastMessage -->
-```jsonc
-{
-  "game_id": "string" // ゲームID,
-  "spectator_id": "string" // スタンプ送信した観戦者ID,
-  "stamp_no": 0 // スタンプ番号
-}
-```
-<!-- END GENERATED: SpectateStampBroadcastMessage -->
-
----
-
 ### Connection Status
 
 #### `opponent_disconnected` — 対戦相手が切断
@@ -721,9 +622,6 @@ NPC 表示名:
 | `game_action` | `game_state` / `action_rejected` / `game_over` | ゲームアクション実行 |
 | `use_stamp` | `stamp_used` | スタンプ送信 |
 | `npc_battle_start` | `npc_battle_created` / `error` | NPC 対戦開始 |
-| `spectate_join` | `spectate_joined` / `spectate_error` | 観戦参加 |
-| `spectate_leave` | — | 観戦離脱 |
-| `spectate_stamp` | `spectate_stamp_broadcast` | 観戦スタンプ送信 |
 | `ping` | `pong` | 生存確認 |
 
 ### Server → Client
@@ -742,10 +640,6 @@ NPC 表示名:
 | `stamp_used` | `use_stamp` 受信時 | スタンプ受信 |
 | `error` | エラー発生時 | エラー通知 |
 | `npc_battle_created` | `npc_battle_start` 成功 | NPC 対戦作成通知 |
-| `spectate_joined` | `spectate_join` 成功 | 観戦参加完了 |
-| `spectate_error` | 観戦エラー時 | 観戦エラー |
-| `spectate_ended` | 観戦中ゲーム終了 | 観戦終了通知 |
-| `spectate_stamp_broadcast` | 観戦スタンプ時 | 観戦スタンプ受信 |
 | `opponent_disconnected` | 相手切断時 | 対戦相手切断通知 |
 | `opponent_reconnected` | 相手再接続時 | 対戦相手再接続通知 |
 | `pong` | `ping` 受信時 | Ping 応答 |

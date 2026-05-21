@@ -5,7 +5,7 @@ info:
   description: |
     Gateway service の REST 契約 (client → gateway 公開 API)。
     本ファイルが SSoT。`packages/api-gateway` の Go 型は oapi-codegen が本ファイルから生成する。
-    gateway は固有のドメインロジックを持たず、認証 / 観戦 / 静的データ + 各サービスへの
+    gateway は固有のドメインロジックを持たず、認証 / 静的データ + 各サービスへの
     path-prefix forwarder を提供する。client 公開仕様は各サービスの openapi.yaml が SSoT。
 
 paths:
@@ -62,20 +62,6 @@ paths:
                 $ref: "#/components/schemas/PlayerResponse"
         "404":
           description: プレイヤー未登録
-
-  /api/v1/spectate/games:
-    get:
-      operationId: listSpectateGames
-      summary: 観戦可能なアクティブゲーム一覧を取得
-      responses:
-        "200":
-          description: 観戦可能ゲーム一覧
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/SpectateGameInfo"
 
 components:
   schemas:
@@ -151,20 +137,3 @@ components:
           type: integer
           format: int64
           description: 次レベルまでの必要経験値
-
-    SpectateGameInfo:
-      type: object
-      required: [game_id, player1_id, player2_id, started_at]
-      properties:
-        game_id:
-          type: string
-          x-go-name: GameID
-        player1_id:
-          type: string
-          x-go-name: Player1ID
-        player2_id:
-          type: string
-          x-go-name: Player2ID
-        started_at:
-          type: string
-          format: date-time

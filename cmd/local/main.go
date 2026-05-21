@@ -82,8 +82,7 @@ func main() {
 	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, matchmakingTimeout, internalSigner)
 	wsHandler := ws.NewHandler(wsManager, nil, accountClient, nil)
 	handlers := &router.Handlers{
-		Auth:     rest.NewAuthHandler(accountClient),
-		Spectate: rest.NewSpectateHandler(wsManager),
+		Auth: rest.NewAuthHandler(accountClient),
 	}
 
 	r := gin.Default()
@@ -108,7 +107,6 @@ func main() {
 	api.Use(middleware.DevAuthWithPlayerResolve(accountClient))
 	router.RegisterAuthRoutes(api, handlers)
 	api.Use(middleware.IssueInternalAuth(internalSigner))
-	router.RegisterAPIRoutes(api, handlers)
 	if err := router.RegisterForwardRoutes(api, cfg); err != nil {
 		log.Fatalf("failed to register forward routes: %v", err)
 	}

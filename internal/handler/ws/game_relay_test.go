@@ -90,15 +90,15 @@ func (m *mockBattleClient) GetGameLogText(_ context.Context, _ string) ([]byte, 
 // --- helpers ---
 
 // newTestRelay creates a GameRelay backed by a noop hub and mock battle client.
-// 依存 (spectate / account / repo / lookup) は nil のまま。EXP 付与や spectate を触るテストは
-// フィールドに直接代入するか、専用ヘルパー (exp_award_test.go の setupAwardRelay 等) を使う。
+// 依存 (account / repo / lookup) は nil のまま。EXP 付与を触るテストはフィールドに直接代入するか、
+// 専用ヘルパー (exp_award_test.go の setupAwardRelay 等) を使う。
 func newTestRelay() (*GameRelay, *mockBattleClient) {
 	bc := newMockBattleClient()
 	hub := NewConnectionHub(HubCallbacks{
 		GetGameID:           func(string) (string, bool) { return "", false },
 		OnDisconnectTimeout: func(string, string) {},
 	})
-	relay := NewGameRelay(hub, bc, nil, nil, nil)
+	relay := NewGameRelay(hub, bc, nil, nil)
 	return relay, bc
 }
 

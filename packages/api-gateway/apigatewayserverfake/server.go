@@ -28,9 +28,6 @@ type Server struct {
 	// ─── Auth (Firebase 認証) ────────────────────────────
 	RegisterFn func() (int, any)
 	LoginFn    func() (int, any)
-
-	// ─── Spectate ────────────────────────────────────────
-	ListSpectateGamesFn func() (int, any)
 }
 
 // NewServer は起動済み Server を返す。テスト終了時に Close() すること。
@@ -42,7 +39,6 @@ func NewServer() *Server {
 	mux.HandleFunc("GET /api/v1/version", s.handleVersion)
 	mux.HandleFunc("POST /api/v1/auth/register", s.handleRegister)
 	mux.HandleFunc("POST /api/v1/auth/login", s.handleLogin)
-	mux.HandleFunc("GET /api/v1/spectate/games", s.handleListSpectateGames)
 
 	s.srv = httptest.NewServer(mux)
 	return s
@@ -101,13 +97,4 @@ func (s *Server) handleLogin(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, apigateway.PlayerResponse{})
-}
-
-func (s *Server) handleListSpectateGames(w http.ResponseWriter, _ *http.Request) {
-	if fn := s.ListSpectateGamesFn; fn != nil {
-		status, body := fn()
-		writeJSON(w, status, body)
-		return
-	}
-	writeJSON(w, http.StatusOK, []apigateway.SpectateGameInfo{})
 }

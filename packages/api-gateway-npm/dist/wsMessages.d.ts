@@ -52,38 +52,6 @@ export interface StampUsedMessage {
 export interface NPCBattleCreatedMessage {
     game_id: string;
 }
-export interface SpectateJoinMessage {
-    game_id: string;
-}
-export interface SpectateLeaveMessage {
-    game_id: string;
-}
-export interface SpectateStampMessage {
-    game_id: string;
-    stamp_no: number;
-}
-export interface SpectateJoinedMessage {
-    game_id: string;
-    player1_name: string;
-    player1_level: number;
-    player2_name: string;
-    player2_level: number;
-    state: ClientGameState;
-}
-export interface SpectateErrorMessage {
-    error_code: string;
-    message: string;
-}
-export interface SpectateEndedMessage {
-    game_id: string;
-    winning_player_num: number;
-    win_reason: string;
-}
-export interface SpectateStampBroadcastMessage {
-    game_id: string;
-    spectator_id: string;
-    stamp_no: number;
-}
 export interface OpponentDisconnectedMessage {
 }
 export interface OpponentReconnectedMessage {

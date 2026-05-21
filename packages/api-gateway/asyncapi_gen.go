@@ -36,22 +36,6 @@ type NpcBattleStartMessage struct {
 	NpcModel string `json:"npc_model"`
 }
 
-// SpectateJoinMessage は 観戦対象のゲームへ参加する要求。
-type SpectateJoinMessage struct {
-	GameID string `json:"game_id"`
-}
-
-// SpectateLeaveMessage は 観戦から離脱する要求。
-type SpectateLeaveMessage struct {
-	GameID string `json:"game_id"`
-}
-
-// SpectateStampMessage は 観戦中のスタンプ送信。
-type SpectateStampMessage struct {
-	GameID  string `json:"game_id"`
-	StampNo int64  `json:"stamp_no"`
-}
-
 // ErrorMessage は サーバー由来のエラー通知。
 type ErrorMessage struct {
 	ErrorCode string `json:"error_code"`
@@ -104,35 +88,5 @@ type OpponentDisconnectedMessage struct {
 
 // OpponentReconnectedMessage は 対戦相手の再接続通知 (空ペイロード)。
 type OpponentReconnectedMessage struct {
-}
-
-// SpectateJoinedMessage は 観戦参加成立 + 初期状態通知。
-type SpectateJoinedMessage struct {
-	GameID       string                 `json:"game_id"`
-	Player1Name  string                 `json:"player1_name"`
-	Player1Level int64                  `json:"player1_level"`
-	Player2Name  string                 `json:"player2_name"`
-	Player2Level int64                  `json:"player2_level"`
-	State        json.RawMessage       `json:"state"`
-}
-
-// SpectateErrorMessage は 観戦処理におけるエラー通知。
-type SpectateErrorMessage struct {
-	ErrorCode string `json:"error_code"`
-	Message   string `json:"message"`
-}
-
-// SpectateEndedMessage は 観戦対象のゲーム終了通知。
-type SpectateEndedMessage struct {
-	GameID           string `json:"game_id"`
-	WinningPlayerNum int64  `json:"winning_player_num"`
-	WinReason        string `json:"win_reason"`
-}
-
-// SpectateStampBroadcastMessage は 観戦者からのスタンプ broadcast 通知。
-type SpectateStampBroadcastMessage struct {
-	GameID      string `json:"game_id"`
-	SpectatorID string `json:"spectator_id"`
-	StampNo     int64  `json:"stamp_no"`
 }
 

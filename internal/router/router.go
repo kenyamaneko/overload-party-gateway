@@ -13,19 +13,13 @@ import (
 // でルート定義を共有します。downstream サービス公開 path は RegisterForwardRoutes で
 // 別途扱う。
 type Handlers struct {
-	Auth     *rest.AuthHandler
-	Spectate *rest.SpectateHandler
+	Auth *rest.AuthHandler
 }
 
 // RegisterAuthRoutes は認証エンドポイント（register / login）を登録します
 func RegisterAuthRoutes(group *gin.RouterGroup, h *Handlers) {
 	group.POST("/auth/register", h.Auth.Register)
 	group.POST("/auth/login", h.Auth.Login)
-}
-
-// RegisterAPIRoutes は gateway 自身が応答する認証済みエンドポイントを登録します
-func RegisterAPIRoutes(api *gin.RouterGroup, h *Handlers) {
-	api.GET("/spectate/games", h.Spectate.GetActiveGames)
 }
 
 // RegisterForwardRoutes は各サービスへの path-prefix forwarder を登録します。
