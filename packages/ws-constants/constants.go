@@ -22,14 +22,9 @@ const (
 	WSServerMsgActionPerformed        = "action_performed"
 	WSServerMsgTurnControls           = "turn_controls"
 	WSServerMsgNpcBattleCreated       = "npc_battle_created"
-	WSServerMsgOpponentDisconnected   = "opponent_disconnected"
-	WSServerMsgOpponentReconnected    = "opponent_reconnected"
-	WSServerMsgSpectateJoined         = "spectate_joined"
-	WSServerMsgSpectateError          = "spectate_error"
-	WSServerMsgSpectateUpdate         = "spectate_update"
-	WSServerMsgSpectateEnded          = "spectate_ended"
-	WSServerMsgSpectateStampBroadcast = "spectate_stamp_broadcast"
-	WSServerMsgGameStateRestore       = "game_state_restore"
+	WSServerMsgOpponentDisconnected = "opponent_disconnected"
+	WSServerMsgOpponentReconnected  = "opponent_reconnected"
+	WSServerMsgGameStateRestore     = "game_state_restore"
 )
 
 // WS client message types (client → server).
@@ -41,7 +36,4 @@ const (
 	WSClientMsgUseStamp          = "use_stamp"
 	WSClientMsgPing              = "ping"
 	WSClientMsgNpcBattleStart    = "npc_battle_start"
-	WSClientMsgSpectateJoin      = "spectate_join"
-	WSClientMsgSpectateLeave     = "spectate_leave"
-	WSClientMsgSpectateStamp     = "spectate_stamp"
 )

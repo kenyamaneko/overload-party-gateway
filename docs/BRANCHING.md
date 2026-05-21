@@ -52,7 +52,7 @@ GitFlow をベースに、環境とブランチを対応付けた運用を採用
 
 - 新機能・改善の作業ブランチ
 - `develop` から切って `develop` にマージ
-- 命名例: `feature/gateway/issue-42`, `feature/add-spectate-heartbeat`
+- 命名例: `feature/gateway/issue-42`, `feature/add-stamp-throttle`
 - PR マージ時にブランチ削除
 
 ### hotfix/xxx

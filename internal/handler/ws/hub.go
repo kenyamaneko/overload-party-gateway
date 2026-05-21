@@ -19,8 +19,6 @@ type HubCallbacks struct {
 	GetGameID func(playerID string) (string, bool)
 	// OnDisconnectTimeout は切断タイマー発火時（forfeit）に呼ばれる
 	OnDisconnectTimeout func(playerID, gameID string)
-	// OnSpectatorDisconnect は接続終了時に観戦状態をクリーンアップする
-	OnSpectatorDisconnect func(playerID string)
 	// OnMatchmakingLeave は切断時にマッチメイキングキューからプレイヤーを除去する
 	OnMatchmakingLeave func(playerID string)
 	// OnGameDisconnect は対戦相手に切断を通知する
@@ -98,9 +96,6 @@ func (h *ConnectionHub) Unregister(conn *Connection) {
 	h.mu.Unlock()
 
 	// SendToPlayer が RLock を取得するためデッドロック防止でロック外で実行
-	if h.cb.OnSpectatorDisconnect != nil {
-		h.cb.OnSpectatorDisconnect(conn.playerID)
-	}
 	if h.cb.OnMatchmakingLeave != nil {
 		h.cb.OnMatchmakingLeave(conn.playerID)
 	}

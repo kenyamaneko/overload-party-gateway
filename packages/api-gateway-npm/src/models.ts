@@ -1,7 +1,7 @@
 // Overload Party gateway API types — the npm package for the client.
 //
 // Contains REST request/response types for gateway-owned endpoints
-// (auth / spectate / version). Service-specific contracts
+// (auth / version). Service-specific contracts
 // (account / card / shop / scenario / news / support / battle) are
 // published by each service in `@kenyamaneko/overload-party-api-<service>`
 // (battle 公開型は `@kenyamaneko/overload-party-game-state` を直接消費)
@@ -35,14 +35,6 @@ export interface PlayerResponse {
   updated_at: string;
   level_exp_current: number;
   level_exp_required: number;
-}
-
-/** SpectateGameInfo is the public view of an active game for the spectate list API. */
-export interface SpectateGameInfo {
-  game_id: string;
-  player1_id: string;
-  player2_id: string;
-  started_at: string;
 }
 
 /** ErrorResponse is the standard error envelope returned by gateway REST endpoints. */

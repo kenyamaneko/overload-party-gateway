@@ -40,7 +40,6 @@ const downstreamCallTimeout = 10 * time.Second
 type GameRelay struct {
 	hub            *ConnectionHub
 	battleClient   service.BattleClient
-	spectateRelay  *SpectateRelay
 	accountClient  port.AccountClient
 	gamePlayerRepo port.GamePlayerRepo
 
@@ -57,14 +56,12 @@ type GameRelay struct {
 func NewGameRelay(
 	hub *ConnectionHub,
 	battleClient service.BattleClient,
-	spectateRelay *SpectateRelay,
 	accountClient port.AccountClient,
 	gamePlayerRepo port.GamePlayerRepo,
 ) *GameRelay {
 	return &GameRelay{
 		hub:            hub,
 		battleClient:   battleClient,
-		spectateRelay:  spectateRelay,
 		accountClient:  accountClient,
 		gamePlayerRepo: gamePlayerRepo,
 		gameMembers:    make(map[string][]string),
@@ -166,13 +163,12 @@ func (r *GameRelay) SendGameStateToPlayers(gameID string) {
 
 	var activePlayerID string
 	var activeTimeBank int64
-	var spectateState json.RawMessage // 観戦者に送る正規オブザーバービュー
 
 	// SendGameStateToPlayers はタイマー発火・game_over 後の整合等、特定の WS リクエストに
 	// 紐づかない経路からも呼ばれるため、独立したタイムアウトを使う。
 	ctx, cancel := context.WithTimeout(context.Background(), downstreamCallTimeout)
 	defer cancel()
-	for i, pid := range players {
+	for _, pid := range players {
 		pNum := r.resolvePlayerNum(pid)
 		if pNum == 0 {
 			continue
@@ -198,18 +194,10 @@ func (r *GameRelay) SendGameStateToPlayers(gameID string) {
 			Type: genws.WSServerMsgGameState,
 			Data: state,
 		})
-
-		if i == 0 {
-			spectateState = state
-		}
 	}
 
 	if activePlayerID != "" {
 		r.resetTurnTimer(gameID, activePlayerID, activeTimeBank)
-	}
-
-	if r.spectateRelay != nil && spectateState != nil {
-		r.spectateRelay.BroadcastStateUpdate(gameID, spectateState)
 	}
 }
 
@@ -376,10 +364,6 @@ func (r *GameRelay) broadcastGameOver(gameID string, winningPlayerNum int64, rea
 	})
 
 	r.awardGameExp(gameID, winningPlayerNum, reason)
-
-	if r.spectateRelay != nil {
-		r.spectateRelay.UnregisterGame(gameID, winningPlayerNum, reason)
-	}
 }
 
 // HandleGameEnter は game_enter メッセージを処理します

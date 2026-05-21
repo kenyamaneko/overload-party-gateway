@@ -22,7 +22,7 @@ gateway は以下の機能ドメインを所有する。
 | Pub/Sub → WS 通知 | 下流発の非同期イベントを購読し、該当プレイヤーの WS へ push |
 | セッション整合性 | 切断タイマー・ターンタイマー・NPC ターン駆動・EXP 付与の冪等キーなど、ゲームセッションを WS 上で完結させるための整合性担保 |
 
-gateway が保持するのは WS 接続 map、ゲーム/観戦セッションのインメモリ索引、`gateway.game_players` テーブル（match_made 起点の冪等キー用途）、各種タイマーのみ。下流から受け取った JSON ペイロードは `json.RawMessage` で不透明なまま WS へ push する。
+gateway が保持するのは WS 接続 map、ゲームセッションのインメモリ索引、`gateway.game_players` テーブル（match_made 起点の冪等キー用途）、各種タイマーのみ。下流から受け取った JSON ペイロードは `json.RawMessage` で不透明なまま WS へ push する。
 
 ---
 
@@ -60,7 +60,6 @@ WS 切断時、プレイヤーの状態に応じて以下のクリーンアッ�
 |---|---|
 | マッチ待機中 | matchmaking サービスへ best-effort cancel を送信 |
 | ゲーム中 | 60 秒の **切断タイマー** を起動（§2.5） |
-| 観戦中 | SpectateRelay から除去 |
 
 いずれの状態にも該当しない場合は接続マップから除去するのみ。
 
@@ -124,7 +123,7 @@ subscription `matchmaking-events-gateway`（Exactly-Once Delivery）を全 Pod �
 
 1. GameRelay の `playerNum` を使って battle に ProcessAction を委譲
 2. `action_performed` を対戦相手に送信（各プレイヤー視点の情報秘匿済み状態を個別取得）
-3. NPC 対戦の場合、§7 の NPC ポーリング駆動に入る
+3. NPC 対戦の場合、§6 の NPC ポーリング駆動に入る
 4. `game_state` + `turn_controls` を全プレイヤーに送信
 5. battle が `GameOver=true, winningPlayerNum, winReason` を返したら、ターンタイマーをキャンセルし `game_over` をブロードキャスト + EXP 付与トリガ（§5）
 
@@ -158,27 +157,11 @@ gateway はゲーム終了を検知して accountclient 経由で EXP 付与 RPC
 
 ---
 
-## 6. 観戦
-
-### 6.1 観戦セッション契約
-
-- `spectate_join(gameId)` で SpectateRelay に登録
-- 観戦者は **プレイヤー 1 の視点の状態** を受信（情報秘匿なし）
-- ゲーム状態更新時、SpectateRelay.BroadcastStateUpdate で観戦者全員に転送
-- ゲーム終了時に `spectate_ended` を送信し、観戦者をクリーンアップ
-- WS 切断時は SpectateRelay から自動除去（§2.4）
-
-### 6.2 観戦一覧
-
-- 観戦可能ゲーム一覧は REST `GET /api/v1/spectate/games` で公開する（認証不要ではなく Authenticated）
-
----
-
-## 7. NPC ターン駆動
+## 6. NPC ターン駆動
 
 NPC のアクション生成は battle が 1 手単位で行う（`NpcPending=true` のレスポンスを返す）。gateway はこれをポーリングで駆動する。
 
-### 7.1 駆動契約
+### 6.1 駆動契約
 
 1. `game_enter` で NPC が先手の局面を検出した場合、`POST /games/{id}/advance-npc` を呼んで初手を進める
 2. `game_action` 応答または advance-npc 応答で `NpcPending=true` が続く限り、ループで `advance-npc` を呼び続ける
@@ -187,17 +170,17 @@ NPC のアクション生成は battle が 1 手単位で行う（`NpcPending=tr
 
 ---
 
-## 8. HTTP 委譲（REST パススルー）
+## 7. HTTP 委譲（REST パススルー）
 
 gateway は `/api/v1/**` の REST リクエストを下流サービスへ委譲する。
 
-### 8.1 委譲契約
+### 7.1 委譲契約
 
 - 認証階層（Public / Auth / Authenticated）に応じて認証ミドルウェアを適用
 - 認証通過後、`playerID` を URL パスに埋めて下流サービスへ HTTP 呼び出し
 - 下流レスポンスは **ステータスコードとボディをそのまま** クライアントへ返す
 
-### 8.2 認証階層
+### 7.2 認証階層
 
 - **Public**: `announcements` / `daily` / `cloud-news` 等、認証不要
 - **Auth**: `register` / `login` — Firebase トークン検証し FirebaseUID → PlayerID 解決
@@ -207,9 +190,9 @@ gateway は `/api/v1/**` の REST リクエストを下流サービスへ委譲�
 
 ---
 
-## 9. Pub/Sub subscribe
+## 8. Pub/Sub subscribe
 
-### 9.1 match_made（§3.4 で詳細）
+### 8.1 match_made（§3.4 で詳細）
 
 - Subscription: `matchmaking-events-gateway` (Exactly-Once)
 - 副作用: battle ゲーム作成 + DB 行挿入 + WS push
@@ -217,7 +200,7 @@ gateway は `/api/v1/**` の REST リクエストを下流サービスへ委譲�
 
 ---
 
-## 10. 認証信頼境界
+## 9. 認証信頼境界
 
 - クライアント → gateway 入り口で Firebase ID Token を検証する
 - 検証済み FirebaseUID を accountclient 経由で PlayerID に解決する
@@ -226,7 +209,7 @@ gateway は `/api/v1/**` の REST リクエストを下流サービスへ委譲�
 
 ---
 
-## 11. Graceful shutdown
+## 10. Graceful shutdown
 
 SIGTERM 受信時の契約:
 
@@ -241,9 +224,9 @@ k8s の preStop hook で traffic ドレイン時間を確保し、in-flight ゲ�
 
 ---
 
-## 12. エラーセマンティクス
+## 11. エラーセマンティクス
 
-### 12.1 下流サービスエラーの扱い
+### 11.1 下流サービスエラーの扱い
 
 | 下流の応答 | gateway の挙動 |
 |---|---|
@@ -252,10 +235,10 @@ k8s の preStop hook で traffic ドレイン時間を確保し、in-flight ゲ�
 | 5xx | WS では `matchmaking_error` 等の retryable エラーで通知。REST では 5xx のまま返す |
 | 到達不能 | 5xx 扱い |
 
-### 12.2 エラーを握りつぶさない
+### 11.2 エラーを握りつぶさない
 
 下流サービス呼び出しの失敗は **必ずクライアント（または Pub/Sub nack）に伝搬する**。ログ出力のみで処理継続してはならない（CLAUDE.md 設計思想）。
 
-### 12.3 Cancel の 404
+### 11.3 Cancel の 404
 
 matchmaking の Cancel が 404 を返すのは、マッチ成立直後や WS 切断時の race で起きる正常系。gateway はこれをエラーとして扱わない。

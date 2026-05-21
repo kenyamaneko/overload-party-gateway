@@ -102,8 +102,7 @@ func main() {
 	wsHandler := ws.NewHandler(wsManager, authClient, accountClient, cfg.AllowedOrigins)
 
 	handlers := &router.Handlers{
-		Auth:     rest.NewAuthHandler(accountClient),
-		Spectate: rest.NewSpectateHandler(wsManager),
+		Auth: rest.NewAuthHandler(accountClient),
 	}
 
 	// ルーター
@@ -135,7 +134,6 @@ func main() {
 	api := v1.Group("")
 	api.Use(middleware.PlayerResolve(accountClient))
 	api.Use(middleware.IssueInternalAuth(internalSigner))
-	router.RegisterAPIRoutes(api, handlers)
 	if err := router.RegisterForwardRoutes(api, cfg); err != nil {
 		log.Fatalf("failed to register forward routes: %v", err)
 	}

@@ -35,14 +35,6 @@ type PlayerResponse struct {
 	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
-// SpectateGameInfo defines model for SpectateGameInfo.
-type SpectateGameInfo struct {
-	GameID    string    `json:"game_id"`
-	Player1ID string    `json:"player1_id"`
-	Player2ID string    `json:"player2_id"`
-	StartedAt time.Time `json:"started_at"`
-}
-
 // VersionResponse defines model for VersionResponse.
 type VersionResponse struct {
 	// ForceUpdate true の場合、クライアントはストアへ誘導する
