@@ -14,8 +14,8 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
-// playerIDList はログメッセージ用にプレイヤー ID をフォーマットする。
-func playerIDList(players []apimatchmaking.MatchedPlayer) string {
+// formatPlayerIDList はログメッセージ用にプレイヤー ID をフォーマットする。
+func formatPlayerIDList(players []apimatchmaking.MatchedPlayer) string {
 	ids := make([]string, 0, len(players))
 	for _, p := range players {
 		ids = append(ids, p.PlayerID)
@@ -71,7 +71,7 @@ func (s *MatchSubscriber) processEvent(ctx context.Context, data []byte) error {
 
 	if err := s.handler.HandleMatchMade(ctx, event); err != nil {
 		slog.Error("matchsubscriber: handler failed",
-			"match_id", event.MatchID, "players", playerIDList(event.Players), "error", err)
+			"match_id", event.MatchID, "players", formatPlayerIDList(event.Players), "error", err)
 		s.unmark(event.MatchID)
 		return fmt.Errorf("matchsubscriber: handler: %w", err)
 	}

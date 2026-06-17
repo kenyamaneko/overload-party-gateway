@@ -1,7 +1,7 @@
 // Package main はローカルモード gateway のエントリポイントです。
 //
 // *_SERVICE_URL 環境変数で指定した URL の全下流サービスが起動している必要がある。
-// cmd/main との違いは認証 middleware: DevAuth により Firebase ID トークンの代わりに
+// cmd/main との違いは認証 middleware: UseDevAuth により Firebase ID トークンの代わりに
 // `dev-token-{uid}` を使用でき、CORS は全オリジン許可となる。
 package main
 
@@ -86,7 +86,7 @@ func main() {
 	}
 
 	r := gin.Default()
-	r.Use(middleware.CORS())
+	r.Use(middleware.UseCORS())
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "mode": "local"})
@@ -104,7 +104,7 @@ func main() {
 	}
 
 	api := r.Group("/api/v1")
-	api.Use(middleware.DevAuthWithPlayerResolve(accountClient))
+	api.Use(middleware.UseDevAuthWithPlayerResolve(accountClient))
 	router.RegisterAuthRoutes(api, handlers)
 	api.Use(middleware.IssueInternalAuth(internalSigner))
 	if err := router.RegisterForwardRoutes(api, cfg); err != nil {

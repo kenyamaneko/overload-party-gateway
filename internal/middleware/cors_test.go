@@ -15,7 +15,7 @@ func init() {
 
 func setupRouter(allowedOrigins ...string) *gin.Engine {
 	r := gin.New()
-	r.Use(CORS(allowedOrigins...))
+	r.Use(UseCORS(allowedOrigins...))
 	r.GET("/test", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})

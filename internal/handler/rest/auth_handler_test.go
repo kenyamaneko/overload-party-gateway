@@ -20,7 +20,7 @@ func init() {
 }
 
 // withFirebaseUID は firebase_uid を context に注入する middleware ヘルパー。
-// FirebaseAuth が成功した状態を再現する。
+// UseFirebaseAuth が成功した状態を再現する。
 func withFirebaseUID(uid string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if uid != "" {

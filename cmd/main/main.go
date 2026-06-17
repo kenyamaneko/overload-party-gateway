@@ -107,7 +107,7 @@ func main() {
 
 	// ルーター
 	r := gin.Default()
-	r.Use(middleware.CORS(cfg.AllowedOrigins...))
+	r.Use(middleware.UseCORS(cfg.AllowedOrigins...))
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
@@ -127,12 +127,12 @@ func main() {
 	}
 
 	v1 := r.Group("/api/v1")
-	v1.Use(middleware.FirebaseAuth(authClient))
+	v1.Use(middleware.UseFirebaseAuth(authClient))
 
 	router.RegisterAuthRoutes(v1, handlers)
 
 	api := v1.Group("")
-	api.Use(middleware.PlayerResolve(accountClient))
+	api.Use(middleware.ResolvePlayer(accountClient))
 	api.Use(middleware.IssueInternalAuth(internalSigner))
 	if err := router.RegisterForwardRoutes(api, cfg); err != nil {
 		log.Fatalf("failed to register forward routes: %v", err)
@@ -178,10 +178,10 @@ func runServices(
 ) error {
 	g, gCtx := errgroup.WithContext(ctx)
 
-	for _, sub := range subscribers {
-		sub := sub
+	for _, subscriber := range subscribers {
+		subscriber := subscriber
 		g.Go(func() error {
-			if err := sub.Run(gCtx); err != nil && gCtx.Err() == nil {
+			if err := subscriber.Run(gCtx); err != nil && gCtx.Err() == nil {
 				return fmt.Errorf("subscriber: %w", err)
 			}
 			return nil

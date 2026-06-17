@@ -25,7 +25,7 @@ func NewAuthHandler(account port.AccountClient) *AuthHandler {
 func (h *AuthHandler) Register(c *gin.Context) {
 	firebaseUID := middleware.GetFirebaseUID(c)
 	if firebaseUID == "" {
-		// FirebaseAuth の後にチェインされる前提だが、防御的に 401 を返す。
+		// UseFirebaseAuth の後にチェインされる前提だが、防御的に 401 を返す。
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing firebase uid"})
 		return
 	}

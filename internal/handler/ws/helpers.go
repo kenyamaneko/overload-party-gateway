@@ -20,17 +20,17 @@ func mustMarshal(v interface{}) json.RawMessage {
 }
 
 // sendError は単一接続にエラーメッセージを送信する。
-func sendError(conn *Connection, code, message string, retryable bool) {
+func sendError(conn *Connection, code, message string, isRetryable bool) {
 	conn.SendMessage(&WSMessage{
 		Type: genws.WSServerMsgError,
-		Data: mustMarshal(ErrorMessage{ErrorCode: code, Message: message, Retryable: retryable}),
+		Data: mustMarshal(ErrorMessage{ErrorCode: code, Message: message, Retryable: isRetryable}),
 	})
 }
 
 // sendErrorToPlayer は hub 経由でプレイヤーにエラーメッセージを送信する。
-func sendErrorToPlayer(hub *ConnectionHub, playerID, code, message string, retryable bool) {
+func sendErrorToPlayer(hub *ConnectionHub, playerID, code, message string, isRetryable bool) {
 	hub.SendToPlayer(playerID, &WSMessage{
 		Type: genws.WSServerMsgError,
-		Data: mustMarshal(ErrorMessage{ErrorCode: code, Message: message, Retryable: retryable}),
+		Data: mustMarshal(ErrorMessage{ErrorCode: code, Message: message, Retryable: isRetryable}),
 	})
 }

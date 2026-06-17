@@ -84,7 +84,7 @@ func (r *GameRelay) handleTurnTimeout(gameID, playerID string) {
 	// Background ベースで独立した短いタイムアウトを使う。
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	result, err := r.battleClient.ProcessAction(ctx, gameID, pNum, gamelogic.ActionTypeForfeit, forfeitReason(gamelogic.WinReasonTurnTimeout))
+	result, err := r.battleClient.ProcessAction(ctx, gameID, pNum, gamelogic.ActionTypeForfeit, buildForfeitReason(gamelogic.WinReasonTurnTimeout))
 	if err != nil {
 		log.Printf("ERROR: turn timeout forfeit (game=%s, player=%s): %v", gameID, playerID, err)
 		// forfeit が battle server に到達しないとゲームが終了せず、両プレイヤーが
