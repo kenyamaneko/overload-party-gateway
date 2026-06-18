@@ -81,8 +81,8 @@ func NewManager(
 	return m
 }
 
-// withAuth は ctx に内部認証 JWT を注入した派生 context を返す。
-func (m *Manager) withAuth(ctx context.Context, playerID string) context.Context {
+// buildAuthedContext は ctx に内部認証 JWT を注入した派生 context を返す。
+func (m *Manager) buildAuthedContext(ctx context.Context, playerID string) context.Context {
 	token, err := m.internalSigner.Issue(playerID)
 	if err != nil {
 		// Issue は起動時に検証済の resolver と非空 playerID で必ず成功するため、ここでの失敗は
@@ -159,7 +159,7 @@ func (m *Manager) handleMatchWaitTimeout(playerID string) {
 func (m *Manager) HandleMessage(conn *Connection, msg *WSMessage) {
 	ctx, cancel := context.WithTimeout(conn.Context(), 30*time.Second)
 	defer cancel()
-	ctx = m.withAuth(ctx, conn.playerID)
+	ctx = m.buildAuthedContext(ctx, conn.playerID)
 
 	switch msg.Type {
 	case genws.WSClientMsgGameEnter:
