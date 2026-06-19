@@ -41,11 +41,11 @@ func (m *mockBattleClient) ListNpcModels(_ context.Context) ([]service.NpcModelE
 	return nil, nil
 }
 
-func (m *mockBattleClient) StartNPCBattle(_ context.Context, _ []service.BattleDeckCard, _ string, _, _ service.PlayerSummaryRequest) (*service.GameCreatedResult, error) {
+func (m *mockBattleClient) StartNPCBattle(_ context.Context, _ []service.BattleDeckCard, _ service.DeckInitiatives, _ string, _, _ service.PlayerSummaryRequest) (*service.GameCreatedResult, error) {
 	return nil, nil
 }
 
-func (m *mockBattleClient) CreatePvPGame(_ context.Context, _, _ []service.BattleDeckCard, _, _ service.PlayerSummaryRequest) (*service.GameCreatedResult, error) {
+func (m *mockBattleClient) CreatePvPGame(_ context.Context, _, _ []service.BattleDeckCard, _, _ service.DeckInitiatives, _, _ service.PlayerSummaryRequest) (*service.GameCreatedResult, error) {
 	return nil, nil
 }
 

@@ -267,7 +267,7 @@ func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, da
 		return
 	}
 
-	cards, err := m.resolveDeckCards(ctx, conn.playerID, req.DeckID)
+	cards, deckInitiatives, err := m.resolveDeckCards(ctx, conn.playerID, req.DeckID)
 	if err != nil {
 		sendError(conn, "npc_battle_error", "failed to resolve deck", true)
 		return
@@ -286,7 +286,7 @@ func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, da
 	player1Summary := service.PlayerSummaryRequest{Name: meName, Level: &me.Level}
 	player2Summary := service.PlayerSummaryRequest{Name: npcDisplayName}
 
-	game, err := m.battleClient.StartNPCBattle(ctx, cards, req.NpcModel, player1Summary, player2Summary)
+	game, err := m.battleClient.StartNPCBattle(ctx, cards, deckInitiatives, req.NpcModel, player1Summary, player2Summary)
 	if err != nil {
 		sendError(conn, "npc_battle_error", err.Error(), true)
 		return
@@ -318,11 +318,11 @@ func (m *Manager) HandleMatchMade(ctx context.Context, event apimatchmaking.Matc
 	m.stopMatchWait(event.Players[0].PlayerID)
 	m.stopMatchWait(event.Players[1].PlayerID)
 
-	p1Cards, err := m.resolveDeckCards(ctx, event.Players[0].PlayerID, event.Players[0].DeckID)
+	p1Cards, p1Initiatives, err := m.resolveDeckCards(ctx, event.Players[0].PlayerID, event.Players[0].DeckID)
 	if err != nil {
 		return err
 	}
-	p2Cards, err := m.resolveDeckCards(ctx, event.Players[1].PlayerID, event.Players[1].DeckID)
+	p2Cards, p2Initiatives, err := m.resolveDeckCards(ctx, event.Players[1].PlayerID, event.Players[1].DeckID)
 	if err != nil {
 		return err
 	}
@@ -330,7 +330,7 @@ func (m *Manager) HandleMatchMade(ctx context.Context, event apimatchmaking.Matc
 	p1Summary := matchedPlayerToSummary(event.Players[0])
 	p2Summary := matchedPlayerToSummary(event.Players[1])
 
-	game, err := m.battleClient.CreatePvPGame(ctx, p1Cards, p2Cards, p1Summary, p2Summary)
+	game, err := m.battleClient.CreatePvPGame(ctx, p1Cards, p2Cards, p1Initiatives, p2Initiatives, p1Summary, p2Summary)
 	if err != nil {
 		return err
 	}
@@ -366,10 +366,12 @@ func matchedPlayerToSummary(p apimatchmaking.MatchedPlayer) service.PlayerSummar
 	return service.PlayerSummaryRequest{Name: p.Name, Level: &level}
 }
 
-func (m *Manager) resolveDeckCards(ctx context.Context, playerID string, deckID int64) ([]service.BattleDeckCard, error) {
-	deckCards, err := m.cardClient.GetDeckCards(ctx, deckID)
+// resolveDeckCards はデッキを battle 用のカード列に展開し、battle へ転送する
+// ルーチン/スペシャル施策の ID を併せて返す。
+func (m *Manager) resolveDeckCards(ctx context.Context, playerID string, deckID int64) ([]service.BattleDeckCard, service.DeckInitiatives, error) {
+	deckCards, deckInitiatives, err := m.cardClient.GetDeckCards(ctx, deckID)
 	if err != nil {
-		return nil, err
+		return nil, service.DeckInitiatives{}, err
 	}
 	totalCount := 0
 	for _, dc := range deckCards {
@@ -381,7 +383,11 @@ func (m *Manager) resolveDeckCards(ctx context.Context, playerID string, deckID 
 			cards = append(cards, service.BattleDeckCard{CardID: dc.CardID, ArtNo: dc.ArtNo})
 		}
 	}
-	return cards, nil
+	initiatives := service.DeckInitiatives{
+		RoutineID: deckInitiatives.RoutineID,
+		SpecialID: deckInitiatives.SpecialID,
+	}
+	return cards, initiatives, nil
 }
 
 func (m *Manager) checkAndIncrementBattleLimit(ctx context.Context) (string, error) {

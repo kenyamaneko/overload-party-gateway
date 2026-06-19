@@ -50,12 +50,17 @@ func (c *Client) ListAllCards(ctx context.Context) ([]*apicard.CardDefinition, e
 }
 
 // GetDeckCards はマッチ成立時や NPC バトル開始時に gateway がデッキを resolve するために使う。
-func (c *Client) GetDeckCards(ctx context.Context, deckID int64) ([]apicard.DeckCard, error) {
-	_, cards, err := c.api.GetDeck(ctx, deckID)
+// デッキのカード構成に加え、battle に転送するルーチン/スペシャル施策の ID を返す。
+func (c *Client) GetDeckCards(ctx context.Context, deckID int64) ([]apicard.DeckCard, port.DeckInitiatives, error) {
+	deck, cards, err := c.api.GetDeck(ctx, deckID)
 	if err != nil {
-		return nil, err
+		return nil, port.DeckInitiatives{}, err
 	}
-	return cards, nil
+	initiatives := port.DeckInitiatives{
+		RoutineID: deck.RoutineID,
+		SpecialID: deck.SpecialID,
+	}
+	return cards, initiatives, nil
 }
 
 // ValidateDeckForBattle は ws/manager の matchmaking_start / npc_battle 受付時の前段検査に使う。
