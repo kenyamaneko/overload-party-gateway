@@ -106,50 +106,60 @@ func newTestRelay() (*GameRelay, *mockBattleClient) {
 // T-2: Passthrough behavior tests
 // ========================================================================
 
+// TestBattleStateMeta_Parsing は battle server の状態 JSON が最小射影に正しくパースされることを検証する。
 func TestBattleStateMeta_Parsing(t *testing.T) {
-	raw := json.RawMessage(`{
-		"currentTurn": 5,
-		"isMyTurn": true,
-		"myView": {
-			"timeBank": 120,
-			"hand": [1,2,3],
-			"field": {"cards": []}
+	tests := []struct {
+		name            string
+		raw             string
+		wantCurrentTurn int64
+		wantIsMyTurn    bool
+		wantTimeBank    int64
+	}{
+		{
+			name: "full payload",
+			raw: `{
+				"currentTurn": 5,
+				"isMyTurn": true,
+				"myView": {
+					"timeBank": 120,
+					"hand": [1,2,3],
+					"field": {"cards": []}
+				},
+				"opponentView": {"handCount": 4}
+			}`,
+			wantCurrentTurn: 5,
+			wantIsMyTurn:    true,
+			wantTimeBank:    120,
 		},
-		"opponentView": {"handCount": 4}
-	}`)
-
-	var meta battleStateMeta
-	err := json.Unmarshal(raw, &meta)
-	require.NoError(t, err)
-	assert.Equal(t, int64(5), meta.CurrentTurn)
-	assert.True(t, meta.IsMyTurn)
-	assert.Equal(t, int64(120), meta.MyView.TimeBank)
-}
-
-func TestBattleStateMeta_IsNotMyTurn(t *testing.T) {
-	raw := json.RawMessage(`{
-		"currentTurn": 3,
-		"isMyTurn": false,
-		"myView": {"timeBank": 0}
-	}`)
-
-	var meta battleStateMeta
-	err := json.Unmarshal(raw, &meta)
-	require.NoError(t, err)
-	assert.Equal(t, int64(3), meta.CurrentTurn)
-	assert.False(t, meta.IsMyTurn)
-	assert.Equal(t, int64(0), meta.MyView.TimeBank)
-}
-
-func TestBattleStateMeta_EmptyJSON(t *testing.T) {
-	raw := json.RawMessage(`{}`)
-
-	var meta battleStateMeta
-	err := json.Unmarshal(raw, &meta)
-	require.NoError(t, err)
-	assert.Equal(t, int64(0), meta.CurrentTurn)
-	assert.False(t, meta.IsMyTurn)
-	assert.Equal(t, int64(0), meta.MyView.TimeBank)
+		{
+			name: "not my turn",
+			raw: `{
+				"currentTurn": 3,
+				"isMyTurn": false,
+				"myView": {"timeBank": 0}
+			}`,
+			wantCurrentTurn: 3,
+			wantIsMyTurn:    false,
+			wantTimeBank:    0,
+		},
+		{
+			name:            "empty json defaults to zero values",
+			raw:             `{}`,
+			wantCurrentTurn: 0,
+			wantIsMyTurn:    false,
+			wantTimeBank:    0,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var meta battleStateMeta
+			err := json.Unmarshal(json.RawMessage(tt.raw), &meta)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantCurrentTurn, meta.CurrentTurn)
+			assert.Equal(t, tt.wantIsMyTurn, meta.IsMyTurn)
+			assert.Equal(t, tt.wantTimeBank, meta.MyView.TimeBank)
+		})
+	}
 }
 
 // ========================================================================

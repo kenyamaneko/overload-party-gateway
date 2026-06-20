@@ -14,28 +14,28 @@ import (
 // 「cancel 後は発火しない」「timeBank<=0 で no-op」が契約。
 // 実発火時には battle server 呼び出しが起こるため、battle 呼び出しを伴わない範囲で検証する。
 
-func TestResetTurnTimer_ZeroTimeBank_DoesNothing(t *testing.T) {
-	relay, _ := newTestRelay()
-	relay.JoinGame("p1", "g1", 1)
+// TestResetTurnTimer_NonPositiveTimeBank_DoesNothing は timeBank<=0 のときタイマーを登録しないことを検証する。
+func TestResetTurnTimer_NonPositiveTimeBank_DoesNothing(t *testing.T) {
+	tests := []struct {
+		name            string
+		timeBankSeconds int64
+	}{
+		{"zero", 0},
+		{"negative", -5},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			relay, _ := newTestRelay()
+			relay.JoinGame("p1", "g1", 1)
 
-	relay.resetTurnTimer("g1", "p1", 0)
+			relay.resetTurnTimer("g1", "p1", tt.timeBankSeconds)
 
-	relay.timerMu.Lock()
-	_, ok := relay.turnTimers["g1"]
-	relay.timerMu.Unlock()
-	assert.False(t, ok, "no timer should be registered when timeBank<=0")
-}
-
-func TestResetTurnTimer_NegativeTimeBank_DoesNothing(t *testing.T) {
-	relay, _ := newTestRelay()
-	relay.JoinGame("p1", "g1", 1)
-
-	relay.resetTurnTimer("g1", "p1", -5)
-
-	relay.timerMu.Lock()
-	_, ok := relay.turnTimers["g1"]
-	relay.timerMu.Unlock()
-	assert.False(t, ok)
+			relay.timerMu.Lock()
+			_, ok := relay.turnTimers["g1"]
+			relay.timerMu.Unlock()
+			assert.False(t, ok, "no timer should be registered when timeBank<=0")
+		})
+	}
 }
 
 func TestResetTurnTimer_RegistersTimer(t *testing.T) {
