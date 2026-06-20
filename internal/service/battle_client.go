@@ -32,13 +32,19 @@ type (
 // client 公開 path (`/api/v1/games/{id}/log[/text]`, `/api/v1/npc/models`) は
 // gateway path-prefix forwarder が直接 forward するため本 interface には含めない。
 type BattleClient interface {
-	StartNPCBattle(ctx context.Context, deckCards []BattleDeckCard, npcModel string, player1Summary, player2Summary PlayerSummaryRequest) (*GameCreatedResult, error)
-	CreatePvPGame(ctx context.Context, deck1Cards, deck2Cards []BattleDeckCard, player1Summary, player2Summary PlayerSummaryRequest) (*GameCreatedResult, error)
+	StartNPCBattle(ctx context.Context, deckCards []BattleDeckCard, deckInitiatives DeckInitiatives, npcModel string, player1Summary, player2Summary PlayerSummaryRequest) (*GameCreatedResult, error)
+	CreatePvPGame(ctx context.Context, deck1Cards, deck2Cards []BattleDeckCard, deck1Initiatives, deck2Initiatives DeckInitiatives, player1Summary, player2Summary PlayerSummaryRequest) (*GameCreatedResult, error)
 	ProcessAction(ctx context.Context, gameID string, playerNum int, actionType string, data json.RawMessage) (*ActionResult, error)
 	GetGameStateForPlayer(ctx context.Context, gameID string, playerNum int) (json.RawMessage, error)
 	GetTurnControlsForPlayer(ctx context.Context, gameID string, playerNum int) (json.RawMessage, error)
 	AdvanceNpcTurn(ctx context.Context, gameID string) (*ActionResult, error)
 	ListNpcModels(ctx context.Context) ([]NpcModelEntry, error)
+}
+
+// DeckInitiatives はデッキがセットしたルーチン/スペシャル施策の ID を battle へ転送するための値です。
+type DeckInitiatives struct {
+	RoutineID string
+	SpecialID string
 }
 
 const battleClientTimeout = 30 * time.Second
@@ -56,12 +62,14 @@ func NewBattleClient(baseURL string) BattleClient {
 	}
 }
 
-func (c *battleClient) StartNPCBattle(ctx context.Context, deckCards []BattleDeckCard, npcModel string, player1Summary, player2Summary PlayerSummaryRequest) (*GameCreatedResult, error) {
+func (c *battleClient) StartNPCBattle(ctx context.Context, deckCards []BattleDeckCard, deckInitiatives DeckInitiatives, npcModel string, player1Summary, player2Summary PlayerSummaryRequest) (*GameCreatedResult, error) {
 	body := &apibattle.NpcBattleRequest{
 		DeckCards:      deckCards,
 		NpcModel:       npcModel,
 		Player1Summary: player1Summary,
 		Player2Summary: player2Summary,
+		RoutineId:      deckInitiatives.RoutineID,
+		SpecialId:      deckInitiatives.SpecialID,
 	}
 	var result GameCreatedResult
 	if err := c.post(ctx, "/api/v1/games/npc", body, &result); err != nil {
@@ -70,10 +78,14 @@ func (c *battleClient) StartNPCBattle(ctx context.Context, deckCards []BattleDec
 	return &result, nil
 }
 
-func (c *battleClient) CreatePvPGame(ctx context.Context, deck1Cards, deck2Cards []BattleDeckCard, player1Summary, player2Summary PlayerSummaryRequest) (*GameCreatedResult, error) {
+func (c *battleClient) CreatePvPGame(ctx context.Context, deck1Cards, deck2Cards []BattleDeckCard, deck1Initiatives, deck2Initiatives DeckInitiatives, player1Summary, player2Summary PlayerSummaryRequest) (*GameCreatedResult, error) {
 	body := &apibattle.PvpBattleRequest{
 		Deck1Cards:     deck1Cards,
 		Deck2Cards:     deck2Cards,
+		Deck1RoutineId: deck1Initiatives.RoutineID,
+		Deck1SpecialId: deck1Initiatives.SpecialID,
+		Deck2RoutineId: deck2Initiatives.RoutineID,
+		Deck2SpecialId: deck2Initiatives.SpecialID,
 		Player1Summary: player1Summary,
 		Player2Summary: player2Summary,
 	}
