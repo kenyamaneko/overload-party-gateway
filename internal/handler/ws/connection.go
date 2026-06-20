@@ -30,7 +30,7 @@ type Connection struct {
 	playerID string
 	send     chan []byte
 	mu       sync.Mutex
-	closed   bool
+	isClosed bool
 
 	// ctx は接続が閉じられた時点で cancel される。
 	// 下流の HTTP 呼び出しに引き回すことで、WS 切断時に in-flight な処理を即座に打ち切る。
@@ -76,7 +76,7 @@ func (c *Connection) SendMessage(msg *WSMessage) {
 func (c *Connection) SendRaw(data []byte) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.closed {
+	if c.isClosed {
 		return
 	}
 
@@ -158,8 +158,8 @@ func (c *Connection) WritePump() {
 func (c *Connection) Close() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if !c.closed {
-		c.closed = true
+	if !c.isClosed {
+		c.isClosed = true
 		// 下流呼び出しを即座に打ち切るため close より先に cancel する。
 		if c.cancel != nil {
 			c.cancel()

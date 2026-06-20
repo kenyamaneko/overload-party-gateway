@@ -13,9 +13,9 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
-// DevAuth は Firebase なしで dev トークンを受け付ける Gin middleware を返します。
+// UseDevAuth は Firebase なしで dev トークンを受け付ける Gin middleware を返します。
 // トークン形式: "dev-token-{uid}" → firebase_uid context key に "{uid}" を設定。
-func DevAuth() gin.HandlerFunc {
+func UseDevAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -43,9 +43,9 @@ func DevAuth() gin.HandlerFunc {
 // DevPlayerSetup は dev プレイヤーが自動作成された後に呼ばれるコールバックです
 type DevPlayerSetup func(ctx context.Context, playerID string) error
 
-// DevAuthWithPlayerResolve は dev トークン認証と firebase_uid → playerID 解決を行う Gin middleware を返します。
+// UseDevAuthWithPlayerResolve は dev トークン認証と firebase_uid → playerID 解決を行う Gin middleware を返します。
 // プレイヤーが未登録の場合は account サービス経由で自動作成する。
-func DevAuthWithPlayerResolve(accountClient port.AccountClient, onCreated ...DevPlayerSetup) gin.HandlerFunc {
+func UseDevAuthWithPlayerResolve(accountClient port.AccountClient, onCreated ...DevPlayerSetup) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {

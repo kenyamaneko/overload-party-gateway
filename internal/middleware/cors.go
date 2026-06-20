@@ -9,9 +9,9 @@ import (
 // CORS プリフライトのキャッシュ有効期間（秒）。24 時間。
 const corsMaxAge = "86400"
 
-// CORS は CORS ヘッダーを設定する Gin middleware を返します。
+// UseCORS は CORS ヘッダーを設定する Gin middleware を返します。
 // 本番では allowedOrigins で許可オリジンを制限する。
-func CORS(allowedOrigins ...string) gin.HandlerFunc {
+func UseCORS(allowedOrigins ...string) gin.HandlerFunc {
 	origins := make(map[string]struct{}, len(allowedOrigins))
 	for _, o := range allowedOrigins {
 		origins[o] = struct{}{}
@@ -24,11 +24,11 @@ func CORS(allowedOrigins ...string) gin.HandlerFunc {
 			return
 		}
 
-		allowed := len(origins) == 0
-		if !allowed {
-			_, allowed = origins[origin]
+		isAllowed := len(origins) == 0
+		if !isAllowed {
+			_, isAllowed = origins[origin]
 		}
-		if !allowed {
+		if !isAllowed {
 			c.Next()
 			return
 		}

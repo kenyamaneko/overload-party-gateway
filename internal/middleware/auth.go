@@ -21,8 +21,8 @@ const playerIDKey contextKey = "player_id"
 // トークン形式: "dev-token-{uid}"。
 const DevTokenPrefix = "dev-token-"
 
-// FirebaseAuth は Firebase ID トークンを検証する Gin middleware を返します
-func FirebaseAuth(authClient *auth.Client) gin.HandlerFunc {
+// UseFirebaseAuth は Firebase ID トークンを検証する Gin middleware を返します
+func UseFirebaseAuth(authClient *auth.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -65,9 +65,9 @@ func GetPlayerID(c *gin.Context) string {
 	return ""
 }
 
-// PlayerResolve は認証済み Firebase UID を account サービス経由でプレイヤー UUID に解決する Gin middleware を返します。
-// FirebaseAuth の後にチェインする必要がある。
-func PlayerResolve(accountClient port.AccountClient) gin.HandlerFunc {
+// ResolvePlayer は認証済み Firebase UID を account サービス経由でプレイヤー UUID に解決する Gin middleware を返します。
+// UseFirebaseAuth の後にチェインする必要がある。
+func ResolvePlayer(accountClient port.AccountClient) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		uid := GetFirebaseUID(c)
 		if uid == "" {

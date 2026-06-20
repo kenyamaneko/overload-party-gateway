@@ -247,31 +247,31 @@ func (r *GameRelay) sendActionPerformed(ctx context.Context, gameID, actingPlaye
 	r.mu.RUnlock()
 
 	actingPlayerNum := r.resolvePlayerNum(actingPlayerID)
-	for _, evt := range result.Events {
+	for _, event := range result.Events {
 		switch {
-		case evt.EventType == gamelogic.EventTypeTurnStart:
-			r.sendActionToPlayers(ctx, gameID, players, evt)
+		case event.EventType == gamelogic.EventTypeTurnStart:
+			r.sendActionToPlayers(ctx, gameID, players, event)
 
-		case evt.PlayerNum != nil && *evt.PlayerNum == int64(actingPlayerNum):
+		case event.PlayerNum != nil && *event.PlayerNum == int64(actingPlayerNum):
 			opponents := make([]string, 0, len(players))
 			for _, pid := range players {
 				if pid != actingPlayerID {
 					opponents = append(opponents, pid)
 				}
 			}
-			r.sendActionToPlayers(ctx, gameID, opponents, evt)
+			r.sendActionToPlayers(ctx, gameID, opponents, event)
 
 		default:
-			if len(evt.State) == 0 {
+			if len(event.State) == 0 {
 				continue
 			}
 			r.hub.SendToPlayer(actingPlayerID, &WSMessage{
 				Type: genws.WSServerMsgActionPerformed,
 				Data: mustMarshal(ActionPerformedMessage{
-					Sequence:   evt.Sequence,
-					ActionType: evt.EventType,
-					ActionData: mapToRaw(evt.EventData),
-					State:      mapToRaw(evt.State),
+					Sequence:   event.Sequence,
+					ActionType: event.EventType,
+					ActionData: mapToRaw(event.EventData),
+					State:      mapToRaw(event.State),
 				}),
 			})
 		}
@@ -618,7 +618,7 @@ func (r *GameRelay) HandleDisconnectTimeout(playerID, gameID string) {
 	// 切断タイムアウトは WS コネクション喪失後に発火するので Background ベースで実行する。
 	ctx, cancel := context.WithTimeout(context.Background(), downstreamCallTimeout)
 	defer cancel()
-	result, err := r.battleClient.ProcessAction(ctx, gameID, pNum, gamelogic.ActionTypeForfeit, forfeitReason(gamelogic.WinReasonDisconnect))
+	result, err := r.battleClient.ProcessAction(ctx, gameID, pNum, gamelogic.ActionTypeForfeit, buildForfeitReason(gamelogic.WinReasonDisconnect))
 	if err != nil {
 		// 切断 forfeit は対戦相手にも影響する（ゲーム終了せず宙ぶらりんになる）。
 		// 接続は既に切れているので本人通知は不可能だが、対戦相手は DB 観測 / 別経路の
@@ -682,8 +682,8 @@ func appendUnique(slice []string, s string) []string {
 	return append(slice, s)
 }
 
-// forfeitReason は forfeit リクエスト用のアクションデータを構築する。
-func forfeitReason(reason string) json.RawMessage {
+// buildForfeitReason は forfeit リクエスト用のアクションデータを構築する。
+func buildForfeitReason(reason string) json.RawMessage {
 	return mustMarshal(map[string]string{"reason": reason})
 }
 

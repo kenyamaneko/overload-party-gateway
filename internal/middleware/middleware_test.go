@@ -77,7 +77,7 @@ func (s *statefulAccountFake) seed(firebaseUID, playerID string) {
 	}
 }
 
-func TestDevAuth(t *testing.T) {
+func TestUseDevAuth(t *testing.T) {
 	tests := []struct {
 		name       string
 		authHeader string
@@ -92,7 +92,7 @@ func TestDevAuth(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := gin.New()
-			r.Use(DevAuth())
+			r.Use(UseDevAuth())
 			r.GET("/test", func(c *gin.Context) {
 				uid := GetFirebaseUID(c)
 				c.JSON(http.StatusOK, gin.H{"uid": uid})
@@ -114,7 +114,7 @@ func TestDevAuth(t *testing.T) {
 	}
 }
 
-func TestDevAuthWithPlayerResolve_AutoCreate(t *testing.T) {
+func TestUseDevAuthWithPlayerResolve_AutoCreate(t *testing.T) {
 	fa := newStatefulAccountFake()
 	defer fa.close()
 
@@ -125,7 +125,7 @@ func TestDevAuthWithPlayerResolve_AutoCreate(t *testing.T) {
 	})
 
 	r := gin.New()
-	r.Use(DevAuthWithPlayerResolve(fa.client(), onCreated))
+	r.Use(UseDevAuthWithPlayerResolve(fa.client(), onCreated))
 	r.GET("/test", func(c *gin.Context) {
 		pid := GetPlayerID(c)
 		c.JSON(http.StatusOK, gin.H{"player_id": pid})
@@ -141,13 +141,13 @@ func TestDevAuthWithPlayerResolve_AutoCreate(t *testing.T) {
 	assert.Contains(t, w.Body.String(), "generated-newuser")
 }
 
-func TestDevAuthWithPlayerResolve_ExistingPlayer(t *testing.T) {
+func TestUseDevAuthWithPlayerResolve_ExistingPlayer(t *testing.T) {
 	fa := newStatefulAccountFake()
 	defer fa.close()
 	fa.seed("existinguser", "existing-id")
 
 	r := gin.New()
-	r.Use(DevAuthWithPlayerResolve(fa.client()))
+	r.Use(UseDevAuthWithPlayerResolve(fa.client()))
 	r.GET("/test", func(c *gin.Context) {
 		pid := GetPlayerID(c)
 		c.JSON(http.StatusOK, gin.H{"player_id": pid})
@@ -162,7 +162,7 @@ func TestDevAuthWithPlayerResolve_ExistingPlayer(t *testing.T) {
 	assert.Equal(t, `{"player_id":"existing-id"}`, w.Body.String())
 }
 
-func TestPlayerResolve_Success(t *testing.T) {
+func TestResolvePlayer_Success(t *testing.T) {
 	fa := newStatefulAccountFake()
 	defer fa.close()
 	fa.seed("uid1", "p1")
@@ -172,7 +172,7 @@ func TestPlayerResolve_Success(t *testing.T) {
 		c.Set(string(firebaseUIDKey), "uid1")
 		c.Next()
 	})
-	r.Use(PlayerResolve(fa.client()))
+	r.Use(ResolvePlayer(fa.client()))
 	r.GET("/test", func(c *gin.Context) {
 		pid := GetPlayerID(c)
 		c.JSON(http.StatusOK, gin.H{"player_id": pid})
@@ -186,12 +186,12 @@ func TestPlayerResolve_Success(t *testing.T) {
 	assert.Equal(t, `{"player_id":"p1"}`, w.Body.String())
 }
 
-func TestPlayerResolve_MissingUID(t *testing.T) {
+func TestResolvePlayer_MissingUID(t *testing.T) {
 	fa := newStatefulAccountFake()
 	defer fa.close()
 
 	r := gin.New()
-	r.Use(PlayerResolve(fa.client()))
+	r.Use(ResolvePlayer(fa.client()))
 	r.GET("/test", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{})
 	})
@@ -203,7 +203,7 @@ func TestPlayerResolve_MissingUID(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
-func TestPlayerResolve_PlayerNotRegistered(t *testing.T) {
+func TestResolvePlayer_PlayerNotRegistered(t *testing.T) {
 	fa := newStatefulAccountFake()
 	defer fa.close()
 
@@ -212,7 +212,7 @@ func TestPlayerResolve_PlayerNotRegistered(t *testing.T) {
 		c.Set(string(firebaseUIDKey), "unknown-uid")
 		c.Next()
 	})
-	r.Use(PlayerResolve(fa.client()))
+	r.Use(ResolvePlayer(fa.client()))
 	r.GET("/test", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{})
 	})
