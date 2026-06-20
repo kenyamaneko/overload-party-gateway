@@ -154,12 +154,12 @@ github.com/json-iterator/go v1.1.12/go.mod h1:e30LSqwooZae/UwlEbR2852Gd8hjQvJoHm
 github.com/juju/gnuflag v0.0.0-20171113085948-2ce1bb71843d/go.mod h1:2PavIy+JPciBPrBUjwbNvtwB6RQlve+hkpll6QSNmOE=
 github.com/kenyamaneko/overload-party-account/packages/api-account v0.2.0 h1:giUtWvlETCCytWcIE1IK+xYiPuJ7/5niHbipwZ25PLg=
 github.com/kenyamaneko/overload-party-account/packages/api-account v0.2.0/go.mod h1:Q4gp7reYrriSOUqO9nD4Oa/3zNlS2bHgAj48x0TiLYc=
-github.com/kenyamaneko/overload-party-battle/packages/api-battle-rpc-go v0.2.1 h1:9erK6U60+gPRYkNrH/bozlgZ2YS7GV6oFq0nLum+WIo=
-github.com/kenyamaneko/overload-party-battle/packages/api-battle-rpc-go v0.2.1/go.mod h1:VaArzviJG3ViPI4LTwIywMYgn77eMLgHA4RZUThE5L8=
+github.com/kenyamaneko/overload-party-battle/packages/api-battle-rpc-go v0.2.4 h1:Gmh8nmN0LqEkrsGBXvloiHH5dq+/MItO+6sZ7WNXJqY=
+github.com/kenyamaneko/overload-party-battle/packages/api-battle-rpc-go v0.2.4/go.mod h1:VaArzviJG3ViPI4LTwIywMYgn77eMLgHA4RZUThE5L8=
 github.com/kenyamaneko/overload-party-battle/packages/game-logic-constants-go v0.1.0 h1:nxbYSBUkTerPTfy+9UugWeZYXOFzhsSxaVUgtgh8r+U=
 github.com/kenyamaneko/overload-party-battle/packages/game-logic-constants-go v0.1.0/go.mod h1:p4GKIRMJjAwIIBEKFXKOBBmZPrvuTrNfEV8dzUPcF9E=
-github.com/kenyamaneko/overload-party-card/packages/api-card v0.2.0 h1:x3CYTM+YtH7lnZo53o/9AVxE7J7+MKduMCCTgq3+0Qs=
-github.com/kenyamaneko/overload-party-card/packages/api-card v0.2.0/go.mod h1:3OLEy5qNLPANClSmxHc2siCssAbxcK/QI3udwgOU0sA=
+github.com/kenyamaneko/overload-party-card/packages/api-card v0.3.0 h1:pm/KtjHf0VcBgQQRQXwpbhc4PquWpKiRzqdc1J83/TU=
+github.com/kenyamaneko/overload-party-card/packages/api-card v0.3.0/go.mod h1:3OLEy5qNLPANClSmxHc2siCssAbxcK/QI3udwgOU0sA=
 github.com/kenyamaneko/overload-party-common/packages/game-design-constants v0.1.0 h1:1+9zGE1CWh+XkiQ0FYnNBIOXHyS9N+OjzVVvWIJRaXo=
 github.com/kenyamaneko/overload-party-common/packages/game-design-constants v0.1.0/go.mod h1:4z5Ry1Y8LZQM4OKqLivo/OhVefKloLZP2vUDQ1Yo0UI=
 github.com/kenyamaneko/overload-party-matchmaking/packages/api-matchmaking v0.1.7 h1:nN0GUtuvUqPXxQXdKQdhl131/wmBN72r2FrcnDvdEwI=
