@@ -366,8 +366,7 @@ func matchedPlayerToSummary(p apimatchmaking.MatchedPlayer) service.PlayerSummar
 	return service.PlayerSummaryRequest{Name: p.Name, Level: &level}
 }
 
-// resolveDeckCards はデッキを battle 用のカード列に展開し、battle へ転送する
-// ルーチン/スペシャル施策の ID を併せて返す。
+// resolveDeckCards はデッキを battle 転送用の情報に展開する。
 func (m *Manager) resolveDeckCards(ctx context.Context, playerID string, deckID int64) ([]service.BattleDeckCard, service.DeckInitiatives, error) {
 	deckCards, deckInitiatives, err := m.cardClient.GetDeckCards(ctx, deckID)
 	if err != nil {

@@ -50,7 +50,6 @@ func (c *Client) ListAllCards(ctx context.Context) ([]*apicard.CardDefinition, e
 }
 
 // GetDeckCards はマッチ成立時や NPC バトル開始時に gateway がデッキを resolve するために使う。
-// デッキのカード構成に加え、battle に転送するルーチン/スペシャル施策の ID を返す。
 func (c *Client) GetDeckCards(ctx context.Context, deckID int64) ([]apicard.DeckCard, port.DeckInitiatives, error) {
 	deck, cards, err := c.api.GetDeck(ctx, deckID)
 	if err != nil {
