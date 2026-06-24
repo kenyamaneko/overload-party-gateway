@@ -103,9 +103,19 @@ func main() {
 		pub.GET("/version", staticHandler.GetVersion)
 	}
 
+	// ローカルモードは Firebase Auth エミュレーターを持たない (この compose スタックは
+	// Pub/Sub と Firestore のエミュレーターのみ提供する) ため、Firebase ID トークン検証の
+	// 代わりに dev-token を使い、その代償として prod (cmd/main) との認証非対称を許容する。
+	// auth (register/login) は dev-token を検証するだけにし、プレイヤー生成は handler に委ねる。
+	// 自動生成 middleware の配下に置くと register が二重生成になり 409 を返すため分離する。
+	auth := r.Group("/api/v1")
+	auth.Use(middleware.UseDevAuth())
+	router.RegisterAuthRoutes(auth, handlers)
+
+	// forward は dev-token からプレイヤーを自動生成する。これは register を呼ばない dev-token
+	// クライアント (同梱 UI) を成立させるためのローカル限定の非対称で、prod は明示 register を要する。
 	api := r.Group("/api/v1")
 	api.Use(middleware.UseDevAuthWithPlayerResolve(accountClient))
-	router.RegisterAuthRoutes(api, handlers)
 	api.Use(middleware.IssueInternalAuth(internalSigner))
 	if err := router.RegisterForwardRoutes(api, cfg); err != nil {
 		log.Fatalf("failed to register forward routes: %v", err)
