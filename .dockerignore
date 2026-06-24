@@ -1,0 +1,5 @@
+# ローカル開発専用の go.work は sibling リポを overlay 参照するため、単一リポしか
+# 含まない docker build context では参照先が解決できずビルドを破綻させる。除外して
+# コンテナ内では go.mod 単体でモジュール解決させる。
+go.work
+go.work.sum
