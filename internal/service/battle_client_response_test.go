@@ -96,19 +96,20 @@ func TestParseBattleError(t *testing.T) {
 	}
 }
 
-// TestBattleClient_GetGameStateForPlayer_StatusHandling は state 取得が 404 を不在 (nil) として扱い、200 を raw として返す契約を検証する。
+// TestBattleClient_GetGameStateForPlayer_StatusHandling は state 取得のステータス別レスポンス変換契約を検証する。
 func TestBattleClient_GetGameStateForPlayer_StatusHandling(t *testing.T) {
 	cases := []struct {
 		name    string
 		status  int
 		body    string
 		wantRaw json.RawMessage
+		wantErr error
 	}{
 		{
-			name:    "404 は不在として nil を返す",
+			name:    "404 は状態欠落として errMissingGameState を返す",
 			status:  http.StatusNotFound,
 			body:    `{"error":"game not found"}`,
-			wantRaw: nil,
+			wantErr: errMissingGameState,
 		},
 		{
 			name:    "200 は body を raw として返す",
@@ -119,13 +120,12 @@ func TestBattleClient_GetGameStateForPlayer_StatusHandling(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			srv := newBattleServer(t, tc.status, tc.body)
 			c := NewBattleClient(srv.URL)
 
 			got, err := c.GetGameStateForPlayer(context.Background(), "game-1", 1)
-			require.NoError(t, err)
+			require.ErrorIs(t, err, tc.wantErr)
 			require.Equal(t, tc.wantRaw, got)
 		})
 	}
@@ -146,7 +146,7 @@ func TestBattleClient_GetGameStateForPlayer_ErrorStatus(t *testing.T) {
 			wantMsg: "invalid player",
 		},
 		{
-			name:    "非 JSON エラーはステータスと body にフォールバックする",
+			name:    "非 JSON エラーはステータスコードと body 文字列をそのままエラー文に含める",
 			status:  http.StatusInternalServerError,
 			body:    "boom",
 			wantMsg: "battle server returned 500: boom",
