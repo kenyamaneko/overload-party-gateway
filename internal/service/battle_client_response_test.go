@@ -21,77 +21,57 @@ func newBattleServer(t *testing.T, status int, body string) *httptest.Server {
 	return srv
 }
 
-// TestRawToMap は battle アクション data の変換が、入力の有無と不正データを区別する契約を検証する。
-func TestRawToMap(t *testing.T) {
-	cases := []struct {
-		name    string
-		raw     json.RawMessage
-		wantMap map[string]interface{}
-		wantErr bool
-	}{
-		{
-			name:    "空入力は nil を返す",
-			raw:     nil,
-			wantMap: nil,
-			wantErr: false,
-		},
-		{
-			name:    "オブジェクトを map に変換する",
-			raw:     json.RawMessage(`{"target":"TST-0001"}`),
-			wantMap: map[string]interface{}{"target": "TST-0001"},
-			wantErr: false,
-		},
-		{
-			name:    "不正な JSON はエラーになる",
-			raw:     json.RawMessage(`{`),
-			wantMap: nil,
-			wantErr: true,
-		},
-	}
+// TestBattleClient_ProcessAction_RejectsInvalidData は不正なアクションデータが battle へ送信される前に弾かれる契約を検証する。
+func TestBattleClient_ProcessAction_RejectsInvalidData(t *testing.T) {
+	wasPosted := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		wasPosted = true
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	t.Cleanup(srv.Close)
+	c := NewBattleClient(srv.URL)
 
-	for _, tc := range cases {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := rawToMap(tc.raw)
-			require.Equal(t, tc.wantErr, err != nil)
-			require.Equal(t, tc.wantMap, got)
-		})
-	}
+	_, err := c.ProcessAction(context.Background(), "game-1", 1, "play_card", json.RawMessage(`{`))
+
+	require.Error(t, err)
+	require.False(t, wasPosted)
 }
 
-// TestParseBattleError は battle エラーレスポンスから構造化メッセージを抽出し、抽出不能時はステータスと body にフォールバックする契約を検証する。
-func TestParseBattleError(t *testing.T) {
+// TestBattleClient_ProcessAction_SendsTransformedData はアクションデータが map へ変換され battle へ送られる契約を検証する。
+func TestBattleClient_ProcessAction_SendsTransformedData(t *testing.T) {
 	cases := []struct {
-		name       string
-		statusCode int
-		body       string
-		wantMsg    string
+		name     string
+		data     json.RawMessage
+		wantData interface{}
 	}{
 		{
-			name:       "構造化された error フィールドを抽出する",
-			statusCode: http.StatusBadRequest,
-			body:       `{"error":"deck not found"}`,
-			wantMsg:    "deck not found",
+			name:     "空入力は data なしで送られる",
+			data:     nil,
+			wantData: nil,
 		},
 		{
-			name:       "error フィールドが空ならステータスと body にフォールバックする",
-			statusCode: http.StatusBadRequest,
-			body:       `{"error":""}`,
-			wantMsg:    `battle server returned 400: {"error":""}`,
-		},
-		{
-			name:       "非 JSON body はステータスと body にフォールバックする",
-			statusCode: http.StatusBadGateway,
-			body:       "upstream down",
-			wantMsg:    "battle server returned 502: upstream down",
+			name:     "オブジェクトは map として送られる",
+			data:     json.RawMessage(`{"target":"TST-0001"}`),
+			wantData: map[string]interface{}{"target": "TST-0001"},
 		},
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			err := parseBattleError(tc.statusCode, []byte(tc.body))
-			require.EqualError(t, err, tc.wantMsg)
+			var sent map[string]interface{}
+			var decodeErr error
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				decodeErr = json.NewDecoder(r.Body).Decode(&sent)
+				_, _ = w.Write([]byte(`{}`))
+			}))
+			t.Cleanup(srv.Close)
+			c := NewBattleClient(srv.URL)
+
+			_, err := c.ProcessAction(context.Background(), "game-1", 1, "play_card", tc.data)
+
+			require.NoError(t, err)
+			require.NoError(t, decodeErr)
+			require.Equal(t, tc.wantData, sent["data"])
 		})
 	}
 }
