@@ -147,9 +147,19 @@ func (c *battleClient) AdvanceNpcTurn(ctx context.Context, gameID string) (*Acti
 	return &result, nil
 }
 
+var errMissingGameState = errors.New("battle returned no game state")
+
+// GetGameStateForPlayer は視点プレイヤーのゲーム状態を返す。欠落時は errMissingGameState を返す。
 func (c *battleClient) GetGameStateForPlayer(ctx context.Context, gameID string, playerNum int) (json.RawMessage, error) {
 	path := fmt.Sprintf("/api/v1/games/%s/state/%d", gameID, playerNum)
-	return c.getRaw(ctx, path)
+	raw, err := c.getRaw(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) == 0 {
+		return nil, errMissingGameState
+	}
+	return raw, nil
 }
 
 func (c *battleClient) GetTurnControlsForPlayer(ctx context.Context, gameID string, playerNum int) (json.RawMessage, error) {
