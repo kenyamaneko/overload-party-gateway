@@ -76,6 +76,59 @@ func TestBattleClient_ProcessAction_SendsTransformedData(t *testing.T) {
 	}
 }
 
+// TestBattleClient_Post_NonOKStatus_SurfacesBattleError は POST 系メソッドが battle の非 200 応答を構造化エラーメッセージへ変換して呼び出し元へ返す契約を検証する。
+func TestBattleClient_Post_NonOKStatus_SurfacesBattleError(t *testing.T) {
+	cases := []struct {
+		name    string
+		status  int
+		body    string
+		wantMsg string
+		call    func(context.Context, BattleClient) error
+	}{
+		{
+			name:    "ProcessAction は battle の構造化エラーメッセージを surface する",
+			status:  http.StatusBadRequest,
+			body:    `{"error":"invalid action"}`,
+			wantMsg: "invalid action",
+			call: func(ctx context.Context, c BattleClient) error {
+				_, err := c.ProcessAction(ctx, "game-1", 1, "play_card", json.RawMessage(`{}`))
+				return err
+			},
+		},
+		{
+			name:    "StartNPCBattle は非 JSON エラーをステータスと body に変換する",
+			status:  http.StatusInternalServerError,
+			body:    "boom",
+			wantMsg: "battle server returned 500: boom",
+			call: func(ctx context.Context, c BattleClient) error {
+				_, err := c.StartNPCBattle(ctx, nil, DeckInitiatives{}, "npc-1", PlayerSummaryRequest{}, PlayerSummaryRequest{})
+				return err
+			},
+		},
+		{
+			name:    "CreatePvPGame は battle の構造化エラーメッセージを surface する",
+			status:  http.StatusBadRequest,
+			body:    `{"error":"deck mismatch"}`,
+			wantMsg: "deck mismatch",
+			call: func(ctx context.Context, c BattleClient) error {
+				_, err := c.CreatePvPGame(ctx, nil, nil, DeckInitiatives{}, DeckInitiatives{}, PlayerSummaryRequest{}, PlayerSummaryRequest{})
+				return err
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := newBattleServer(t, tc.status, tc.body)
+			c := NewBattleClient(srv.URL)
+
+			err := tc.call(context.Background(), c)
+
+			require.EqualError(t, err, tc.wantMsg)
+		})
+	}
+}
+
 // TestBattleClient_GetGameStateForPlayer_StatusHandling は state 取得のステータス別レスポンス変換契約を検証する。
 func TestBattleClient_GetGameStateForPlayer_StatusHandling(t *testing.T) {
 	cases := []struct {
