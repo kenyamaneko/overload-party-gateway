@@ -11,18 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// fakeVerifier は Verifier の最小 fake 実装。
-type fakeVerifier struct {
-	playerID string
-	err      error
-}
-
-func (f *fakeVerifier) Verify(string) (string, error) {
-	return f.playerID, f.err
-}
-
-var _ Verifier = (*fakeVerifier)(nil)
-
 func newAuthTestEngine(verifier Verifier) (*gin.Engine, *string) {
 	r := gin.New()
 	var observed string
@@ -34,7 +22,7 @@ func newAuthTestEngine(verifier Verifier) (*gin.Engine, *string) {
 }
 
 func TestVerifyInternalAuth_Success(t *testing.T) {
-	verifier := &fakeVerifier{playerID: "player-123"}
+	verifier := &MockVerifier{VerifyFn: func(string) (string, error) { return "player-123", nil }}
 	engine, observed := newAuthTestEngine(verifier)
 
 	req := httptest.NewRequest(http.MethodGet, "/probe", nil)
@@ -49,7 +37,7 @@ func TestVerifyInternalAuth_Success(t *testing.T) {
 
 func TestVerifyInternalAuth_PreservesToken(t *testing.T) {
 	const sentToken = "any.signed.token"
-	verifier := &fakeVerifier{playerID: "player-123"}
+	verifier := &MockVerifier{VerifyFn: func(string) (string, error) { return "player-123", nil }}
 
 	r := gin.New()
 	var ginCtxToken string
@@ -79,13 +67,15 @@ func TestVerifyInternalAuth_Unauthorized(t *testing.T) {
 		setupReq func(*http.Request)
 	}{
 		{
+			// VerifyFn 未設定の MockVerifier は呼ばれると panic するため、header 欠落時に
+			// verifier へ到達しないことも同時に確かめている
 			name:     "X-Internal-Auth が欠落していれば 401",
-			verifier: &fakeVerifier{playerID: "irrelevant"},
+			verifier: &MockVerifier{},
 			setupReq: func(*http.Request) {},
 		},
 		{
 			name:     "verifier が error を返すなら 401",
-			verifier: &fakeVerifier{err: errors.New("invalid token")},
+			verifier: &MockVerifier{VerifyFn: func(string) (string, error) { return "", errors.New("invalid token") }},
 			setupReq: func(r *http.Request) { r.Header.Set(HeaderName, "any.signed.token") },
 		},
 	}
