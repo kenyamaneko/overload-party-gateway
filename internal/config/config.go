@@ -1,7 +1,7 @@
 package config
 
 import (
-	"log"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -106,7 +106,8 @@ func getEnvInt(key string, fallback int) int {
 	}
 	n, err := strconv.Atoi(v)
 	if err != nil {
-		log.Fatalf("config: %s is not a valid int: %q", key, v)
+		slog.Error("config env var is not a valid int", "key", key, "value", v)
+		os.Exit(1)
 	}
 	return n
 }

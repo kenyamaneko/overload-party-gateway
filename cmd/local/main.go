@@ -7,8 +7,9 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -32,11 +33,17 @@ import (
 )
 
 func main() {
-	log.Println("=== Overload Party Gateway (LOCAL MODE) ===")
+	// ローカルモードは開発者端末での実行を前提とするため、人間が読みやすい
+	// テキスト形式で出力する (GKE 上の cmd/main は Cloud Logging 互換 JSON)。
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	})).With("service", "gateway"))
+	slog.Info("gateway starting in local mode")
 
 	cfg := config.Load()
 	if cfg.DatabaseConn == "" {
-		log.Fatal("DATABASE_CONN must be set (gateway owns gateway.game_players and reads newsfeed.news_articles)")
+		slog.Error("DATABASE_CONN must be set (gateway owns gateway.game_players and reads newsfeed.news_articles)")
+		os.Exit(1)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -44,7 +51,8 @@ func main() {
 
 	pool, err := pgxpool.New(ctx, cfg.DatabaseConn)
 	if err != nil {
-		log.Fatalf("failed to create pg pool: %v", err)
+		slog.Error("failed to create pg pool", "error", err)
+		os.Exit(1)
 	}
 	defer pool.Close()
 
@@ -57,12 +65,13 @@ func main() {
 	if cfg.GoogleCloudProjectID != "" {
 		fsClient, err := firestore.NewClient(ctx, cfg.GoogleCloudProjectID)
 		if err != nil {
-			log.Fatalf("failed to create firestore client: %v", err)
+			slog.Error("failed to create firestore client", "error", err)
+			os.Exit(1)
 		}
 		defer func() { _ = fsClient.Close() }()
 		_ = repository.NewFirestoreGameConfigRepository(fsClient)
 	} else {
-		log.Println("GOOGLE_CLOUD_PROJECT_ID is unset; skipping Firestore client and matchmaking Pub/Sub subscriber")
+		slog.Info("GOOGLE_CLOUD_PROJECT_ID is unset; skipping Firestore client and matchmaking Pub/Sub subscriber")
 	}
 
 	cardClient := cardclient.New(cfg.CardServiceURL)
@@ -70,7 +79,8 @@ func main() {
 	accountClient := accountclient.New(cfg.AccountServiceURL)
 
 	if cfg.InternalAuthSecret == "" {
-		log.Fatal("INTERNAL_AUTH_SECRET must be set")
+		slog.Error("INTERNAL_AUTH_SECRET must be set")
+		os.Exit(1)
 	}
 	internalSigner := internalauth.NewSigner(
 		internalauth.StaticHS256Resolver([]byte(cfg.InternalAuthSecret), internalauth.DefaultKeyID),
@@ -85,7 +95,8 @@ func main() {
 		Auth: rest.NewAuthHandler(accountClient),
 	}
 
-	r := gin.Default()
+	r := gin.New()
+	r.Use(middleware.UseRequestLogger(), gin.Recovery())
 	r.Use(middleware.UseCORS())
 
 	r.GET("/health", func(c *gin.Context) {
@@ -118,7 +129,8 @@ func main() {
 	api.Use(middleware.UseDevAuthWithPlayerResolve(accountClient))
 	api.Use(middleware.IssueInternalAuth(internalSigner))
 	if err := router.RegisterForwardRoutes(api, cfg); err != nil {
-		log.Fatalf("failed to register forward routes: %v", err)
+		slog.Error("failed to register forward routes", "error", err)
+		os.Exit(1)
 	}
 
 	srv := &http.Server{
@@ -134,36 +146,40 @@ func main() {
 	if cfg.GoogleCloudProjectID != "" {
 		stream, err := pubsubadapter.NewStream(srvCtx, cfg.GoogleCloudProjectID, cfg.MatchmakingSubscription)
 		if err != nil {
-			log.Fatalf("failed to create matchmaking stream: %v", err)
+			slog.Error("failed to create matchmaking stream", "error", err)
+			os.Exit(1)
 		}
 		defer func() { _ = stream.Close() }()
 		subscriber, err := pubsubadapter.NewMatchSubscriber(stream, wsManager)
 		if err != nil {
-			log.Fatalf("failed to create match subscriber: %v", err)
+			slog.Error("failed to create match subscriber", "error", err)
+			os.Exit(1)
 		}
 		go func() {
 			if err := subscriber.Run(srvCtx); err != nil && srvCtx.Err() == nil {
-				log.Fatalf("match subscriber error: %v", err)
+				slog.Error("match subscriber error", "error", err)
+				os.Exit(1)
 			}
 		}()
 	}
 
 	go func() {
-		log.Println("gateway local server starting on :9001")
-		log.Println("  REST: http://localhost:9001/api/v1/")
+		slog.Info("gateway local server starting", "addr", ":9001", "rest_base", "http://localhost:9001/api/v1/")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("listen: %v", err)
+			slog.Error("listen failed", "error", err)
+			os.Exit(1)
 		}
 	}()
 
 	<-srvCtx.Done()
-	log.Println("shutting down...")
+	slog.Info("shutting down")
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Fatalf("server forced to shutdown: %v", err)
+		slog.Error("server forced to shutdown", "error", err)
+		os.Exit(1)
 	}
-	log.Println("gateway local server exited")
+	slog.Info("gateway local server exited")
 }

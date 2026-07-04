@@ -1,7 +1,7 @@
 package ws
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -64,7 +64,7 @@ func (h *Handler) HandleUpgrade(c *gin.Context) {
 		}
 		player, err := h.accountClient.FindByFirebaseUID(c.Request.Context(), decoded.UID)
 		if err != nil || player == nil {
-			log.Printf("ws handler: find player by firebase uid %s: %v", decoded.UID, err)
+			slog.Warn("find player by firebase uid failed", "firebase_uid", decoded.UID, "error", err)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "player not registered"})
 			return
 		}
@@ -77,7 +77,7 @@ func (h *Handler) HandleUpgrade(c *gin.Context) {
 		uid := strings.TrimPrefix(token, middleware.DevTokenPrefix)
 		player, err := h.accountClient.FindByFirebaseUID(c.Request.Context(), uid)
 		if err != nil || player == nil {
-			log.Printf("ws handler (dev): player not found for uid=%s: %v", uid, err)
+			slog.Warn("dev player not found", "firebase_uid", uid, "error", err)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "player not registered"})
 			return
 		}
@@ -86,7 +86,7 @@ func (h *Handler) HandleUpgrade(c *gin.Context) {
 
 	wsConn, err := h.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		log.Printf("ws upgrade error: %v", err)
+		slog.Warn("ws upgrade failed", "error", err)
 		return
 	}
 

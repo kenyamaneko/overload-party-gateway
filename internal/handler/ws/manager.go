@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -100,7 +100,7 @@ func (m *Manager) cancelMatchmaking(playerID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	if err := m.matchmakingClient.Cancel(ctx); err != nil {
-		log.Printf("matchmaking cancel for %s: %v", playerID, err)
+		slog.Warn("matchmaking cancel failed", "player_id", playerID, "error", err)
 	}
 }
 
@@ -142,14 +142,14 @@ func (m *Manager) handleMatchWaitTimeout(playerID string) {
 	delete(m.matchWait, playerID)
 	m.matchWaitMu.Unlock()
 
-	log.Printf("matchmaking: wait timeout for player %s after %v", playerID, m.matchmakingTimeout)
+	slog.Warn("matchmaking wait timeout", "player_id", playerID, "timeout", m.matchmakingTimeout)
 	sendErrorToPlayer(m.Hub, playerID, "matchmaking_error", "matchmaking timed out", true)
 
 	// タイマー発火経路は WS リクエスト ctx を持たない。上流キャンセルは接続状態に依存せず完了させたい。
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	if err := m.matchmakingClient.Cancel(ctx); err != nil {
-		log.Printf("matchmaking: upstream cancel after timeout for %s: %v", playerID, err)
+		slog.Warn("matchmaking upstream cancel after timeout failed", "player_id", playerID, "error", err)
 	}
 }
 
@@ -189,7 +189,7 @@ func (m *Manager) HandleMessage(conn *Connection, msg *WSMessage) {
 		conn.SendMessage(&WSMessage{Type: genws.WSServerMsgPong})
 
 	default:
-		log.Printf("unhandled message type: %s from player %s", msg.Type, conn.playerID)
+		slog.Warn("unhandled message type", "type", msg.Type, "player_id", conn.playerID)
 	}
 }
 
@@ -293,7 +293,7 @@ func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, da
 	}
 	if m.gamePlayerRepo != nil {
 		if err := m.gamePlayerRepo.InsertGamePlayer(ctx, game.GameID, 1, conn.playerID); err != nil {
-			log.Printf("npc battle: insert game_player: %v", err)
+			slog.Error("npc battle insert game_player failed", "error", err)
 		}
 	}
 	conn.SendMessage(&WSMessage{
@@ -337,10 +337,10 @@ func (m *Manager) HandleMatchMade(ctx context.Context, event apimatchmaking.Matc
 
 	if m.gamePlayerRepo != nil {
 		if err := m.gamePlayerRepo.InsertGamePlayer(ctx, game.GameID, 1, event.Players[0].PlayerID); err != nil {
-			log.Printf("match_made: insert game_player p1: %v", err)
+			slog.Error("match_made insert game_player p1 failed", "error", err)
 		}
 		if err := m.gamePlayerRepo.InsertGamePlayer(ctx, game.GameID, 2, event.Players[1].PlayerID); err != nil {
-			log.Printf("match_made: insert game_player p2: %v", err)
+			slog.Error("match_made insert game_player p2 failed", "error", err)
 		}
 	}
 

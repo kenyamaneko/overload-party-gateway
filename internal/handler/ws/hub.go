@@ -1,7 +1,7 @@
 package ws
 
 import (
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 )
@@ -53,7 +53,7 @@ func (h *ConnectionHub) Register(conn *Connection) {
 		info.timer.Stop()
 		reconnectGameID = info.gameID
 		delete(h.disconnects, conn.playerID)
-		log.Printf("player %s reconnected", conn.playerID)
+		slog.Info("player reconnected", "player_id", conn.playerID)
 	}
 
 	if old, ok := h.connections[conn.playerID]; ok {
@@ -84,14 +84,14 @@ func (h *ConnectionHub) Unregister(conn *Connection) {
 			delete(h.disconnects, conn.playerID)
 			h.mu.Unlock()
 
-			log.Printf("player %s disconnect timeout expired for game %s, forfeit", conn.playerID, gameID)
+			slog.Info("player disconnect timeout expired, forfeit", "player_id", conn.playerID, "game_id", gameID)
 			h.cb.OnDisconnectTimeout(conn.playerID, gameID)
 		})
 		h.disconnects[conn.playerID] = &disconnectInfo{
 			gameID: gameID,
 			timer:  timer,
 		}
-		log.Printf("player %s disconnected, %v timeout started", conn.playerID, disconnectTimeout)
+		slog.Info("player disconnected, timeout started", "player_id", conn.playerID, "timeout", disconnectTimeout)
 	}
 	h.mu.Unlock()
 

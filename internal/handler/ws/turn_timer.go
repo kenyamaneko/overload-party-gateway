@@ -3,7 +3,7 @@ package ws
 import (
 	"context"
 	"errors"
-	"log"
+	"log/slog"
 	"time"
 
 	gamelogic "github.com/kenyamaneko/overload-party-battle/packages/game-logic-constants-go"
@@ -48,7 +48,7 @@ func (r *GameRelay) resetTurnTimer(gameID, activePlayerID string, timeBankSecond
 		delete(r.turnTimers, gameID)
 		r.timerMu.Unlock()
 
-		log.Printf("turn timer expired for game %s, player %s", gameID, activePlayerID)
+		slog.Info("turn timer expired", "game_id", gameID, "player_id", activePlayerID)
 		r.handleTurnTimeout(gameID, activePlayerID)
 	})
 
@@ -86,7 +86,7 @@ func (r *GameRelay) handleTurnTimeout(gameID, playerID string) {
 	defer cancel()
 	result, err := r.battleClient.ProcessAction(ctx, gameID, pNum, gamelogic.ActionTypeForfeit, buildForfeitReason(gamelogic.WinReasonTurnTimeout))
 	if err != nil {
-		log.Printf("ERROR: turn timeout forfeit (game=%s, player=%s): %v", gameID, playerID, err)
+		slog.Error("turn timeout forfeit failed", "game_id", gameID, "player_id", playerID, "error", err)
 		// forfeit が battle server に到達しないとゲームが終了せず、両プレイヤーが
 		// 待ち続けてしまう。両プレイヤーに通知し、回復は再接続/監視に委ねる。
 		sendErrorToPlayer(r.hub, playerID, "turn_timeout_failed", "failed to register turn timeout", true)

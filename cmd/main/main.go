@@ -3,8 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -37,21 +38,56 @@ type subscriberRunner interface {
 	Run(ctx context.Context) error
 }
 
+// newCloudLoggingHandler は Cloud Logging に適合するログハンドラを生成する。
+func newCloudLoggingHandler() slog.Handler {
+	return slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+			if a.Key == slog.LevelKey {
+				a.Key = "severity"
+				if level, ok := a.Value.Any().(slog.Level); ok {
+					switch {
+					case level >= slog.LevelError:
+						a.Value = slog.StringValue("ERROR")
+					case level >= slog.LevelWarn:
+						a.Value = slog.StringValue("WARNING")
+					case level >= slog.LevelInfo:
+						a.Value = slog.StringValue("INFO")
+					default:
+						a.Value = slog.StringValue("DEBUG")
+					}
+				}
+			}
+			if a.Key == slog.MessageKey {
+				a.Key = "message"
+			}
+			return a
+		},
+	})
+}
+
 func main() {
 	ctx := context.Background()
 	cfg := config.Load()
 
+	// cmd/main は GKE (dev/stg/prod いずれも Cloud Logging) 上で動作するため常に
+	// Cloud Logging 互換 JSON で出力する。ローカル実行のテキスト出力は cmd/local が担う。
+	slog.SetDefault(slog.New(newCloudLoggingHandler()).With("service", "gateway"))
+
 	if cfg.Env == "prod" && len(cfg.AllowedOrigins) == 0 {
-		log.Fatal("ALLOWED_ORIGINS must be set in production")
+		slog.Error("ALLOWED_ORIGINS must be set in production")
+		os.Exit(1)
 	}
 	if cfg.DatabaseConn == "" {
-		log.Fatal("DATABASE_CONN must be set")
+		slog.Error("DATABASE_CONN must be set")
+		os.Exit(1)
 	}
 	if cfg.GoogleCloudProjectID == "" {
-		log.Fatal("GOOGLE_CLOUD_PROJECT_ID must be set")
+		slog.Error("GOOGLE_CLOUD_PROJECT_ID must be set")
+		os.Exit(1)
 	}
 	if cfg.InternalAuthSecret == "" {
-		log.Fatal("INTERNAL_AUTH_SECRET must be set")
+		slog.Error("INTERNAL_AUTH_SECRET must be set")
+		os.Exit(1)
 	}
 
 	if cfg.Env == "prod" {
@@ -62,21 +98,24 @@ func main() {
 	// newsfeed.news_articles（read-only クロススキーマプロキシ）に使用
 	pool, err := pgxpool.New(ctx, cfg.DatabaseConn)
 	if err != nil {
-		log.Fatalf("failed to create pg pool: %v", err)
+		slog.Error("failed to create pg pool", "error", err)
+		os.Exit(1)
 	}
 	defer pool.Close()
 
 	// Firestore クライアント (game_config)
 	fsClient, err := firestore.NewClient(ctx, cfg.GoogleCloudProjectID)
 	if err != nil {
-		log.Fatalf("failed to create firestore client: %v", err)
+		slog.Error("failed to create firestore client", "error", err)
+		os.Exit(1)
 	}
 	defer func() { _ = fsClient.Close() }()
 
 	// Firebase Auth クライアント
 	authClient, err := middleware.NewFirebaseAuthClient(ctx)
 	if err != nil {
-		log.Fatalf("failed to create firebase auth client: %v", err)
+		slog.Error("failed to create firebase auth client", "error", err)
+		os.Exit(1)
 	}
 
 	// gateway 所有の game_players リポジトリ
@@ -106,7 +145,8 @@ func main() {
 	}
 
 	// ルーター
-	r := gin.Default()
+	r := gin.New()
+	r.Use(middleware.UseRequestLogger(), gin.Recovery())
 	r.Use(middleware.UseCORS(cfg.AllowedOrigins...))
 
 	r.GET("/health", func(c *gin.Context) {
@@ -135,7 +175,8 @@ func main() {
 	api.Use(middleware.ResolvePlayer(accountClient))
 	api.Use(middleware.IssueInternalAuth(internalSigner))
 	if err := router.RegisterForwardRoutes(api, cfg); err != nil {
-		log.Fatalf("failed to register forward routes: %v", err)
+		slog.Error("failed to register forward routes", "error", err)
+		os.Exit(1)
 	}
 
 	srv := &http.Server{
@@ -148,23 +189,26 @@ func main() {
 
 	matchStream, err := pubsubadapter.NewStream(srvCtx, cfg.GoogleCloudProjectID, cfg.MatchmakingSubscription)
 	if err != nil {
-		log.Fatalf("failed to create matchmaking stream: %v", err)
+		slog.Error("failed to create matchmaking stream", "error", err)
+		os.Exit(1)
 	}
 	defer func() { _ = matchStream.Close() }()
 
 	matchSub, err := pubsubadapter.NewMatchSubscriber(matchStream, wsManager)
 	if err != nil {
-		log.Fatalf("failed to create match subscriber: %v", err)
+		slog.Error("failed to create match subscriber", "error", err)
+		os.Exit(1)
 	}
 
 	// Why: graceful shutdown 時に subscriber と HTTP server が確実に停止するまで
 	// main を block させるため errgroup で束ねる。どちらかが err を返すと
 	// gCtx がキャンセルされ、他方も停止する。
 	if err := runServices(srvCtx, cfg, srv, matchSub); err != nil {
-		log.Fatalf("server: %v", err)
+		slog.Error("server failed", "error", err)
+		os.Exit(1)
 	}
 
-	log.Println("gateway server exited")
+	slog.Info("gateway server exited")
 }
 
 // runServices は HTTP server と全 subscriber を errgroup で束ねて起動する。
@@ -189,7 +233,7 @@ func runServices(
 	}
 
 	g.Go(func() error {
-		log.Printf("gateway server starting on :%s (env=%s)", cfg.Port, cfg.Env)
+		slog.Info("gateway server starting", "port", cfg.Port, "env", cfg.Env)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			return fmt.Errorf("http server: %w", err)
 		}
@@ -198,7 +242,7 @@ func runServices(
 
 	g.Go(func() error {
 		<-gCtx.Done()
-		log.Println("shutting down gracefully...")
+		slog.Info("shutting down gracefully")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), serverShutdownTimeout)
 		defer cancel()
 		if err := srv.Shutdown(shutdownCtx); err != nil {
