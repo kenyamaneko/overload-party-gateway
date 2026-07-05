@@ -65,8 +65,10 @@ func newStatefulAccountFake() *statefulAccountFake {
 	return s
 }
 
-func (s *statefulAccountFake) close()                        { s.server.Close() }
-func (s *statefulAccountFake) client() *accountclient.Client { return accountclient.New(s.server.URL()) }
+func (s *statefulAccountFake) close() { s.server.Close() }
+func (s *statefulAccountFake) client() *accountclient.Client {
+	return accountclient.New(s.server.URL())
+}
 
 func (s *statefulAccountFake) seed(firebaseUID, playerID string) {
 	s.mu.Lock()
@@ -78,19 +80,8 @@ func (s *statefulAccountFake) seed(firebaseUID, playerID string) {
 }
 
 func TestUseDevAuth(t *testing.T) {
-	tests := []struct {
-		name       string
-		authHeader string
-		wantCode   int
-	}{
-		{"Success", "Bearer dev-token-user1", http.StatusOK},
-		{"MissingHeader", "", http.StatusUnauthorized},
-		{"NoBearerPrefix", "dev-token-user1", http.StatusUnauthorized},
-		{"InvalidTokenFormat", "Bearer some-other-token", http.StatusUnauthorized},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	t.Run("開発用 Bearer 認証", func(t *testing.T) {
+		t.Run("有効な dev-token-user1 のとき、200 で uid を解決する", func(t *testing.T) {
 			r := gin.New()
 			r.Use(UseDevAuth())
 			r.GET("/test", func(c *gin.Context) {
@@ -99,159 +90,200 @@ func TestUseDevAuth(t *testing.T) {
 			})
 
 			req := httptest.NewRequest("GET", "/test", nil)
-			if tt.authHeader != "" {
-				req.Header.Set("Authorization", tt.authHeader)
-			}
+			req.Header.Set("Authorization", "Bearer dev-token-user1")
 			w := httptest.NewRecorder()
 			r.ServeHTTP(w, req)
 
-			require.Equal(t, tt.wantCode, w.Code)
-
-			if tt.wantCode == http.StatusOK {
-				assert.Equal(t, `{"uid":"user1"}`, w.Body.String())
-			}
+			require.Equal(t, http.StatusOK, w.Code)
+			assert.Equal(t, `{"uid":"user1"}`, w.Body.String())
 		})
-	}
-}
 
-func TestUseDevAuthWithPlayerResolve_AutoCreate(t *testing.T) {
-	fa := newStatefulAccountFake()
-	defer fa.close()
-
-	setupCalled := false
-	onCreated := DevPlayerSetup(func(ctx context.Context, playerID string) error {
-		setupCalled = true
-		return nil
-	})
-
-	r := gin.New()
-	r.Use(UseDevAuthWithPlayerResolve(fa.client(), onCreated))
-	r.GET("/test", func(c *gin.Context) {
-		pid := GetPlayerID(c)
-		c.JSON(http.StatusOK, gin.H{"player_id": pid})
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("Authorization", "Bearer dev-token-newuser")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	assert.True(t, setupCalled, "expected onCreated callback to be called")
-	assert.Contains(t, w.Body.String(), "generated-newuser")
-}
-
-func TestUseDevAuthWithPlayerResolve_ExistingPlayer(t *testing.T) {
-	fa := newStatefulAccountFake()
-	defer fa.close()
-	fa.seed("existinguser", "existing-id")
-
-	r := gin.New()
-	r.Use(UseDevAuthWithPlayerResolve(fa.client()))
-	r.GET("/test", func(c *gin.Context) {
-		pid := GetPlayerID(c)
-		c.JSON(http.StatusOK, gin.H{"player_id": pid})
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("Authorization", "Bearer dev-token-existinguser")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	assert.Equal(t, `{"player_id":"existing-id"}`, w.Body.String())
-}
-
-func TestResolvePlayer_Success(t *testing.T) {
-	fa := newStatefulAccountFake()
-	defer fa.close()
-	fa.seed("uid1", "p1")
-
-	r := gin.New()
-	r.Use(func(c *gin.Context) {
-		c.Set(string(firebaseUIDKey), "uid1")
-		c.Next()
-	})
-	r.Use(ResolvePlayer(fa.client()))
-	r.GET("/test", func(c *gin.Context) {
-		pid := GetPlayerID(c)
-		c.JSON(http.StatusOK, gin.H{"player_id": pid})
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	assert.Equal(t, `{"player_id":"p1"}`, w.Body.String())
-}
-
-func TestResolvePlayer_MissingUID(t *testing.T) {
-	fa := newStatefulAccountFake()
-	defer fa.close()
-
-	r := gin.New()
-	r.Use(ResolvePlayer(fa.client()))
-	r.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{})
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
-}
-
-func TestResolvePlayer_PlayerNotRegistered(t *testing.T) {
-	fa := newStatefulAccountFake()
-	defer fa.close()
-
-	r := gin.New()
-	r.Use(func(c *gin.Context) {
-		c.Set(string(firebaseUIDKey), "unknown-uid")
-		c.Next()
-	})
-	r.Use(ResolvePlayer(fa.client()))
-	r.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{})
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
-}
-
-func TestGetNotSet(t *testing.T) {
-	tests := []struct {
-		name     string
-		key      string
-		wantBody string
-	}{
-		{"GetFirebaseUID_NotSet", "uid", `{"uid":""}`},
-		{"GetPlayerID_NotSet", "pid", `{"pid":""}`},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run("Authorization header が無いとき、401 になる", func(t *testing.T) {
 			r := gin.New()
+			r.Use(UseDevAuth())
 			r.GET("/test", func(c *gin.Context) {
-				var val string
-				if tt.key == "uid" {
-					val = GetFirebaseUID(c)
-				} else {
-					val = GetPlayerID(c)
-				}
-				c.JSON(http.StatusOK, gin.H{tt.key: val})
+				uid := GetFirebaseUID(c)
+				c.JSON(http.StatusOK, gin.H{"uid": uid})
 			})
 
 			req := httptest.NewRequest("GET", "/test", nil)
 			w := httptest.NewRecorder()
 			r.ServeHTTP(w, req)
 
-			assert.Equal(t, tt.wantBody, w.Body.String())
+			require.Equal(t, http.StatusUnauthorized, w.Code)
 		})
-	}
+
+		invalidHeaderCases := []struct {
+			name       string
+			authHeader string
+		}{
+			{name: "Bearer 接頭辞が無いとき、401 になる", authHeader: "dev-token-user1"},
+			{name: "dev-token 形式でない token のとき、401 になる", authHeader: "Bearer some-other-token"},
+		}
+		for _, tc := range invalidHeaderCases {
+			t.Run(tc.name, func(t *testing.T) {
+				r := gin.New()
+				r.Use(UseDevAuth())
+				r.GET("/test", func(c *gin.Context) {
+					uid := GetFirebaseUID(c)
+					c.JSON(http.StatusOK, gin.H{"uid": uid})
+				})
+
+				req := httptest.NewRequest("GET", "/test", nil)
+				req.Header.Set("Authorization", tc.authHeader)
+				w := httptest.NewRecorder()
+				r.ServeHTTP(w, req)
+
+				require.Equal(t, http.StatusUnauthorized, w.Code)
+			})
+		}
+	})
+}
+
+func TestUseDevAuthWithPlayerResolve(t *testing.T) {
+	t.Run("開発用認証とプレイヤー解決", func(t *testing.T) {
+		t.Run("未登録ユーザーのとき、自動作成し onCreated が呼ばれる", func(t *testing.T) {
+			fa := newStatefulAccountFake()
+			defer fa.close()
+
+			setupCalled := false
+			onCreated := DevPlayerSetup(func(ctx context.Context, playerID string) error {
+				setupCalled = true
+				return nil
+			})
+
+			r := gin.New()
+			r.Use(UseDevAuthWithPlayerResolve(fa.client(), onCreated))
+			r.GET("/test", func(c *gin.Context) {
+				pid := GetPlayerID(c)
+				c.JSON(http.StatusOK, gin.H{"player_id": pid})
+			})
+
+			req := httptest.NewRequest("GET", "/test", nil)
+			req.Header.Set("Authorization", "Bearer dev-token-newuser")
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+			assert.True(t, setupCalled, "expected onCreated callback to be called")
+			assert.Contains(t, w.Body.String(), "generated-newuser")
+		})
+
+		t.Run("既存ユーザーのとき、既存 player_id を解決する", func(t *testing.T) {
+			fa := newStatefulAccountFake()
+			defer fa.close()
+			fa.seed("existinguser", "existing-id")
+
+			r := gin.New()
+			r.Use(UseDevAuthWithPlayerResolve(fa.client()))
+			r.GET("/test", func(c *gin.Context) {
+				pid := GetPlayerID(c)
+				c.JSON(http.StatusOK, gin.H{"player_id": pid})
+			})
+
+			req := httptest.NewRequest("GET", "/test", nil)
+			req.Header.Set("Authorization", "Bearer dev-token-existinguser")
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+			assert.Equal(t, `{"player_id":"existing-id"}`, w.Body.String())
+		})
+	})
+}
+
+func TestResolvePlayer(t *testing.T) {
+	t.Run("firebase_uid からのプレイヤー解決", func(t *testing.T) {
+		t.Run("firebase_uid が既存プレイヤーのとき、player_id を解決する", func(t *testing.T) {
+			fa := newStatefulAccountFake()
+			defer fa.close()
+			fa.seed("uid1", "p1")
+
+			r := gin.New()
+			r.Use(func(c *gin.Context) {
+				c.Set(string(firebaseUIDKey), "uid1")
+				c.Next()
+			})
+			r.Use(ResolvePlayer(fa.client()))
+			r.GET("/test", func(c *gin.Context) {
+				pid := GetPlayerID(c)
+				c.JSON(http.StatusOK, gin.H{"player_id": pid})
+			})
+
+			req := httptest.NewRequest("GET", "/test", nil)
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+			assert.Equal(t, `{"player_id":"p1"}`, w.Body.String())
+		})
+
+		t.Run("firebase_uid が無いとき、401 になる", func(t *testing.T) {
+			fa := newStatefulAccountFake()
+			defer fa.close()
+
+			r := gin.New()
+			r.Use(ResolvePlayer(fa.client()))
+			r.GET("/test", func(c *gin.Context) {
+				c.JSON(http.StatusOK, gin.H{})
+			})
+
+			req := httptest.NewRequest("GET", "/test", nil)
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusUnauthorized, w.Code)
+		})
+
+		t.Run("firebase_uid が未登録のとき、401 になる", func(t *testing.T) {
+			fa := newStatefulAccountFake()
+			defer fa.close()
+
+			r := gin.New()
+			r.Use(func(c *gin.Context) {
+				c.Set(string(firebaseUIDKey), "unknown-uid")
+				c.Next()
+			})
+			r.Use(ResolvePlayer(fa.client()))
+			r.GET("/test", func(c *gin.Context) {
+				c.JSON(http.StatusOK, gin.H{})
+			})
+
+			req := httptest.NewRequest("GET", "/test", nil)
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusUnauthorized, w.Code)
+		})
+	})
+}
+
+func TestContextGetters(t *testing.T) {
+	t.Run("未設定時の context getter", func(t *testing.T) {
+		t.Run("GetFirebaseUID は未設定のとき、空文字を返す", func(t *testing.T) {
+			r := gin.New()
+			r.GET("/test", func(c *gin.Context) {
+				c.JSON(http.StatusOK, gin.H{"uid": GetFirebaseUID(c)})
+			})
+
+			req := httptest.NewRequest("GET", "/test", nil)
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			assert.Equal(t, `{"uid":""}`, w.Body.String())
+		})
+
+		t.Run("GetPlayerID は未設定のとき、空文字を返す", func(t *testing.T) {
+			r := gin.New()
+			r.GET("/test", func(c *gin.Context) {
+				c.JSON(http.StatusOK, gin.H{"pid": GetPlayerID(c)})
+			})
+
+			req := httptest.NewRequest("GET", "/test", nil)
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			assert.Equal(t, `{"pid":""}`, w.Body.String())
+		})
+	})
 }
