@@ -13,9 +13,3 @@ Post ADR-014, gateway owns the `gateway` PostgreSQL schema. The DDL SSoT is
   `player_id` references `account.players(id)` as an app-level (not SQL) FK
   because cross-schema FKs are forbidden by ADR-014. `game_id` references
   `battle.games(game_id)` the same way.
-
-## Read-only cross-service reference
-
-- `newsfeed.news_articles` — cloud news list. Owned by newsfeed (Cloud Run
-  Job). Gateway only reads and proxies to client via `/api/v1/cloud-news`.
-  The DDL lives in `overload-party-newsfeed/schema.sql`.
