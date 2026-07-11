@@ -58,7 +58,7 @@ GitFlow をベースに、環境とブランチを対応付けた運用を採用
 ### hotfix/xxx
 
 - **prod 緊急修正**の作業ブランチ
-- `main` から切る（develop からではない — develop には未リリース変更が混ざっているため）
+- `main` から切る（develop からではない。develop には未リリース変更が混ざっているため）
 - main と develop の両方にマージする（back-merge 必須）
 - release ブランチが存在する場合は、release にもマージする
 - 命名例: `hotfix/fix-ws-reconnect`, `hotfix/pubsub-dedup-leak`
@@ -140,14 +140,15 @@ Semantic Versioning (SemVer) を採用する。
 
 ### `packages/` のタグ
 
-gateway は Go + npm の 2 言語で 2 パッケージ（`api-gateway` / `ws-constants`）、計 4 配布単位を持つ。タグ形式と発行は以下:
+gateway は Go の 3 モジュール（`api-gateway` / `ws-constants` / `internalauth-go`）と npm の 2 パッケージ、計 5 配布単位を持つ。タグ形式と発行は以下:
 
 | パッケージ | タグ形式 / 公開先 | 発行トリガー |
 |---|---|---|
 | `packages/api-gateway` (Go) | `packages/api-gateway/vX.Y.Z` | `publish.yaml` が main push で自動検出 + `workflow_dispatch` |
 | `packages/ws-constants` (Go) | `packages/ws-constants/vX.Y.Z` | 同上 |
-| `packages/api-gateway-npm` | GitHub Packages (npm) | 同上 |
-| `packages/ws-constants-npm` | GitHub Packages (npm) | 同上 |
+| `packages/internalauth-go` (Go) | `packages/internalauth-go/vX.Y.Z` | 同上 |
+| `packages/api-gateway-npm` | Cloudsmith (npm) | 同上 |
+| `packages/ws-constants-npm` | Cloudsmith (npm) | 同上 |
 
 発行は [.github/workflows/publish.yaml](../.github/workflows/publish.yaml) が担当する。`packages/**` / `data/ws_constants.yaml` / `data/models.yaml` / `scripts/generate_types.py` のいずれかに main で変更が入った時に自動発火し、変更検出したモジュールのみタグ付け・公開する。bump 種別を人が判断したい場合は `workflow_dispatch` で `bump=patch|minor|major` を明示指定できる。
 
@@ -163,7 +164,7 @@ GitHub Rulesets で以下を設定する（account / shop と同等）。
 - PR マージのみ許可（linear history）
 - force push 禁止、削除禁止
 - 履歴書き換え禁止
-- 必須ステータスチェック: CI / lint, CI / test, Validate codegen が green
+- 必須ステータスチェック: CI / lint, CI / test-unit, CI / test-integration, CI / codegen-sync が green
 - required reviews: 1（self-approve 不可）
 - マージ元ブランチ制限: `release/*` と `hotfix/*` のみ
 
@@ -171,25 +172,25 @@ GitHub Rulesets で以下を設定する（account / shop と同等）。
 
 - 直 push 禁止。PR 経由のマージのみ
 - force push 禁止、削除は手動で可
-- 必須ステータスチェック: CI / lint, CI / test が green
+- 必須ステータスチェック: CI / lint, CI / test-unit, CI / test-integration が green
 
 ### develop
 
 - 直 push 禁止
 - PR マージのみ許可
-- 必須ステータスチェック: CI / lint, CI / test が green
+- 必須ステータスチェック: CI / lint, CI / test-unit, CI / test-integration が green
 - required reviews: 不要（一人開発での速度優先）
 
 ## CI/CD パイプライン
 
 | ワークフロー | トリガー | 役割 |
 |---|---|---|
-| [ci.yaml](../.github/workflows/ci.yaml) | PR: main (将来的に develop / release/** も) | lint + test + Docker build & push |
-| [validate.yaml](../.github/workflows/validate.yaml) | PR: main | `generate_types.py` / `generate_schema_doc.py` / `generate_api_docs.py` の出力ドリフト検出 |
-| [publish.yaml](../.github/workflows/publish.yaml) | push: main (packages/** 変更時) + workflow_dispatch | `packages/api-gateway`, `packages/ws-constants` の Go モジュールタグ付け + 対応 npm パッケージの GitHub Packages 公開 |
+| [ci.yaml](../.github/workflows/ci.yaml) | PR: main (将来的に develop / release/** も) | lint + test + `generate_types.sh` の出力ドリフト検出 (codegen-sync) |
+| [deploy.yaml](../.github/workflows/deploy.yaml) | push: main | Docker image build & push |
+| [publish.yaml](../.github/workflows/publish.yaml) | push: main (packages/** 変更時) + workflow_dispatch | `packages/` 配下 Go モジュールのタグ付け + npm パッケージの Cloudsmith 公開 |
 | `release-tag.yaml`（未整備） | PR closed (merged) to main | `release/*` または `hotfix/*` が main にマージされた時に SemVer タグを自動作成 |
 
-CI と CD は将来的に分離する方針。現在は `ci.yaml` 内で build & push まで行っているが、account / shop に合わせて `deploy.yaml` への分離を計画している。
+CI と CD は分離済みで、`ci.yaml` は PR 検証のみを行い、image build & push は main への push を契機に `deploy.yaml` が行う。
 
 ### feature / hotfix ブランチの CI
 
@@ -197,7 +198,7 @@ feature/* や hotfix/* ブランチへの直 push では CI が走らない。CI
 
 ### main へのマージ源の制約
 
-`release/*` / `hotfix/*` のみを main のマージ元として許容するため、`ci.yaml` に `check-source-branch` ジョブを追加する（未整備 — account / shop に合わせて追加予定）。
+`release/*` / `hotfix/*` のみを main のマージ元として許容するため、`ci.yaml` に `check-source-branch` ジョブを追加する（未整備。account / shop に合わせて追加予定）。
 
 ## 現状のギャップ
 
@@ -205,6 +206,5 @@ feature/* や hotfix/* ブランチへの直 push では CI が走らない。CI
 
 - `develop` / `release/*` ブランチが未作成（現在 `main` 単一ブランチ運用）
 - `release-tag.yaml` ワークフロー未作成（サービス本体の SemVer タグが自動化されていない）
-- `deploy.yaml` 分離未実施（現状 `ci.yaml` 内で build & push）
 - `check-source-branch` ジョブ未追加（main へのマージ元を release/hotfix に限定する機械チェック）
 - develop への back-merge 自動 PR workflow 未作成
