@@ -16,64 +16,65 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
 )
 
-// TestInternalAuth_E2E は middleware チェーン → handler → outbound HTTP の経路で
-// JWT claims が仕様通りに乗ることを end-to-end に検証する。cardclient を介して
-// downstream に X-Internal-Auth が転送されることを確認する。
 func TestInternalAuth_E2E(t *testing.T) {
-	const (
-		secret   = "e2e-test-secret-32-bytes-or-longer"
-		playerID = "player-e2e-123"
-	)
+	t.Run("内部認証 JWT の end-to-end 伝搬", func(t *testing.T) {
+		t.Run("player_id を設定して下流を呼ぶと、署名済み JWT が X-Internal-Auth として転送される", func(t *testing.T) {
+			const (
+				secret   = "e2e-test-secret-32-bytes-or-longer"
+				playerID = "player-e2e-123"
+			)
 
-	var got string
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		got = r.Header.Get(internalauth.HeaderName)
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`[]`))
-	}))
-	defer upstream.Close()
+			var got string
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				got = r.Header.Get(internalauth.HeaderName)
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`[]`))
+			}))
+			defer upstream.Close()
 
-	signer := internalauth.NewSigner(
-		internalauth.StaticHS256Resolver([]byte(secret), internalauth.DefaultKeyID),
-		internalauth.DefaultKeyID,
-	)
-	cc := cardclient.New(upstream.URL)
+			signer := internalauth.NewSigner(
+				internalauth.StaticHS256Resolver([]byte(secret), internalauth.DefaultKeyID),
+				internalauth.DefaultKeyID,
+			)
+			cc := cardclient.New(upstream.URL)
 
-	r := gin.New()
-	r.Use(func(c *gin.Context) {
-		c.Set("player_id", playerID)
-		c.Next()
+			r := gin.New()
+			r.Use(func(c *gin.Context) {
+				c.Set("player_id", playerID)
+				c.Next()
+			})
+			r.Use(middleware.IssueInternalAuth(signer))
+			r.GET("/cards", func(c *gin.Context) {
+				if _, err := cc.ListAllCards(c.Request.Context()); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					return
+				}
+				c.JSON(http.StatusOK, gin.H{})
+			})
+
+			rr := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, "/cards", nil)
+			r.ServeHTTP(rr, req)
+
+			require.Equal(t, http.StatusOK, rr.Code, "handler returned non-200; body=%s", rr.Body.String())
+			require.NotEmpty(t, got, "X-Internal-Auth header was not received upstream")
+
+			claims := &jwt.RegisteredClaims{}
+			parser := jwt.NewParser(jwt.WithoutClaimsValidation())
+			parsed, err := parser.ParseWithClaims(got, claims, func(*jwt.Token) (any, error) {
+				return []byte(secret), nil
+			})
+			require.NoError(t, err, "failed to parse JWT")
+			require.True(t, parsed.Valid, "JWT signature invalid")
+
+			assert.Equal(t, "HS256", parsed.Method.Alg(), "alg")
+			assert.Equal(t, string(internalauth.DefaultKeyID), parsed.Header["kid"], "kid")
+			assert.Equal(t, playerID, claims.Subject, "sub should equal player_id")
+			assert.Equal(t, internalauth.Issuer, claims.Issuer, "iss")
+			require.NotNil(t, claims.IssuedAt, "iat present")
+			require.NotNil(t, claims.ExpiresAt, "exp present")
+			assert.Equal(t, internalauth.DefaultTTL, claims.ExpiresAt.Sub(claims.IssuedAt.Time), "exp - iat == TTL")
+			assert.WithinDuration(t, time.Now(), claims.IssuedAt.Time, 5*time.Second, "iat near now")
+		})
 	})
-	r.Use(middleware.IssueInternalAuth(signer))
-	r.GET("/cards", func(c *gin.Context) {
-		if _, err := cc.ListAllCards(c.Request.Context()); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{})
-	})
-
-	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/cards", nil)
-	r.ServeHTTP(rr, req)
-
-	require.Equal(t, http.StatusOK, rr.Code, "handler returned non-200; body=%s", rr.Body.String())
-	require.NotEmpty(t, got, "X-Internal-Auth header was not received upstream")
-
-	claims := &jwt.RegisteredClaims{}
-	parser := jwt.NewParser(jwt.WithoutClaimsValidation())
-	parsed, err := parser.ParseWithClaims(got, claims, func(*jwt.Token) (any, error) {
-		return []byte(secret), nil
-	})
-	require.NoError(t, err, "failed to parse JWT")
-	require.True(t, parsed.Valid, "JWT signature invalid")
-
-	assert.Equal(t, "HS256", parsed.Method.Alg(), "alg")
-	assert.Equal(t, string(internalauth.DefaultKeyID), parsed.Header["kid"], "kid")
-	assert.Equal(t, playerID, claims.Subject, "sub should equal player_id")
-	assert.Equal(t, internalauth.Issuer, claims.Issuer, "iss")
-	require.NotNil(t, claims.IssuedAt, "iat present")
-	require.NotNil(t, claims.ExpiresAt, "exp present")
-	assert.Equal(t, internalauth.DefaultTTL, claims.ExpiresAt.Sub(claims.IssuedAt.Time), "exp - iat == TTL")
-	assert.WithinDuration(t, time.Now(), claims.IssuedAt.Time, 5*time.Second, "iat near now")
 }
