@@ -58,8 +58,7 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	// PostgreSQL 接続プール: gateway.game_players（gateway 所有）と
-	// newsfeed.news_articles（read-only クロススキーマプロキシ）に使用
+	// PostgreSQL 接続プール: gateway.game_players（gateway 所有）に使用
 	pool, err := pgxpool.New(ctx, cfg.DatabaseConn)
 	if err != nil {
 		log.Fatalf("failed to create pg pool: %v", err)

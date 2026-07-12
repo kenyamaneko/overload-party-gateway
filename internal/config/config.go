@@ -24,7 +24,7 @@ type Config struct {
 	NewsServiceURL        string
 	SupportServiceURL     string
 
-	// game_players / news_articles は gateway が直接 Postgres に接続して読み書きする
+	// game_players は gateway が直接 Postgres に接続して読み書きする
 	DatabaseConn string
 
 	// GoogleCloudProjectID は Pub/Sub および Firestore (game_config) の対象プロジェクト ID。

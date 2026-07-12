@@ -36,7 +36,7 @@ func main() {
 
 	cfg := config.Load()
 	if cfg.DatabaseConn == "" {
-		log.Fatal("DATABASE_CONN must be set (gateway owns gateway.game_players and reads newsfeed.news_articles)")
+		log.Fatal("DATABASE_CONN must be set (gateway owns gateway.game_players)")
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
