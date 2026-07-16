@@ -45,7 +45,7 @@ func TestMatchSubscriber(t *testing.T) {
 		{PlayerID: "p-2", DeckID: 20},
 	}
 
-	t.Run("MatchMadeEvent の購読", func(t *testing.T) {
+	t.Run("マッチ成立イベントの購読", func(t *testing.T) {
 		// matchmaking 送信側 fake 経由で publish 型をそのまま使い、matchmaking が schema を
 		// 変えたら本テストが compile / 実行で破綻して乖離を検知できるようにする。
 		tests := []struct {
@@ -56,7 +56,7 @@ func TestMatchSubscriber(t *testing.T) {
 			assertHandler func(t *testing.T, h *fakeMatchHandler)
 		}{
 			{
-				name: "有効な MatchMadeEvent のとき、handler に委譲して ACK になる",
+				name: "有効なマッチ成立イベントのとき、処理に委譲して ACK になる",
 				publish: func(ctx context.Context, pub *apimatchmakingfake.Publisher, _ *apimatchmakingfake.Broker) {
 					_ = apimatchmakingfake.PublishMatchMade(ctx, pub, apimatchmaking.MatchMadeEvent{
 						MatchID: "mch_1",
@@ -73,7 +73,7 @@ func TestMatchSubscriber(t *testing.T) {
 				},
 			},
 			{
-				name: "不正な JSON のとき、握りつぶさず NACK になり handler に到達しない",
+				name: "不正な JSON のとき、握りつぶさず NACK になり処理に渡らない",
 				publish: func(_ context.Context, _ *apimatchmakingfake.Publisher, broker *apimatchmakingfake.Broker) {
 					broker.Publish(matchMadeTopic, []byte("not-json"))
 				},
@@ -83,7 +83,7 @@ func TestMatchSubscriber(t *testing.T) {
 				},
 			},
 			{
-				name: "未知の event_type のとき、責務外として ACK になり handler に到達しない",
+				name: "未知の event_type のとき、責務外として ACK になり処理に渡らない",
 				publish: func(_ context.Context, _ *apimatchmakingfake.Publisher, broker *apimatchmakingfake.Broker) {
 					payload, _ := json.Marshal(apimatchmaking.MatchMadeEvent{
 						EventType: "unknown",
@@ -98,7 +98,7 @@ func TestMatchSubscriber(t *testing.T) {
 				},
 			},
 			{
-				name: "handler が失敗するとき、NACK になり handler は呼ばれる",
+				name: "処理が失敗するとき、処理は呼ばれた上で NACK になる",
 				publish: func(ctx context.Context, pub *apimatchmakingfake.Publisher, _ *apimatchmakingfake.Broker) {
 					_ = apimatchmakingfake.PublishMatchMade(ctx, pub, apimatchmaking.MatchMadeEvent{
 						MatchID: "mch_fail",
@@ -145,7 +145,7 @@ func TestMatchSubscriber(t *testing.T) {
 			})
 		}
 
-		t.Run("同一 matchId が 2 回届くとき、Pod-local dedup で handler には 1 回だけ到達する", func(t *testing.T) {
+		t.Run("同一マッチ ID が 2 回届くとき、Pod 単位の重複排除で処理は 1 回だけ実行される", func(t *testing.T) {
 			// matchmaking の Exactly-Once Delivery が万一破綻した場合の Pod 単位 safety net。
 			// 2 回目は Pod-local dedup map により handler に到達せず ACK される。
 			broker := apimatchmakingfake.NewBroker()

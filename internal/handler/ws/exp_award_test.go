@@ -98,12 +98,12 @@ func setupAwardRelay(t *testing.T, repo port.GamePlayerRepo, account *awardCount
 
 func TestAwardGameExp(t *testing.T) {
 	t.Run("EXP 付与", func(t *testing.T) {
-		t.Run("repo も accountClient も無いとき、パニックせず戻る", func(t *testing.T) {
+		t.Run("記録先も account 連携も無いとき、パニックせず戻る", func(t *testing.T) {
 			relay, _ := newTestRelay()
 			relay.awardGameExp("g1", 1, "lp_zero")
 		})
 
-		t.Run("repo はあるが accountClient が無いとき、MarkExpAwarded を呼ばない", func(t *testing.T) {
+		t.Run("記録先はあるが account 連携が無いとき、付与済みフラグを立てない", func(t *testing.T) {
 			relay, _ := newTestRelay()
 			repo := &mockGamePlayerRepo{}
 			relay.gamePlayerRepo = repo
@@ -116,7 +116,7 @@ func TestAwardGameExp(t *testing.T) {
 			assert.Equal(t, 0, repo.markAwardedCalls)
 		})
 
-		t.Run("初回付与のとき、mark→lookup の順で実行し account に付与する", func(t *testing.T) {
+		t.Run("初回付与のとき、フラグ確定→プレイヤー解決の順で実行し account に付与する", func(t *testing.T) {
 			repo := &mockGamePlayerRepo{
 				markAwardedReturn: true,
 				lookupEntries: []port.GamePlayerEntry{
@@ -136,7 +136,7 @@ func TestAwardGameExp(t *testing.T) {
 				"MarkExpAwarded MUST be called before LookupGamePlayers (idempotency invariant)")
 		})
 
-		t.Run("対戦相手が 1 エントリ (NPC) のとき、account に付与する", func(t *testing.T) {
+		t.Run("対戦相手が 1 件 (NPC) のとき、account に付与する", func(t *testing.T) {
 			repo := &mockGamePlayerRepo{
 				markAwardedReturn: true,
 				lookupEntries: []port.GamePlayerEntry{
@@ -151,7 +151,7 @@ func TestAwardGameExp(t *testing.T) {
 			assert.Equal(t, int32(1), account.calls.Load())
 		})
 
-		t.Run("既に awarded 済みのとき、lookup も付与もしない", func(t *testing.T) {
+		t.Run("既に付与済みのとき、プレイヤー解決も付与もしない", func(t *testing.T) {
 			repo := &mockGamePlayerRepo{
 				markAwardedReturn: false, // フラグは既に立っていた
 			}
@@ -165,7 +165,7 @@ func TestAwardGameExp(t *testing.T) {
 			assert.Equal(t, int32(0), account.calls.Load(), "must not award twice")
 		})
 
-		t.Run("MarkExpAwarded が失敗するとき、付与せず lookup も呼ばない", func(t *testing.T) {
+		t.Run("付与済みフラグの確定が失敗するとき、付与せずプレイヤー解決も呼ばない", func(t *testing.T) {
 			// フラグ書き込みに失敗したら付与せず返す。強引に付与すると次回リトライで二重付与に
 			// なるため、失敗したら諦めて要監視 (ERROR ログ) が正しい。次回同じ game_id が来たら
 			// MarkExpAwarded が再試行され、成功すれば付与される。
@@ -182,7 +182,7 @@ func TestAwardGameExp(t *testing.T) {
 			assert.Equal(t, int32(0), account.calls.Load())
 		})
 
-		t.Run("LookupGamePlayers が失敗するとき、付与しない", func(t *testing.T) {
+		t.Run("プレイヤー解決が失敗するとき、付与しない", func(t *testing.T) {
 			// マークは成功 (フラグは立った) したがプレイヤー解決で失敗。次回呼んでも MarkExpAwarded が
 			// false を返すため二重付与にはならない。このゲームの EXP は失われる (ERROR ログで監視)。
 			repo := &mockGamePlayerRepo{
@@ -225,7 +225,7 @@ func TestAwardGameExp(t *testing.T) {
 			assert.Equal(t, int32(1), account.calls.Load(), "no retry — EXP is permanently lost without manual intervention")
 		})
 
-		t.Run("PlayerNum が 1/2 以外のとき、パニックせず付与する", func(t *testing.T) {
+		t.Run("プレイヤー番号が 1/2 以外のとき、パニックせず付与する", func(t *testing.T) {
 			// PlayerNum が 1/2 以外 (不整合データ) でも player1ID/player2ID の組み立てで panic しない。
 			repo := &mockGamePlayerRepo{
 				markAwardedReturn: true,
