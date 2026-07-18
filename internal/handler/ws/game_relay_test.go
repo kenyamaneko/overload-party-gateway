@@ -27,6 +27,21 @@ type mockBattleClient struct {
 	// (overrides advanceNpcResult). Enables tests that need successive results.
 	advanceNpcQueue []*service.ActionResult
 	advanceNpcCalls int
+
+	createPvPGameResult *service.GameCreatedResult
+	createPvPGameErr    error
+	createPvPGameCalls  int
+	createPvPGameArgs   capturedCreatePvPGameArgs
+}
+
+// capturedCreatePvPGameArgs は CreatePvPGame への呼び出し引数を記録する。
+type capturedCreatePvPGameArgs struct {
+	deck1Cards       []service.BattleDeckCard
+	deck2Cards       []service.BattleDeckCard
+	deck1Initiatives service.DeckInitiatives
+	deck2Initiatives service.DeckInitiatives
+	player1Summary   service.PlayerSummaryRequest
+	player2Summary   service.PlayerSummaryRequest
 }
 
 func newMockBattleClient() *mockBattleClient {
@@ -45,8 +60,17 @@ func (m *mockBattleClient) StartNPCBattle(_ context.Context, _ []service.BattleD
 	return nil, nil
 }
 
-func (m *mockBattleClient) CreatePvPGame(_ context.Context, _, _ []service.BattleDeckCard, _, _ service.DeckInitiatives, _, _ service.PlayerSummaryRequest) (*service.GameCreatedResult, error) {
-	return nil, nil
+func (m *mockBattleClient) CreatePvPGame(_ context.Context, deck1Cards, deck2Cards []service.BattleDeckCard, deck1Initiatives, deck2Initiatives service.DeckInitiatives, player1Summary, player2Summary service.PlayerSummaryRequest) (*service.GameCreatedResult, error) {
+	m.createPvPGameCalls++
+	m.createPvPGameArgs = capturedCreatePvPGameArgs{
+		deck1Cards:       deck1Cards,
+		deck2Cards:       deck2Cards,
+		deck1Initiatives: deck1Initiatives,
+		deck2Initiatives: deck2Initiatives,
+		player1Summary:   player1Summary,
+		player2Summary:   player2Summary,
+	}
+	return m.createPvPGameResult, m.createPvPGameErr
 }
 
 func (m *mockBattleClient) ProcessAction(_ context.Context, _ string, _ int, _ string, _ json.RawMessage) (*service.ActionResult, error) {

@@ -2,6 +2,7 @@ package ws
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	apiaccount "github.com/kenyamaneko/overload-party-account/packages/api-account"
+	gamedesign "github.com/kenyamaneko/overload-party-common/packages/game-design-constants"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
@@ -63,15 +67,23 @@ func (m *mockGamePlayerRepo) MarkExpAwarded(_ context.Context, _ string) (bool, 
 
 var _ port.GamePlayerRepo = (*mockGamePlayerRepo)(nil)
 
-// awardCounter は account サービスの AwardGameExp 呼出回数を集計する httptest 用ハンドラ。
+// awardCounter は account サービスの AwardGameExp 呼出回数と受信 body を集計する httptest 用ハンドラ。
 type awardCounter struct {
 	calls    atomic.Int32
 	respCode int // 0 → 200
+
+	mu           sync.Mutex
+	capturedBody apiaccount.AwardGameExpRequest
 }
 
 func (a *awardCounter) handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/internal/v1/players/award-game-exp" {
+			var req apiaccount.AwardGameExpRequest
+			_ = json.NewDecoder(r.Body).Decode(&req)
+			a.mu.Lock()
+			a.capturedBody = req
+			a.mu.Unlock()
 			a.calls.Add(1)
 			code := a.respCode
 			if code == 0 {
@@ -82,6 +94,13 @@ func (a *awardCounter) handler() http.Handler {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	})
+}
+
+// body は直近に受信した AwardGameExp リクエスト body を返す。
+func (a *awardCounter) body() apiaccount.AwardGameExpRequest {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.capturedBody
 }
 
 // setupAwardRelay は awardGameExp の動線を完全に組み立てた relay を返す。
@@ -242,6 +261,44 @@ func TestAwardGameExp(t *testing.T) {
 			// PlayerNum=99 は player1ID/player2ID のどちらにも入らないが AwardGameExp は呼ばれる
 			// (空文字 ID をどう処理するかは account の責務)。
 			assert.Equal(t, int32(1), account.calls.Load())
+		})
+
+		t.Run("2 人のゲームで player 1 が勝ったとき、付与依頼に両プレイヤー ID・勝者 1・理由・pvp が載る", func(t *testing.T) {
+			repo := &mockGamePlayerRepo{
+				markAwardedReturn: true,
+				lookupEntries: []port.GamePlayerEntry{
+					{PlayerNum: 1, PlayerID: "TST-P1"},
+					{PlayerNum: 2, PlayerID: "TST-P2"},
+				},
+			}
+			account := &awardCounter{}
+			relay := setupAwardRelay(t, repo, account)
+
+			relay.awardGameExp("g1", 1, "lp_zero")
+
+			got := account.body()
+			assert.Equal(t, "TST-P1", got.Player1ID)
+			assert.Equal(t, "TST-P2", got.Player2ID)
+			assert.Equal(t, int64(1), got.WinnerNum)
+			assert.Equal(t, "lp_zero", got.Reason)
+			assert.Equal(t, gamedesign.MatchTypePvp, got.MatchType)
+		})
+
+		t.Run("参加者が 1 人だけ (NPC 戦) のとき、付与依頼のマッチ種別が npc になる", func(t *testing.T) {
+			repo := &mockGamePlayerRepo{
+				markAwardedReturn: true,
+				lookupEntries: []port.GamePlayerEntry{
+					{PlayerNum: 1, PlayerID: "TST-P1"},
+				},
+			}
+			account := &awardCounter{}
+			relay := setupAwardRelay(t, repo, account)
+
+			relay.awardGameExp("g1", 1, "lp_zero")
+
+			got := account.body()
+			assert.Equal(t, gamedesign.MatchTypeNpc, got.MatchType)
+			assert.Equal(t, "", got.Player2ID)
 		})
 	})
 }

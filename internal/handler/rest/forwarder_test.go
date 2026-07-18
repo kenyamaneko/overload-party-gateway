@@ -236,4 +236,35 @@ func TestNewForwarder(t *testing.T) {
 			require.Error(t, err)
 		})
 	})
+
+	t.Run("ヘッダの透過", func(t *testing.T) {
+		t.Run("リクエストの Content-Type が backend に届き、レスポンスの Content-Type がクライアントに返る", func(t *testing.T) {
+			var gotContentType string
+			backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gotContentType = r.Header.Get("Content-Type")
+				w.Header().Set("Content-Type", "text/plain")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte("ok"))
+			}))
+			t.Cleanup(backend.Close)
+
+			fwd, err := rest.NewForwarder(backend.URL)
+			require.NoError(t, err)
+
+			r := gin.New()
+			r.Any("/api/v1/*path", fwd)
+			gw := httptest.NewServer(r)
+			t.Cleanup(gw.Close)
+
+			req, err := http.NewRequest(http.MethodPost, gw.URL+"/api/v1/echo", strings.NewReader(`{}`))
+			require.NoError(t, err)
+			req.Header.Set("Content-Type", "application/json")
+			resp, err := http.DefaultClient.Do(req)
+			require.NoError(t, err)
+			defer func() { _ = resp.Body.Close() }()
+
+			assert.Equal(t, "application/json", gotContentType)
+			assert.Equal(t, "text/plain", resp.Header.Get("Content-Type"))
+		})
+	})
 }
