@@ -270,7 +270,7 @@ func TestUseDevAuthWithPlayerResolve(t *testing.T) {
 			})
 		}
 
-		t.Run("登録が競合 (409) し再検索で見つかるとき、既存の player_id で通る", func(t *testing.T) {
+		t.Run("登録が競合 (409) し再検索で見つかるとき、既存のプレイヤー ID で通る", func(t *testing.T) {
 			fa := newSequencedAccountFake(t, []int{http.StatusNotFound, http.StatusOK}, http.StatusConflict)
 
 			r := gin.New()

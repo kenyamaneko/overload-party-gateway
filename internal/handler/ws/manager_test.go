@@ -272,14 +272,14 @@ func TestCheckAndIncrementBattleLimit(t *testing.T) {
 			wantErr           bool
 		}{
 			{
-				name:              "残回数がある (CanBattle=true) とき、バトル回数の加算が 1 回だけ行われ、制限メッセージは返らない",
+				name:              "残回数があるとき、バトル回数の加算が 1 回だけ行われ、制限メッセージは返らない",
 				limitStatus:       http.StatusOK,
 				canBattle:         true,
 				incrementStatus:   http.StatusNoContent,
 				wantIncrementHits: 1,
 			},
 			{
-				name:        "上限到達 (CanBattle=false) のとき、加算されず「daily battle limit reached」を返す",
+				name:        "上限到達のとき、加算されず「daily battle limit reached」を返す",
 				limitStatus: http.StatusOK,
 				canBattle:   false,
 				wantMsg:     "daily battle limit reached",

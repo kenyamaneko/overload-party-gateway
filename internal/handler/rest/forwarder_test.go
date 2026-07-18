@@ -238,7 +238,7 @@ func TestNewForwarder(t *testing.T) {
 	})
 
 	t.Run("ヘッダの透過", func(t *testing.T) {
-		t.Run("リクエストの Content-Type が backend に届き、レスポンスの Content-Type がクライアントに返る", func(t *testing.T) {
+		t.Run("リクエストの Content-Type がバックエンドに届き、レスポンスの Content-Type がクライアントに返る", func(t *testing.T) {
 			var gotContentType string
 			backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				gotContentType = r.Header.Get("Content-Type")
