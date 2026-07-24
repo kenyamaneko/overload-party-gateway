@@ -3,14 +3,23 @@ name: Deploy
 on:
   push:
     branches: [main]
+    tags: ["v*.*.*"]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - ".vscode/**"
+      - ".gitignore"
+      - "LICENSE"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "昇格対象の git タグ (stg で検証済みの vX.Y.Z)"
+        required: true
+        type: string
 
 permissions:
   contents: read
   id-token: write
-
-concurrency:
-  group: deploy-${{ github.ref }}
-  cancel-in-progress: false
 
 env:
   PROJECT_ID: keyandnotes-platform
@@ -20,8 +29,13 @@ env:
 
 jobs:
   push-image:
+    if: github.event_name == 'push' && github.ref_type == 'branch'
     runs-on: ubicloud-standard-2
     timeout-minutes: 30
+    concurrency:
+      group: gateway-deploy-build
+      # デプロイ中断による中途半端な反映を避けるため、実行中の処理を中止しない
+      cancel-in-progress: false
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -58,3 +72,147 @@ jobs:
             -t ${IMAGE}:${{ github.sha }} -t ${IMAGE}:latest .
           docker push ${IMAGE}:${{ github.sha }}
           docker push ${IMAGE}:latest
+
+  deploy-dev:
+    needs: push-image
+    if: github.event_name == 'push' && github.ref_type == 'branch'
+    runs-on: ubicloud-standard-2
+    timeout-minutes: 20
+    concurrency:
+      group: gateway-deploy-dev
+      # ロール中断による中途半端な反映を避けるため、実行中の処理を中止しない
+      cancel-in-progress: false
+    environment: dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.GCE_DEPLOY_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Create versioned instance template
+        id: create-template
+        env:
+          REGISTRY_PROJECT_ID: ${{ env.PROJECT_ID }}
+          PROJECT_ID: ${{ vars.GCE_PROJECT_ID }}
+          BASE_TEMPLATE: ${{ vars.GCE_BASE_INSTANCE_TEMPLATE }}
+          MIG_NAME: ${{ vars.GCE_MIG_NAME }}
+          IMAGE: ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}
+          SHA: ${{ github.sha }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: .github/scripts/deploy/create-versioned-template.sh
+
+      - name: Roll instance group
+        env:
+          PROJECT_ID: ${{ vars.GCE_PROJECT_ID }}
+          REGION: ${{ vars.GCE_REGION }}
+          MIG_NAME: ${{ vars.GCE_MIG_NAME }}
+          NEW_TEMPLATE: ${{ steps.create-template.outputs.template }}
+        run: .github/scripts/deploy/roll-instance-group.sh
+
+  deploy-stg:
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    runs-on: ubicloud-standard-2
+    timeout-minutes: 20
+    concurrency:
+      group: gateway-deploy-stg
+      cancel-in-progress: false
+    environment: stg
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve tag commit
+        id: resolve
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: echo "sha=$(git rev-parse "${REF_NAME}^{commit}")" >> "$GITHUB_OUTPUT"
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.GCE_DEPLOY_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Create versioned instance template
+        id: create-template
+        env:
+          REGISTRY_PROJECT_ID: ${{ env.PROJECT_ID }}
+          PROJECT_ID: ${{ vars.GCE_PROJECT_ID }}
+          BASE_TEMPLATE: ${{ vars.GCE_BASE_INSTANCE_TEMPLATE }}
+          MIG_NAME: ${{ vars.GCE_MIG_NAME }}
+          IMAGE: ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}
+          SHA: ${{ steps.resolve.outputs.sha }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: .github/scripts/deploy/create-versioned-template.sh
+
+      - name: Roll instance group
+        env:
+          PROJECT_ID: ${{ vars.GCE_PROJECT_ID }}
+          REGION: ${{ vars.GCE_REGION }}
+          MIG_NAME: ${{ vars.GCE_MIG_NAME }}
+          NEW_TEMPLATE: ${{ steps.create-template.outputs.template }}
+        run: .github/scripts/deploy/roll-instance-group.sh
+
+  deploy-prod:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubicloud-standard-2
+    timeout-minutes: 20
+    concurrency:
+      group: gateway-deploy-prod
+      cancel-in-progress: false
+    environment: prod
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version commit
+        id: resolve
+        env:
+          VERSION: ${{ inputs.version }}
+        run: echo "sha=$(git rev-parse "${VERSION}^{commit}")" >> "$GITHUB_OUTPUT"
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.GCE_DEPLOY_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Create versioned instance template
+        id: create-template
+        env:
+          REGISTRY_PROJECT_ID: ${{ env.PROJECT_ID }}
+          PROJECT_ID: ${{ vars.GCE_PROJECT_ID }}
+          BASE_TEMPLATE: ${{ vars.GCE_BASE_INSTANCE_TEMPLATE }}
+          MIG_NAME: ${{ vars.GCE_MIG_NAME }}
+          IMAGE: ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}
+          SHA: ${{ steps.resolve.outputs.sha }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: .github/scripts/deploy/create-versioned-template.sh
+
+      - name: Roll instance group
+        env:
+          PROJECT_ID: ${{ vars.GCE_PROJECT_ID }}
+          REGION: ${{ vars.GCE_REGION }}
+          MIG_NAME: ${{ vars.GCE_MIG_NAME }}
+          NEW_TEMPLATE: ${{ steps.create-template.outputs.template }}
+        run: .github/scripts/deploy/roll-instance-group.sh
