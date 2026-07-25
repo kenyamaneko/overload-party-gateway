@@ -125,7 +125,7 @@ type reconnectCall struct {
 
 func TestRegister_WasLate(t *testing.T) {
 	t.Run("復帰したプレイヤー自身の猶予切れ判定", func(t *testing.T) {
-		t.Run("インメモリのタイマーがまだ残っているとき、wasLate は false になる", func(t *testing.T) {
+		t.Run("インメモリのタイマーがまだ残っているとき、猶予切れではないと判定される", func(t *testing.T) {
 			var calls []reconnectCall
 			hub := NewConnectionHub(HubCallbacks{
 				GetGameID:           func(string) (string, bool) { return "game_1", true },
@@ -145,7 +145,7 @@ func TestRegister_WasLate(t *testing.T) {
 			assert.False(t, calls[0].wasLate)
 		})
 
-		t.Run("インメモリに記録が無く TimerStore の期限がまだ先のとき、wasLate は false になる", func(t *testing.T) {
+		t.Run("インメモリに記録が無く写しの期限がまだ先のとき、猶予切れではないと判定される", func(t *testing.T) {
 			var calls []reconnectCall
 			store := &fakeTimerStore{
 				getDisconnectFound:  true,
@@ -166,7 +166,7 @@ func TestRegister_WasLate(t *testing.T) {
 			assert.False(t, calls[0].wasLate)
 		})
 
-		t.Run("インメモリに記録が無く TimerStore の期限が過ぎているとき、wasLate は true になる", func(t *testing.T) {
+		t.Run("インメモリに記録が無く写しの期限が過ぎているとき、猶予切れとして判定される", func(t *testing.T) {
 			var calls []reconnectCall
 			store := &fakeTimerStore{
 				getDisconnectFound:  true,
@@ -187,7 +187,7 @@ func TestRegister_WasLate(t *testing.T) {
 			assert.True(t, calls[0].wasLate)
 		})
 
-		t.Run("インメモリにも TimerStore にも記録が無いとき、OnGameReconnect を呼ばない", func(t *testing.T) {
+		t.Run("インメモリにも写しにも記録が無いとき、復帰処理を実行しない", func(t *testing.T) {
 			var calls []reconnectCall
 			store := &fakeTimerStore{}
 			hub := NewConnectionHub(HubCallbacks{
@@ -243,13 +243,13 @@ func TestDisconnectDeadlineExpired(t *testing.T) {
 			assert.False(t, hub.DisconnectDeadlineExpired("p1"))
 		})
 
-		t.Run("インメモリに記録が無く TimerStore にも記録が無いとき、false になる", func(t *testing.T) {
+		t.Run("インメモリにも写しにも記録が無いとき、false になる", func(t *testing.T) {
 			hub := newTestHub(&fakeTimerStore{}, true, "game_1")
 
 			assert.False(t, hub.DisconnectDeadlineExpired("p1"))
 		})
 
-		t.Run("インメモリに記録が無く TimerStore の期限がまだ先のとき、false になる", func(t *testing.T) {
+		t.Run("インメモリに記録が無く写しの期限がまだ先のとき、false になる", func(t *testing.T) {
 			store := &fakeTimerStore{
 				getDisconnectFound:  true,
 				getDisconnectReturn: portDisconnectDeadline("game_1", time.Now().Add(time.Minute)),
@@ -259,7 +259,7 @@ func TestDisconnectDeadlineExpired(t *testing.T) {
 			assert.False(t, hub.DisconnectDeadlineExpired("p1"))
 		})
 
-		t.Run("インメモリに記録が無く TimerStore の期限が過ぎているとき、true になる", func(t *testing.T) {
+		t.Run("インメモリに記録が無く写しの期限が過ぎているとき、true になる", func(t *testing.T) {
 			store := &fakeTimerStore{
 				getDisconnectFound:  true,
 				getDisconnectReturn: portDisconnectDeadline("game_1", time.Now().Add(-time.Minute)),
