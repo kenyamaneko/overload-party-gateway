@@ -19,6 +19,7 @@ var errFake = errors.New("fake battle error")
 type mockBattleClient struct {
 	processActionResult *service.ActionResult
 	processActionErr    error
+	processActionCalls  []processActionCall
 	turnControls        json.RawMessage
 	turnControlsErr     error
 	advanceNpcResult    *service.ActionResult
@@ -27,6 +28,14 @@ type mockBattleClient struct {
 	// (overrides advanceNpcResult). Enables tests that need successive results.
 	advanceNpcQueue []*service.ActionResult
 	advanceNpcCalls int
+}
+
+// processActionCall は mockBattleClient.ProcessAction への 1 回の呼出を記録する。
+type processActionCall struct {
+	gameID     string
+	playerNum  int
+	actionType string
+	data       json.RawMessage
 }
 
 func newMockBattleClient() *mockBattleClient {
@@ -49,7 +58,10 @@ func (m *mockBattleClient) CreatePvPGame(_ context.Context, _, _ []service.Battl
 	return nil, nil
 }
 
-func (m *mockBattleClient) ProcessAction(_ context.Context, _ string, _ int, _ string, _ json.RawMessage) (*service.ActionResult, error) {
+func (m *mockBattleClient) ProcessAction(_ context.Context, gameID string, playerNum int, actionType string, data json.RawMessage) (*service.ActionResult, error) {
+	m.processActionCalls = append(m.processActionCalls, processActionCall{
+		gameID: gameID, playerNum: playerNum, actionType: actionType, data: data,
+	})
 	return m.processActionResult, m.processActionErr
 }
 
