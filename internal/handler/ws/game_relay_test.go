@@ -97,8 +97,8 @@ func newTestRelay() (*GameRelay, *mockBattleClient) {
 	hub := NewConnectionHub(HubCallbacks{
 		GetGameID:           func(string) (string, bool) { return "", false },
 		OnDisconnectTimeout: func(string, string) {},
-	})
-	relay := NewGameRelay(hub, bc, nil, nil)
+	}, nil)
+	relay := NewGameRelay(hub, bc, nil, nil, nil)
 	return relay, bc
 }
 
@@ -431,6 +431,19 @@ func TestLeaveAllPlayers(t *testing.T) {
 			_, membersExist := relay.gameMembers["game_1"]
 			relay.mu.RUnlock()
 			assert.False(t, membersExist, "gameMembers should be cleaned up")
+		})
+
+		t.Run("呼ぶと、退出した全プレイヤーの切断猶予期限が TimerStore から削除される", func(t *testing.T) {
+			relay, _ := newTestRelay()
+			store := &fakeTimerStore{}
+			relay.hub.timerStore = store
+
+			relay.JoinGame("p1", "game_1", 1)
+			relay.JoinGame("p2", "game_1", 2)
+
+			relay.leaveAllPlayers("game_1")
+
+			assert.ElementsMatch(t, []string{"p1", "p2"}, store.snapshotClearDisconnectCalls())
 		})
 	})
 }

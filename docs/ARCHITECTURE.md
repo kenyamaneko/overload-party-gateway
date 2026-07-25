@@ -90,3 +90,4 @@ gateway の env は [internal/config/config.go](../internal/config/config.go) �
 
 - **`MATCHMAKING_TIMEOUT_SEC`**: マッチ待機タイムアウト。短すぎるとキューが浅い時間帯にユーザーが離脱しやすい。matchmaking サービスのキュー長メトリクスと併せて調整する
 - **Pub/Sub subscription 名** (`MATCHMAKING_SUBSCRIPTION`): 環境（dev/stg/prod）ごとに分離する。異環境の subscription を共有するとメッセージが競合してどちらの環境にも届かない事故が起きる
+- **`UPSTASH_REDIS_URL`**: 対戦ごとの計時（切断猶予・ターン）の写しを保持する Redis の接続先。書き込み・読み出しの失敗は警告ログのみで対戦を止めないため、到達不能でも対戦自体は継続するが、プロセス再起動をまたいだ切断決着の復元ができなくなる

@@ -49,15 +49,20 @@ type GameRelay struct {
 
 	timerMu    sync.Mutex
 	turnTimers map[string]*turnTimerInfo // gameID → active turn timer
+
+	// timerStore はターン期限を Redis へ写す。未設定 (nil) の場合は写しを行わない
+	// （ローカル開発など Redis を使わない環境向け）。
+	timerStore port.TimerStore
 }
 
 // NewGameRelay は GameRelay を生成します。
-// accountClient / gamePlayerRepo は nil 可（mock モード / テスト用）。
+// accountClient / gamePlayerRepo / timerStore は nil 可（mock モード / テスト用 / 写し無し）。
 func NewGameRelay(
 	hub *ConnectionHub,
 	battleClient service.BattleClient,
 	accountClient port.AccountClient,
 	gamePlayerRepo port.GamePlayerRepo,
+	timerStore port.TimerStore,
 ) *GameRelay {
 	return &GameRelay{
 		hub:            hub,
@@ -67,6 +72,7 @@ func NewGameRelay(
 		gameMembers:    make(map[string][]string),
 		playerGames:    make(map[string]playerSession),
 		turnTimers:     make(map[string]*turnTimerInfo),
+		timerStore:     timerStore,
 	}
 }
 
@@ -575,7 +581,8 @@ func (r *GameRelay) HandleGameAction(ctx context.Context, conn *Connection, data
 }
 
 // leaveAllPlayers はゲームの全プレイヤーのメンバーシップを解除する。
-// game over 後に gameMembers / playerGames をクリーンアップする。
+// game over 後に gameMembers / playerGames をクリーンアップし、対戦を終えた
+// プレイヤーの切断猶予期限の写しも合わせて削除する。
 func (r *GameRelay) leaveAllPlayers(gameID string) {
 	r.mu.RLock()
 	players := make([]string, len(r.gameMembers[gameID]))
@@ -583,6 +590,7 @@ func (r *GameRelay) leaveAllPlayers(gameID string) {
 	r.mu.RUnlock()
 	for _, pid := range players {
 		r.LeaveGame(pid)
+		r.hub.ClearDisconnectDeadline(pid)
 	}
 }
 

@@ -24,18 +24,19 @@ const turnTimerNetworkBuffer = 2 * time.Second
 // タイマー発火時にアクティブプレイヤーの forfeit（タイムアウト負け）を送信する。
 func (r *GameRelay) resetTurnTimer(gameID, activePlayerID string, timeBankSeconds int64) {
 	r.timerMu.Lock()
-	defer r.timerMu.Unlock()
-
 	if info, ok := r.turnTimers[gameID]; ok {
 		info.timer.Stop()
 		delete(r.turnTimers, gameID)
 	}
 
 	if timeBankSeconds <= 0 {
+		r.timerMu.Unlock()
+		r.mirrorClearTurnDeadline(gameID)
 		return
 	}
 
 	duration := time.Duration(timeBankSeconds)*time.Second + turnTimerNetworkBuffer
+	deadline := time.Now().Add(duration)
 
 	timer := time.AfterFunc(duration, func() {
 		r.timerMu.Lock()
@@ -48,6 +49,7 @@ func (r *GameRelay) resetTurnTimer(gameID, activePlayerID string, timeBankSecond
 		delete(r.turnTimers, gameID)
 		r.timerMu.Unlock()
 
+		r.mirrorClearTurnDeadline(gameID)
 		log.Printf("turn timer expired for game %s, player %s", gameID, activePlayerID)
 		r.handleTurnTimeout(gameID, activePlayerID)
 	})
@@ -56,16 +58,47 @@ func (r *GameRelay) resetTurnTimer(gameID, activePlayerID string, timeBankSecond
 		timer:          timer,
 		activePlayerID: activePlayerID,
 	}
+	r.timerMu.Unlock()
+
+	// 発火時刻そのものを絶対時刻として書く。復元側が再度バッファを足さずに済むようにする。
+	r.mirrorSetTurnDeadline(gameID, activePlayerID, deadline)
 }
 
 // cancelTurnTimer はゲームのターンタイマーを停止し削除する。
 func (r *GameRelay) cancelTurnTimer(gameID string) {
 	r.timerMu.Lock()
-	defer r.timerMu.Unlock()
-
 	if info, ok := r.turnTimers[gameID]; ok {
 		info.timer.Stop()
 		delete(r.turnTimers, gameID)
+	}
+	r.timerMu.Unlock()
+
+	r.mirrorClearTurnDeadline(gameID)
+}
+
+// mirrorSetTurnDeadline はターン期限を TimerStore へ書き込む。
+// 失敗しても対戦は継続するため、警告ログのみで済ませる。
+func (r *GameRelay) mirrorSetTurnDeadline(gameID, activePlayerID string, deadline time.Time) {
+	if r.timerStore == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timerMirrorTimeout)
+	defer cancel()
+	if err := r.timerStore.SetTurnDeadline(ctx, gameID, activePlayerID, deadline); err != nil {
+		log.Printf("WARN: mirror turn deadline for game %s: %v", gameID, err)
+	}
+}
+
+// mirrorClearTurnDeadline はターン期限の写しを TimerStore から削除する。
+// 失敗しても対戦は継続するため、警告ログのみで済ませる。
+func (r *GameRelay) mirrorClearTurnDeadline(gameID string) {
+	if r.timerStore == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timerMirrorTimeout)
+	defer cancel()
+	if err := r.timerStore.ClearTurnDeadline(ctx, gameID); err != nil {
+		log.Printf("WARN: clear mirrored turn deadline for game %s: %v", gameID, err)
 	}
 }
 

@@ -90,6 +90,80 @@ func TestResetTurnTimer(t *testing.T) {
 	})
 }
 
+func TestResetTurnTimer_TimerStoreMirroring(t *testing.T) {
+	t.Run("ターン期限の TimerStore への書き込み", func(t *testing.T) {
+		t.Run("正の timeBank のとき、発火時刻を絶対時刻として書き込む", func(t *testing.T) {
+			relay, _ := newTestRelay()
+			store := &fakeTimerStore{}
+			relay.timerStore = store
+			relay.JoinGame("p1", "g1", 1)
+			before := time.Now()
+
+			relay.resetTurnTimer("g1", "p1", 60)
+
+			calls := store.snapshotSetTurnCalls()
+			require.Len(t, calls, 1)
+			assert.Equal(t, "g1", calls[0].gameID)
+			assert.Equal(t, "p1", calls[0].activePlayerID)
+			wantDeadline := before.Add(60*time.Second + turnTimerNetworkBuffer)
+			assert.WithinDuration(t, wantDeadline, calls[0].deadline, 2*time.Second)
+
+			relay.cancelTurnTimer("g1")
+		})
+
+		t.Run("timeBank が 0 のとき、書き込まず期限を削除する", func(t *testing.T) {
+			relay, _ := newTestRelay()
+			store := &fakeTimerStore{}
+			relay.timerStore = store
+			relay.JoinGame("p1", "g1", 1)
+
+			relay.resetTurnTimer("g1", "p1", 0)
+
+			assert.Empty(t, store.snapshotSetTurnCalls())
+			assert.Equal(t, []string{"g1"}, store.snapshotClearTurnCalls())
+		})
+
+		t.Run("TimerStore が未設定のとき、パニックしない", func(t *testing.T) {
+			relay, _ := newTestRelay()
+			relay.JoinGame("p1", "g1", 1)
+
+			assert.NotPanics(t, func() { relay.resetTurnTimer("g1", "p1", 60) })
+			relay.cancelTurnTimer("g1")
+		})
+
+		t.Run("TimerStore への書き込みが失敗しても、パニックしない", func(t *testing.T) {
+			relay, _ := newTestRelay()
+			relay.timerStore = &fakeTimerStore{setTurnErr: errors.New("redis down")}
+			relay.JoinGame("p1", "g1", 1)
+
+			assert.NotPanics(t, func() { relay.resetTurnTimer("g1", "p1", 60) })
+			relay.cancelTurnTimer("g1")
+		})
+	})
+}
+
+func TestCancelTurnTimer_TimerStoreMirroring(t *testing.T) {
+	t.Run("ターン期限の TimerStore からの削除", func(t *testing.T) {
+		t.Run("取り消すと、TimerStore の期限も削除される", func(t *testing.T) {
+			relay, _ := newTestRelay()
+			store := &fakeTimerStore{}
+			relay.timerStore = store
+			relay.JoinGame("p1", "g1", 1)
+			relay.resetTurnTimer("g1", "p1", 60)
+
+			relay.cancelTurnTimer("g1")
+
+			assert.Equal(t, []string{"g1"}, store.snapshotClearTurnCalls())
+		})
+
+		t.Run("TimerStore が未設定のとき、パニックしない", func(t *testing.T) {
+			relay, _ := newTestRelay()
+
+			assert.NotPanics(t, func() { relay.cancelTurnTimer("g1") })
+		})
+	})
+}
+
 func TestCancelTurnTimer(t *testing.T) {
 	t.Run("ターンタイマーの取消", func(t *testing.T) {
 		t.Run("登録済みタイマーを取り消すと、削除される", func(t *testing.T) {

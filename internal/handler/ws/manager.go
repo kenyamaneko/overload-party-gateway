@@ -43,7 +43,8 @@ type Manager struct {
 	matchWait   map[string]*time.Timer
 }
 
-// NewManager は WebSocket Manager を生成します
+// NewManager は WebSocket Manager を生成します。timerStore は nil 可
+// （切断猶予・ターン期限の Redis への写しを行わない環境向け）。
 func NewManager(
 	battleClient service.BattleClient,
 	accountClient port.AccountClient,
@@ -52,6 +53,7 @@ func NewManager(
 	gamePlayerRepo port.GamePlayerRepo,
 	matchmakingTimeout time.Duration,
 	internalSigner *internalauth.Signer,
+	timerStore port.TimerStore,
 ) *Manager {
 	m := &Manager{
 		battleClient:       battleClient,
@@ -71,9 +73,9 @@ func NewManager(
 		OnMatchmakingLeave:  m.cancelMatchmaking,
 		OnGameDisconnect:    func(playerID, gameID string) { m.Relay.NotifyOpponentDisconnected(playerID, gameID) },
 		OnGameReconnect:     func(playerID, gameID string) { m.Relay.NotifyOpponentReconnected(playerID, gameID) },
-	})
+	}, timerStore)
 
-	relay := NewGameRelay(hub, battleClient, accountClient, gamePlayerRepo)
+	relay := NewGameRelay(hub, battleClient, accountClient, gamePlayerRepo, timerStore)
 
 	m.Hub = hub
 	m.Relay = relay
