@@ -116,6 +116,161 @@ func TestRegister(t *testing.T) {
 	})
 }
 
+// reconnectCall は OnGameReconnect コールバックへの 1 回の呼出を記録する。
+type reconnectCall struct {
+	playerID string
+	gameID   string
+	wasLate  bool
+}
+
+func TestRegister_WasLate(t *testing.T) {
+	t.Run("復帰したプレイヤー自身の猶予切れ判定", func(t *testing.T) {
+		t.Run("インメモリのタイマーがまだ残っているとき、wasLate は false になる", func(t *testing.T) {
+			var calls []reconnectCall
+			hub := NewConnectionHub(HubCallbacks{
+				GetGameID:           func(string) (string, bool) { return "game_1", true },
+				OnDisconnectTimeout: func(string, string) {},
+				OnGameReconnect: func(playerID, gameID string, wasLate bool) {
+					calls = append(calls, reconnectCall{playerID, gameID, wasLate})
+				},
+			}, nil)
+			conn := NewConnection(nil, "p1")
+			hub.Register(conn)
+			hub.Unregister(conn)
+
+			hub.Register(NewConnection(nil, "p1"))
+
+			require.Len(t, calls, 1)
+			assert.Equal(t, "game_1", calls[0].gameID)
+			assert.False(t, calls[0].wasLate)
+		})
+
+		t.Run("インメモリに記録が無く TimerStore の期限がまだ先のとき、wasLate は false になる", func(t *testing.T) {
+			var calls []reconnectCall
+			store := &fakeTimerStore{
+				getDisconnectFound:  true,
+				getDisconnectReturn: portDisconnectDeadline("game_1", time.Now().Add(time.Minute)),
+			}
+			hub := NewConnectionHub(HubCallbacks{
+				GetGameID:           func(string) (string, bool) { return "", false },
+				OnDisconnectTimeout: func(string, string) {},
+				OnGameReconnect: func(playerID, gameID string, wasLate bool) {
+					calls = append(calls, reconnectCall{playerID, gameID, wasLate})
+				},
+			}, store)
+
+			hub.Register(NewConnection(nil, "p1"))
+
+			require.Len(t, calls, 1)
+			assert.Equal(t, "game_1", calls[0].gameID)
+			assert.False(t, calls[0].wasLate)
+		})
+
+		t.Run("インメモリに記録が無く TimerStore の期限が過ぎているとき、wasLate は true になる", func(t *testing.T) {
+			var calls []reconnectCall
+			store := &fakeTimerStore{
+				getDisconnectFound:  true,
+				getDisconnectReturn: portDisconnectDeadline("game_1", time.Now().Add(-time.Minute)),
+			}
+			hub := NewConnectionHub(HubCallbacks{
+				GetGameID:           func(string) (string, bool) { return "", false },
+				OnDisconnectTimeout: func(string, string) {},
+				OnGameReconnect: func(playerID, gameID string, wasLate bool) {
+					calls = append(calls, reconnectCall{playerID, gameID, wasLate})
+				},
+			}, store)
+
+			hub.Register(NewConnection(nil, "p1"))
+
+			require.Len(t, calls, 1)
+			assert.Equal(t, "game_1", calls[0].gameID)
+			assert.True(t, calls[0].wasLate)
+		})
+
+		t.Run("インメモリにも TimerStore にも記録が無いとき、OnGameReconnect を呼ばない", func(t *testing.T) {
+			var calls []reconnectCall
+			store := &fakeTimerStore{}
+			hub := NewConnectionHub(HubCallbacks{
+				GetGameID:           func(string) (string, bool) { return "", false },
+				OnDisconnectTimeout: func(string, string) {},
+				OnGameReconnect: func(playerID, gameID string, wasLate bool) {
+					calls = append(calls, reconnectCall{playerID, gameID, wasLate})
+				},
+			}, store)
+
+			hub.Register(NewConnection(nil, "p1"))
+
+			assert.Empty(t, calls)
+		})
+	})
+}
+
+func TestIsConnected(t *testing.T) {
+	t.Run("接続状況の判定", func(t *testing.T) {
+		t.Run("Register 済みのプレイヤーは true になる", func(t *testing.T) {
+			hub := newTestHub(nil, false, "")
+			hub.Register(NewConnection(nil, "p1"))
+
+			assert.True(t, hub.IsConnected("p1"))
+		})
+
+		t.Run("Unregister 後は false になる", func(t *testing.T) {
+			hub := newTestHub(nil, false, "")
+			conn := NewConnection(nil, "p1")
+			hub.Register(conn)
+
+			hub.Unregister(conn)
+
+			assert.False(t, hub.IsConnected("p1"))
+		})
+
+		t.Run("一度も接続していないプレイヤーは false になる", func(t *testing.T) {
+			hub := newTestHub(nil, false, "")
+
+			assert.False(t, hub.IsConnected("unknown"))
+		})
+	})
+}
+
+func TestDisconnectDeadlineExpired(t *testing.T) {
+	t.Run("切断猶予期限の期限切れ判定", func(t *testing.T) {
+		t.Run("インメモリのタイマーがまだ残っているとき、false になる", func(t *testing.T) {
+			hub := newTestHub(nil, true, "game_1")
+			conn := NewConnection(nil, "p1")
+			hub.Register(conn)
+			hub.Unregister(conn)
+
+			assert.False(t, hub.DisconnectDeadlineExpired("p1"))
+		})
+
+		t.Run("インメモリに記録が無く TimerStore にも記録が無いとき、false になる", func(t *testing.T) {
+			hub := newTestHub(&fakeTimerStore{}, true, "game_1")
+
+			assert.False(t, hub.DisconnectDeadlineExpired("p1"))
+		})
+
+		t.Run("インメモリに記録が無く TimerStore の期限がまだ先のとき、false になる", func(t *testing.T) {
+			store := &fakeTimerStore{
+				getDisconnectFound:  true,
+				getDisconnectReturn: portDisconnectDeadline("game_1", time.Now().Add(time.Minute)),
+			}
+			hub := newTestHub(store, true, "game_1")
+
+			assert.False(t, hub.DisconnectDeadlineExpired("p1"))
+		})
+
+		t.Run("インメモリに記録が無く TimerStore の期限が過ぎているとき、true になる", func(t *testing.T) {
+			store := &fakeTimerStore{
+				getDisconnectFound:  true,
+				getDisconnectReturn: portDisconnectDeadline("game_1", time.Now().Add(-time.Minute)),
+			}
+			hub := newTestHub(store, true, "game_1")
+
+			assert.True(t, hub.DisconnectDeadlineExpired("p1"))
+		})
+	})
+}
+
 func TestClearDisconnectDeadline(t *testing.T) {
 	t.Run("ゲーム終了時などの明示的な猶予期限削除", func(t *testing.T) {
 		t.Run("呼ぶと、そのプレイヤーの猶予期限が削除される", func(t *testing.T) {

@@ -72,7 +72,7 @@ func NewManager(
 		OnDisconnectTimeout: func(playerID, gameID string) { m.Relay.HandleDisconnectTimeout(playerID, gameID) },
 		OnMatchmakingLeave:  m.cancelMatchmaking,
 		OnGameDisconnect:    func(playerID, gameID string) { m.Relay.NotifyOpponentDisconnected(playerID, gameID) },
-		OnGameReconnect:     func(playerID, gameID string) { m.Relay.NotifyOpponentReconnected(playerID, gameID) },
+		OnGameReconnect:     func(playerID, gameID string, wasLate bool) { m.Relay.HandleReconnect(playerID, gameID, wasLate) },
 	}, timerStore)
 
 	relay := NewGameRelay(hub, battleClient, accountClient, gamePlayerRepo, timerStore)
