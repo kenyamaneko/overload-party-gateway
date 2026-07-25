@@ -445,7 +445,7 @@ func TestLeaveAllPlayers(t *testing.T) {
 			assert.False(t, membersExist, "gameMembers should be cleaned up")
 		})
 
-		t.Run("呼ぶと、退出した全プレイヤーの切断猶予期限が TimerStore から削除される", func(t *testing.T) {
+		t.Run("呼ぶと、退出した全プレイヤーの切断猶予期限の写しが削除される", func(t *testing.T) {
 			relay, _ := newTestRelay()
 			store := &fakeTimerStore{}
 			relay.hub.timerStore = store

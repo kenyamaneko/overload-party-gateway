@@ -32,7 +32,7 @@ func newDisconnectResolutionRelay(entries []port.GamePlayerEntry, timerStore *fa
 }
 
 func TestOpponentPlayerID(t *testing.T) {
-	t.Run("対戦相手の playerID 解決", func(t *testing.T) {
+	t.Run("対戦相手のプレイヤー ID 解決", func(t *testing.T) {
 		tests := []struct {
 			name    string
 			entries []port.GamePlayerEntry
@@ -40,7 +40,7 @@ func TestOpponentPlayerID(t *testing.T) {
 			want    string
 		}{
 			{
-				name: "2 人制で自分が 1P のとき、2P の playerID を返す",
+				name: "2 人制で自分が 1P のとき、2P のプレイヤー ID を返す",
 				entries: []port.GamePlayerEntry{
 					{PlayerNum: 1, PlayerID: "p1"},
 					{PlayerNum: 2, PlayerID: "p2"},
@@ -49,7 +49,7 @@ func TestOpponentPlayerID(t *testing.T) {
 				want:   "p2",
 			},
 			{
-				name: "2 人制で自分が 2P のとき、1P の playerID を返す",
+				name: "2 人制で自分が 2P のとき、1P のプレイヤー ID を返す",
 				entries: []port.GamePlayerEntry{
 					{PlayerNum: 1, PlayerID: "p1"},
 					{PlayerNum: 2, PlayerID: "p2"},
@@ -80,7 +80,7 @@ func TestOpponentPlayerID(t *testing.T) {
 	})
 }
 
-func TestHandleDisconnectTimeout_BDR002(t *testing.T) {
+func TestHandleDisconnectTimeout(t *testing.T) {
 	entries := []port.GamePlayerEntry{
 		{PlayerNum: 1, PlayerID: "p1"},
 		{PlayerNum: 2, PlayerID: "p2"},
@@ -127,7 +127,7 @@ func TestHandleDisconnectTimeout_BDR002(t *testing.T) {
 			require.Len(t, bc.processActionCalls, 1)
 		})
 
-		t.Run("LookupGamePlayers が失敗するとき、forfeit を実行しない", func(t *testing.T) {
+		t.Run("ゲーム参加者情報の取得に失敗するとき、forfeit を実行しない", func(t *testing.T) {
 			relay, bc, _ := newDisconnectResolutionRelay(nil, nil)
 			relay.gamePlayerRepo = &mockGamePlayerRepo{lookupErr: errors.New("db down")}
 			relay.JoinGame("p1", "g1", 1)
@@ -204,13 +204,13 @@ func TestResolveStaleDisconnect(t *testing.T) {
 			assert.Empty(t, bc.processActionCalls)
 		})
 
-		t.Run("gamePlayerRepo が無いとき、パニックしない", func(t *testing.T) {
+		t.Run("ゲーム参加者情報の取得元が無いとき、パニックしない", func(t *testing.T) {
 			relay, _ := newTestRelay()
 
 			assert.NotPanics(t, func() { relay.resolveStaleDisconnect("g1", "p1", false) })
 		})
 
-		t.Run("LookupGamePlayers が失敗するとき、forfeit を実行しない", func(t *testing.T) {
+		t.Run("ゲーム参加者情報の取得に失敗するとき、forfeit を実行しない", func(t *testing.T) {
 			relay, bc, _ := newDisconnectResolutionRelay(nil, nil)
 			relay.gamePlayerRepo = &mockGamePlayerRepo{lookupErr: errors.New("db down")}
 

@@ -91,7 +91,7 @@ func TestResetTurnTimer(t *testing.T) {
 }
 
 func TestResetTurnTimer_TimerStoreMirroring(t *testing.T) {
-	t.Run("ターン期限の TimerStore への書き込み", func(t *testing.T) {
+	t.Run("ターン期限の写しの書き込み", func(t *testing.T) {
 		t.Run("正の timeBank のとき、発火時刻を絶対時刻として書き込む", func(t *testing.T) {
 			relay, _ := newTestRelay()
 			store := &fakeTimerStore{}
@@ -123,7 +123,7 @@ func TestResetTurnTimer_TimerStoreMirroring(t *testing.T) {
 			assert.Equal(t, []string{"g1"}, store.snapshotClearTurnCalls())
 		})
 
-		t.Run("TimerStore が未設定のとき、パニックしない", func(t *testing.T) {
+		t.Run("写しの保存先が未設定のとき、パニックしない", func(t *testing.T) {
 			relay, _ := newTestRelay()
 			relay.JoinGame("p1", "g1", 1)
 
@@ -131,7 +131,7 @@ func TestResetTurnTimer_TimerStoreMirroring(t *testing.T) {
 			relay.cancelTurnTimer("g1")
 		})
 
-		t.Run("TimerStore への書き込みが失敗しても、パニックしない", func(t *testing.T) {
+		t.Run("写しの書き込みが失敗しても、パニックしない", func(t *testing.T) {
 			relay, _ := newTestRelay()
 			relay.timerStore = &fakeTimerStore{setTurnErr: errors.New("redis down")}
 			relay.JoinGame("p1", "g1", 1)
@@ -143,8 +143,8 @@ func TestResetTurnTimer_TimerStoreMirroring(t *testing.T) {
 }
 
 func TestCancelTurnTimer_TimerStoreMirroring(t *testing.T) {
-	t.Run("ターン期限の TimerStore からの削除", func(t *testing.T) {
-		t.Run("取り消すと、TimerStore の期限も削除される", func(t *testing.T) {
+	t.Run("ターン期限の写しの削除", func(t *testing.T) {
+		t.Run("取り消すと、写しの期限も削除される", func(t *testing.T) {
 			relay, _ := newTestRelay()
 			store := &fakeTimerStore{}
 			relay.timerStore = store
@@ -156,7 +156,7 @@ func TestCancelTurnTimer_TimerStoreMirroring(t *testing.T) {
 			assert.Equal(t, []string{"g1"}, store.snapshotClearTurnCalls())
 		})
 
-		t.Run("TimerStore が未設定のとき、パニックしない", func(t *testing.T) {
+		t.Run("写しの保存先が未設定のとき、パニックしない", func(t *testing.T) {
 			relay, _ := newTestRelay()
 
 			assert.NotPanics(t, func() { relay.cancelTurnTimer("g1") })
