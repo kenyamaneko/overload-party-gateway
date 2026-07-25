@@ -24,6 +24,8 @@ const (
 	strayTTL = 24 * time.Hour
 )
 
+var _ port.TimerStore = (*Store)(nil)
+
 // Store は port.TimerStore を Redis の Hash で実装する。
 type Store struct {
 	client *redis.Client
