@@ -13,13 +13,20 @@ import (
 // でルート定義を共有します。downstream サービス公開 path は RegisterForwardRoutes で
 // 別途扱う。
 type Handlers struct {
-	Auth *rest.AuthHandler
+	Auth   *rest.AuthHandler
+	PubSub *rest.PubSubPushHandler
 }
 
 // RegisterAuthRoutes は認証エンドポイント（register / login）を登録します
 func RegisterAuthRoutes(group *gin.RouterGroup, h *Handlers) {
 	group.POST("/auth/register", h.Auth.Register)
 	group.POST("/auth/login", h.Auth.Login)
+}
+
+// RegisterPubSubRoutes は Pub/Sub push 配信の内部エンドポイントを登録します。
+// 到達制御は Cloud Run の呼び出し IAM が担うため、認証 middleware は挟みません。
+func RegisterPubSubRoutes(group *gin.RouterGroup, h *Handlers) {
+	group.POST("/pubsub/match_made", h.PubSub.HandleMatchMade)
 }
 
 // RegisterForwardRoutes は各サービスへの path-prefix forwarder を登録します。

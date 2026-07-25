@@ -14,6 +14,8 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
+var _ port.PushMessageProcessor = (*MatchSubscriber)(nil)
+
 // formatPlayerIDList はログメッセージ用にプレイヤー ID をフォーマットする。
 func formatPlayerIDList(players []apimatchmaking.MatchedPlayer) string {
 	ids := make([]string, 0, len(players))
@@ -27,32 +29,25 @@ func formatPlayerIDList(players []apimatchmaking.MatchedPlayer) string {
 // ディスパッチします。Pod-local な matchId 重複排除 map を保持し、Exactly-Once
 // Delivery で ack 済みメッセージが再配信されないことを前提に Pod 単位のみで dedup する。
 type MatchSubscriber struct {
-	stream         port.MessageStream
 	handler        port.MatchEventHandler
 	processedMu    sync.Mutex
 	processedMatch map[string]struct{}
 }
 
-// NewMatchSubscriber は MessageStream から pull する subscriber を生成します。
-func NewMatchSubscriber(stream port.MessageStream, handler port.MatchEventHandler) (*MatchSubscriber, error) {
+// NewMatchSubscriber は port.PushMessageProcessor を満たす MatchSubscriber を生成します。
+func NewMatchSubscriber(handler port.MatchEventHandler) (*MatchSubscriber, error) {
 	if handler == nil {
 		return nil, errors.New("matchsubscriber: handler is nil")
 	}
 	return &MatchSubscriber{
-		stream:         stream,
 		handler:        handler,
 		processedMatch: make(map[string]struct{}),
 	}, nil
 }
 
-// Run は ctx がキャンセルされるか stream がエラーを返すまでブロックします。
-func (s *MatchSubscriber) Run(ctx context.Context) error {
-	slog.Info("matchsubscriber: consuming")
-	return s.stream.Consume(ctx, s.processEvent)
-}
-
-// processEvent は 1 メッセージを処理する。戻り値 nil = ack、非 nil = nack。
-func (s *MatchSubscriber) processEvent(ctx context.Context, data []byte) error {
+// ProcessMessage は match_made イベントを JSON デコードし、対象外の event_type
+// と重複 matchId を除いて port.MatchEventHandler へディスパッチする。
+func (s *MatchSubscriber) ProcessMessage(ctx context.Context, data []byte) error {
 	var event apimatchmaking.MatchMadeEvent
 	if err := json.Unmarshal(data, &event); err != nil {
 		slog.Error("matchsubscriber: bad payload (nack)", "error", err, "payload_len", len(data))

@@ -95,16 +95,16 @@ WS 切断時、プレイヤーの状態に応じて以下のクリーンアッ�
 
 ### match_made → match_found 配信契約
 
-subscription `matchmaking-events-gateway`（Exactly-Once Delivery）を全 Pod で競合 pull する。メッセージ受信時:
+`POST /internal/v1/pubsub/match_made` で push 配信を受信する（最大インスタンス数が 1 のため、配信は必ず唯一のインスタンスへ届く）。受信時:
 
-1. `matchId` のインメモリ重複排除（per-Pod）で多重配送を抑止
+1. `matchId` のインメモリ重複排除で多重配送を抑止
 2. cardclient で両プレイヤーのデッキカードを取得
 3. battleClient で PvP ゲームを作成（`matchId` に対して冪等）
 4. `gateway.game_players` に両プレイヤーの行を挿入（EXP 付与冪等キー + playerNum 索引用途、「EXP 付与トリガと冪等性」）
-5. 両プレイヤーの WS 接続が該当 Pod にあれば `match_found` を push
-6. 上記いずれかに失敗した場合は dedup エントリをロールバックして **nack**（Pub/Sub がリトライ）
+5. 両プレイヤーの WS 接続があれば `match_found` を push
+6. 上記いずれかに失敗した場合は dedup エントリをロールバックして **500** を返す（Pub/Sub がリトライ）
 
-**配信保証**: Exactly-Once。保険として手順 1 の per-Pod dedup + battle のゲーム作成冪等性で、多重配送が起きても二重ゲーム作成は発生しない。
+**配信保証**: Exactly-Once。保険として手順 1 の dedup + battle のゲーム作成冪等性で、多重配送が起きても二重ゲーム作成は発生しない。
 
 ---
 
@@ -189,13 +189,13 @@ gateway は `/api/v1/**` の REST リクエストを下流サービスへ委譲�
 
 ---
 
-## Pub/Sub subscribe
+## Pub/Sub push 受信
 
 ### match_made（「match_made → match_found 配信契約」で詳細）
 
-- Subscription: `matchmaking-events-gateway` (Exactly-Once)
+- エンドポイント: `POST /internal/v1/pubsub/match_made` (Exactly-Once)
 - 副作用: battle ゲーム作成 + DB 行挿入 + WS push
-- gateway は matchmaking-events 専用 subscriber としてこれ 1 本のみを購読する。他サービスが publish する topic を WS 中継目的で subscribe しない (ADR-027)
+- gateway は match_made 専用の受け口としてこれ 1 本のみを持つ。他サービスが publish するイベントを WS 中継目的で subscribe しない (ADR-027)
 
 ---
 

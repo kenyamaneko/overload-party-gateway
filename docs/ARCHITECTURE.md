@@ -36,7 +36,7 @@ REST では `middleware.UseFirebaseAuth` → `middleware.ResolvePlayer` → `mid
 
 Pub/Sub は Exactly-Once Delivery を使うが、**Exactly-Once は subscription 境界外（ack 前クラッシュ / visibility timeout 超過）では破れうる**。gateway 側にも重複ゲーム作成を許さない保険を張る:
 
-1. **per-Pod インメモリ dedup** (`matchId` キー): 同一 Pod 内で同一メッセージを複数回処理しない。最初の受領時に dedup entry を入れ、失敗時は entry をロールバックして nack → リトライ
+1. **per-Pod インメモリ dedup** (`matchId` キー): 同一 Pod 内で同一メッセージを複数回処理しない。最初の受領時に dedup entry を入れ、失敗時は entry をロールバックして 500 を返す → Pub/Sub がリトライ
 2. **battle 側 `matchId` 冪等**: battle の `CreatePvPGame` は `matchId` に対して冪等で、既存ゲームがあれば同じ game を返す。Pod を跨いだ重複配送が起きても二重ゲーム作成にならない
 3. **`gateway.game_players` の UNIQUE 制約**: 同一 `(gameID, playerNum)` の挿入は DB 側で失敗する。match_made ハンドラが複数 Pod で競合しても片方だけが挿入に成功する
 
@@ -72,21 +72,20 @@ gateway がドメイン状態を持たないと言いつつ 1 つだけ DB テ�
 
 ## 運用
 
-### Pub/Sub subscription
+### Pub/Sub push 配信
 
-| Subscription | 副作用 | 冪等性の担保 |
+| エンドポイント | 副作用 | 冪等性の担保 |
 |---|---|---|
-| `matchmaking-events-gateway` (Exactly-Once) | battle ゲーム作成 + `game_players` 挿入 + WS push | 「match_made の二重ゲーム作成防止（多層冪等性）」の 3 層冪等性 |
+| `POST /internal/v1/pubsub/match_made` | battle ゲーム作成 + `game_players` 挿入 + WS push | 「match_made の二重ゲーム作成防止（多層冪等性）」の 3 層冪等性 |
 
-gateway は matchmaking-events 専用の subscriber として位置づけられ、他サービスが publish する topic を fan-out 用途で subscribe しない (ADR-027)。subscription 名と publisher 側はこのリポジトリからは導けない。matchmaking 側の publish 設定と併せて変更すること（subscription 再作成は過去メッセージの loss を伴う）。
+gateway は match_made 専用の受け口として位置づけられ、他サービスが publish するイベントを fan-out 用途で subscribe しない (ADR-027)。到達制御は Cloud Run の呼び出し IAM が担うため、本エンドポイントはアプリ層の認証を行わない (ADR-057)。push 配信の subscription 設定 (push endpoint の URL、dead letter policy 等) はこのリポジトリからは導けない。Terraform 側の設定と併せて変更すること。
 
 ### Graceful shutdown
 
-SIGTERM 受信時、**HTTP / WS 新規受付停止 → 既存 WS への close 送出 → Pub/Sub pull 停止 → in-flight 処理完了待ち** の順にドレインする。preStop hook で k8s Service の endpoint から外れるまでの猶予を稼ぎ、in-flight ゲームセッションの forfeit を最小化する前提。ドレインタイムアウト超過時は強制キャンセルで、そのタイミングで in-flight だった game_action / advance-npc は battle 側で未処理として残るが、WS 再接続時にクライアントが `game_state` を再取得して収束する。
+SIGTERM 受信時、**HTTP / WS 新規受付停止 → 既存 WS への close 送出 → in-flight 処理完了待ち** の順にドレインする。preStop hook で k8s Service の endpoint から外れるまでの猶予を稼ぎ、in-flight ゲームセッションの forfeit を最小化する前提。ドレインタイムアウト超過時は強制キャンセルで、そのタイミングで in-flight だった game_action / advance-npc は battle 側で未処理として残るが、WS 再接続時にクライアントが `game_state` を再取得して収束する。
 
 ### 環境変数
 
 gateway の env は [internal/config/config.go](../internal/config/config.go) が SSoT。運用上の注意点のみ:
 
 - **`MATCHMAKING_TIMEOUT_SEC`**: マッチ待機タイムアウト。短すぎるとキューが浅い時間帯にユーザーが離脱しやすい。matchmaking サービスのキュー長メトリクスと併せて調整する
-- **Pub/Sub subscription 名** (`MATCHMAKING_SUBSCRIPTION`): 環境（dev/stg/prod）ごとに分離する。異環境の subscription を共有するとメッセージが競合してどちらの環境にも届かない事故が起きる
