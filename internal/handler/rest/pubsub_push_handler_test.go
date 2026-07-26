@@ -31,12 +31,12 @@ func newPushTestRouter(processor *fakePushProcessor) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	h := NewPubSubPushHandler(processor)
-	r.POST("/internal/v1/pubsub/match_made", h.HandleMatchMade)
+	r.POST("/internal/v1/pubsub/match-made", h.HandleMatchMade)
 	return r
 }
 
 func postPush(r *gin.Engine, body string) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(http.MethodPost, "/internal/v1/pubsub/match_made", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/internal/v1/pubsub/match-made", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)

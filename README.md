@@ -20,7 +20,7 @@ Gateway (このサービス, :9001)
   ├─ HTTP → news      (:9008)  ニュース記事
   ├─ HTTP → support   (:9009)  お知らせ
   ├─ PostgreSQL                 gateway.game_players (所有)
-  └─ POST /internal/v1/pubsub/match_made  ← Cloud Pub/Sub push 配信
+  └─ POST /internal/v1/pubsub/match-made  ← Cloud Pub/Sub push 配信
 ```
 
 REST エンドポイント契約は [data/openapi.yaml](data/openapi.yaml) を参照。

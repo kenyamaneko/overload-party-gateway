@@ -95,7 +95,7 @@ WS 切断時、プレイヤーの状態に応じて以下のクリーンアッ�
 
 ### match_made → match_found 配信契約
 
-`POST /internal/v1/pubsub/match_made` で push 配信を受信する（最大インスタンス数が 1 のため、配信は必ず唯一のインスタンスへ届く）。受信時:
+`POST /internal/v1/pubsub/match-made` で push 配信を受信する（最大インスタンス数が 1 のため、配信は必ず唯一のインスタンスへ届く）。受信時:
 
 1. `matchId` のインメモリ重複排除で多重配送を抑止
 2. cardclient で両プレイヤーのデッキカードを取得
@@ -193,7 +193,7 @@ gateway は `/api/v1/**` の REST リクエストを下流サービスへ委譲�
 
 ### match_made（「match_made → match_found 配信契約」で詳細）
 
-- エンドポイント: `POST /internal/v1/pubsub/match_made` (Exactly-Once)
+- エンドポイント: `POST /internal/v1/pubsub/match-made` (Exactly-Once)
 - 副作用: battle ゲーム作成 + DB 行挿入 + WS push
 - gateway は match_made 専用の受け口としてこれ 1 本のみを持つ。他サービスが publish するイベントを WS 中継目的で subscribe しない (ADR-027)
 
