@@ -9,22 +9,23 @@ package ws
 
 // WS server message types (server → client).
 const (
-	WSServerMsgGameState              = "game_state"
-	WSServerMsgGameOver               = "game_over"
-	WSServerMsgError                  = "error"
-	WSServerMsgGameEntered            = "game_entered"
-	WSServerMsgMatchmakingStarted     = "matchmaking_started"
-	WSServerMsgMatchmakingCancelled   = "matchmaking_cancelled"
-	WSServerMsgActionRejected         = "action_rejected"
-	WSServerMsgStampUsed              = "stamp_used"
-	WSServerMsgPong                   = "pong"
-	WSServerMsgMatchFound             = "match_found"
-	WSServerMsgActionPerformed        = "action_performed"
-	WSServerMsgTurnControls           = "turn_controls"
-	WSServerMsgNpcBattleCreated       = "npc_battle_created"
+	WSServerMsgGameState            = "game_state"
+	WSServerMsgGameOver             = "game_over"
+	WSServerMsgError                = "error"
+	WSServerMsgGameEntered          = "game_entered"
+	WSServerMsgMatchmakingStarted   = "matchmaking_started"
+	WSServerMsgMatchmakingCancelled = "matchmaking_cancelled"
+	WSServerMsgActionRejected       = "action_rejected"
+	WSServerMsgStampUsed            = "stamp_used"
+	WSServerMsgPong                 = "pong"
+	WSServerMsgMatchFound           = "match_found"
+	WSServerMsgActionPerformed      = "action_performed"
+	WSServerMsgTurnControls         = "turn_controls"
+	WSServerMsgNpcBattleCreated     = "npc_battle_created"
 	WSServerMsgOpponentDisconnected = "opponent_disconnected"
 	WSServerMsgOpponentReconnected  = "opponent_reconnected"
 	WSServerMsgGameStateRestore     = "game_state_restore"
+	WSServerMsgServerShutdown       = "server_shutdown"
 )
 
 // WS client message types (client → server).
