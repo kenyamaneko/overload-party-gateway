@@ -26,8 +26,8 @@ func formatPlayerIDList(players []apimatchmaking.MatchedPlayer) string {
 }
 
 // MatchSubscriber は match_made イベントを受信し port.MatchEventHandler 経由で
-// ディスパッチします。Pod-local な matchId 重複排除 map を保持し、Exactly-Once
-// Delivery で ack 済みメッセージが再配信されないことを前提に Pod 単位のみで dedup する。
+// ディスパッチします。プロセス内の matchId 重複排除 map を保持し、Exactly-Once
+// Delivery で ack 済みメッセージが再配信されないことを前提に同一プロセス内のみで重複排除する。
 type MatchSubscriber struct {
 	handler        port.MatchEventHandler
 	processedMu    sync.Mutex
@@ -73,7 +73,7 @@ func (s *MatchSubscriber) ProcessMessage(ctx context.Context, data []byte) error
 	return nil
 }
 
-// markProcessed はこの matchId がこの Pod で未処理の場合に true を返す。
+// markProcessed はこの matchId がこのプロセスで未処理の場合に true を返す。
 func (s *MatchSubscriber) markProcessed(matchID string) bool {
 	s.processedMu.Lock()
 	defer s.processedMu.Unlock()

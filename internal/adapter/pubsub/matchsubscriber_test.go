@@ -53,7 +53,7 @@ func TestMatchSubscriber_ProcessMessage(t *testing.T) {
 	}
 
 	t.Run("MatchMadeEvent の処理", func(t *testing.T) {
-		t.Run("有効な MatchMadeEvent のとき、エラーを返さず handler に委譲する", func(t *testing.T) {
+		t.Run("有効な MatchMadeEvent のとき、エラーを返さずマッチ成立イベントの処理に渡す", func(t *testing.T) {
 			handler := &fakeMatchHandler{}
 			sub, err := NewMatchSubscriber(handler)
 			require.NoError(t, err)
@@ -69,7 +69,7 @@ func TestMatchSubscriber_ProcessMessage(t *testing.T) {
 			assert.Equal(t, "p-1", handler.received[0].Players[0].PlayerID)
 		})
 
-		t.Run("不正な JSON のとき、エラーを返し handler に到達しない", func(t *testing.T) {
+		t.Run("不正な JSON のとき、エラーを返しマッチ成立イベントの処理は実行されない", func(t *testing.T) {
 			handler := &fakeMatchHandler{}
 			sub, err := NewMatchSubscriber(handler)
 			require.NoError(t, err)
@@ -80,7 +80,7 @@ func TestMatchSubscriber_ProcessMessage(t *testing.T) {
 			assert.Zero(t, handler.count())
 		})
 
-		t.Run("未知の event_type のとき、エラーを返さず責務外として handler に到達しない", func(t *testing.T) {
+		t.Run("未知の event_type のとき、エラーを返さず責務外としてマッチ成立イベントの処理は実行されない", func(t *testing.T) {
 			handler := &fakeMatchHandler{}
 			sub, err := NewMatchSubscriber(handler)
 			require.NoError(t, err)
@@ -97,7 +97,7 @@ func TestMatchSubscriber_ProcessMessage(t *testing.T) {
 			assert.Zero(t, handler.count())
 		})
 
-		t.Run("handler が失敗するとき、エラーを返し handler は呼ばれる", func(t *testing.T) {
+		t.Run("マッチ成立イベントの処理が失敗するとき、エラーを返し処理は実行される", func(t *testing.T) {
 			handler := &fakeMatchHandler{err: errors.New("handler failed")}
 			sub, err := NewMatchSubscriber(handler)
 			require.NoError(t, err)
@@ -106,11 +106,10 @@ func TestMatchSubscriber_ProcessMessage(t *testing.T) {
 			err = sub.ProcessMessage(context.Background(), data)
 
 			assert.Error(t, err)
-			assert.Equal(t, 1, handler.count(), "handler は呼ばれた")
+			assert.Equal(t, 1, handler.count(), "マッチ成立イベントの処理は実行された")
 		})
 
-		t.Run("同一 matchId が 2 回届くとき、Pod-local dedup で handler には 1 回だけ到達する", func(t *testing.T) {
-			// matchmaking の Exactly-Once Delivery が万一破綻した場合の Pod 単位 safety net。
+		t.Run("同一 matchId が 2 回届くとき、マッチ成立イベントの処理は 1 回だけ実行される", func(t *testing.T) {
 			handler := &fakeMatchHandler{}
 			sub, err := NewMatchSubscriber(handler)
 			require.NoError(t, err)
@@ -119,10 +118,10 @@ func TestMatchSubscriber_ProcessMessage(t *testing.T) {
 			require.NoError(t, sub.ProcessMessage(context.Background(), data))
 			require.NoError(t, sub.ProcessMessage(context.Background(), data))
 
-			assert.Equal(t, 1, handler.count(), "重複 matchId は Pod-local dedup で 1 回のみ handler に届く")
+			assert.Equal(t, 1, handler.count(), "重複 matchId ではマッチ成立イベントの処理は 1 回のみ実行される")
 		})
 
-		t.Run("handler 失敗後に再送されると、dedup が解除されており再度 handler に届く", func(t *testing.T) {
+		t.Run("マッチ成立イベントの処理に失敗した matchId が再送されると、処理は再度実行される", func(t *testing.T) {
 			handler := &fakeMatchHandler{err: errors.New("handler failed")}
 			sub, err := NewMatchSubscriber(handler)
 			require.NoError(t, err)
@@ -135,7 +134,7 @@ func TestMatchSubscriber_ProcessMessage(t *testing.T) {
 			err = sub.ProcessMessage(context.Background(), data)
 
 			require.NoError(t, err)
-			assert.Equal(t, 2, handler.count(), "失敗した matchId は dedup に残らず再送で再度届く")
+			assert.Equal(t, 2, handler.count(), "処理に失敗した matchId は再送時に再度処理が実行される")
 		})
 	})
 }

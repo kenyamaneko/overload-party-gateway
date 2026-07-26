@@ -305,16 +305,12 @@ func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, da
 }
 
 // HandleMatchMade は port.MatchEventHandler の実装です。
-// Pub/Sub subscriber が match_made イベント受信時に呼び出す。
-//
-// 全 Gateway Pod が competing-consumer で受信する。2 人のうちいずれかの
-// WS 接続を保持する Pod のみが通知を push し、他の Pod は ack して終了する。
+// マッチメイキングサービスの match_made イベント push 配信で呼び出されます。
 func (m *Manager) HandleMatchMade(ctx context.Context, event apimatchmaking.MatchMadeEvent) error {
 	if len(event.Players) != 2 {
 		return errors.New("match_made event must contain exactly 2 players")
 	}
 
-	// どの Pod が接続を保持するかに関わらず待機タイマーを停止（保持していない Pod では noop）
 	m.stopMatchWait(event.Players[0].PlayerID)
 	m.stopMatchWait(event.Players[1].PlayerID)
 
