@@ -18,7 +18,7 @@ battle は **意図的に passive な REST-only エンジン** として配置�
 |---|---|
 | match_made の Pub/Sub subscribe | battle は Pub/Sub 購読を持たない。WS 接続を保持しているレイヤでのみ push が成立する |
 | ターンタイマー（ウォールクロック）と `reason: turn_timeout` forfeit 送出 | battle は `TimeBank` の減算しか見ず実時間を知らない。WS 側で turn_start を送出した時点を基準に計時できるのは gateway のみ |
-| 切断検知と 60 秒猶予タイマー、`reason: disconnect` forfeit 送出 | battle は「disconnected」概念を持たず forfeit アクションしか受け付けない。WS 断を検知できるのは gateway のみ |
+| 切断検知と 120 秒猶予タイマー、`reason: disconnect` forfeit 送出 | battle は「disconnected」概念を持たず forfeit アクションしか受け付けない。WS 断を検知できるのは gateway のみ |
 | NPC ターンの連続駆動（advance-npc のポーリングループ、最大 200 回） | battle は 1 リクエスト = 1 手を契約に固定している（state 更新を 1 手ずつ WS に流せるように）。連続局面を埋める駆動は呼び出し側の責務 |
 | `battle_start` / `turn_start` 合成イベントの送出 | battle は WS 送出タイミングを知らない。battle のイベントシーケンス外の開始バナー用イベントを組み立てて送れるのは WS を持つ gateway のみ |
 
@@ -88,3 +88,4 @@ SIGTERM 受信時、**HTTP / WS 新規受付停止 → 既存 WS への close �
 gateway の env は [internal/config/config.go](../internal/config/config.go) が SSoT。運用上の注意点のみ:
 
 - **`MATCHMAKING_TIMEOUT_SEC`**: マッチ待機タイムアウト。短すぎるとキューが浅い時間帯にユーザーが離脱しやすい。matchmaking サービスのキュー長メトリクスと併せて調整する
+- **`UPSTASH_REDIS_URL`**: 対戦ごとの計時（切断猶予・ターン）の写しを保持する Redis の接続先。書き込み失敗は警告ログのみで対戦を止めない。写しからプロセス再起動をまたいだ状態を復元する読み出し経路は後続 Issue で追加する

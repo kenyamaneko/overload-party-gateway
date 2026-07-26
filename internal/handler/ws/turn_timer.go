@@ -24,18 +24,19 @@ const turnTimerNetworkBuffer = 2 * time.Second
 // タイマー発火時にアクティブプレイヤーの forfeit（タイムアウト負け）を送信する。
 func (r *GameRelay) resetTurnTimer(gameID, activePlayerID string, timeBankSeconds int64) {
 	r.timerMu.Lock()
-	defer r.timerMu.Unlock()
-
 	if info, ok := r.turnTimers[gameID]; ok {
 		info.timer.Stop()
 		delete(r.turnTimers, gameID)
 	}
 
 	if timeBankSeconds <= 0 {
+		r.timerMu.Unlock()
+		r.mirrorClearTurnDeadline(gameID)
 		return
 	}
 
 	duration := time.Duration(timeBankSeconds)*time.Second + turnTimerNetworkBuffer
+	deadline := time.Now().Add(duration)
 
 	timer := time.AfterFunc(duration, func() {
 		r.timerMu.Lock()
@@ -48,6 +49,7 @@ func (r *GameRelay) resetTurnTimer(gameID, activePlayerID string, timeBankSecond
 		delete(r.turnTimers, gameID)
 		r.timerMu.Unlock()
 
+		r.mirrorClearTurnDeadline(gameID)
 		log.Printf("turn timer expired for game %s, player %s", gameID, activePlayerID)
 		r.handleTurnTimeout(gameID, activePlayerID)
 	})
@@ -56,16 +58,47 @@ func (r *GameRelay) resetTurnTimer(gameID, activePlayerID string, timeBankSecond
 		timer:          timer,
 		activePlayerID: activePlayerID,
 	}
+	r.timerMu.Unlock()
+
+	// 発火時刻そのものを絶対時刻として書く。復元側が再度バッファを足さずに済むようにする。
+	r.mirrorSetTurnDeadline(gameID, activePlayerID, deadline)
 }
 
 // cancelTurnTimer はゲームのターンタイマーを停止し削除する。
 func (r *GameRelay) cancelTurnTimer(gameID string) {
 	r.timerMu.Lock()
-	defer r.timerMu.Unlock()
-
 	if info, ok := r.turnTimers[gameID]; ok {
 		info.timer.Stop()
 		delete(r.turnTimers, gameID)
+	}
+	r.timerMu.Unlock()
+
+	r.mirrorClearTurnDeadline(gameID)
+}
+
+// mirrorSetTurnDeadline はターン期限を TimerStore へ書き込む。
+// 失敗しても対戦は継続するため、警告ログのみで済ませる。
+func (r *GameRelay) mirrorSetTurnDeadline(gameID, activePlayerID string, deadline time.Time) {
+	if r.timerStore == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timerMirrorTimeout)
+	defer cancel()
+	if err := r.timerStore.SetTurnDeadline(ctx, gameID, activePlayerID, deadline); err != nil {
+		log.Printf("WARN: mirror turn deadline for game %s: %v", gameID, err)
+	}
+}
+
+// mirrorClearTurnDeadline はターン期限の写しを TimerStore から削除する。
+// 失敗しても対戦は継続するため、警告ログのみで済ませる。
+func (r *GameRelay) mirrorClearTurnDeadline(gameID string) {
+	if r.timerStore == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timerMirrorTimeout)
+	defer cancel()
+	if err := r.timerStore.ClearTurnDeadline(ctx, gameID); err != nil {
+		log.Printf("WARN: clear mirrored turn deadline for game %s: %v", gameID, err)
 	}
 }
 
@@ -75,16 +108,31 @@ func (r *GameRelay) cancelTurnTimer(gameID string) {
 // gateway の責務であり、Battle Server はタイムアウトの種別を区別できないため、
 // 例外的に gateway が reason を指定して Battle Server に送る。
 // broadcastGameOver でも gateway 側の WinReason で上書きしている。
+//
+// 対戦相手も切断中の場合はこの時点では決着させない (HandleDisconnectTimeout と同じ
+// 理由)。次にどちらかが戻ってきた時点で resolveStaleDisconnect が改めて評価する。
 func (r *GameRelay) handleTurnTimeout(gameID, playerID string) {
+	ctx, cancel := context.WithTimeout(context.Background(), downstreamCallTimeout)
+	bothDisconnected, err := r.areBothPlayersDisconnected(ctx, playerID, gameID)
+	cancel()
+	if err != nil {
+		log.Printf("ERROR: turn timeout: lookup game players (game=%s, player=%s): %v", gameID, playerID, err)
+		return
+	}
+	if bothDisconnected {
+		log.Printf("player %s turn timer expired but opponent is also disconnected for game %s, deferring resolution", playerID, gameID)
+		return
+	}
+
 	pNum := r.resolvePlayerNum(playerID)
 	if pNum == 0 {
 		return
 	}
 	// タイマー発火は WS コネクション context に紐づかない（接続が生きていても発火する）。
 	// Background ベースで独立した短いタイムアウトを使う。
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	result, err := r.battleClient.ProcessAction(ctx, gameID, pNum, gamelogic.ActionTypeForfeit, buildForfeitReason(gamelogic.WinReasonTurnTimeout))
+	ctx2, cancel2 := context.WithTimeout(context.Background(), downstreamCallTimeout)
+	defer cancel2()
+	result, err := r.battleClient.ProcessAction(ctx2, gameID, pNum, gamelogic.ActionTypeForfeit, buildForfeitReason(gamelogic.WinReasonTurnTimeout))
 	if err != nil {
 		log.Printf("ERROR: turn timeout forfeit (game=%s, player=%s): %v", gameID, playerID, err)
 		// forfeit が battle server に到達しないとゲームが終了せず、両プレイヤーが

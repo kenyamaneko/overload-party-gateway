@@ -12,9 +12,11 @@ import (
 	"cloud.google.com/go/firestore"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 	"golang.org/x/sync/errgroup"
 
 	pubsubadapter "github.com/kenyamaneko/overload-party-gateway/internal/adapter/pubsub"
+	"github.com/kenyamaneko/overload-party-gateway/internal/adapter/redistimer"
 	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/cardclient"
@@ -29,6 +31,11 @@ import (
 )
 
 const serverShutdownTimeout = 10 * time.Second
+
+// wsShutdownNotifier は errgroup で束ねる WS 終了通知の最小契約。
+type wsShutdownNotifier interface {
+	Shutdown(ctx context.Context)
+}
 
 func main() {
 	ctx := context.Background()
@@ -52,13 +59,15 @@ func main() {
 	if cfg.PubSubPushAudience == "" {
 		log.Fatal("PUBSUB_PUSH_AUDIENCE must be set")
 	}
+	if cfg.UpstashRedisURL == "" {
+		log.Fatal("UPSTASH_REDIS_URL must be set")
+	}
 
 	if cfg.Env == "prod" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	// PostgreSQL 接続プール: gateway.game_players（gateway 所有）と
-	// newsfeed.news_articles（read-only クロススキーマプロキシ）に使用
+	// PostgreSQL 接続プール: gateway.game_players（gateway 所有）に使用
 	pool, err := pgxpool.New(ctx, cfg.DatabaseConn)
 	if err != nil {
 		log.Fatalf("failed to create pg pool: %v", err)
@@ -95,10 +104,21 @@ func main() {
 		internalauth.DefaultKeyID,
 	)
 
+	// 対戦ごとの計時 (切断猶予・ターン) の写しを保持する Redis client。
+	// 接続は go-redis が遅延で確立するため、ここでは接続確認 (Ping) を行わない。
+	// 到達不能でも各書き込み・読み出しがエラーを返すだけで対戦は継続する。
+	redisOpt, err := redis.ParseURL(cfg.UpstashRedisURL)
+	if err != nil {
+		log.Fatalf("failed to parse UPSTASH_REDIS_URL: %v", err)
+	}
+	redisClient := redis.NewClient(redisOpt)
+	defer func() { _ = redisClient.Close() }()
+	timerStore := redistimer.NewStore(redisClient)
+
 	// Battle クライアント（HTTP → battle server）
 	battleClient := service.NewBattleClient(cfg.BattleServerURL)
 	matchmakingTimeout := time.Duration(cfg.MatchmakingTimeoutSec) * time.Second
-	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, processedMatchRepo, matchmakingTimeout, internalSigner)
+	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, processedMatchRepo, matchmakingTimeout, internalSigner, timerStore)
 	wsHandler := ws.NewHandler(wsManager, authClient, accountClient, cfg.AllowedOrigins)
 
 	matchSub, err := pubsubadapter.NewMatchSubscriber(wsManager)
@@ -162,9 +182,9 @@ func main() {
 	srvCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// Why: graceful shutdown 時に HTTP server が確実に停止するまで main を
-	// block させるため errgroup で束ねる。
-	if err := runServices(srvCtx, cfg, srv); err != nil {
+	// Why: graceful shutdown 時に HTTP server と WS 接続への終了通知が確実に完了する
+	// まで main を block させるため errgroup で束ねる。
+	if err := runServices(srvCtx, cfg, srv, wsManager); err != nil {
 		log.Fatalf("server: %v", err)
 	}
 
@@ -172,11 +192,13 @@ func main() {
 }
 
 // runServices は HTTP server を errgroup で起動する。ctx キャンセル
-// (SIGINT/SIGTERM) を検知すると HTTP server の Shutdown を呼ぶ。
+// (SIGINT/SIGTERM) を検知すると HTTP server の Shutdown を呼ぶ。対戦中を含む WS 接続には
+// HTTP server の Shutdown と並行して終了を通知してから閉じる。
 func runServices(
 	ctx context.Context,
 	cfg *config.Config,
 	srv *http.Server,
+	wsShutdown wsShutdownNotifier,
 ) error {
 	g, gCtx := errgroup.WithContext(ctx)
 
@@ -185,6 +207,15 @@ func runServices(
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			return fmt.Errorf("http server: %w", err)
 		}
+		return nil
+	})
+
+	g.Go(func() error {
+		<-gCtx.Done()
+		log.Println("notifying WS connections of shutdown...")
+		wsCtx, cancel := context.WithTimeout(context.Background(), ws.ShutdownNotifyTimeout)
+		defer cancel()
+		wsShutdown.Shutdown(wsCtx)
 		return nil
 	})
 

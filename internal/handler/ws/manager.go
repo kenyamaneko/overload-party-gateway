@@ -44,7 +44,8 @@ type Manager struct {
 	matchWait   map[string]*time.Timer
 }
 
-// NewManager は WebSocket Manager を生成します
+// NewManager は WebSocket Manager を生成します。timerStore は nil 可
+// （切断猶予・ターン期限の Redis への写しを行わない環境向け）。
 func NewManager(
 	battleClient service.BattleClient,
 	accountClient port.AccountClient,
@@ -54,6 +55,7 @@ func NewManager(
 	processedMatchRepo port.ProcessedMatchRepo,
 	matchmakingTimeout time.Duration,
 	internalSigner *internalauth.Signer,
+	timerStore port.TimerStore,
 ) *Manager {
 	m := &Manager{
 		battleClient:       battleClient,
@@ -73,15 +75,20 @@ func NewManager(
 		OnDisconnectTimeout: func(playerID, gameID string) { m.Relay.HandleDisconnectTimeout(playerID, gameID) },
 		OnMatchmakingLeave:  m.cancelMatchmaking,
 		OnGameDisconnect:    func(playerID, gameID string) { m.Relay.NotifyOpponentDisconnected(playerID, gameID) },
-		OnGameReconnect:     func(playerID, gameID string) { m.Relay.NotifyOpponentReconnected(playerID, gameID) },
-	})
+		OnGameReconnect:     func(playerID, gameID string, wasLate bool) { m.Relay.HandleReconnect(playerID, gameID, wasLate) },
+	}, timerStore)
 
-	relay := NewGameRelay(hub, battleClient, accountClient, gamePlayerRepo)
+	relay := NewGameRelay(hub, battleClient, accountClient, gamePlayerRepo, timerStore)
 
 	m.Hub = hub
 	m.Relay = relay
 
 	return m
+}
+
+// Shutdown は全 WS 接続へ終了を通知してから閉じます。SIGTERM 受信時に呼ばれます。
+func (m *Manager) Shutdown(ctx context.Context) {
+	m.Hub.Shutdown(ctx)
 }
 
 // buildAuthedContext は ctx に内部認証 JWT を注入した派生 context を返す。

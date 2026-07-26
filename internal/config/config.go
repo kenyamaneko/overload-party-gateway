@@ -24,7 +24,7 @@ type Config struct {
 	NewsServiceURL        string
 	SupportServiceURL     string
 
-	// game_players / news_articles は gateway が直接 Postgres に接続して読み書きする
+	// game_players は gateway が直接 Postgres に接続して読み書きする
 	DatabaseConn string
 
 	// GoogleCloudProjectID は Firestore (game_config) の対象プロジェクト ID。
@@ -48,6 +48,10 @@ type Config struct {
 	// PubSubPushAudience は match-made push subscription の OIDC トークンに期待する aud クレーム
 	// (Terraform 側で明示 audience を設定していないため push endpoint の URL と一致する)。
 	PubSubPushAudience string
+
+	// UpstashRedisURL は対戦ごとの計時 (切断猶予・ターン) の写しを保持する
+	// Upstash Redis の接続 URL。未設定の場合は写しを行わない。
+	UpstashRedisURL string
 }
 
 // Load は環境変数からサービス設定を読み込みます
@@ -82,6 +86,8 @@ func Load() *Config {
 
 		PubSubPushServiceAccountEmail: getEnv("PUBSUB_PUSH_SERVICE_ACCOUNT_EMAIL", ""),
 		PubSubPushAudience:            getEnv("PUBSUB_PUSH_AUDIENCE", ""),
+
+		UpstashRedisURL: getEnv("UPSTASH_REDIS_URL", ""),
 	}
 }
 
