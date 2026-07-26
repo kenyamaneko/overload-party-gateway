@@ -22,8 +22,8 @@ func (noopMatchmakingClient) Cancel(_ context.Context) error                    
 
 var _ port.MatchmakingClient = noopMatchmakingClient{}
 
-func TestManagerReconnectWiring(t *testing.T) {
-	t.Run("WS 再接続から BDR-002 の決着判定までの配線", func(t *testing.T) {
+func TestManagerReconnect(t *testing.T) {
+	t.Run("切断猶予切れ状態での復帰時の決着評価", func(t *testing.T) {
 		t.Run("対戦相手の猶予切れのまま再接続すると、対戦相手の forfeit が実行される", func(t *testing.T) {
 			bc := newMockBattleClient()
 			bc.processActionResult = &service.ActionResult{}
@@ -51,7 +51,7 @@ func TestManagerReconnectWiring(t *testing.T) {
 
 			require.Eventually(t, func() bool {
 				return len(bc.snapshotProcessActionCalls()) == 1
-			}, time.Second, 10*time.Millisecond, "opponent forfeit must fire through the Hub to GameRelay wiring")
+			}, time.Second, 10*time.Millisecond, "opponent forfeit must fire")
 			calls := bc.snapshotProcessActionCalls()
 			assert.Equal(t, 2, calls[0].playerNum, "forfeit must be attributed to the still-disconnected opponent")
 			assert.Equal(t, gamelogic.ActionTypeForfeit, calls[0].actionType)
