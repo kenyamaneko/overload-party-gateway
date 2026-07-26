@@ -99,9 +99,15 @@ func (r *GameRelay) NotifyOpponentReconnected(playerID, gameID string) {
 
 // HandleReconnect はプレイヤーが切断していたゲームへ復帰した際の処理です。
 // wasLate は復帰したプレイヤー自身の猶予期限が既に過ぎていたかを表します。
+//
+// resolveStaleDisconnect は WS ハンドシェイク中 (ConnectionHub.Register 経由、
+// read/write pump 起動前) に呼ばれるため、ここで同期実行すると forfeit の
+// downstream 呼び出し分だけ pump 起動が遅れる。既存の切断タイムアウト forfeit
+// (time.AfterFunc 経由) と同様に接続処理のパスから切り離すため、別 goroutine
+// で実行する。
 func (r *GameRelay) HandleReconnect(playerID, gameID string, wasLate bool) {
 	r.NotifyOpponentReconnected(playerID, gameID)
-	r.resolveStaleDisconnect(gameID, playerID, wasLate)
+	go r.resolveStaleDisconnect(gameID, playerID, wasLate)
 }
 
 // resolveStaleDisconnect は全員切断のまま決着していなかった対戦を、戻ってきた

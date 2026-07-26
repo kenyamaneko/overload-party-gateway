@@ -240,8 +240,10 @@ func TestHandleReconnect(t *testing.T) {
 
 			relay.HandleReconnect("p1", "g1", false)
 
-			require.Len(t, bc.processActionCalls, 1, "stale disconnect evaluation must run")
-			assert.Equal(t, 2, bc.processActionCalls[0].playerNum)
+			require.Eventually(t, func() bool {
+				return len(bc.snapshotProcessActionCalls()) == 1
+			}, time.Second, 10*time.Millisecond, "stale disconnect evaluation must run")
+			assert.Equal(t, 2, bc.snapshotProcessActionCalls()[0].playerNum)
 		})
 	})
 }
