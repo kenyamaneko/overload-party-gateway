@@ -41,6 +41,13 @@ type Config struct {
 
 	// InternalAuthSecret は内部認証 JWT (HS256) の共有秘密鍵。
 	InternalAuthSecret string
+
+	// PubSubPushServiceAccountEmail は match-made push subscription の OIDC トークンを
+	// 署名する Pub/Sub push 用サービスアカウントの email。
+	PubSubPushServiceAccountEmail string
+	// PubSubPushAudience は match-made push subscription の OIDC トークンに期待する aud クレーム
+	// (Terraform 側で明示 audience を設定していないため push endpoint の URL と一致する)。
+	PubSubPushAudience string
 }
 
 // Load は環境変数からサービス設定を読み込みます
@@ -72,6 +79,9 @@ func Load() *Config {
 		AppForceUpdate:   getEnv("APP_FORCE_UPDATE", "false") == "true",
 
 		InternalAuthSecret: getEnv("INTERNAL_AUTH_SECRET", ""),
+
+		PubSubPushServiceAccountEmail: getEnv("PUBSUB_PUSH_SERVICE_ACCOUNT_EMAIL", ""),
+		PubSubPushAudience:            getEnv("PUBSUB_PUSH_AUDIENCE", ""),
 	}
 }
 

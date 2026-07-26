@@ -110,7 +110,8 @@ func main() {
 		pub.GET("/version", staticHandler.GetVersion)
 	}
 
-	// Pub/Sub push 配信の内部エンドポイント（到達制御は Cloud Run の呼び出し IAM が担う）
+	// Pub/Sub push 配信の内部エンドポイント。ローカルモードは Pub/Sub エミュレーターを使うため
+	// 本物の Google 署名 OIDC トークンを用意できず、cmd/main のような push 認証は行わない。
 	internalGroup := r.Group("/internal/v1")
 	router.RegisterPubSubRoutes(internalGroup, handlers)
 

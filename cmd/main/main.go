@@ -46,6 +46,12 @@ func main() {
 	if cfg.InternalAuthSecret == "" {
 		log.Fatal("INTERNAL_AUTH_SECRET must be set")
 	}
+	if cfg.PubSubPushServiceAccountEmail == "" {
+		log.Fatal("PUBSUB_PUSH_SERVICE_ACCOUNT_EMAIL must be set")
+	}
+	if cfg.PubSubPushAudience == "" {
+		log.Fatal("PUBSUB_PUSH_AUDIENCE must be set")
+	}
 
 	if cfg.Env == "prod" {
 		gin.SetMode(gin.ReleaseMode)
@@ -126,8 +132,14 @@ func main() {
 		pub.GET("/version", staticHandler.GetVersion)
 	}
 
-	// Pub/Sub push 配信の内部エンドポイント（到達制御は Cloud Run の呼び出し IAM が担う）
+	// Pub/Sub push 配信の内部エンドポイント。allUsers に公開されるため、Cloud Run の
+	// 呼び出し IAM に頼らずアプリ層で push リクエストの OIDC トークンを検証する。
 	internalGroup := r.Group("/internal/v1")
+	internalGroup.Use(middleware.UsePubSubPushAuth(
+		middleware.NewGoogleIDTokenValidator(),
+		cfg.PubSubPushServiceAccountEmail,
+		cfg.PubSubPushAudience,
+	))
 	router.RegisterPubSubRoutes(internalGroup, handlers)
 
 	v1 := r.Group("/api/v1")

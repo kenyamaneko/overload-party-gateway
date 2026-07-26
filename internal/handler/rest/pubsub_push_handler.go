@@ -21,8 +21,8 @@ type pushEnvelope struct {
 }
 
 // PubSubPushHandler は Pub/Sub push 配信の HTTP エンドポイントを処理します。
-// 到達制御は Cloud Run の呼び出し IAM が担うため、本 handler はアプリ層の
-// 認証を行いません。
+// push リクエストの認証は呼び出し元の router group に設定する middleware が担うため、
+// 本 handler 自体は認証を行いません。
 type PubSubPushHandler struct {
 	matchMade port.PushMessageProcessor
 }

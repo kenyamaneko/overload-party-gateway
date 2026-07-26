@@ -24,7 +24,7 @@ func RegisterAuthRoutes(group *gin.RouterGroup, h *Handlers) {
 }
 
 // RegisterPubSubRoutes は Pub/Sub push 配信の内部エンドポイントを登録します。
-// 到達制御は Cloud Run の呼び出し IAM が担うため、認証 middleware は挟みません。
+// 認証は呼び出し元が group に対して push 認証 middleware を設定する前提です。
 func RegisterPubSubRoutes(group *gin.RouterGroup, h *Handlers) {
 	group.POST("/pubsub/match-made", h.PubSub.HandleMatchMade)
 }
