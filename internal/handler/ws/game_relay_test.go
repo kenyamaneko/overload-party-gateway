@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,6 +28,20 @@ type mockBattleClient struct {
 	// (overrides advanceNpcResult). Enables tests that need successive results.
 	advanceNpcQueue []*service.ActionResult
 	advanceNpcCalls int
+
+	// callsMu は processActionCalls を守る。resolveStaleDisconnect が別 goroutine
+	// から ProcessAction を呼ぶ経路 (HandleReconnect 経由) があるため、書込み・読出し
+	// 双方をこの mutex 経由に統一する。
+	callsMu            sync.Mutex
+	processActionCalls []processActionCall
+}
+
+// processActionCall は mockBattleClient.ProcessAction への 1 回の呼出を記録する。
+type processActionCall struct {
+	gameID     string
+	playerNum  int
+	actionType string
+	data       json.RawMessage
 }
 
 func newMockBattleClient() *mockBattleClient {
@@ -49,8 +64,22 @@ func (m *mockBattleClient) CreatePvPGame(_ context.Context, _, _ []service.Battl
 	return nil, nil
 }
 
-func (m *mockBattleClient) ProcessAction(_ context.Context, _ string, _ int, _ string, _ json.RawMessage) (*service.ActionResult, error) {
+func (m *mockBattleClient) ProcessAction(_ context.Context, gameID string, playerNum int, actionType string, data json.RawMessage) (*service.ActionResult, error) {
+	m.callsMu.Lock()
+	m.processActionCalls = append(m.processActionCalls, processActionCall{
+		gameID: gameID, playerNum: playerNum, actionType: actionType, data: data,
+	})
+	m.callsMu.Unlock()
 	return m.processActionResult, m.processActionErr
+}
+
+// snapshotProcessActionCalls は processActionCalls を排他制御した上で複製して返す。
+// resolveStaleDisconnect が別 goroutine から書き込みうる経路を検証するテストは、
+// 直接フィールドを読まずこの関数を使う。
+func (m *mockBattleClient) snapshotProcessActionCalls() []processActionCall {
+	m.callsMu.Lock()
+	defer m.callsMu.Unlock()
+	return append([]processActionCall(nil), m.processActionCalls...)
 }
 
 func (m *mockBattleClient) GetGameStateForPlayer(_ context.Context, _ string, _ int) (json.RawMessage, error) {

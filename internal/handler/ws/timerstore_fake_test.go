@@ -32,6 +32,12 @@ type fakeTimerStore struct {
 	clearDisconnectCalls []string
 	clearDisconnectErr   error
 
+	// getDisconnectReturn は GetDisconnectDeadline の固定応答。playerID によらず
+	// 同じ値を返す簡易スタブ (テストは呼出ごとに 1 プレイヤーだけを問い合わせる)。
+	getDisconnectReturn port.DisconnectDeadline
+	getDisconnectFound  bool
+	getDisconnectErr    error
+
 	setTurnCalls   []turnDeadlineCall
 	setTurnErr     error
 	clearTurnCalls []string
@@ -53,7 +59,9 @@ func (f *fakeTimerStore) ClearDisconnectDeadline(_ context.Context, playerID str
 }
 
 func (f *fakeTimerStore) GetDisconnectDeadline(_ context.Context, _ string) (port.DisconnectDeadline, bool, error) {
-	return port.DisconnectDeadline{}, false, nil
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.getDisconnectReturn, f.getDisconnectFound, f.getDisconnectErr
 }
 
 func (f *fakeTimerStore) SetTurnDeadline(_ context.Context, gameID, activePlayerID string, deadline time.Time) error {
@@ -104,6 +112,11 @@ func (f *fakeTimerStore) snapshotClearTurnCalls() []string {
 	out := make([]string, len(f.clearTurnCalls))
 	copy(out, f.clearTurnCalls)
 	return out
+}
+
+// portDisconnectDeadline は fakeTimerStore.getDisconnectReturn を組み立てる。
+func portDisconnectDeadline(gameID string, deadline time.Time) port.DisconnectDeadline {
+	return port.DisconnectDeadline{GameID: gameID, Deadline: deadline}
 }
 
 var _ port.TimerStore = (*fakeTimerStore)(nil)

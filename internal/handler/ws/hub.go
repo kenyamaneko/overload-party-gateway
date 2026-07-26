@@ -13,7 +13,9 @@ import (
 	genws "github.com/kenyamaneko/overload-party-gateway/packages/ws-constants"
 )
 
-const disconnectTimeout = 60 * time.Second
+// disconnectTimeout は切断したプレイヤーに与える再接続猶予。
+// アプリの再起動を伴う復帰に届くよう 120 秒とする。
+const disconnectTimeout = 120 * time.Second
 
 // timerMirrorTimeout は TimerStore への書き込み・削除の上限時間。写しの失敗が
 // 対戦の進行を止めないよう、短い上限で打ち切る。
@@ -43,8 +45,9 @@ type HubCallbacks struct {
 	OnMatchmakingLeave func(playerID string)
 	// OnGameDisconnect は対戦相手に切断を通知する
 	OnGameDisconnect func(playerID, gameID string)
-	// OnGameReconnect は切断していたプレイヤーの復帰を対戦相手に通知する
-	OnGameReconnect func(playerID, gameID string)
+	// OnGameReconnect は切断していたプレイヤーの復帰を対戦相手に通知する。
+	// wasLate は復帰したプレイヤー自身の猶予期限が既に過ぎていたかを表す。
+	OnGameReconnect func(playerID, gameID string, wasLate bool)
 }
 
 // ConnectionHub は WebSocket 接続と切断タイマーを管理します
@@ -77,9 +80,11 @@ func NewConnectionHub(cb HubCallbacks, timerStore port.TimerStore) *ConnectionHu
 func (h *ConnectionHub) Register(conn *Connection) {
 	h.mu.Lock()
 	var reconnectGameID string
+	var stillInMemory bool
 	if info, ok := h.disconnects[conn.playerID]; ok {
 		info.timer.Stop()
 		reconnectGameID = info.gameID
+		stillInMemory = true
 		delete(h.disconnects, conn.playerID)
 		log.Printf("player %s reconnected", conn.playerID)
 	}
@@ -90,11 +95,58 @@ func (h *ConnectionHub) Register(conn *Connection) {
 	h.connections[conn.playerID] = conn
 	h.mu.Unlock()
 
+	// インメモリのタイマーがまだ発火していなければ、それだけで猶予内と判定できる
+	// (wasLate=false)。インメモリに記録が無い場合はローカルタイマーが既に発火済みか
+	// プロセス再起動をまたいだ可能性があるため、削除する前に TimerStore の写しを見て
+	// 猶予切れかどうかを判定する。写しの読み出しが失敗した場合は対象ゲームが分からず
+	// 評価しようがないため、対戦相手の未決着評価を持ち越せないことを ERROR ログで残す。
+	wasLate := false
+	if !stillInMemory {
+		dl, found, err := h.mirrorGetDisconnectDeadline(conn.playerID)
+		if err != nil {
+			log.Printf("ERROR: player %s reconnect: read mirrored disconnect deadline: %v, stale disconnect resolution skipped", conn.playerID, err)
+		} else if found {
+			reconnectGameID = dl.GameID
+			wasLate = !time.Now().Before(dl.Deadline)
+		}
+	}
+
 	// デッドロック防止のためロック外で対戦相手に通知
 	h.mirrorClearDisconnectDeadline(conn.playerID)
 	if reconnectGameID != "" && h.cb.OnGameReconnect != nil {
-		h.cb.OnGameReconnect(conn.playerID, reconnectGameID)
+		h.cb.OnGameReconnect(conn.playerID, reconnectGameID, wasLate)
 	}
+}
+
+// IsConnected はプレイヤーが現在 WS 接続を保持しているかを返します。
+func (h *ConnectionHub) IsConnected(playerID string) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	_, ok := h.connections[playerID]
+	return ok
+}
+
+// IsDisconnectDeadlineExpired はプレイヤーの切断猶予期限が既に過ぎているかを返します。
+// インメモリのタイマーが残っている間は猶予内と判定し、消えている場合のみ
+// TimerStore の写しを読み出して判定します。記録が見つからない場合は
+// 猶予切れとは判定しません (false を返す)。写しの読み出しが失敗した場合は
+// 期限切れかどうか判定できないため、呼び出し元が判断できるよう err を返します。
+func (h *ConnectionHub) IsDisconnectDeadlineExpired(playerID string) (expired bool, err error) {
+	h.mu.RLock()
+	_, stillDisconnected := h.disconnects[playerID]
+	h.mu.RUnlock()
+	if stillDisconnected {
+		return false, nil
+	}
+
+	dl, found, err := h.mirrorGetDisconnectDeadline(playerID)
+	if err != nil {
+		return false, err
+	}
+	if !found {
+		return false, nil
+	}
+	return !time.Now().Before(dl.Deadline), nil
 }
 
 // Unregister は WebSocket 接続を解除し切断タイマーを開始します
@@ -164,6 +216,17 @@ func (h *ConnectionHub) mirrorClearDisconnectDeadline(playerID string) {
 	if err := h.timerStore.ClearDisconnectDeadline(ctx, playerID); err != nil {
 		log.Printf("WARN: clear mirrored disconnect deadline for player %s: %v", playerID, err)
 	}
+}
+
+// mirrorGetDisconnectDeadline は切断猶予期限の写しを TimerStore から読み出す。
+// timerStore が未設定の場合は found=false を返します。
+func (h *ConnectionHub) mirrorGetDisconnectDeadline(playerID string) (port.DisconnectDeadline, bool, error) {
+	if h.timerStore == nil {
+		return port.DisconnectDeadline{}, false, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timerMirrorTimeout)
+	defer cancel()
+	return h.timerStore.GetDisconnectDeadline(ctx, playerID)
 }
 
 // ClearDisconnectDeadline は切断猶予期限の写しを TimerStore から削除します。
