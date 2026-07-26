@@ -28,13 +28,7 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
-const (
-	serverShutdownTimeout = 10 * time.Second
-	// wsShutdownNotifyTimeout は SIGTERM 受信時、WS 接続へ終了を通知してから閉じるまでの
-	// 上限。serverShutdownTimeout とは別予算とし、HTTP server の graceful shutdown を
-	// 遅らせない。
-	wsShutdownNotifyTimeout = 3 * time.Second
-)
+const serverShutdownTimeout = 10 * time.Second
 
 // subscriberRunner は errgroup で束ねる subscriber の最小契約。
 // stream ライフサイクルは caller 側で defer Close しているため、subscriber は
@@ -212,7 +206,7 @@ func runServices(
 	g.Go(func() error {
 		<-gCtx.Done()
 		log.Println("notifying WS connections of shutdown...")
-		wsCtx, cancel := context.WithTimeout(context.Background(), wsShutdownNotifyTimeout)
+		wsCtx, cancel := context.WithTimeout(context.Background(), ws.ShutdownNotifyTimeout)
 		defer cancel()
 		wsShutdown.Shutdown(wsCtx)
 		return nil

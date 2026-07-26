@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -12,6 +13,9 @@ import (
 )
 
 const disconnectTimeout = 60 * time.Second
+
+// ShutdownNotifyTimeout は SIGTERM 受信時、WS 接続へ終了を通知してから閉じるまでの上限。
+const ShutdownNotifyTimeout = 3 * time.Second
 
 // shutdownNotifier は Shutdown が個々の接続に対して行う操作の最小契約。
 // Connection から切り出すことで、テストが実ソケットを介さずに振る舞いを検証できる。
@@ -140,7 +144,7 @@ func (h *ConnectionHub) SendRawToPlayer(playerID string, data []byte) {
 	}
 }
 
-// Shutdown は登録中の全接続へ終了を通知してから閉じます。ctx の期限までに完了しなかった
+// Shutdown は呼び出し時点で登録中の接続へ終了を通知してから閉じます。ctx の期限までに完了しなかった
 // 接続は待たずに諦めます（ベストエフォート）。対戦中の接続の切断猶予には関与しません。
 func (h *ConnectionHub) Shutdown(ctx context.Context) {
 	h.mu.Lock()
@@ -162,12 +166,14 @@ func shutdownAll(ctx context.Context, notifiers []shutdownNotifier, code int, re
 	}
 
 	var wg sync.WaitGroup
+	var notified atomic.Int64
 	for _, n := range notifiers {
 		n := n
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			n.Shutdown(code, reason)
+			notified.Add(1)
 		}()
 	}
 
@@ -180,6 +186,7 @@ func shutdownAll(ctx context.Context, notifiers []shutdownNotifier, code int, re
 	select {
 	case <-done:
 	case <-ctx.Done():
-		log.Printf("ws shutdown: timed out notifying %d connection(s) before deadline", len(notifiers))
+		log.Printf("ws shutdown: timed out before deadline, notified %d/%d connection(s)",
+			notified.Load(), len(notifiers))
 	}
 }

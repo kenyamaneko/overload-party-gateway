@@ -80,7 +80,7 @@ func TestShutdownAll(t *testing.T) {
 
 func TestConnectionHubShutdown(t *testing.T) {
 	t.Run("全接続への一斉終了通知", func(t *testing.T) {
-		t.Run("登録されている接続はすべて、close コードと終了理由を伴って終了処理される", func(t *testing.T) {
+		t.Run("登録されている接続はすべて、シャットダウン用の close コードと終了理由を持って閉じられる", func(t *testing.T) {
 			hub := NewConnectionHub(HubCallbacks{
 				GetGameID: func(string) (string, bool) { return "", false },
 			})
