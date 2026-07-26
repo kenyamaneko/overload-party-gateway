@@ -13,8 +13,8 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
-// newDisconnectResolutionRelay は BDR-002 の決着ロジックを検証するための GameRelay を返す。
-// 実際の ConnectionHub を使うことで hub.IsConnected / hub.DisconnectDeadlineExpired が
+// newDisconnectResolutionRelay は切断・再接続時の決着ロジックを検証するための GameRelay を返す。
+// 実際の ConnectionHub を使うことで hub.IsConnected / hub.IsDisconnectDeadlineExpired が
 // テストごとの接続状況を正しく反映する。
 func newDisconnectResolutionRelay(entries []port.GamePlayerEntry, timerStore *fakeTimerStore) (*GameRelay, *mockBattleClient, *ConnectionHub) {
 	bc := newMockBattleClient()
@@ -101,20 +101,17 @@ func TestHandleDisconnectTimeout(t *testing.T) {
 			assert.Equal(t, gamelogic.ActionTypeForfeit, bc.processActionCalls[0].actionType)
 		})
 
-		t.Run("対戦相手も切断中のとき、forfeit を実行せずターンタイマーも継続する", func(t *testing.T) {
+		t.Run("対戦相手も切断中のとき、切断タイムアウトでもターンタイマー期限切れでも forfeit を実行しない", func(t *testing.T) {
 			relay, bc, _ := newDisconnectResolutionRelay(entries, nil)
 			relay.JoinGame("p1", "g1", 1)
-			relay.resetTurnTimer("g1", "p1", 60)
+			relay.resetTurnTimer("g1", "p1", 1) // timeBankSeconds=1 (+turnTimerNetworkBuffer) で数秒後に自然発火する
 
 			relay.HandleDisconnectTimeout("p1", "g1")
 
-			assert.Empty(t, bc.processActionCalls, "must not forfeit while the opponent is also disconnected")
-			relay.timerMu.Lock()
-			_, stillRunning := relay.turnTimers["g1"]
-			relay.timerMu.Unlock()
-			assert.True(t, stillRunning, "turn timer must not be canceled while resolution is deferred")
-
-			relay.cancelTurnTimer("g1")
+			assert.Never(t, func() bool {
+				return len(bc.snapshotProcessActionCalls()) > 0
+			}, 5*time.Second, 100*time.Millisecond,
+				"must not forfeit while the opponent is also disconnected, even after the turn timer later fires")
 		})
 
 		t.Run("NPC 戦 (対戦相手が居ない) のとき、forfeit を実行する", func(t *testing.T) {
@@ -165,6 +162,15 @@ func TestResolveStaleDisconnect(t *testing.T) {
 			relay.resolveStaleDisconnect("g1", "p1", false)
 
 			assert.Empty(t, bc.processActionCalls)
+		})
+
+		t.Run("対戦相手の切断猶予の写しの読み出しに失敗するとき、forfeit を実行しない", func(t *testing.T) {
+			store := &fakeTimerStore{getDisconnectErr: errors.New("redis down")}
+			relay, bc, _ := newDisconnectResolutionRelay(entries, store)
+
+			relay.resolveStaleDisconnect("g1", "p1", false)
+
+			assert.Empty(t, bc.processActionCalls, "must not declare a winner when the opponent's deadline cannot be determined")
 		})
 
 		t.Run("対戦相手の猶予が切れており復帰した本人は猶予内だったとき、対戦相手の forfeit を実行する", func(t *testing.T) {
@@ -223,7 +229,7 @@ func TestResolveStaleDisconnect(t *testing.T) {
 
 func TestHandleReconnect(t *testing.T) {
 	t.Run("復帰処理", func(t *testing.T) {
-		t.Run("呼ぶと、対戦相手への通知と猶予評価の両方が行われる", func(t *testing.T) {
+		t.Run("対戦相手の切断猶予が切れているとき、復帰処理により対戦相手の forfeit が実行される", func(t *testing.T) {
 			entries := []port.GamePlayerEntry{
 				{PlayerNum: 1, PlayerID: "p1"},
 				{PlayerNum: 2, PlayerID: "p2"},
