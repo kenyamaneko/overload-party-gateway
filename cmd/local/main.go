@@ -159,6 +159,10 @@ func main() {
 	<-srvCtx.Done()
 	log.Println("shutting down...")
 
+	wsShutdownCtx, wsCancel := context.WithTimeout(context.Background(), 3*time.Second)
+	wsManager.Shutdown(wsShutdownCtx)
+	wsCancel()
+
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 

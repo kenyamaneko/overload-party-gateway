@@ -1,12 +1,23 @@
 package ws
 
 import (
+	"context"
 	"log"
 	"sync"
 	"time"
+
+	"github.com/gorilla/websocket"
+
+	genws "github.com/kenyamaneko/overload-party-gateway/packages/ws-constants"
 )
 
 const disconnectTimeout = 60 * time.Second
+
+// shutdownNotifier は Shutdown が個々の接続に対して行う操作の最小契約。
+// Connection から切り出すことで、テストが実ソケットを介さずに振る舞いを検証できる。
+type shutdownNotifier interface {
+	Shutdown(code int, reason string)
+}
 
 type disconnectInfo struct {
 	gameID string
@@ -32,6 +43,9 @@ type ConnectionHub struct {
 	mu          sync.RWMutex
 	connections map[string]*Connection
 	disconnects map[string]*disconnectInfo
+	// isShuttingDown は Shutdown 開始後に true になる。Unregister はこの間、
+	// 対戦相手への切断通知を抑止する（サーバー都合の切断を相手の切断と誤認させないため）。
+	isShuttingDown bool
 
 	cb HubCallbacks
 }
@@ -78,6 +92,7 @@ func (h *ConnectionHub) Unregister(conn *Connection) {
 	delete(h.connections, conn.playerID)
 
 	gameID, inGame := h.cb.GetGameID(conn.playerID)
+	suppressOpponentNotify := h.isShuttingDown
 	if inGame {
 		timer := time.AfterFunc(disconnectTimeout, func() {
 			h.mu.Lock()
@@ -99,7 +114,8 @@ func (h *ConnectionHub) Unregister(conn *Connection) {
 	if h.cb.OnMatchmakingLeave != nil {
 		h.cb.OnMatchmakingLeave(conn.playerID)
 	}
-	if inGame && h.cb.OnGameDisconnect != nil {
+	// シャットダウン中は対戦中の両者がほぼ同時に切断されるため、相手の切断としては通知しない。
+	if inGame && h.cb.OnGameDisconnect != nil && !suppressOpponentNotify {
 		h.cb.OnGameDisconnect(conn.playerID, gameID)
 	}
 }
@@ -121,5 +137,49 @@ func (h *ConnectionHub) SendRawToPlayer(playerID string, data []byte) {
 	h.mu.RUnlock()
 	if ok {
 		conn.SendRaw(data)
+	}
+}
+
+// Shutdown は登録中の全接続へ終了を通知してから閉じます。ctx の期限までに完了しなかった
+// 接続は待たずに諦めます（ベストエフォート）。対戦中の接続の切断猶予には関与しません。
+func (h *ConnectionHub) Shutdown(ctx context.Context) {
+	h.mu.Lock()
+	h.isShuttingDown = true
+	notifiers := make([]shutdownNotifier, 0, len(h.connections))
+	for _, conn := range h.connections {
+		notifiers = append(notifiers, conn)
+	}
+	h.mu.Unlock()
+
+	shutdownAll(ctx, notifiers, websocket.CloseGoingAway, genws.WSServerMsgServerShutdown)
+}
+
+// shutdownAll は各 notifier の Shutdown を並行に呼び出し、ctx の期限まで完了を待つ。
+// 期限に間に合わなかった呼び出しは待たずに諦める（呼び出し自体は動き続ける）。
+func shutdownAll(ctx context.Context, notifiers []shutdownNotifier, code int, reason string) {
+	if len(notifiers) == 0 {
+		return
+	}
+
+	var wg sync.WaitGroup
+	for _, n := range notifiers {
+		n := n
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			n.Shutdown(code, reason)
+		}()
+	}
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-ctx.Done():
+		log.Printf("ws shutdown: timed out notifying %d connection(s) before deadline", len(notifiers))
 	}
 }

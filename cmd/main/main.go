@@ -28,13 +28,24 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
-const serverShutdownTimeout = 10 * time.Second
+const (
+	serverShutdownTimeout = 10 * time.Second
+	// wsShutdownNotifyTimeout は SIGTERM 受信時、WS 接続へ終了を通知してから閉じるまでの
+	// 上限。serverShutdownTimeout とは別予算とし、HTTP server の graceful shutdown を
+	// 遅らせない。
+	wsShutdownNotifyTimeout = 3 * time.Second
+)
 
 // subscriberRunner は errgroup で束ねる subscriber の最小契約。
 // stream ライフサイクルは caller 側で defer Close しているため、subscriber は
 // Run のみを持つ。
 type subscriberRunner interface {
 	Run(ctx context.Context) error
+}
+
+// wsShutdownNotifier は errgroup で束ねる WS 終了通知の最小契約。
+type wsShutdownNotifier interface {
+	Shutdown(ctx context.Context)
 }
 
 func main() {
@@ -160,7 +171,7 @@ func main() {
 	// Why: graceful shutdown 時に subscriber と HTTP server が確実に停止するまで
 	// main を block させるため errgroup で束ねる。どちらかが err を返すと
 	// gCtx がキャンセルされ、他方も停止する。
-	if err := runServices(srvCtx, cfg, srv, matchSub); err != nil {
+	if err := runServices(srvCtx, cfg, srv, wsManager, matchSub); err != nil {
 		log.Fatalf("server: %v", err)
 	}
 
@@ -169,11 +180,13 @@ func main() {
 
 // runServices は HTTP server と全 subscriber を errgroup で束ねて起動する。
 // ctx キャンセル (SIGINT/SIGTERM) を検知すると HTTP server の Shutdown を呼び、
-// subscriber も gCtx 経由で停止する。
+// subscriber も gCtx 経由で停止する。対戦中を含む WS 接続には HTTP server の Shutdown と
+// 並行して終了を通知してから閉じる。
 func runServices(
 	ctx context.Context,
 	cfg *config.Config,
 	srv *http.Server,
+	wsShutdown wsShutdownNotifier,
 	subscribers ...subscriberRunner,
 ) error {
 	g, gCtx := errgroup.WithContext(ctx)
@@ -193,6 +206,15 @@ func runServices(
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			return fmt.Errorf("http server: %w", err)
 		}
+		return nil
+	})
+
+	g.Go(func() error {
+		<-gCtx.Done()
+		log.Println("notifying WS connections of shutdown...")
+		wsCtx, cancel := context.WithTimeout(context.Background(), wsShutdownNotifyTimeout)
+		defer cancel()
+		wsShutdown.Shutdown(wsCtx)
 		return nil
 	})
 
