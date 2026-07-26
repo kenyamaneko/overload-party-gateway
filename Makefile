@@ -72,7 +72,8 @@ run-local:  ## Run local gateway server (no DB/Firebase, in-memory mock repos)
 	go run ./cmd/local
 
 run-gateway:  ## Run gateway server (PostgreSQL mode)
-	DATABASE_URL="postgresql://dev:dev@localhost:5432/overload_party" \
+	DATABASE_CONN="postgresql://dev:dev@localhost:5432/overload_party" \
+	DATABASE_IAM_AUTH_ENABLED=false \
 	ENV=dev \
 	go run ./cmd/main
 

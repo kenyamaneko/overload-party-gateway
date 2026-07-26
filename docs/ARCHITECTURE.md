@@ -88,6 +88,7 @@ SIGTERM 受信時、**HTTP / WS 新規受付停止 → 既存 WS への close �
 
 gateway の env は [internal/config/config.go](../internal/config/config.go) が SSoT。運用上の注意点のみ:
 
+- **`CLOUDSQL_CONNECTION_NAME`**: Cloud SQL インスタンスの接続名。値は Terraform 側の接続名と一致させる
 - **`MATCHMAKING_TIMEOUT_SEC`**: マッチ待機タイムアウト。短すぎるとキューが浅い時間帯にユーザーが離脱しやすい。matchmaking サービスのキュー長メトリクスと併せて調整する
 - **Pub/Sub subscription 名** (`MATCHMAKING_SUBSCRIPTION`): 環境（dev/stg/prod）ごとに分離する。異環境の subscription を共有するとメッセージが競合してどちらの環境にも届かない事故が起きる
 - **`UPSTASH_REDIS_URL`**: 対戦ごとの計時（切断猶予・ターン）の写しを保持する Redis の接続先。書き込み失敗は警告ログのみで対戦を止めない。写しからプロセス再起動をまたいだ状態を復元する読み出し経路は後続 Issue で追加する

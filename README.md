@@ -36,6 +36,8 @@ REST エンドポイント契約は [data/openapi.yaml](data/openapi.yaml) を�
 | `ENV` | `dev` | 動作環境 (`dev` / `stg` / `prod`) |
 | `LOG_LEVEL` | `info` | ログレベル |
 | `DATABASE_CONN` | *(必須)* | PostgreSQL 接続文字列 (`gateway.game_players`) |
+| `DATABASE_IAM_AUTH_ENABLED` | *(必須)* | Cloud SQL への接続を Cloud SQL Go Connector 経由の自動 IAM データベース認証で行うかどうか。`true` / `false` のいずれか必須で、フォールバックは無い |
+| `CLOUDSQL_CONNECTION_NAME` | *(空)* | Cloud SQL インスタンスの接続名 (`project:region:instance`)。`DATABASE_IAM_AUTH_ENABLED=true` のときのみ必須 |
 | `GOOGLE_CLOUD_PROJECT_ID` | *(必須)* | Google Cloud プロジェクト ID (Pub/Sub および Firestore game_config) |
 | `INTERNAL_AUTH_SECRET` | *(必須)* | 内部認証 JWT (HS256) の共有秘密鍵 |
 
