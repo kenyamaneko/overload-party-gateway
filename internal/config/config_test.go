@@ -22,12 +22,13 @@ func TestLoad(t *testing.T) {
 			assert.Equal(t, "http://localhost:9005", cfg.AccountServiceURL)
 			assert.Equal(t, "http://localhost:9006", cfg.ShopServiceURL)
 			assert.Equal(t, "http://localhost:9007", cfg.ScenarioServiceURL)
-			assert.Equal(t, "matchmaking-events-gateway", cfg.MatchmakingSubscription)
 			assert.Equal(t, 60, cfg.MatchmakingTimeoutSec)
 			assert.Equal(t, "0.1.0", cfg.AppMinVersion)
 			assert.Equal(t, "0.1.0", cfg.AppLatestVersion)
 			assert.False(t, cfg.AppForceUpdate)
 			assert.Equal(t, "", cfg.InternalAuthSecret)
+			assert.Equal(t, "", cfg.PubSubPushServiceAccountEmail)
+			assert.Equal(t, "", cfg.PubSubPushAudience)
 		})
 
 		t.Run("全 env を指定するとき、その値が反映される", func(t *testing.T) {
@@ -45,6 +46,8 @@ func TestLoad(t *testing.T) {
 			t.Setenv("APP_LATEST_VERSION", "1.2.0")
 			t.Setenv("APP_FORCE_UPDATE", "true")
 			t.Setenv("INTERNAL_AUTH_SECRET", "test-internal-auth-secret-32-bytes-min")
+			t.Setenv("PUBSUB_PUSH_SERVICE_ACCOUNT_EMAIL", "pubsub-push@test-project.iam.gserviceaccount.com")
+			t.Setenv("PUBSUB_PUSH_AUDIENCE", "https://gateway.example.com/internal/v1/pubsub/match-made")
 
 			cfg := Load()
 
@@ -62,6 +65,8 @@ func TestLoad(t *testing.T) {
 			assert.Equal(t, "1.2.0", cfg.AppLatestVersion)
 			assert.True(t, cfg.AppForceUpdate)
 			assert.Equal(t, "test-internal-auth-secret-32-bytes-min", cfg.InternalAuthSecret)
+			assert.Equal(t, "pubsub-push@test-project.iam.gserviceaccount.com", cfg.PubSubPushServiceAccountEmail)
+			assert.Equal(t, "https://gateway.example.com/internal/v1/pubsub/match-made", cfg.PubSubPushAudience)
 		})
 
 		t.Run("ALLOWED_ORIGINS を CSV 指定するとき、分割して格納される", func(t *testing.T) {

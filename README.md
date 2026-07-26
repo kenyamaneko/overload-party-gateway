@@ -20,8 +20,7 @@ Gateway (このサービス, :9001)
   ├─ HTTP → news      (:9008)  ニュース記事
   ├─ HTTP → support   (:9009)  お知らせ
   ├─ PostgreSQL                 gateway.game_players (所有)
-  └─ Cloud Pub/Sub subscriber
-        └─ matchmaking-events-gateway         ← match_made
+  └─ POST /internal/v1/pubsub/match-made  ← Cloud Pub/Sub push 配信
 ```
 
 REST エンドポイント契約は [data/openapi.yaml](data/openapi.yaml) を参照。
@@ -51,12 +50,6 @@ REST エンドポイント契約は [data/openapi.yaml](data/openapi.yaml) を�
 | `SCENARIO_SERVICE_URL` | `http://localhost:9007` | Scenario サービス URL |
 | `NEWS_SERVICE_URL` | `http://localhost:9008` | News サービス URL |
 | `SUPPORT_SERVICE_URL` | `http://localhost:9009` | Support サービス URL |
-
-**ConfigMap (Pub/Sub):**
-
-| 変数名 | デフォルト | 説明 |
-|---|---|---|
-| `MATCHMAKING_SUBSCRIPTION` | `matchmaking-events-gateway` | matchmaking Pub/Sub サブスクリプション名 |
 
 **ConfigMap (アプリ挙動):**
 

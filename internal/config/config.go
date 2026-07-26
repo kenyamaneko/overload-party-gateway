@@ -27,10 +27,9 @@ type Config struct {
 	// game_players は gateway が直接 Postgres に接続して読み書きする
 	DatabaseConn string
 
-	// GoogleCloudProjectID は Pub/Sub および Firestore (game_config) の対象プロジェクト ID。
+	// GoogleCloudProjectID は Firestore (game_config) の対象プロジェクト ID。
 	// ローカル/CI では FIRESTORE_EMULATOR_HOST を別途設定することでエミュレーターに接続する。
-	GoogleCloudProjectID    string
-	MatchmakingSubscription string
+	GoogleCloudProjectID string
 
 	// matchmaking_start 後のプレイヤー待機タイムアウト（秒）。
 	// タイムアウト時に gateway がエラーを push し、上流の enqueue をキャンセルする。
@@ -42,6 +41,13 @@ type Config struct {
 
 	// InternalAuthSecret は内部認証 JWT (HS256) の共有秘密鍵。
 	InternalAuthSecret string
+
+	// PubSubPushServiceAccountEmail は match-made push subscription の OIDC トークンを
+	// 署名する Pub/Sub push 用サービスアカウントの email。
+	PubSubPushServiceAccountEmail string
+	// PubSubPushAudience は match-made push subscription の OIDC トークンに期待する aud クレーム
+	// (Terraform 側で明示 audience を設定していないため push endpoint の URL と一致する)。
+	PubSubPushAudience string
 
 	// UpstashRedisURL は対戦ごとの計時 (切断猶予・ターン) の写しを保持する
 	// Upstash Redis の接続 URL。未設定の場合は写しを行わない。
@@ -68,8 +74,7 @@ func Load() *Config {
 
 		DatabaseConn: getEnv("DATABASE_CONN", ""),
 
-		GoogleCloudProjectID:    getEnv("GOOGLE_CLOUD_PROJECT_ID", ""),
-		MatchmakingSubscription: getEnv("MATCHMAKING_SUBSCRIPTION", "matchmaking-events-gateway"),
+		GoogleCloudProjectID: getEnv("GOOGLE_CLOUD_PROJECT_ID", ""),
 
 		MatchmakingTimeoutSec: getEnvInt("MATCHMAKING_TIMEOUT_SEC", 60),
 
@@ -78,6 +83,9 @@ func Load() *Config {
 		AppForceUpdate:   getEnv("APP_FORCE_UPDATE", "false") == "true",
 
 		InternalAuthSecret: getEnv("INTERNAL_AUTH_SECRET", ""),
+
+		PubSubPushServiceAccountEmail: getEnv("PUBSUB_PUSH_SERVICE_ACCOUNT_EMAIL", ""),
+		PubSubPushAudience:            getEnv("PUBSUB_PUSH_AUDIENCE", ""),
 
 		UpstashRedisURL: getEnv("UPSTASH_REDIS_URL", ""),
 	}

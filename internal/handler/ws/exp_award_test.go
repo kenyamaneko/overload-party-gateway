@@ -35,10 +35,36 @@ type mockGamePlayerRepo struct {
 	// callOrder は MarkExpAwarded と LookupGamePlayers の呼出順を記録する。
 	// 「MarkExpAwarded を必ず先に実行」の契約を検証するため。
 	callOrder []string
+
+	insertCalls []insertGamePlayerCall
+	// insertErrForPlayerNum が非 0 のとき、その playerNum の InsertGamePlayer 呼出のみ
+	// insertErr を返す (0 = 全呼出に対して返す)。部分成功後のリトライを再現するため。
+	insertErr             error
+	insertErrForPlayerNum int
 }
 
-func (m *mockGamePlayerRepo) InsertGamePlayer(_ context.Context, _ string, _ int, _ string) error {
+// insertGamePlayerCall は mockGamePlayerRepo.InsertGamePlayer への 1 回の呼出を記録する。
+type insertGamePlayerCall struct {
+	gameID    string
+	playerNum int
+	playerID  string
+}
+
+func (m *mockGamePlayerRepo) InsertGamePlayer(_ context.Context, gameID string, playerNum int, playerID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.insertCalls = append(m.insertCalls, insertGamePlayerCall{gameID, playerNum, playerID})
+	if m.insertErr != nil && (m.insertErrForPlayerNum == 0 || m.insertErrForPlayerNum == playerNum) {
+		return m.insertErr
+	}
 	return nil
+}
+
+// snapshotInsertGamePlayerCalls は insertCalls を排他制御した上で複製して返す。
+func (m *mockGamePlayerRepo) snapshotInsertGamePlayerCalls() []insertGamePlayerCall {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]insertGamePlayerCall(nil), m.insertCalls...)
 }
 
 func (m *mockGamePlayerRepo) LookupPlayerNum(_ context.Context, _ string, _ string) (int, error) {
