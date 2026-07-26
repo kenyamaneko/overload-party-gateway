@@ -82,10 +82,14 @@ func (h *ConnectionHub) Register(conn *Connection) {
 	// インメモリのタイマーがまだ発火していなければ、それだけで猶予内と判定できる
 	// (wasLate=false)。インメモリに記録が無い場合はローカルタイマーが既に発火済みか
 	// プロセス再起動をまたいだ可能性があるため、削除する前に TimerStore の写しを見て
-	// 猶予切れかどうかを判定する。
+	// 猶予切れかどうかを判定する。写しの読み出しが失敗した場合は対象ゲームが分からず
+	// 評価しようがないため、対戦相手の未決着評価を持ち越せないことを ERROR ログで残す。
 	wasLate := false
 	if !stillInMemory {
-		if dl, found := h.mirrorGetDisconnectDeadline(conn.playerID); found {
+		dl, found, err := h.mirrorGetDisconnectDeadline(conn.playerID)
+		if err != nil {
+			log.Printf("ERROR: player %s reconnect: read mirrored disconnect deadline: %v, stale disconnect resolution skipped", conn.playerID, err)
+		} else if found {
 			reconnectGameID = dl.GameID
 			wasLate = !time.Now().Before(dl.Deadline)
 		}
@@ -106,23 +110,27 @@ func (h *ConnectionHub) IsConnected(playerID string) bool {
 	return ok
 }
 
-// DisconnectDeadlineExpired はプレイヤーの切断猶予期限が既に過ぎているかを返します。
+// IsDisconnectDeadlineExpired はプレイヤーの切断猶予期限が既に過ぎているかを返します。
 // インメモリのタイマーが残っている間は猶予内と判定し、消えている場合のみ
 // TimerStore の写しを読み出して判定します。記録が見つからない場合は
-// 猶予切れとは判定しません (false を返す)。
-func (h *ConnectionHub) DisconnectDeadlineExpired(playerID string) bool {
+// 猶予切れとは判定しません (false を返す)。写しの読み出しが失敗した場合は
+// 期限切れかどうか判定できないため、呼び出し元が判断できるよう err を返します。
+func (h *ConnectionHub) IsDisconnectDeadlineExpired(playerID string) (expired bool, err error) {
 	h.mu.RLock()
 	_, stillDisconnected := h.disconnects[playerID]
 	h.mu.RUnlock()
 	if stillDisconnected {
-		return false
+		return false, nil
 	}
 
-	dl, found := h.mirrorGetDisconnectDeadline(playerID)
-	if !found {
-		return false
+	dl, found, err := h.mirrorGetDisconnectDeadline(playerID)
+	if err != nil {
+		return false, err
 	}
-	return !time.Now().Before(dl.Deadline)
+	if !found {
+		return false, nil
+	}
+	return !time.Now().Before(dl.Deadline), nil
 }
 
 // Unregister は WebSocket 接続を解除し切断タイマーを開始します
@@ -193,19 +201,14 @@ func (h *ConnectionHub) mirrorClearDisconnectDeadline(playerID string) {
 }
 
 // mirrorGetDisconnectDeadline は切断猶予期限の写しを TimerStore から読み出す。
-// 読み出しに失敗しても対戦は継続するため、警告ログのみで済ませ found=false を返す。
-func (h *ConnectionHub) mirrorGetDisconnectDeadline(playerID string) (port.DisconnectDeadline, bool) {
+// timerStore が未設定の場合は found=false を返します。
+func (h *ConnectionHub) mirrorGetDisconnectDeadline(playerID string) (port.DisconnectDeadline, bool, error) {
 	if h.timerStore == nil {
-		return port.DisconnectDeadline{}, false
+		return port.DisconnectDeadline{}, false, nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timerMirrorTimeout)
 	defer cancel()
-	dl, found, err := h.timerStore.GetDisconnectDeadline(ctx, playerID)
-	if err != nil {
-		log.Printf("WARN: read mirrored disconnect deadline for player %s: %v", playerID, err)
-		return port.DisconnectDeadline{}, false
-	}
-	return dl, found
+	return h.timerStore.GetDisconnectDeadline(ctx, playerID)
 }
 
 // ClearDisconnectDeadline は切断猶予期限の写しを TimerStore から削除します。

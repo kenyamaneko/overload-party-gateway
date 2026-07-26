@@ -108,16 +108,31 @@ func (r *GameRelay) mirrorClearTurnDeadline(gameID string) {
 // gateway の責務であり、Battle Server はタイムアウトの種別を区別できないため、
 // 例外的に gateway が reason を指定して Battle Server に送る。
 // broadcastGameOver でも gateway 側の WinReason で上書きしている。
+//
+// 対戦相手も切断中の場合はこの時点では決着させない (HandleDisconnectTimeout と同じ
+// 理由)。次にどちらかが戻ってきた時点で resolveStaleDisconnect が改めて評価する。
 func (r *GameRelay) handleTurnTimeout(gameID, playerID string) {
+	ctx, cancel := context.WithTimeout(context.Background(), downstreamCallTimeout)
+	bothDisconnected, err := r.areBothPlayersDisconnected(ctx, playerID, gameID)
+	cancel()
+	if err != nil {
+		log.Printf("ERROR: turn timeout: lookup game players (game=%s, player=%s): %v", gameID, playerID, err)
+		return
+	}
+	if bothDisconnected {
+		log.Printf("player %s turn timer expired but opponent is also disconnected for game %s, deferring resolution", playerID, gameID)
+		return
+	}
+
 	pNum := r.resolvePlayerNum(playerID)
 	if pNum == 0 {
 		return
 	}
 	// タイマー発火は WS コネクション context に紐づかない（接続が生きていても発火する）。
 	// Background ベースで独立した短いタイムアウトを使う。
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	result, err := r.battleClient.ProcessAction(ctx, gameID, pNum, gamelogic.ActionTypeForfeit, buildForfeitReason(gamelogic.WinReasonTurnTimeout))
+	ctx2, cancel2 := context.WithTimeout(context.Background(), downstreamCallTimeout)
+	defer cancel2()
+	result, err := r.battleClient.ProcessAction(ctx2, gameID, pNum, gamelogic.ActionTypeForfeit, buildForfeitReason(gamelogic.WinReasonTurnTimeout))
 	if err != nil {
 		log.Printf("ERROR: turn timeout forfeit (game=%s, player=%s): %v", gameID, playerID, err)
 		// forfeit が battle server に到達しないとゲームが終了せず、両プレイヤーが
