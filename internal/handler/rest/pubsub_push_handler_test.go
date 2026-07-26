@@ -99,6 +99,28 @@ func TestHandleMatchMade(t *testing.T) {
 			assert.Empty(t, processor.calls)
 		})
 
+		t.Run("message.data が空文字のとき、400 とレスポンスボディに invalid push envelope が返る", func(t *testing.T) {
+			processor := &fakePushProcessor{}
+			r := newPushTestRouter(processor)
+
+			w := postPush(r, `{"message":{"data":"","messageId":"msg-1"}}`)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+			assert.Equal(t, "invalid push envelope", decodeBody(t, w)["error"])
+			assert.Empty(t, processor.calls)
+		})
+
+		t.Run("message フィールドの中身が空のとき、400 とレスポンスボディに invalid push envelope が返る", func(t *testing.T) {
+			processor := &fakePushProcessor{}
+			r := newPushTestRouter(processor)
+
+			w := postPush(r, `{"message":{}}`)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+			assert.Equal(t, "invalid push envelope", decodeBody(t, w)["error"])
+			assert.Empty(t, processor.calls)
+		})
+
 		t.Run("message.data が base64 として不正なとき、400 とレスポンスボディに invalid base64 data が返る", func(t *testing.T) {
 			processor := &fakePushProcessor{}
 			r := newPushTestRouter(processor)
