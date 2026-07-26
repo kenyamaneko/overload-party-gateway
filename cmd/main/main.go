@@ -12,9 +12,11 @@ import (
 	"cloud.google.com/go/firestore"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 	"golang.org/x/sync/errgroup"
 
 	pubsubadapter "github.com/kenyamaneko/overload-party-gateway/internal/adapter/pubsub"
+	"github.com/kenyamaneko/overload-party-gateway/internal/adapter/redistimer"
 	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/cardclient"
@@ -58,6 +60,9 @@ func main() {
 	if cfg.InternalAuthSecret == "" {
 		log.Fatal("INTERNAL_AUTH_SECRET must be set")
 	}
+	if cfg.UpstashRedisURL == "" {
+		log.Fatal("UPSTASH_REDIS_URL must be set")
+	}
 
 	if cfg.Env == "prod" {
 		gin.SetMode(gin.ReleaseMode)
@@ -99,10 +104,21 @@ func main() {
 		internalauth.DefaultKeyID,
 	)
 
+	// 対戦ごとの計時 (切断猶予・ターン) の写しを保持する Redis client。
+	// 接続は go-redis が遅延で確立するため、ここでは接続確認 (Ping) を行わない。
+	// 到達不能でも各書き込み・読み出しがエラーを返すだけで対戦は継続する。
+	redisOpt, err := redis.ParseURL(cfg.UpstashRedisURL)
+	if err != nil {
+		log.Fatalf("failed to parse UPSTASH_REDIS_URL: %v", err)
+	}
+	redisClient := redis.NewClient(redisOpt)
+	defer func() { _ = redisClient.Close() }()
+	timerStore := redistimer.NewStore(redisClient)
+
 	// Battle クライアント（HTTP → battle server）
 	battleClient := service.NewBattleClient(cfg.BattleServerURL)
 	matchmakingTimeout := time.Duration(cfg.MatchmakingTimeoutSec) * time.Second
-	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, matchmakingTimeout, internalSigner)
+	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, matchmakingTimeout, internalSigner, timerStore)
 	wsHandler := ws.NewHandler(wsManager, authClient, accountClient, cfg.AllowedOrigins)
 
 	handlers := &router.Handlers{

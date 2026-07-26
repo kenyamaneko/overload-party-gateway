@@ -42,6 +42,10 @@ type Config struct {
 
 	// InternalAuthSecret は内部認証 JWT (HS256) の共有秘密鍵。
 	InternalAuthSecret string
+
+	// UpstashRedisURL は対戦ごとの計時 (切断猶予・ターン) の写しを保持する
+	// Upstash Redis の接続 URL。未設定の場合は写しを行わない。
+	UpstashRedisURL string
 }
 
 // Load は環境変数からサービス設定を読み込みます
@@ -74,6 +78,8 @@ func Load() *Config {
 		AppForceUpdate:   getEnv("APP_FORCE_UPDATE", "false") == "true",
 
 		InternalAuthSecret: getEnv("INTERNAL_AUTH_SECRET", ""),
+
+		UpstashRedisURL: getEnv("UPSTASH_REDIS_URL", ""),
 	}
 }
 

@@ -16,8 +16,10 @@ import (
 	"cloud.google.com/go/firestore"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 
 	pubsubadapter "github.com/kenyamaneko/overload-party-gateway/internal/adapter/pubsub"
+	"github.com/kenyamaneko/overload-party-gateway/internal/adapter/redistimer"
 	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/cardclient"
@@ -26,6 +28,7 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/handler/rest"
 	ws "github.com/kenyamaneko/overload-party-gateway/internal/handler/ws"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
 	"github.com/kenyamaneko/overload-party-gateway/internal/router"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
@@ -77,9 +80,24 @@ func main() {
 		internalauth.DefaultKeyID,
 	)
 
+	// 対戦ごとの計時の写しは UPSTASH_REDIS_URL が未設定なら行わない
+	// (docker-compose の redis サービスを使わないローカル起動でも動く状態を保つ)。
+	var timerStore port.TimerStore
+	if cfg.UpstashRedisURL != "" {
+		redisOpt, err := redis.ParseURL(cfg.UpstashRedisURL)
+		if err != nil {
+			log.Fatalf("failed to parse UPSTASH_REDIS_URL: %v", err)
+		}
+		redisClient := redis.NewClient(redisOpt)
+		defer func() { _ = redisClient.Close() }()
+		timerStore = redistimer.NewStore(redisClient)
+	} else {
+		log.Println("UPSTASH_REDIS_URL is unset; skipping timer deadline mirroring")
+	}
+
 	battleClient := service.NewBattleClient(cfg.BattleServerURL)
 	matchmakingTimeout := time.Duration(cfg.MatchmakingTimeoutSec) * time.Second
-	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, matchmakingTimeout, internalSigner)
+	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, matchmakingTimeout, internalSigner, timerStore)
 	wsHandler := ws.NewHandler(wsManager, nil, accountClient, nil)
 	handlers := &router.Handlers{
 		Auth: rest.NewAuthHandler(accountClient),

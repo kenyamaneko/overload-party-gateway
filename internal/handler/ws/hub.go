@@ -9,10 +9,15 @@ import (
 
 	"github.com/gorilla/websocket"
 
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 	genws "github.com/kenyamaneko/overload-party-gateway/packages/ws-constants"
 )
 
 const disconnectTimeout = 60 * time.Second
+
+// timerMirrorTimeout は TimerStore への書き込み・削除の上限時間。写しの失敗が
+// 対戦の進行を止めないよう、短い上限で打ち切る。
+const timerMirrorTimeout = 2 * time.Second
 
 // ShutdownNotifyTimeout は SIGTERM 受信時、WS 接続へ終了を通知してから閉じるまでの上限。
 const ShutdownNotifyTimeout = 3 * time.Second
@@ -52,14 +57,19 @@ type ConnectionHub struct {
 	isShuttingDown bool
 
 	cb HubCallbacks
+
+	// timerStore は切断猶予期限を Redis へ写す。未設定 (nil) の場合は写しを行わない
+	// （ローカル開発など Redis を使わない環境向け）。
+	timerStore port.TimerStore
 }
 
-// NewConnectionHub は ConnectionHub を生成します
-func NewConnectionHub(cb HubCallbacks) *ConnectionHub {
+// NewConnectionHub は ConnectionHub を生成します。timerStore は nil 可（写しを行わない）。
+func NewConnectionHub(cb HubCallbacks, timerStore port.TimerStore) *ConnectionHub {
 	return &ConnectionHub{
 		connections: make(map[string]*Connection),
 		disconnects: make(map[string]*disconnectInfo),
 		cb:          cb,
+		timerStore:  timerStore,
 	}
 }
 
@@ -81,6 +91,7 @@ func (h *ConnectionHub) Register(conn *Connection) {
 	h.mu.Unlock()
 
 	// デッドロック防止のためロック外で対戦相手に通知
+	h.mirrorClearDisconnectDeadline(conn.playerID)
 	if reconnectGameID != "" && h.cb.OnGameReconnect != nil {
 		h.cb.OnGameReconnect(conn.playerID, reconnectGameID)
 	}
@@ -96,8 +107,10 @@ func (h *ConnectionHub) Unregister(conn *Connection) {
 	delete(h.connections, conn.playerID)
 
 	gameID, inGame := h.cb.GetGameID(conn.playerID)
+	var deadline time.Time
 	suppressOpponentNotify := h.isShuttingDown
 	if inGame {
+		deadline = time.Now().Add(disconnectTimeout)
 		timer := time.AfterFunc(disconnectTimeout, func() {
 			h.mu.Lock()
 			delete(h.disconnects, conn.playerID)
@@ -115,6 +128,9 @@ func (h *ConnectionHub) Unregister(conn *Connection) {
 	h.mu.Unlock()
 
 	// SendToPlayer が RLock を取得するためデッドロック防止でロック外で実行
+	if inGame {
+		h.mirrorSetDisconnectDeadline(conn.playerID, gameID, deadline)
+	}
 	if h.cb.OnMatchmakingLeave != nil {
 		h.cb.OnMatchmakingLeave(conn.playerID)
 	}
@@ -122,6 +138,38 @@ func (h *ConnectionHub) Unregister(conn *Connection) {
 	if inGame && h.cb.OnGameDisconnect != nil && !suppressOpponentNotify {
 		h.cb.OnGameDisconnect(conn.playerID, gameID)
 	}
+}
+
+// mirrorSetDisconnectDeadline は切断猶予期限を TimerStore へ書き込む。
+// 失敗しても対戦は継続するため、警告ログのみで済ませる。
+func (h *ConnectionHub) mirrorSetDisconnectDeadline(playerID, gameID string, deadline time.Time) {
+	if h.timerStore == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timerMirrorTimeout)
+	defer cancel()
+	if err := h.timerStore.SetDisconnectDeadline(ctx, playerID, gameID, deadline); err != nil {
+		log.Printf("WARN: mirror disconnect deadline for player %s: %v", playerID, err)
+	}
+}
+
+// mirrorClearDisconnectDeadline は切断猶予期限の写しを TimerStore から削除する。
+// 失敗しても対戦は継続するため、警告ログのみで済ませる。
+func (h *ConnectionHub) mirrorClearDisconnectDeadline(playerID string) {
+	if h.timerStore == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timerMirrorTimeout)
+	defer cancel()
+	if err := h.timerStore.ClearDisconnectDeadline(ctx, playerID); err != nil {
+		log.Printf("WARN: clear mirrored disconnect deadline for player %s: %v", playerID, err)
+	}
+}
+
+// ClearDisconnectDeadline は切断猶予期限の写しを TimerStore から削除します。
+// ゲーム終了などプレイヤーの切断猶予が不要になった時点で GameRelay から呼ばれます。
+func (h *ConnectionHub) ClearDisconnectDeadline(playerID string) {
+	h.mirrorClearDisconnectDeadline(playerID)
 }
 
 // SendToPlayer は指定プレイヤーにメッセージを送信します

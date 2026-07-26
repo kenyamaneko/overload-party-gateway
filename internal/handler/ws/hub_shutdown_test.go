@@ -83,7 +83,7 @@ func TestConnectionHubShutdown(t *testing.T) {
 		t.Run("登録されている接続はすべて、シャットダウン用の close コードと終了理由を持って閉じられる", func(t *testing.T) {
 			hub := NewConnectionHub(HubCallbacks{
 				GetGameID: func(string) (string, bool) { return "", false },
-			})
+			}, nil)
 			conn1 := NewConnection(nil, "p1")
 			conn2 := NewConnection(nil, "p2")
 			hub.Register(conn1)
@@ -112,7 +112,7 @@ func TestConnectionHubShutdown(t *testing.T) {
 					GetGameID:           func(string) (string, bool) { return "g1", true },
 					OnDisconnectTimeout: func(string, string) {},
 					OnGameDisconnect:    func(string, string) { atomic.AddInt32(&notifyCalls, 1) },
-				})
+				}, nil)
 				conn := NewConnection(nil, "p1")
 				hub.Register(conn)
 
@@ -130,7 +130,7 @@ func TestConnectionHubShutdown(t *testing.T) {
 					GetGameID:           func(string) (string, bool) { return "g1", true },
 					OnDisconnectTimeout: func(string, string) {},
 					OnGameDisconnect:    func(string, string) { atomic.AddInt32(&notifyCalls, 1) },
-				})
+				}, nil)
 				conn := NewConnection(nil, "p1")
 				hub.Register(conn)
 
