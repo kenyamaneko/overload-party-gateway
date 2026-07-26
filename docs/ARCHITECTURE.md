@@ -74,7 +74,7 @@ gateway がドメイン状態を持たないと言いつつ 1 つだけ DB テ�
 
 | エンドポイント | 副作用 | 冪等性の担保 |
 |---|---|---|
-| `POST /internal/v1/pubsub/match_made` | battle ゲーム作成 + `game_players` 挿入 + WS push | 「match_made の二重ゲーム作成防止（多層冪等性）」の 3 層 (ゲーム作成・`game_players` 挿入の重複防止) |
+| `POST /internal/v1/pubsub/match-made` | battle ゲーム作成 + `game_players` 挿入 + WS push | 「match_made の二重ゲーム作成防止（多層冪等性）」の 3 層 (ゲーム作成・`game_players` 挿入の重複防止) |
 
 gateway は match_made 専用の受け口として位置づけられ、他サービスが publish するイベントを fan-out 用途で subscribe しない (ADR-027)。到達制御は Cloud Run の呼び出し IAM が担うため、本エンドポイントはアプリ層の認証を行わない (ADR-057)。push 配信の subscription 設定 (push endpoint の URL、dead letter policy 等) はこのリポジトリからは導けない。Terraform 側の設定と併せて変更すること。
 
