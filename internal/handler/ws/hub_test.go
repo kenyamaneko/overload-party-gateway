@@ -26,7 +26,7 @@ func newTestHub(timerStore *fakeTimerStore, inGame bool, gameID string) *Connect
 }
 
 func TestUnregister(t *testing.T) {
-	t.Run("切断時の TimerStore への書き込み", func(t *testing.T) {
+	t.Run("切断時の写しの書き込み", func(t *testing.T) {
 		t.Run("ゲームに参加中のプレイヤーが切断すると、猶予期限が書き込まれる", func(t *testing.T) {
 			store := &fakeTimerStore{}
 			hub := newTestHub(store, true, "game_1")
@@ -40,7 +40,7 @@ func TestUnregister(t *testing.T) {
 			require.Len(t, calls, 1)
 			assert.Equal(t, "p1", calls[0].playerID)
 			assert.Equal(t, "game_1", calls[0].gameID)
-			assert.WithinDuration(t, before.Add(disconnectTimeout), calls[0].deadline, 2*time.Second)
+			assert.WithinDuration(t, before.Add(60*time.Second), calls[0].deadline, 2*time.Second)
 		})
 
 		t.Run("ゲームに参加していないプレイヤーが切断すると、猶予期限を書き込まない", func(t *testing.T) {
@@ -54,7 +54,7 @@ func TestUnregister(t *testing.T) {
 			assert.Empty(t, store.snapshotSetDisconnectCalls())
 		})
 
-		t.Run("TimerStore が未設定のとき、パニックしない", func(t *testing.T) {
+		t.Run("写しが未設定のとき、パニックしない", func(t *testing.T) {
 			hub := newTestHub(nil, true, "game_1")
 			conn := NewConnection(nil, "p1")
 			hub.Register(conn)
@@ -62,7 +62,7 @@ func TestUnregister(t *testing.T) {
 			assert.NotPanics(t, func() { hub.Unregister(conn) })
 		})
 
-		t.Run("TimerStore への書き込みが失敗しても、パニックしない", func(t *testing.T) {
+		t.Run("写しの書き込みが失敗しても、パニックしない", func(t *testing.T) {
 			store := &fakeTimerStore{setDisconnectErr: errors.New("redis down")}
 			hub := newTestHub(store, true, "game_1")
 			conn := NewConnection(nil, "p1")
@@ -86,7 +86,7 @@ func TestUnregister(t *testing.T) {
 }
 
 func TestRegister(t *testing.T) {
-	t.Run("再接続時の TimerStore からの削除", func(t *testing.T) {
+	t.Run("再接続時の写しの削除", func(t *testing.T) {
 		t.Run("登録すると、そのプレイヤーの猶予期限が削除される", func(t *testing.T) {
 			store := &fakeTimerStore{}
 			hub := newTestHub(store, true, "game_1")
@@ -99,14 +99,14 @@ func TestRegister(t *testing.T) {
 			assert.Equal(t, "p1", calls[0])
 		})
 
-		t.Run("TimerStore が未設定のとき、パニックしない", func(t *testing.T) {
+		t.Run("写しが未設定のとき、パニックしない", func(t *testing.T) {
 			hub := newTestHub(nil, true, "game_1")
 			conn := NewConnection(nil, "p1")
 
 			assert.NotPanics(t, func() { hub.Register(conn) })
 		})
 
-		t.Run("TimerStore からの削除が失敗しても、パニックしない", func(t *testing.T) {
+		t.Run("写しからの削除が失敗しても、パニックしない", func(t *testing.T) {
 			store := &fakeTimerStore{clearDisconnectErr: errors.New("redis down")}
 			hub := newTestHub(store, true, "game_1")
 			conn := NewConnection(nil, "p1")
@@ -127,7 +127,7 @@ func TestClearDisconnectDeadline(t *testing.T) {
 			assert.Equal(t, []string{"p1"}, store.snapshotClearDisconnectCalls())
 		})
 
-		t.Run("TimerStore が未設定のとき、パニックしない", func(t *testing.T) {
+		t.Run("写しが未設定のとき、パニックしない", func(t *testing.T) {
 			hub := newTestHub(nil, true, "game_1")
 
 			assert.NotPanics(t, func() { hub.ClearDisconnectDeadline("p1") })
