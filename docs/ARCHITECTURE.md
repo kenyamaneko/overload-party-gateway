@@ -6,7 +6,7 @@
 
 ## Gateway の責務境界
 
-gateway はクライアント ⇄ 下流サービス間のプロトコル終端とセッション整合のみを担い、ドメイン状態・ルール判定・永続化されるドメインデータを所有しない。保持するのは WS 接続 map、ゲームセッションのインメモリ索引、`gateway.game_players` テーブル（match_made 起点の冪等キー用途）、各種タイマー。
+gateway はクライアント ⇄ 下流サービス間のプロトコル終端とセッション整合のみを担い、ドメイン状態・ルール判定・永続化されるドメインデータを所有しない。保持するのは WS 接続 map、ゲームセッションのインメモリ索引、`gateway.game_players` テーブル（EXP 付与の冪等キー + playerNum 索引用途）、`gateway.processed_matches` テーブル（match_made の永続 dedup 用途）、各種タイマー。
 
 下流サービスから受け取った JSON ペイロードは `json.RawMessage` で不透明なまま WS へ push する。battle の `game_state` / `action_performed` のようにカード効果や盤面構造を含むペイロードを gateway が解釈すると、battle のドメイン変更に gateway の再デプロイが必要になる。契約型の変更を battle 側だけで完結させるための不変条件。
 
@@ -32,15 +32,14 @@ battle は **意図的に passive な REST-only エンジン** として配置�
 
 REST では `middleware.UseFirebaseAuth` → `middleware.ResolvePlayer` → `middleware.IssueInternalAuth` のチェーンが `playerID` を context に載せ、WS では upgrade 時に同等の検証・解決を行う。ハンドラは context の `playerID` だけを信頼し、リクエストボディから PlayerID を取らない（クライアント側成りすまし防止）。
 
-## match_made の二重ゲーム作成防止（多層冪等性）
+## match_made の二重ゲーム作成防止
 
-match-made の push subscription は **at-least-once 配信のみで、exactly-once 配信をサポートしない**。gateway 側にも重複ゲーム作成を許さない保険を張る:
+battle の `CreatePvPGame` は matchId に対して冪等ではなく、呼び出すたびに新しいゲームを作る。match-made の push subscription は at-least-once 配信のみで exactly-once をサポートしないため、gateway 側で matchId ごとの永続的な dedup を持つ (`gateway.processed_matches`)。プロセスの再起動をまたいでも同じ matchId の再送で二重にゲームが作られないよう、dedup 状態は DB に置きインメモリには持たない。
 
-1. **per-Pod インメモリ dedup** (`matchId` キー): 同一 Pod 内で同一メッセージを複数回処理しない。最初の受領時に dedup entry を入れ、失敗時は entry をロールバックして 500 を返す → Pub/Sub がリトライ
-2. **battle 側 `matchId` 冪等**: battle の `CreatePvPGame` は `matchId` に対して冪等で、既存ゲームがあれば同じ game を返す。Pod を跨いだ重複配送が起きても二重ゲーム作成にならない
-3. **`gateway.game_players` の UNIQUE 制約**: 同一 `(gameID, playerNum)` の挿入は DB 側で失敗する。match_made ハンドラが複数 Pod で競合しても片方だけが挿入に成功する
-
-1 つ目だけでは competing consumer を跨いだ重複を防げず、3 つ目だけでは battle 側にゴミゲームが残りうる。3 層すべてが揃って初めて「WS に同じ `match_found` が 1 回だけ届く」が担保される。
+- 受信時にまず matchId を claim する。既に claim 済みで gameID も記録済みなら、battle を呼び出さず記録済みの gameID を再利用する
+- claim できたら battle にゲーム作成を依頼し、成功したら gameID を記録する
+- battle 呼び出し自体が失敗した場合のみ claim を解放し、Pub/Sub のリトライで再度 claim できるようにする。gameID 記録後の失敗 (`game_players` 挿入など) では claim を解放しない。解放すると再送のたびに battle を再度呼び出し、二重にゲームを作ってしまうため
+- claim 済みだが gameID がまだ記録されていない状態で再送されると (battle 呼び出しが競合中、または記録直前でプロセスが停止した場合)、二重作成を避けるためその回は処理をスキップする。この状態からの自動回復は無く、運用での検知に委ねる
 
 ## EXP 付与の冪等性設計
 
@@ -76,7 +75,7 @@ gateway がドメイン状態を持たないと言いつつ 1 つだけ DB テ�
 
 | エンドポイント | 副作用 | 冪等性の担保 |
 |---|---|---|
-| `POST /internal/v1/pubsub/match-made` | battle ゲーム作成 + `game_players` 挿入 + WS push | 「match_made の二重ゲーム作成防止（多層冪等性）」の 3 層冪等性 |
+| `POST /internal/v1/pubsub/match-made` | battle ゲーム作成 + `game_players` 挿入 + WS push | 「match_made の二重ゲーム作成防止」の永続 dedup |
 
 gateway は match_made 専用の受け口として位置づけられ、他サービスが発行するイベントを複数の購読先へ配信する用途で購読しない (ADR-027)。呼び出し元自体の到達制御は実行基盤の呼び出し認可に委ねるため、本エンドポイントはアプリ層の認証を行わない（[ADR-057](https://github.com/kenyamaneko/overload-party-common/blob/main/docs/adr/057-cloudrun-service-auth-iam-and-rs256.md)）。push 配信の subscription 設定 (push endpoint の URL、dead letter policy 等) はこのリポジトリからは導けない。Terraform 側の設定と併せて変更すること。
 

@@ -97,14 +97,14 @@ WS 切断時、プレイヤーの状態に応じて以下のクリーンアッ�
 
 `POST /internal/v1/pubsub/match-made` で push 配信を受信する（最大インスタンス数が 1 のため、配信は必ず唯一のインスタンスへ届く）。受信時:
 
-1. `matchId` のインメモリ重複排除で多重配送を抑止
+1. `gateway.processed_matches` で `matchId` を claim する。既に claim 済みで gameID も記録済みなら、battle を呼び出さず記録済みの gameID で手順 4 から再開する。claim 済みで gameID が未記録なら処理をスキップする
 2. cardclient で両プレイヤーのデッキカードを取得
-3. battleClient で PvP ゲームを作成（`matchId` に対して冪等）
+3. battleClient で PvP ゲームを作成し、作成した gameID を `gateway.processed_matches` に記録する
 4. `gateway.game_players` に両プレイヤーの行を挿入（EXP 付与冪等キー + playerNum 索引用途、「EXP 付与トリガと冪等性」）
 5. 両プレイヤーの WS 接続があれば `match_found` を push
-6. 上記いずれかに失敗した場合は dedup エントリをロールバックして **500** を返す（Pub/Sub がリトライ）
+6. 手順 2-3 (claim 後、battle 呼び出しまで) で失敗した場合は claim をロールバックして **500** を返す（Pub/Sub がリトライ）。手順 3 の gameID 記録以降の失敗では claim を解放せず、**500** を返すのみとする（battle 側に既にゲームが存在するため、解放すると再送時に二重作成になる）
 
-**配信保証**: at-least-once（exactly-once 配信はサポートされない）。同一メッセージが再送されても、手順 1 のプロセス内 `matchId` 重複排除により同一プロセス内では二重処理されない。
+**配信保証**: at-least-once（exactly-once 配信はサポートされない）。同一メッセージがプロセス再起動をまたいで再送されても、手順 1 の `gateway.processed_matches` による永続 dedup により battle のゲーム作成は matchId あたり 1 回に保たれる。
 
 ---
 

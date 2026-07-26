@@ -24,11 +24,12 @@ type Manager struct {
 	Hub   *ConnectionHub
 	Relay *GameRelay
 
-	battleClient      service.BattleClient
-	accountClient     port.AccountClient
-	cardClient        port.CardClient
-	matchmakingClient port.MatchmakingClient
-	gamePlayerRepo    port.GamePlayerRepo
+	battleClient       service.BattleClient
+	accountClient      port.AccountClient
+	cardClient         port.CardClient
+	matchmakingClient  port.MatchmakingClient
+	gamePlayerRepo     port.GamePlayerRepo
+	processedMatchRepo port.ProcessedMatchRepo
 
 	// internalSigner は WS 経路から各サービス client を呼ぶ前に X-Internal-Auth JWT を発行する。
 	internalSigner *internalauth.Signer
@@ -50,6 +51,7 @@ func NewManager(
 	cardClient port.CardClient,
 	matchmakingClient port.MatchmakingClient,
 	gamePlayerRepo port.GamePlayerRepo,
+	processedMatchRepo port.ProcessedMatchRepo,
 	matchmakingTimeout time.Duration,
 	internalSigner *internalauth.Signer,
 ) *Manager {
@@ -59,6 +61,7 @@ func NewManager(
 		cardClient:         cardClient,
 		matchmakingClient:  matchmakingClient,
 		gamePlayerRepo:     gamePlayerRepo,
+		processedMatchRepo: processedMatchRepo,
 		internalSigner:     internalSigner,
 		matchmakingTimeout: matchmakingTimeout,
 		matchWait:          make(map[string]*time.Timer),
@@ -306,6 +309,9 @@ func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, da
 
 // HandleMatchMade は port.MatchEventHandler の実装です。
 // マッチメイキングサービスの match_made イベント push 配信で呼び出されます。
+// matchId ごとに processedMatchRepo で排他制御し、battle のゲーム作成は matchId
+// あたり 1 回だけ行う。作成成功後に gameID を記録するため、game_players 挿入だけが
+// 失敗して再送されても battle を再呼び出ししない。
 func (m *Manager) HandleMatchMade(ctx context.Context, event apimatchmaking.MatchMadeEvent) error {
 	if len(event.Players) != 2 {
 		return errors.New("match_made event must contain exactly 2 players")
@@ -314,13 +320,72 @@ func (m *Manager) HandleMatchMade(ctx context.Context, event apimatchmaking.Matc
 	m.stopMatchWait(event.Players[0].PlayerID)
 	m.stopMatchWait(event.Players[1].PlayerID)
 
-	p1Cards, p1Initiatives, err := m.resolveDeckCards(ctx, event.Players[0].PlayerID, event.Players[0].DeckID)
+	gameID, err := m.resolveMatchGameID(ctx, event)
 	if err != nil {
 		return err
 	}
+	if gameID == "" {
+		log.Printf("WARN: match_made: matchId %s already claimed with no recorded game yet, skipping", event.MatchID)
+		return nil
+	}
+
+	if m.gamePlayerRepo != nil {
+		if err := m.gamePlayerRepo.InsertGamePlayer(ctx, gameID, 1, event.Players[0].PlayerID); err != nil {
+			return fmt.Errorf("match_made: insert game_player p1: %w", err)
+		}
+		if err := m.gamePlayerRepo.InsertGamePlayer(ctx, gameID, 2, event.Players[1].PlayerID); err != nil {
+			return fmt.Errorf("match_made: insert game_player p2: %w", err)
+		}
+	}
+
+	m.Relay.NotifyMatchFound(gameID, event.Players[0].PlayerID, event.Players[1].PlayerID)
+	return nil
+}
+
+// resolveMatchGameID は event.MatchID に対応する battle game の ID を返す。
+// 既に battle 側で作成済みならその ID を再利用し、未着手なら claim して battle を
+// 呼び出す。他の呼び出しが claim 済みで結果がまだ記録されていない場合は空文字を返す。
+func (m *Manager) resolveMatchGameID(ctx context.Context, event apimatchmaking.MatchMadeEvent) (string, error) {
+	claimed, err := m.processedMatchRepo.Claim(ctx, event.MatchID)
+	if err != nil {
+		return "", fmt.Errorf("match_made: claim matchId %s: %w", event.MatchID, err)
+	}
+	if !claimed {
+		gameID, found, err := m.processedMatchRepo.GameIDFor(ctx, event.MatchID)
+		if err != nil {
+			return "", fmt.Errorf("match_made: lookup game for matchId %s: %w", event.MatchID, err)
+		}
+		if !found {
+			return "", nil
+		}
+		return gameID, nil
+	}
+
+	gameID, err := m.createBattleGame(ctx, event)
+	if err != nil {
+		if releaseErr := m.processedMatchRepo.Release(ctx, event.MatchID); releaseErr != nil {
+			log.Printf("ERROR: match_made: release matchId %s claim after battle failure: %v", event.MatchID, releaseErr)
+		}
+		return "", err
+	}
+
+	if err := m.processedMatchRepo.RecordGameCreated(ctx, event.MatchID, gameID); err != nil {
+		// battle のゲームは既に作成済みなので claim は解放しない。解放すると再送時に
+		// battle を再度呼び出し、二重にゲームを作ってしまう。記録漏れは要監視。
+		return "", fmt.Errorf("match_made: record game %s for matchId %s: %w", gameID, event.MatchID, err)
+	}
+	return gameID, nil
+}
+
+// createBattleGame はデッキを解決し battle に PvP ゲームの作成を依頼する。
+func (m *Manager) createBattleGame(ctx context.Context, event apimatchmaking.MatchMadeEvent) (string, error) {
+	p1Cards, p1Initiatives, err := m.resolveDeckCards(ctx, event.Players[0].PlayerID, event.Players[0].DeckID)
+	if err != nil {
+		return "", err
+	}
 	p2Cards, p2Initiatives, err := m.resolveDeckCards(ctx, event.Players[1].PlayerID, event.Players[1].DeckID)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	p1Summary := matchedPlayerToSummary(event.Players[0])
@@ -328,20 +393,9 @@ func (m *Manager) HandleMatchMade(ctx context.Context, event apimatchmaking.Matc
 
 	game, err := m.battleClient.CreatePvPGame(ctx, p1Cards, p2Cards, p1Initiatives, p2Initiatives, p1Summary, p2Summary)
 	if err != nil {
-		return err
+		return "", err
 	}
-
-	if m.gamePlayerRepo != nil {
-		if err := m.gamePlayerRepo.InsertGamePlayer(ctx, game.GameID, 1, event.Players[0].PlayerID); err != nil {
-			log.Printf("match_made: insert game_player p1: %v", err)
-		}
-		if err := m.gamePlayerRepo.InsertGamePlayer(ctx, game.GameID, 2, event.Players[1].PlayerID); err != nil {
-			log.Printf("match_made: insert game_player p2: %v", err)
-		}
-	}
-
-	m.Relay.NotifyMatchFound(game.GameID, event.Players[0].PlayerID, event.Players[1].PlayerID)
-	return nil
+	return game.GameID, nil
 }
 
 func (m *Manager) resolveNpcDisplayName(ctx context.Context, npcModel string) (string, error) {

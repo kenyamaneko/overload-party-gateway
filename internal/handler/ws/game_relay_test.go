@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,6 +28,27 @@ type mockBattleClient struct {
 	// (overrides advanceNpcResult). Enables tests that need successive results.
 	advanceNpcQueue []*service.ActionResult
 	advanceNpcCalls int
+
+	createPvPGameMu     sync.Mutex
+	createPvPGameCalls  []createPvPGameCall
+	createPvPGameResult *service.GameCreatedResult
+	createPvPGameErr    error
+	// createPvPGameQueue, if non-nil, is popped from on each CreatePvPGame call
+	// (overrides createPvPGameResult/createPvPGameErr). Enables tests where a
+	// first call fails and a later retry succeeds.
+	createPvPGameQueue []createPvPGameResponse
+}
+
+// createPvPGameCall records a single CreatePvPGame invocation's player summaries,
+// enough to tell distinct calls apart without needing full deck payloads.
+type createPvPGameCall struct {
+	player1Summary service.PlayerSummaryRequest
+	player2Summary service.PlayerSummaryRequest
+}
+
+type createPvPGameResponse struct {
+	result *service.GameCreatedResult
+	err    error
 }
 
 func newMockBattleClient() *mockBattleClient {
@@ -45,8 +67,23 @@ func (m *mockBattleClient) StartNPCBattle(_ context.Context, _ []service.BattleD
 	return nil, nil
 }
 
-func (m *mockBattleClient) CreatePvPGame(_ context.Context, _, _ []service.BattleDeckCard, _, _ service.DeckInitiatives, _, _ service.PlayerSummaryRequest) (*service.GameCreatedResult, error) {
-	return nil, nil
+func (m *mockBattleClient) CreatePvPGame(_ context.Context, _, _ []service.BattleDeckCard, _, _ service.DeckInitiatives, player1Summary, player2Summary service.PlayerSummaryRequest) (*service.GameCreatedResult, error) {
+	m.createPvPGameMu.Lock()
+	defer m.createPvPGameMu.Unlock()
+	m.createPvPGameCalls = append(m.createPvPGameCalls, createPvPGameCall{player1Summary, player2Summary})
+	if len(m.createPvPGameQueue) > 0 {
+		r := m.createPvPGameQueue[0]
+		m.createPvPGameQueue = m.createPvPGameQueue[1:]
+		return r.result, r.err
+	}
+	return m.createPvPGameResult, m.createPvPGameErr
+}
+
+// snapshotCreatePvPGameCalls は createPvPGameCalls を排他制御した上で複製して返す。
+func (m *mockBattleClient) snapshotCreatePvPGameCalls() []createPvPGameCall {
+	m.createPvPGameMu.Lock()
+	defer m.createPvPGameMu.Unlock()
+	return append([]createPvPGameCall(nil), m.createPvPGameCalls...)
 }
 
 func (m *mockBattleClient) ProcessAction(_ context.Context, _ string, _ int, _ string, _ json.RawMessage) (*service.ActionResult, error) {

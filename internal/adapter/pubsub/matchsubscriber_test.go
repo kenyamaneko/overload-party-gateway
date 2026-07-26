@@ -108,33 +108,5 @@ func TestMatchSubscriber_ProcessMessage(t *testing.T) {
 			assert.Error(t, err)
 			assert.Equal(t, 1, handler.count(), "マッチ成立イベントの処理は実行された")
 		})
-
-		t.Run("同一 matchId が 2 回届くとき、マッチ成立イベントの処理は 1 回だけ実行される", func(t *testing.T) {
-			handler := &fakeMatchHandler{}
-			sub, err := NewMatchSubscriber(handler)
-			require.NoError(t, err)
-			data := wireBytes(t, apimatchmaking.MatchMadeEvent{MatchID: "mch_dup", Players: validPlayers})
-
-			require.NoError(t, sub.ProcessMessage(context.Background(), data))
-			require.NoError(t, sub.ProcessMessage(context.Background(), data))
-
-			assert.Equal(t, 1, handler.count(), "重複 matchId ではマッチ成立イベントの処理は 1 回のみ実行される")
-		})
-
-		t.Run("マッチ成立イベントの処理に失敗した matchId が再送されると、処理は再度実行される", func(t *testing.T) {
-			handler := &fakeMatchHandler{err: errors.New("handler failed")}
-			sub, err := NewMatchSubscriber(handler)
-			require.NoError(t, err)
-			data := wireBytes(t, apimatchmaking.MatchMadeEvent{MatchID: "mch_retry", Players: validPlayers})
-			require.Error(t, sub.ProcessMessage(context.Background(), data))
-
-			handler.mu.Lock()
-			handler.err = nil
-			handler.mu.Unlock()
-			err = sub.ProcessMessage(context.Background(), data)
-
-			require.NoError(t, err)
-			assert.Equal(t, 2, handler.count(), "処理に失敗した matchId は再送時に再度処理が実行される")
-		})
 	})
 }

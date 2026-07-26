@@ -72,8 +72,9 @@ func main() {
 		log.Fatalf("failed to create firebase auth client: %v", err)
 	}
 
-	// gateway 所有の game_players リポジトリ
+	// gateway 所有の game_players / processed_matches リポジトリ
 	gamePlayerRepo := repository.NewPgGamePlayerRepository(pool)
+	processedMatchRepo := repository.NewPgProcessedMatchRepository(pool)
 	// game_config は現在 gateway の runtime パスから参照していない。
 	// クライアント到達性は起動時に検証するため、repo を生成だけしておく。
 	_ = repository.NewFirestoreGameConfigRepository(fsClient)
@@ -91,7 +92,7 @@ func main() {
 	// Battle クライアント（HTTP → battle server）
 	battleClient := service.NewBattleClient(cfg.BattleServerURL)
 	matchmakingTimeout := time.Duration(cfg.MatchmakingTimeoutSec) * time.Second
-	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, matchmakingTimeout, internalSigner)
+	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, processedMatchRepo, matchmakingTimeout, internalSigner)
 	wsHandler := ws.NewHandler(wsManager, authClient, accountClient, cfg.AllowedOrigins)
 
 	matchSub, err := pubsubadapter.NewMatchSubscriber(wsManager)
