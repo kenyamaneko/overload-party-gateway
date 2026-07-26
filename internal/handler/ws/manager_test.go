@@ -18,7 +18,7 @@ import (
 type noopMatchmakingClient struct{}
 
 func (noopMatchmakingClient) Enqueue(_ context.Context, _ int64, _ string, _ int64) error { return nil }
-func (noopMatchmakingClient) Cancel(_ context.Context) error                             { return nil }
+func (noopMatchmakingClient) Cancel(_ context.Context) error                              { return nil }
 
 var _ port.MatchmakingClient = noopMatchmakingClient{}
 
