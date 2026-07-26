@@ -34,59 +34,56 @@ REST では `middleware.UseFirebaseAuth` → `middleware.ResolvePlayer` → `mid
 
 ## match_made の二重ゲーム作成防止（多層冪等性）
 
-Pub/Sub は Exactly-Once Delivery を使うが、**Exactly-Once は subscription 境界外（ack 前クラッシュ / visibility timeout 超過）では破れうる**。gateway 側にも重複ゲーム作成を許さない保険を張る:
+gateway は match_made イベントを Pub/Sub の push 配信で受け取る。push 配信は at-least-once であり、同一メッセージが複数回配信されることがある。単一インスタンス構成でも、この再配信による重複ゲーム作成を防ぐ保険を層状に張っている。
 
-1. **per-Pod インメモリ dedup** (`matchId` キー): 同一 Pod 内で同一メッセージを複数回処理しない。最初の受領時に dedup entry を入れ、失敗時は entry をロールバックして nack → リトライ
-2. **battle 側 `matchId` 冪等**: battle の `CreatePvPGame` は `matchId` に対して冪等で、既存ゲームがあれば同じ game を返す。Pod を跨いだ重複配送が起きても二重ゲーム作成にならない
-3. **`gateway.game_players` の UNIQUE 制約**: 同一 `(gameID, playerNum)` の挿入は DB 側で失敗する。match_made ハンドラが複数 Pod で競合しても片方だけが挿入に成功する
+1. **プロセス内 dedup** (`matchId` キー): 実行中のプロセスが同一メッセージを再度受け取っても処理しない。最初の受領時に dedup entry を入れ、後続のハンドラ処理が失敗した場合は entry をロールバックして 500 を返し、Pub/Sub にリトライさせる
+2. **battle 側 `matchId` 冪等**: battle の `CreatePvPGame` は `matchId` に対して冪等で、既存ゲームがあれば同じ game を返す。インスタンスの再起動でプロセス内 dedup の状態が失われた後に同じメッセージが再配信されても、二重にゲームが作られない
+3. **`gateway.game_players` の UNIQUE 制約**: 同一 `(gameID, playerNum)` の挿入は DB 側で失敗する。インスタンス再起動をまたいだ再配信でも、`game_players` に重複行が入らない
 
-1 つ目だけでは competing consumer を跨いだ重複を防げず、3 つ目だけでは battle 側にゴミゲームが残りうる。3 層すべてが揃って初めて「WS に同じ `match_found` が 1 回だけ届く」が担保される。
+1 つ目はプロセスが生きている間の再配信を防ぐが、インスタンス再起動でこの状態は失われる。再起動をまたいだ再配信に対しては、2 つ目が battle 側の二重ゲーム作成を、3 つ目が `game_players` の重複行を防ぐ。片方が欠けると、battle にゴミゲームが残るか `game_players` の挿入で整合が崩れるかのいずれかが起きる。
 
 ## EXP 付与の冪等性設計
 
-`gateway.game_players.exp_awarded` フラグを DB レベルの冪等キーとして使う。`UPDATE ... SET exp_awarded = true WHERE ... AND exp_awarded = false` の影響行数が 0 の Pod は即座に return し、1 の Pod だけが accountclient に付与 RPC を投げる。
+`gateway.game_players.exp_awarded` フラグを DB レベルの冪等キーとして使う。`UPDATE ... SET exp_awarded = true WHERE ... AND exp_awarded = false` の影響行数が 0 の呼び出しは即座に return し、1 の呼び出しだけが accountclient に付与 RPC を投げる。ゲーム終了は通常決着・ターンタイムアウト・切断確定など複数の経路から呼ばれるほか、インスタンス再起動をまたいで再度呼ばれることもあるため、呼び出し回数によらずこのフラグだけを根拠に一度だけ付与する。
 
 重要な設計決定 2 点:
 
-- **RPC 失敗時もフラグは巻き戻さない**。巻き戻すと他 Pod が再度付与を試みる race が成立し、二重付与のリスクが生じる。ロスト許容を受け入れ、account 側の再集計手段（運用ツール）で回復させる前提
+- **RPC 失敗時もフラグは巻き戻さない**。巻き戻すと後続の呼び出しと race して二重付与のリスクが生じる。ロスト許容を受け入れ、account 側の再集計手段（運用ツール）で回復させる前提
 - **UPDATE 対象は `player_num = 1` のみ**。prize は 2 プレイヤー同時付与だが、gateway 側の冪等キーは 1 行で十分。player_num=2 の行で同じ条件を書くと、同一ゲームに対して複数の付与トリガが走りうる
 
-## WS 宛先 Pod の単一性前提
+## WS 接続の単一インスタンス性
 
-gateway は水平スケールするが、Pod 間で「プレイヤー X の接続を持つ Pod はどれか」を追跡しない。接続マップはすべて per-Pod インメモリ。Pod を跨いだ WS push の解決はしない:
+gateway の WS 接続マップはプロセス内のインメモリ状態であり、外部の共有ストアを介さない。Cloud Run 上のインスタンス数は最大 1 に固定されているため、WS 接続を保持するインスタンスが存在する限りそれは常に 1 つであり、match_made の push も必ずそのインスタンスに届く。プレイヤーの接続の有無は、そのインスタンス自身の接続マップを見るだけで判定できる。存在しなければ `match_found` は届かない。
 
-- match_made: Pub/Sub の **competing consumer** により 1 メッセージは 1 Pod にしか届かない。メッセージを受領した Pod が「自 Pod に該当プレイヤーの接続があるか」だけ見る。なければ ack して drop（`match_found` は届かない）
+単一接続契約（[FEATURE_SPEC の「単一接続契約」](FEATURE_SPEC.md#単一接続契約)）は多重ログイン・多重デバイスでのセッション競合を防ぐ業務ルールとして別に存在し、同一 playerID の新規接続が到着すると旧接続を close する。
 
-**「プレイヤーの WS 接続先 Pod は一意」** の前提は単一接続契約（[FEATURE_SPEC の「単一接続契約」](FEATURE_SPEC.md#単一接続契約)）で担保される。多重デバイス等で同一 playerID が別 Pod に繋がると旧接続が close されるので、定常状態では必ず 1 Pod にしか接続がない。
-
-この設計により Redis / etcd 等のクロス Pod セッションストアを持たずに済んでいる。水平スケールを継続する前提なら、この単一接続契約を破る変更（e.g. マルチデバイス同時接続対応）は WS 経路設計そのものの再検討を伴う。
+インスタンス数が最大 1 に固定される制約と単一接続契約が組み合わさることで、Redis / etcd のような分散セッションストアを持たずに済んでいる。
 
 ## `gateway.game_players` テーブルの役割
 
 gateway がドメイン状態を持たないと言いつつ 1 つだけ DB テーブルを持っている理由:
 
-- **EXP 付与の冪等キー** (「EXP 付与の冪等性設計」): インメモリ dedup は Pod 再起動で消えるため、永続化が必要
+- **EXP 付与の冪等キー** (「EXP 付与の冪等性設計」): インメモリの状態はインスタンス再起動で消えるため、永続化が必要
 - **playerNum の索引**: WS message ごとに battle に `playerNum` を問い合わせるのはコストが大きい。match_made 時に確定する `playerID → playerNum` を gateway 側にキャッシュし、以降の game_enter / game_action で参照する
 
 どちらも「WS session 境界の冪等性・低レイテンシ要件」に由来する。battle にこれを寄せると、battle が WS 概念を持ち込むことになり「battle の passive 設計に起因する gateway 側 orchestration」の分業が崩れる。
 
 ## 運用
 
-### Pub/Sub subscription
+### Pub/Sub push 配信
 
-| Subscription | 副作用 | 冪等性の担保 |
+| エンドポイント | 副作用 | 冪等性の担保 |
 |---|---|---|
-| `matchmaking-events-gateway` (Exactly-Once) | battle ゲーム作成 + `game_players` 挿入 + WS push | 「match_made の二重ゲーム作成防止（多層冪等性）」の 3 層冪等性 |
+| `POST /internal/v1/pubsub/match_made` | battle ゲーム作成 + `game_players` 挿入 + WS push | 「match_made の二重ゲーム作成防止（多層冪等性）」の 3 層 (ゲーム作成・`game_players` 挿入の重複防止) |
 
-gateway は matchmaking-events 専用の subscriber として位置づけられ、他サービスが publish する topic を fan-out 用途で subscribe しない (ADR-027)。subscription 名と publisher 側はこのリポジトリからは導けない。matchmaking 側の publish 設定と併せて変更すること（subscription 再作成は過去メッセージの loss を伴う）。
+gateway は match_made 専用の受け口として位置づけられ、他サービスが publish するイベントを fan-out 用途で subscribe しない (ADR-027)。到達制御は Cloud Run の呼び出し IAM が担うため、本エンドポイントはアプリ層の認証を行わない (ADR-057)。push 配信の subscription 設定 (push endpoint の URL、dead letter policy 等) はこのリポジトリからは導けない。Terraform 側の設定と併せて変更すること。
 
 ### Graceful shutdown
 
-SIGTERM 受信時、**HTTP / WS 新規受付停止 → 既存 WS への close 送出 → Pub/Sub pull 停止 → in-flight 処理完了待ち** の順にドレインする。preStop hook で k8s Service の endpoint から外れるまでの猶予を稼ぎ、in-flight ゲームセッションの forfeit を最小化する前提。ドレインタイムアウト超過時は強制キャンセルで、そのタイミングで in-flight だった game_action / advance-npc は battle 側で未処理として残るが、WS 再接続時にクライアントが `game_state` を再取得して収束する。
+SIGTERM 受信時、新規リクエストの受付を止め、進行中の処理の完了を一定時間待ってから終了する。待機時間を超過すると強制終了し、その時点で in-flight だった game_action / advance-npc は battle 側で未処理として残るが、WS 再接続時にクライアントが `game_state` を再取得して収束する。
 
 ### 環境変数
 
 gateway の env は [internal/config/config.go](../internal/config/config.go) が SSoT。運用上の注意点のみ:
 
 - **`MATCHMAKING_TIMEOUT_SEC`**: マッチ待機タイムアウト。短すぎるとキューが浅い時間帯にユーザーが離脱しやすい。matchmaking サービスのキュー長メトリクスと併せて調整する
-- **Pub/Sub subscription 名** (`MATCHMAKING_SUBSCRIPTION`): 環境（dev/stg/prod）ごとに分離する。異環境の subscription を共有するとメッセージが競合してどちらの環境にも届かない事故が起きる
