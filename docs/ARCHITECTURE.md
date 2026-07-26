@@ -78,7 +78,7 @@ gateway がドメイン状態を持たないと言いつつ 1 つだけ DB テ�
 |---|---|---|
 | `POST /internal/v1/pubsub/match-made` | battle ゲーム作成 + `game_players` 挿入 + WS push | 「match_made の二重ゲーム作成防止（多層冪等性）」の 3 層冪等性 |
 
-gateway は match_made 専用の受け口として位置づけられ、他サービスが発行するイベントを複数の購読先へ配信する用途で購読しない (ADR-027)。到達制御は Cloud Run の呼び出し IAM が担うため、本エンドポイントはアプリ層の認証を行わない (ADR-057)。push 配信の subscription 設定 (push endpoint の URL、dead letter policy 等) はこのリポジトリからは導けない。Terraform 側の設定と併せて変更すること。
+gateway は match_made 専用の受け口として位置づけられ、他サービスが発行するイベントを複数の購読先へ配信する用途で購読しない (ADR-027)。呼び出し元自体の到達制御は実行基盤の呼び出し認可に委ねるため、本エンドポイントはアプリ層の認証を行わない（[ADR-057](https://github.com/kenyamaneko/overload-party-common/blob/main/docs/adr/057-cloudrun-service-auth-iam-and-rs256.md)）。push 配信の subscription 設定 (push endpoint の URL、dead letter policy 等) はこのリポジトリからは導けない。Terraform 側の設定と併せて変更すること。
 
 ### Graceful shutdown
 
