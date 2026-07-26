@@ -193,7 +193,7 @@ gateway は `/api/v1/**` の REST リクエストを下流サービスへ委譲�
 
 ### match_made（「match_made → match_found 配信契約」で詳細）
 
-- エンドポイント: `POST /internal/v1/pubsub/match-made` (At-least-once)
+- エンドポイント: `POST /internal/v1/pubsub/match-made` (at-least-once)
 - 副作用: battle ゲーム作成 + DB 行挿入 + WS push
 - gateway は match_made 専用の受け口としてこれ 1 本のみを持つ。他サービスが発行するイベントを WS 中継目的で購読しない (ADR-027)
 
