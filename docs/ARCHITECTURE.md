@@ -89,3 +89,4 @@ gateway の env は [internal/config/config.go](../internal/config/config.go) �
 
 - **`MATCHMAKING_TIMEOUT_SEC`**: マッチ待機タイムアウト。短すぎるとキューが浅い時間帯にユーザーが離脱しやすい。matchmaking サービスのキュー長メトリクスと併せて調整する
 - **`UPSTASH_REDIS_URL`**: 対戦ごとの計時（切断猶予・ターン）の写しを保持する Redis の接続先。書き込み失敗は警告ログのみで対戦を止めない。写しからプロセス再起動をまたいだ状態を復元する読み出し経路は後続 Issue で追加する
+- **`PUBSUB_PUSH_SERVICE_ACCOUNT_EMAIL`** / **`PUBSUB_PUSH_AUDIENCE`**: push 受け口が受け付けるサービスアカウントと audience。gateway は外部から未認証で到達できるため、この 2 つが push リクエストを識別する唯一の手段になる。値は配信元を定義する Terraform 側と一致させる
