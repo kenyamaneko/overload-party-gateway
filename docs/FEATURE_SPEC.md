@@ -104,7 +104,7 @@ WS 切断時、プレイヤーの状態に応じて以下のクリーンアッ�
 5. 両プレイヤーの WS 接続があれば `match_found` を push
 6. 上記いずれかに失敗した場合は dedup エントリをロールバックして **500** を返す（Pub/Sub がリトライ）
 
-**配信保証**: Exactly-Once。保険として手順 1 の dedup + battle のゲーム作成冪等性で、多重配送が起きても二重ゲーム作成は発生しない。
+**配信保証**: at-least-once（exactly-once 配信はサポートされない）。同一メッセージが再送されても、手順 1 のプロセス内 `matchId` 重複排除により同一プロセス内では二重処理されない。
 
 ---
 
@@ -193,9 +193,9 @@ gateway は `/api/v1/**` の REST リクエストを下流サービスへ委譲�
 
 ### match_made（「match_made → match_found 配信契約」で詳細）
 
-- エンドポイント: `POST /internal/v1/pubsub/match-made` (Exactly-Once)
+- エンドポイント: `POST /internal/v1/pubsub/match-made` (At-least-once)
 - 副作用: battle ゲーム作成 + DB 行挿入 + WS push
-- gateway は match_made 専用の受け口としてこれ 1 本のみを持つ。他サービスが publish するイベントを WS 中継目的で subscribe しない (ADR-027)
+- gateway は match_made 専用の受け口としてこれ 1 本のみを持つ。他サービスが発行するイベントを WS 中継目的で購読しない (ADR-027)
 
 ---
 

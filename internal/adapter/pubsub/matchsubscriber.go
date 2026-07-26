@@ -26,8 +26,8 @@ func formatPlayerIDList(players []apimatchmaking.MatchedPlayer) string {
 }
 
 // MatchSubscriber は match_made イベントを受信し port.MatchEventHandler 経由で
-// ディスパッチします。プロセス内の matchId 重複排除 map を保持し、Exactly-Once
-// Delivery で ack 済みメッセージが再配信されないことを前提に同一プロセス内のみで重複排除する。
+// ディスパッチします。プロセス内の matchId 重複排除 map を保持し、push subscription が
+// at-least-once 配信で同一メッセージを再送しても、同一プロセス内では二重処理しない。
 type MatchSubscriber struct {
 	handler        port.MatchEventHandler
 	processedMu    sync.Mutex
