@@ -83,6 +83,11 @@ func NewManager(
 	return m
 }
 
+// Shutdown は全 WS 接続へ終了を通知してから閉じます。SIGTERM 受信時に呼ばれます。
+func (m *Manager) Shutdown(ctx context.Context) {
+	m.Hub.Shutdown(ctx)
+}
+
 // buildAuthedContext は ctx に内部認証 JWT を注入した派生 context を返す。
 func (m *Manager) buildAuthedContext(ctx context.Context, playerID string) context.Context {
 	token, err := m.internalSigner.Issue(playerID)

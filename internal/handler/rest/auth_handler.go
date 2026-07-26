@@ -21,7 +21,7 @@ func NewAuthHandler(account port.AccountClient) *AuthHandler {
 }
 
 // Register はプレイヤー新規登録を処理します。表示名は受け取らず、
-// オンボーディングシナリオの中で player-onboarded イベント経由で確定します。
+// オンボーディングシナリオの中で確定します。
 func (h *AuthHandler) Register(c *gin.Context) {
 	firebaseUID := middleware.GetFirebaseUID(c)
 	if firebaseUID == "" {

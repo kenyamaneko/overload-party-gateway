@@ -39,7 +39,7 @@ func main() {
 
 	cfg := config.Load()
 	if cfg.DatabaseConn == "" {
-		log.Fatal("DATABASE_CONN must be set (gateway owns gateway.game_players and reads newsfeed.news_articles)")
+		log.Fatal("DATABASE_CONN must be set (gateway owns gateway.game_players)")
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -176,6 +176,10 @@ func main() {
 
 	<-srvCtx.Done()
 	log.Println("shutting down...")
+
+	wsShutdownCtx, wsCancel := context.WithTimeout(context.Background(), ws.ShutdownNotifyTimeout)
+	wsManager.Shutdown(wsShutdownCtx)
+	wsCancel()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
