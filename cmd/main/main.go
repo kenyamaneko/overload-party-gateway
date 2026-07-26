@@ -31,13 +31,6 @@ import (
 
 const serverShutdownTimeout = 10 * time.Second
 
-// subscriberRunner は errgroup で束ねる subscriber の最小契約。
-// stream ライフサイクルは caller 側で defer Close しているため、subscriber は
-// Run のみを持つ。
-type subscriberRunner interface {
-	Run(ctx context.Context) error
-}
-
 // wsShutdownNotifier は errgroup で束ねる WS 終了通知の最小契約。
 type wsShutdownNotifier interface {
 	Shutdown(ctx context.Context)
@@ -62,6 +55,12 @@ func main() {
 	}
 	if cfg.InternalAuthSecret == "" {
 		log.Fatal("INTERNAL_AUTH_SECRET must be set")
+	}
+	if cfg.PubSubPushServiceAccountEmail == "" {
+		log.Fatal("PUBSUB_PUSH_SERVICE_ACCOUNT_EMAIL must be set")
+	}
+	if cfg.PubSubPushAudience == "" {
+		log.Fatal("PUBSUB_PUSH_AUDIENCE must be set")
 	}
 	if cfg.UpstashRedisURL == "" {
 		log.Fatal("UPSTASH_REDIS_URL must be set")
@@ -92,8 +91,9 @@ func main() {
 		log.Fatalf("failed to create firebase auth client: %v", err)
 	}
 
-	// gateway 所有の game_players リポジトリ
+	// gateway 所有の game_players / processed_matches リポジトリ
 	gamePlayerRepo := repository.NewPgGamePlayerRepository(pool)
+	processedMatchRepo := repository.NewPgProcessedMatchRepository(pool)
 	// game_config は現在 gateway の runtime パスから参照していない。
 	// クライアント到達性は起動時に検証するため、repo を生成だけしておく。
 	_ = repository.NewFirestoreGameConfigRepository(fsClient)
@@ -122,11 +122,17 @@ func main() {
 	// Battle クライアント（HTTP → battle server）
 	battleClient := service.NewBattleClient(cfg.BattleServerURL)
 	matchmakingTimeout := time.Duration(cfg.MatchmakingTimeoutSec) * time.Second
-	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, matchmakingTimeout, internalSigner, timerStore)
+	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, processedMatchRepo, matchmakingTimeout, internalSigner, timerStore)
 	wsHandler := ws.NewHandler(wsManager, authClient, accountClient, cfg.AllowedOrigins)
 
+	matchSub, err := pubsubadapter.NewMatchSubscriber(wsManager)
+	if err != nil {
+		log.Fatalf("failed to create match subscriber: %v", err)
+	}
+
 	handlers := &router.Handlers{
-		Auth: rest.NewAuthHandler(accountClient),
+		Auth:   rest.NewAuthHandler(accountClient),
+		PubSub: rest.NewPubSubPushHandler(matchSub),
 	}
 
 	// ルーター
@@ -150,6 +156,16 @@ func main() {
 		pub.GET("/version", staticHandler.GetVersion)
 	}
 
+	// Pub/Sub push 配信の内部エンドポイント。allUsers に公開されるため、Cloud Run の
+	// 呼び出し IAM に頼らずアプリ層で push リクエストの OIDC トークンを検証する。
+	internalGroup := r.Group("/internal/v1")
+	internalGroup.Use(middleware.UsePubSubPushAuth(
+		middleware.NewGoogleIDTokenValidator(),
+		cfg.PubSubPushServiceAccountEmail,
+		cfg.PubSubPushAudience,
+	))
+	router.RegisterPubSubRoutes(internalGroup, handlers)
+
 	v1 := r.Group("/api/v1")
 	v1.Use(middleware.UseFirebaseAuth(authClient))
 
@@ -170,49 +186,25 @@ func main() {
 	srvCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	matchStream, err := pubsubadapter.NewStream(srvCtx, cfg.GoogleCloudProjectID, cfg.MatchmakingSubscription)
-	if err != nil {
-		log.Fatalf("failed to create matchmaking stream: %v", err)
-	}
-	defer func() { _ = matchStream.Close() }()
-
-	matchSub, err := pubsubadapter.NewMatchSubscriber(matchStream, wsManager)
-	if err != nil {
-		log.Fatalf("failed to create match subscriber: %v", err)
-	}
-
-	// Why: graceful shutdown 時に subscriber と HTTP server が確実に停止するまで
-	// main を block させるため errgroup で束ねる。どちらかが err を返すと
-	// gCtx がキャンセルされ、他方も停止する。
-	if err := runServices(srvCtx, cfg, srv, wsManager, matchSub); err != nil {
+	// Why: graceful shutdown 時に HTTP server と WS 接続への終了通知が確実に完了する
+	// まで main を block させるため errgroup で束ねる。
+	if err := runServices(srvCtx, cfg, srv, wsManager); err != nil {
 		log.Fatalf("server: %v", err)
 	}
 
 	log.Println("gateway server exited")
 }
 
-// runServices は HTTP server と全 subscriber を errgroup で束ねて起動する。
-// ctx キャンセル (SIGINT/SIGTERM) を検知すると HTTP server の Shutdown を呼び、
-// subscriber も gCtx 経由で停止する。対戦中を含む WS 接続には HTTP server の Shutdown と
-// 並行して終了を通知してから閉じる。
+// runServices は HTTP server を errgroup で起動する。ctx キャンセル
+// (SIGINT/SIGTERM) を検知すると HTTP server の Shutdown を呼ぶ。対戦中を含む WS 接続には
+// HTTP server の Shutdown と並行して終了を通知してから閉じる。
 func runServices(
 	ctx context.Context,
 	cfg *config.Config,
 	srv *http.Server,
 	wsShutdown wsShutdownNotifier,
-	subscribers ...subscriberRunner,
 ) error {
 	g, gCtx := errgroup.WithContext(ctx)
-
-	for _, subscriber := range subscribers {
-		subscriber := subscriber
-		g.Go(func() error {
-			if err := subscriber.Run(gCtx); err != nil && gCtx.Err() == nil {
-				return fmt.Errorf("subscriber: %w", err)
-			}
-			return nil
-		})
-	}
 
 	g.Go(func() error {
 		log.Printf("gateway server starting on :%s (env=%s)", cfg.Port, cfg.Env)
