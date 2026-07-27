@@ -27,6 +27,12 @@ type Config struct {
 	// game_players は gateway が直接 Postgres に接続して読み書きする
 	DatabaseConn string
 
+	// DatabaseIAMAuthEnabledRaw は Cloud SQL への接続方式を選ぶ生の環境変数値。cmd/main が検証する。
+	DatabaseIAMAuthEnabledRaw string
+
+	// CloudSQLConnectionName は Cloud SQL インスタンスの接続名 (project:region:instance)。
+	CloudSQLConnectionName string
+
 	// GoogleCloudProjectID は Firestore (game_config) の対象プロジェクト ID。
 	// ローカル/CI では FIRESTORE_EMULATOR_HOST を別途設定することでエミュレーターに接続する。
 	GoogleCloudProjectID string
@@ -72,7 +78,9 @@ func Load() *Config {
 		NewsServiceURL:        getEnv("NEWS_SERVICE_URL", "http://localhost:9008"),
 		SupportServiceURL:     getEnv("SUPPORT_SERVICE_URL", "http://localhost:9009"),
 
-		DatabaseConn: getEnv("DATABASE_CONN", ""),
+		DatabaseConn:              getEnv("DATABASE_CONN", ""),
+		DatabaseIAMAuthEnabledRaw: getEnv("DATABASE_IAM_AUTH_ENABLED", ""),
+		CloudSQLConnectionName:    getEnv("CLOUDSQL_CONNECTION_NAME", ""),
 
 		GoogleCloudProjectID: getEnv("GOOGLE_CLOUD_PROJECT_ID", ""),
 

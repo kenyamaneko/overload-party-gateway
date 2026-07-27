@@ -11,7 +11,6 @@ import (
 
 	"cloud.google.com/go/firestore"
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/sync/errgroup"
 
@@ -47,6 +46,10 @@ func main() {
 	if cfg.DatabaseConn == "" {
 		log.Fatal("DATABASE_CONN must be set")
 	}
+	databaseIAMAuthEnabled := parseDatabaseIAMAuthEnabled(cfg.DatabaseIAMAuthEnabledRaw)
+	if databaseIAMAuthEnabled && cfg.CloudSQLConnectionName == "" {
+		log.Fatal("CLOUDSQL_CONNECTION_NAME must be set when DATABASE_IAM_AUTH_ENABLED=true")
+	}
 	if cfg.GoogleCloudProjectID == "" {
 		log.Fatal("GOOGLE_CLOUD_PROJECT_ID must be set")
 	}
@@ -68,10 +71,11 @@ func main() {
 	}
 
 	// PostgreSQL 接続プール: gateway.game_players（gateway 所有）に使用
-	pool, err := pgxpool.New(ctx, cfg.DatabaseConn)
+	pool, closeDatabasePool, err := newDatabasePool(ctx, cfg.DatabaseConn, databaseIAMAuthEnabled, cfg.CloudSQLConnectionName)
 	if err != nil {
 		log.Fatalf("failed to create pg pool: %v", err)
 	}
+	defer closeDatabasePool()
 	defer pool.Close()
 
 	// Firestore クライアント (game_config)
