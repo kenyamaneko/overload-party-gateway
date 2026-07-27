@@ -58,7 +58,7 @@ REST エンドポイント契約は [data/openapi.yaml](data/openapi.yaml) を�
 | 変数名 | デフォルト | 説明 |
 |---|---|---|
 | `ALLOWED_ORIGINS` | *(空)* | CORS 許可オリジン (カンマ区切り、prod 必須) |
-| `MATCHMAKING_TIMEOUT_SEC` | `60` | プレイヤーごとのマッチメイク待ちタイムアウト秒 |
+| `MATCHMAKING_TIMEOUT_SEC` | `30` | プレイヤーごとのマッチメイク待ちタイムアウト秒 |
 | `APP_MIN_VERSION` | `0.1.0` | 最低必要バージョン |
 | `APP_LATEST_VERSION` | `0.1.0` | 最新バージョン |
 | `APP_FORCE_UPDATE` | `false` | 強制アップデートフラグ |

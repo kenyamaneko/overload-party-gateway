@@ -11,6 +11,7 @@ import (
 
 	"cloud.google.com/go/firestore"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/sync/errgroup"
 
@@ -100,7 +101,7 @@ func main() {
 
 	// 外部サービスクライアント
 	cardClient := cardclient.New(cfg.CardServiceURL)
-	matchmakingClient := matchmakingclient.New(cfg.MatchmakingServiceURL)
+	matchmakingClient := matchmakingclient.New(cfg.MatchmakingServiceURL, uuid.Must(uuid.NewV7()).String())
 	accountClient := accountclient.New(cfg.AccountServiceURL)
 
 	internalSigner := internalauth.NewSigner(

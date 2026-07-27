@@ -23,7 +23,7 @@ func TestClient_InjectsInternalAuthHeader(t *testing.T) {
 			}))
 			defer srv.Close()
 
-			c := New(srv.URL)
+			c := New(srv.URL, "test-instance-id")
 			ctx := internalauth.WithToken(context.Background(), wantToken)
 			require.NoError(t, c.Enqueue(ctx, 42, "alice", 7))
 			assert.Equal(t, wantToken, got)

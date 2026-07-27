@@ -24,7 +24,7 @@ func TestLoad(t *testing.T) {
 			assert.Equal(t, "http://localhost:9005", cfg.AccountServiceURL)
 			assert.Equal(t, "http://localhost:9006", cfg.ShopServiceURL)
 			assert.Equal(t, "http://localhost:9007", cfg.ScenarioServiceURL)
-			assert.Equal(t, 60, cfg.MatchmakingTimeoutSec)
+			assert.Equal(t, 30, cfg.MatchmakingTimeoutSec)
 			assert.Equal(t, "0.1.0", cfg.AppMinVersion)
 			assert.Equal(t, "0.1.0", cfg.AppLatestVersion)
 			assert.False(t, cfg.AppForceUpdate)
