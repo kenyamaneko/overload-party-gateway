@@ -1,7 +1,7 @@
-// Package pubsub は gateway の Pub/Sub subscriber を管理する。
+// Package pubsub は gateway の Pub/Sub イベントディスパッチを管理する。
 //
-// gateway は matchmaking サービスからの match 成立通知 (`matchmaking-events`
-// topic) を唯一の subscriber として受信し、自 Pod に該当プレイヤーの WS 接続が
-// あれば push する。Pub/Sub をサービス間連携専用とする方針 (ADR-027) のもと、
-// 他サービスが publish するイベントを subscribe する fan-out 配線は持たない。
+// gateway は matchmaking サービスからの match 成立通知を、HTTP push 配信の
+// エンドポイント (internal/handler/rest) 経由で受け取り、該当プレイヤーの
+// WS 接続があれば push する。Pub/Sub はサービス間連携専用とし、他サービスが
+// 発行するイベントを購読し、複数の購読先へ配信する配線は持たない。
 package pubsub
