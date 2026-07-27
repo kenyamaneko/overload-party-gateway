@@ -26,9 +26,9 @@ battle は **意図的に passive な REST-only エンジン** として配置�
 
 ## 認証信頼境界
 
-クライアント → gateway 入り口で Firebase ID Token を検証する（gateway）。検証済み FirebaseUID を accountclient 経由で PlayerID に解決した後、PlayerID を載せた内部認証 JWT (HS256) を発行し、`X-Internal-Auth` ヘッダで下流サービス（ClusterIP のみに公開）へ渡す。下流サービスは共有秘密鍵でこの JWT を検証し、JWT 内の PlayerID を信頼する（検証部品は `packages/internalauth-go` として配布）。
+クライアント → gateway 入り口で Firebase ID Token を検証する（gateway）。検証済み FirebaseUID を accountclient 経由で PlayerID に解決した後、PlayerID を載せた内部認証 JWT (HS256) を発行し、`X-Internal-Auth` ヘッダで下流サービスへ渡す。下流サービスは共有秘密鍵でこの JWT を検証し、JWT 内の PlayerID を信頼する（検証部品は `packages/internalauth-go` として配布）。
 
-この信頼チェーンは **下流を VPC 外に公開しない** ことが前提。内部認証 JWT は gateway と下流の共有秘密鍵に依存し呼び出し元の識別を持たないため、下流サービスを将来外部公開する場合は gateway と同等のトークン検証や mTLS の導入が必要になる。
+内部認証 JWT が運ぶのはプレイヤーが誰であるかだけで、呼び出し元が gateway であることは示さない。共有秘密鍵は検証する側が署名もできるため、鍵を持てば任意のプレイヤーになりすませる。誰が下流に到達できるかは基盤側の到達制御で決める分担になっており、その設計と内部トークンの非対称鍵化は [ADR-057](https://github.com/kenyamaneko/overload-party-common/blob/main/docs/adr/057-cloudrun-service-auth-iam-and-rs256.md) にある。
 
 REST では `middleware.UseFirebaseAuth` → `middleware.ResolvePlayer` → `middleware.IssueInternalAuth` のチェーンが `playerID` を context に載せ、WS では upgrade 時に同等の検証・解決を行う。ハンドラは context の `playerID` だけを信頼し、リクエストボディから PlayerID を取らない（クライアント側成りすまし防止）。
 
@@ -43,28 +43,28 @@ battle の `CreatePvPGame` は matchId に対して冪等ではなく、呼び�
 
 ## EXP 付与の冪等性設計
 
-`gateway.game_players.exp_awarded` フラグを DB レベルの冪等キーとして使う。`UPDATE ... SET exp_awarded = true WHERE ... AND exp_awarded = false` の影響行数が 0 の Pod は即座に return し、1 の Pod だけが accountclient に付与 RPC を投げる。
+`gateway.game_players.exp_awarded` フラグを DB レベルの冪等キーとして使う。`UPDATE ... SET exp_awarded = true WHERE ... AND exp_awarded = false` の影響行数が 0 なら即座に return し、1 を得た呼び出しだけが accountclient に付与 RPC を投げる。ゲーム終了は game_action の応答・切断猶予切れ・ターンタイムアウトの複数経路から検知され、インスタンスの再起動をまたいで再度検知されることもあるため、冪等キーは DB に置く。
 
 重要な設計決定 2 点:
 
-- **RPC 失敗時もフラグは巻き戻さない**。巻き戻すと他 Pod が再度付与を試みる race が成立し、二重付与のリスクが生じる。ロスト許容を受け入れ、account 側の再集計手段（運用ツール）で回復させる前提
+- **RPC 失敗時もフラグは巻き戻さない**。巻き戻すと別の終了経路や再起動後の再検知が付与をやり直し、二重付与のリスクが生じる。ロスト許容を受け入れ、account 側の再集計手段（運用ツール）で回復させる前提
 - **UPDATE 対象は `player_num = 1` のみ**。prize は 2 プレイヤー同時付与だが、gateway 側の冪等キーは 1 行で十分。player_num=2 の行で同じ条件を書くと、同一ゲームに対して複数の付与トリガが走りうる
 
-## WS 宛先 Pod の単一性前提
+## WS 接続の単一インスタンス性
 
-gateway は水平スケールするが、Pod 間で「プレイヤー X の接続を持つ Pod はどれか」を追跡しない。接続マップはすべて per-Pod インメモリ。Pod を跨いだ WS push の解決はしない:
+gateway は Cloud Run の最大インスタンス数を 1 に固定している（[ADR-058](https://github.com/kenyamaneko/overload-party-common/blob/main/docs/adr/058-gateway-on-cloudrun-single-instance.md)）。接続マップ・ゲームセッション索引・各種タイマーはプロセス内のインメモリだけで持ち、インスタンスを跨いだ WS push の解決を持ち込まずに済んでいる。Redis / etcd のようなクロスインスタンスのセッションストアが要らないのはこの制約に由来する。
 
-- match_made: Pub/Sub の **competing consumer** により 1 メッセージは 1 Pod にしか届かない。メッセージを受領した Pod が「自 Pod に該当プレイヤーの接続があるか」だけ見る。なければ ack して drop（`match_found` は届かない）
+- match_made: push は接続を持つプロセスに届く。受け取ったプロセスが「自分に該当プレイヤーの接続があるか」だけ見る。なければ `match_found` は届かないまま対戦だけが成立した状態になる
 
-**「プレイヤーの WS 接続先 Pod は一意」** の前提は単一接続契約（[FEATURE_SPEC の「単一接続契約」](FEATURE_SPEC.md#単一接続契約)）で担保される。多重デバイス等で同一 playerID が別 Pod に繋がると旧接続が close されるので、定常状態では必ず 1 Pod にしか接続がない。
+同一 playerID の重複接続は単一接続契約（[FEATURE_SPEC の「単一接続契約」](FEATURE_SPEC.md#単一接続契約)）で旧接続を close する。
 
-この設計により Redis / etcd 等のクロス Pod セッションストアを持たずに済んでいる。水平スケールを継続する前提なら、この単一接続契約を破る変更（e.g. マルチデバイス同時接続対応）は WS 経路設計そのものの再検討を伴う。
+インスタンス数の上限を上げる変更、および単一接続契約を破る変更（マルチデバイス同時接続対応など）は、接続の所有権をプロセスの外に置く設計を伴うため、WS 経路設計そのものの再検討になる。
 
 ## `gateway.game_players` テーブルの役割
 
 gateway がドメイン状態を持たないと言いつつ 1 つだけ DB テーブルを持っている理由:
 
-- **EXP 付与の冪等キー** (「EXP 付与の冪等性設計」): インメモリ dedup は Pod 再起動で消えるため、永続化が必要
+- **EXP 付与の冪等キー** (「EXP 付与の冪等性設計」): インメモリ dedup はインスタンスの再起動で消えるため、永続化が必要
 - **playerNum の索引**: WS message ごとに battle に `playerNum` を問い合わせるのはコストが大きい。match_made 時に確定する `playerID → playerNum` を gateway 側にキャッシュし、以降の game_enter / game_action で参照する
 
 どちらも「WS session 境界の冪等性・低レイテンシ要件」に由来する。battle にこれを寄せると、battle が WS 概念を持ち込むことになり「battle の passive 設計に起因する gateway 側 orchestration」の分業が崩れる。
@@ -81,7 +81,9 @@ gateway は match_made 専用の受け口として位置づけられ、他サー
 
 ### Graceful shutdown
 
-SIGTERM 受信時、**HTTP / WS 新規受付停止 → 既存 WS への close 送出 → in-flight 処理完了待ち** の順にドレインする。preStop hook で k8s Service の endpoint から外れるまでの猶予を稼ぎ、in-flight ゲームセッションの forfeit を最小化する前提。ドレインタイムアウト超過時は強制キャンセルで、そのタイミングで in-flight だった game_action / advance-npc は battle 側で未処理として残るが、WS 再接続時にクライアントが `game_state` を再取得して収束する。
+SIGTERM 受信時、**HTTP / WS 新規受付停止 → 既存 WS への close 送出 → in-flight 処理完了待ち** の順にドレインする。ドレインタイムアウト超過時は強制キャンセルで、そのタイミングで in-flight だった game_action / advance-npc は battle 側で未処理として残るが、WS 再接続時にクライアントが `game_state` を再取得して収束する。
+
+Cloud Run は処理中のインスタンスにも終了を始めることがあり、ドレインの完了は保証されない。対戦ごとの計時が終了とともに失われないよう、期限は Redis に写しを置く（[ADR-059](https://github.com/kenyamaneko/overload-party-common/blob/main/docs/adr/059-gateway-timer-state-in-memory-with-redis-backup.md)）。
 
 ### 環境変数
 
