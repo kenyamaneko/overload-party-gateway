@@ -16,13 +16,16 @@ import (
 
 // Client は matchmaking サービスへの HTTP クライアント。
 type Client struct {
-	api *apimatchmakingclient.Client
+	api        *apimatchmakingclient.Client
+	instanceID string
 }
 
 var _ port.MatchmakingClient = (*Client)(nil)
 
 // New は matchmaking サービスクライアントを生成する。
-func New(baseURL string) *Client {
+// instanceID は gateway プロセスを識別する値で、matchmaking はこれが切り替わったときに
+// 待機を引き継げないキューを空にする。プロセスが生きている間は同じ値を送り続ける必要がある。
+func New(baseURL, instanceID string) *Client {
 	api, err := apimatchmakingclient.New(baseURL,
 		apimatchmakingclient.WithRequestEditorFn(func(ctx context.Context, req *http.Request) error {
 			internalauth.InjectHeader(ctx, req.Header)
@@ -32,15 +35,16 @@ func New(baseURL string) *Client {
 	if err != nil {
 		panic(fmt.Sprintf("matchmakingclient: %v", err))
 	}
-	return &Client{api: api}
+	return &Client{api: api, instanceID: instanceID}
 }
 
 // Enqueue はプレイヤーをマッチメイキングキューに追加する。
 func (c *Client) Enqueue(ctx context.Context, deckID int64, name string, level int64) error {
 	return toPortErr(c.api.EnqueuePlayer(ctx, apimatchmaking.EnqueueRequest{
-		DeckID: deckID,
-		Name:   name,
-		Level:  level,
+		DeckID:            deckID,
+		Name:              name,
+		Level:             level,
+		GatewayInstanceID: c.instanceID,
 	}))
 }
 

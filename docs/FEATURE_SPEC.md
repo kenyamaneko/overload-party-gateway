@@ -58,17 +58,29 @@ WS 切断時、プレイヤーの状態に応じて以下のクリーンアッ�
 | 状態 | クリーンアップ |
 |---|---|
 | マッチ待機中 | matchmaking サービスへ best-effort cancel を送信 |
-| ゲーム中 | 60 秒の **切断タイマー** を起動（「切断タイマー契約（ゲーム中のみ）」） |
+| ゲーム中 | 120 秒の **切断タイマー** を起動（「切断タイマー契約（ゲーム中のみ）」） |
 
 いずれの状態にも該当しない場合は接続マップから除去するのみ。
 
 ### 切断タイマー契約（ゲーム中のみ）
 
 1. **起動時**: 対戦相手に `opponent_disconnected` を push
-2. **60 秒以内に再接続**: `opponent_reconnected` を push し、タイマーをキャンセル
-3. **タイムアウト時**: battle へ forfeit (`reason: disconnect`) を送信し、両プレイヤーに `game_over` をブロードキャスト
+2. **120 秒以内に再接続**: `opponent_reconnected` を push し、タイマーをキャンセル
+3. **タイムアウト時**: 対戦相手が接続中なら battle へ forfeit (`reason: disconnect`) を送信し、両プレイヤーに `game_over` をブロードキャストする。対戦相手も切断中なら、この時点では決着させない（「全員切断時の決着」参照）
 
-**契約**: ゲーム中プレイヤーの切断は必ず 60 秒以内に決着する（再接続 or 強制 forfeit）。対戦相手がハングしたまま待たされることはない。
+**契約**: 対戦相手が接続を保っている限り、ゲーム中プレイヤーの切断は必ず 120 秒以内に決着する（再接続 or 強制 forfeit）。対戦相手がハングしたまま待たされることはない。
+
+### 全員切断時の決着
+
+対戦中の全員が切断すると、その場では決着させない。どちらかが復帰した時点で両者の切断猶予期限を評価する:
+
+| 評価結果 | 挙動 |
+|---|---|
+| 対戦相手だけ猶予切れ | 復帰した側の forfeit 経路で対戦相手を forfeit させ、復帰した側を勝者とする |
+| 両者とも猶予内 | 何もせず対戦を継続する |
+| 両者とも猶予切れ | 未決着のまま残す。forfeit アクションは常に相手側を勝者にする契約のため、現行の battle API では引き分け (勝者なし) を表現できない |
+
+評価の契機はプレイヤーの WS 再接続（`game_enter` によるゲームへの復帰・`matchmaking_start` による新規マッチメイキング開始のいずれも、その前に WS 再接続が必ず起きるため対象になる）。
 
 ---
 
@@ -77,9 +89,11 @@ WS 切断時、プレイヤーの状態に応じて以下のクリーンアッ�
 ### キュー登録 (`matchmaking_start`)
 
 1. クライアントから WS で `matchmaking_start(deckId)` を受信
-2. matchmaking サービスへ REST で Enqueue 委譲
-3. 成功時: プレイヤーごとの **マッチ待機タイムアウト** を起動（`MATCHMAKING_TIMEOUT_SEC`、デフォルト 60 秒）
+2. matchmaking サービスへ REST で Enqueue 委譲。起動時に採番した gateway プロセスの識別子を添える
+3. 成功時: プレイヤーごとの **マッチ待機タイムアウト** を起動（`MATCHMAKING_TIMEOUT_SEC`、デフォルト 30 秒）
 4. 失敗時: `matchmaking_error` を WS push
+
+gateway プロセスが入れ替わると、前のプロセスが待機していたプレイヤーは WS 接続を失っており、成立させても通知を届けられない。識別子を添えることで matchmaking 側が入れ替わりを検知し、引き継げない待機を破棄してから登録する。
 
 ### キュー取消 (`matchmaking_cancel`)
 
@@ -95,16 +109,16 @@ WS 切断時、プレイヤーの状態に応じて以下のクリーンアッ�
 
 ### match_made → match_found 配信契約
 
-subscription `matchmaking-events-gateway`（Exactly-Once Delivery）を全 Pod で競合 pull する。メッセージ受信時:
+`POST /internal/v1/pubsub/match-made` で push 配信を受信する（最大インスタンス数が 1 のため、配信は必ず唯一のインスタンスへ届く）。受信時:
 
-1. `matchId` のインメモリ重複排除（per-Pod）で多重配送を抑止
+1. `gateway.processed_matches` で `matchId` を claim する。既に claim 済みで gameID も記録済みなら、battle を呼び出さず記録済みの gameID で手順 4 から再開する。claim 済みで gameID が未記録なら処理をスキップする
 2. cardclient で両プレイヤーのデッキカードを取得
-3. battleClient で PvP ゲームを作成（`matchId` に対して冪等）
+3. battleClient で PvP ゲームを作成し、作成した gameID を `gateway.processed_matches` に記録する
 4. `gateway.game_players` に両プレイヤーの行を挿入（EXP 付与冪等キー + playerNum 索引用途、「EXP 付与トリガと冪等性」）
-5. 両プレイヤーの WS 接続が該当 Pod にあれば `match_found` を push
-6. 上記いずれかに失敗した場合は dedup エントリをロールバックして **nack**（Pub/Sub がリトライ）
+5. 両プレイヤーの WS 接続があれば `match_found` を push
+6. 手順 2-3 (claim 後、battle 呼び出しまで) で失敗した場合は claim をロールバックして **500** を返す（Pub/Sub がリトライ）。手順 3 の gameID 記録以降の失敗では claim を解放せず、**500** を返すのみとする（battle 側に既にゲームが存在するため、解放すると再送時に二重作成になる）
 
-**配信保証**: Exactly-Once。保険として手順 1 の per-Pod dedup + battle のゲーム作成冪等性で、多重配送が起きても二重ゲーム作成は発生しない。
+**配信保証**: at-least-once（exactly-once 配信はサポートされない）。同一メッセージがプロセス再起動をまたいで再送されても、手順 1 の `gateway.processed_matches` による永続 dedup により battle のゲーム作成は matchId あたり 1 回に保たれる。
 
 ---
 
@@ -189,13 +203,13 @@ gateway は `/api/v1/**` の REST リクエストを下流サービスへ委譲�
 
 ---
 
-## Pub/Sub subscribe
+## Pub/Sub push 受信
 
 ### match_made（「match_made → match_found 配信契約」で詳細）
 
-- Subscription: `matchmaking-events-gateway` (Exactly-Once)
+- エンドポイント: `POST /internal/v1/pubsub/match-made` (at-least-once)
 - 副作用: battle ゲーム作成 + DB 行挿入 + WS push
-- gateway は matchmaking-events 専用 subscriber としてこれ 1 本のみを購読する。他サービスが publish する topic を WS 中継目的で subscribe しない (ADR-027)
+- gateway は match_made 専用の受け口としてこれ 1 本のみを持つ。他サービスが発行するイベントを WS 中継目的で購読しない (ADR-027)
 
 ---
 

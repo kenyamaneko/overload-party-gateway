@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -28,20 +29,43 @@ type mockBattleClient struct {
 	advanceNpcQueue []*service.ActionResult
 	advanceNpcCalls int
 
+	createPvPGameMu     sync.Mutex
+	createPvPGameCalls  []createPvPGameCall
 	createPvPGameResult *service.GameCreatedResult
 	createPvPGameErr    error
-	createPvPGameCalls  int
-	createPvPGameArgs   capturedCreatePvPGameArgs
+	// createPvPGameQueue, if non-nil, is popped from on each CreatePvPGame call
+	// (overrides createPvPGameResult/createPvPGameErr). Enables tests where a
+	// first call fails and a later retry succeeds.
+	createPvPGameQueue []createPvPGameResponse
+
+	// callsMu は processActionCalls を守る。resolveStaleDisconnect が別 goroutine
+	// から ProcessAction を呼ぶ経路 (HandleReconnect 経由) があるため、書込み・読出し
+	// 双方をこの mutex 経由に統一する。
+	callsMu            sync.Mutex
+	processActionCalls []processActionCall
 }
 
-// capturedCreatePvPGameArgs は CreatePvPGame への呼び出し引数を記録する。
-type capturedCreatePvPGameArgs struct {
+// createPvPGameCall records a single CreatePvPGame invocation's arguments.
+type createPvPGameCall struct {
 	deck1Cards       []service.BattleDeckCard
 	deck2Cards       []service.BattleDeckCard
 	deck1Initiatives service.DeckInitiatives
 	deck2Initiatives service.DeckInitiatives
 	player1Summary   service.PlayerSummaryRequest
 	player2Summary   service.PlayerSummaryRequest
+}
+
+type createPvPGameResponse struct {
+	result *service.GameCreatedResult
+	err    error
+}
+
+// processActionCall は mockBattleClient.ProcessAction への 1 回の呼出を記録する。
+type processActionCall struct {
+	gameID     string
+	playerNum  int
+	actionType string
+	data       json.RawMessage
 }
 
 func newMockBattleClient() *mockBattleClient {
@@ -61,20 +85,47 @@ func (m *mockBattleClient) StartNPCBattle(_ context.Context, _ []service.BattleD
 }
 
 func (m *mockBattleClient) CreatePvPGame(_ context.Context, deck1Cards, deck2Cards []service.BattleDeckCard, deck1Initiatives, deck2Initiatives service.DeckInitiatives, player1Summary, player2Summary service.PlayerSummaryRequest) (*service.GameCreatedResult, error) {
-	m.createPvPGameCalls++
-	m.createPvPGameArgs = capturedCreatePvPGameArgs{
+	m.createPvPGameMu.Lock()
+	defer m.createPvPGameMu.Unlock()
+	m.createPvPGameCalls = append(m.createPvPGameCalls, createPvPGameCall{
 		deck1Cards:       deck1Cards,
 		deck2Cards:       deck2Cards,
 		deck1Initiatives: deck1Initiatives,
 		deck2Initiatives: deck2Initiatives,
 		player1Summary:   player1Summary,
 		player2Summary:   player2Summary,
+	})
+	if len(m.createPvPGameQueue) > 0 {
+		r := m.createPvPGameQueue[0]
+		m.createPvPGameQueue = m.createPvPGameQueue[1:]
+		return r.result, r.err
 	}
 	return m.createPvPGameResult, m.createPvPGameErr
 }
 
-func (m *mockBattleClient) ProcessAction(_ context.Context, _ string, _ int, _ string, _ json.RawMessage) (*service.ActionResult, error) {
+// snapshotCreatePvPGameCalls は createPvPGameCalls を排他制御した上で複製して返す。
+func (m *mockBattleClient) snapshotCreatePvPGameCalls() []createPvPGameCall {
+	m.createPvPGameMu.Lock()
+	defer m.createPvPGameMu.Unlock()
+	return append([]createPvPGameCall(nil), m.createPvPGameCalls...)
+}
+
+func (m *mockBattleClient) ProcessAction(_ context.Context, gameID string, playerNum int, actionType string, data json.RawMessage) (*service.ActionResult, error) {
+	m.callsMu.Lock()
+	m.processActionCalls = append(m.processActionCalls, processActionCall{
+		gameID: gameID, playerNum: playerNum, actionType: actionType, data: data,
+	})
+	m.callsMu.Unlock()
 	return m.processActionResult, m.processActionErr
+}
+
+// snapshotProcessActionCalls は processActionCalls を排他制御した上で複製して返す。
+// resolveStaleDisconnect が別 goroutine から書き込みうる経路を検証するテストは、
+// 直接フィールドを読まずこの関数を使う。
+func (m *mockBattleClient) snapshotProcessActionCalls() []processActionCall {
+	m.callsMu.Lock()
+	defer m.callsMu.Unlock()
+	return append([]processActionCall(nil), m.processActionCalls...)
 }
 
 func (m *mockBattleClient) GetGameStateForPlayer(_ context.Context, _ string, _ int) (json.RawMessage, error) {
@@ -121,8 +172,8 @@ func newTestRelay() (*GameRelay, *mockBattleClient) {
 	hub := NewConnectionHub(HubCallbacks{
 		GetGameID:           func(string) (string, bool) { return "", false },
 		OnDisconnectTimeout: func(string, string) {},
-	})
-	relay := NewGameRelay(hub, bc, nil, nil)
+	}, nil)
+	relay := NewGameRelay(hub, bc, nil, nil, nil)
 	return relay, bc
 }
 
@@ -455,6 +506,19 @@ func TestLeaveAllPlayers(t *testing.T) {
 			_, membersExist := relay.gameMembers["game_1"]
 			relay.mu.RUnlock()
 			assert.False(t, membersExist, "gameMembers should be cleaned up")
+		})
+
+		t.Run("呼ぶと、退出した全プレイヤーの切断猶予期限の写しが削除される", func(t *testing.T) {
+			relay, _ := newTestRelay()
+			store := &fakeTimerStore{}
+			relay.hub.timerStore = store
+
+			relay.JoinGame("p1", "game_1", 1)
+			relay.JoinGame("p2", "game_1", 2)
+
+			relay.leaveAllPlayers("game_1")
+
+			assert.ElementsMatch(t, []string{"p1", "p2"}, store.snapshotClearDisconnectCalls())
 		})
 	})
 }

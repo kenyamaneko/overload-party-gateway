@@ -150,7 +150,7 @@ gateway は Go の 3 モジュール（`api-gateway` / `ws-constants` / `interna
 | `packages/api-gateway-npm` | Cloudsmith (npm) | 同上 |
 | `packages/ws-constants-npm` | Cloudsmith (npm) | 同上 |
 
-発行は [.github/workflows/publish.yaml](../.github/workflows/publish.yaml) が担当する。`packages/**` / `data/ws_constants.yaml` / `data/models.yaml` / `scripts/generate_types.py` のいずれかに main で変更が入った時に自動発火し、変更検出したモジュールのみタグ付け・公開する。bump 種別を人が判断したい場合は `workflow_dispatch` で `bump=patch|minor|major` を明示指定できる。
+発行は [.github/workflows/publish.yaml](../.github/workflows/publish.yaml) が担当する。`packages/**` に main で変更が入った時に自動発火し、変更検出したモジュールのみタグ付け・公開する。bump 種別を人が判断したい場合は `workflow_dispatch` で `bump=patch|minor|major` を明示指定できる。
 
 各パッケージのバージョンはサービス本体のバージョンと独立で、REST 契約型や WS プロトコルに破壊的変更が入る release では対応パッケージを major bump する。
 

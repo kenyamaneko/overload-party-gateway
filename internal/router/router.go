@@ -13,13 +13,20 @@ import (
 // でルート定義を共有します。downstream サービス公開 path は RegisterForwardRoutes で
 // 別途扱う。
 type Handlers struct {
-	Auth *rest.AuthHandler
+	Auth   *rest.AuthHandler
+	PubSub *rest.PubSubPushHandler
 }
 
 // RegisterAuthRoutes は認証エンドポイント（register / login）を登録します
 func RegisterAuthRoutes(group *gin.RouterGroup, h *Handlers) {
 	group.POST("/auth/register", h.Auth.Register)
 	group.POST("/auth/login", h.Auth.Login)
+}
+
+// RegisterPubSubRoutes は Pub/Sub push 配信の内部エンドポイントを登録します。
+// 認証は呼び出し元が group に対して push 認証 middleware を設定する前提です。
+func RegisterPubSubRoutes(group *gin.RouterGroup, h *Handlers) {
+	group.POST("/pubsub/match-made", h.PubSub.HandleMatchMade)
 }
 
 // RegisterForwardRoutes は各サービスへの path-prefix forwarder を登録します。
