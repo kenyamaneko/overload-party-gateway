@@ -15,6 +15,7 @@ import (
 
 	"cloud.google.com/go/firestore"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 
@@ -69,7 +70,7 @@ func main() {
 	}
 
 	cardClient := cardclient.New(cfg.CardServiceURL)
-	matchmakingClient := matchmakingclient.New(cfg.MatchmakingServiceURL)
+	matchmakingClient := matchmakingclient.New(cfg.MatchmakingServiceURL, uuid.Must(uuid.NewV7()).String())
 	accountClient := accountclient.New(cfg.AccountServiceURL)
 
 	if cfg.InternalAuthSecret == "" {

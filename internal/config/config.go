@@ -84,7 +84,7 @@ func Load() *Config {
 
 		GoogleCloudProjectID: getEnv("GOOGLE_CLOUD_PROJECT_ID", ""),
 
-		MatchmakingTimeoutSec: getEnvInt("MATCHMAKING_TIMEOUT_SEC", 60),
+		MatchmakingTimeoutSec: getEnvInt("MATCHMAKING_TIMEOUT_SEC", 30),
 
 		AppMinVersion:    getEnv("APP_MIN_VERSION", "0.1.0"),
 		AppLatestVersion: getEnv("APP_LATEST_VERSION", "0.1.0"),

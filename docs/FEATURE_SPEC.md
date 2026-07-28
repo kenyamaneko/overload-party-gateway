@@ -89,9 +89,11 @@ WS 切断時、プレイヤーの状態に応じて以下のクリーンアッ�
 ### キュー登録 (`matchmaking_start`)
 
 1. クライアントから WS で `matchmaking_start(deckId)` を受信
-2. matchmaking サービスへ REST で Enqueue 委譲
-3. 成功時: プレイヤーごとの **マッチ待機タイムアウト** を起動（`MATCHMAKING_TIMEOUT_SEC`、デフォルト 60 秒）
+2. matchmaking サービスへ REST で Enqueue 委譲。起動時に採番した gateway プロセスの識別子を添える
+3. 成功時: プレイヤーごとの **マッチ待機タイムアウト** を起動（`MATCHMAKING_TIMEOUT_SEC`、デフォルト 30 秒）
 4. 失敗時: `matchmaking_error` を WS push
+
+gateway プロセスが入れ替わると、前のプロセスが待機していたプレイヤーは WS 接続を失っており、成立させても通知を届けられない。識別子を添えることで matchmaking 側が入れ替わりを検知し、引き継げない待機を破棄してから登録する。
 
 ### キュー取消 (`matchmaking_cancel`)
 
