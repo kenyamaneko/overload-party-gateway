@@ -3,6 +3,7 @@ package ws
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -30,7 +31,7 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/cardclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/matchmakingclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
-	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 	genws "github.com/kenyamaneko/overload-party-gateway/packages/ws-constants"
 )
@@ -38,6 +39,65 @@ import (
 func init() {
 	gin.SetMode(gin.TestMode)
 }
+
+// statefulGamePlayerRepo は port.GamePlayerRepo のインメモリ実装。gameID ごとの
+// プレイヤースロットを実際に保持し、InsertGamePlayer で仕込んだ内容を
+// LookupPlayerNum / LookupGamePlayers がそのまま読み出せる (DB seed 相当)。
+// exp_award_test.go の mockGamePlayerRepo は呼出内容の検証用で状態を持たないため、
+// 別名の型として区別する。
+type statefulGamePlayerRepo struct {
+	mu      sync.Mutex
+	entries map[string][]port.GamePlayerEntry // gameID → entries
+	awarded map[string]bool                   // gameID → exp_awarded
+}
+
+func newStatefulGamePlayerRepo() *statefulGamePlayerRepo {
+	return &statefulGamePlayerRepo{
+		entries: make(map[string][]port.GamePlayerEntry),
+		awarded: make(map[string]bool),
+	}
+}
+
+func (r *statefulGamePlayerRepo) InsertGamePlayer(_ context.Context, gameID string, playerNum int, playerID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, e := range r.entries[gameID] {
+		if e.PlayerNum == playerNum {
+			return nil // ON CONFLICT DO NOTHING
+		}
+	}
+	r.entries[gameID] = append(r.entries[gameID], port.GamePlayerEntry{PlayerNum: playerNum, PlayerID: playerID})
+	return nil
+}
+
+func (r *statefulGamePlayerRepo) LookupPlayerNum(_ context.Context, gameID, playerID string) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, e := range r.entries[gameID] {
+		if e.PlayerID == playerID {
+			return e.PlayerNum, nil
+		}
+	}
+	return 0, fmt.Errorf("player %s not found in game %s", playerID, gameID)
+}
+
+func (r *statefulGamePlayerRepo) LookupGamePlayers(_ context.Context, gameID string) ([]port.GamePlayerEntry, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]port.GamePlayerEntry(nil), r.entries[gameID]...), nil
+}
+
+func (r *statefulGamePlayerRepo) MarkExpAwarded(_ context.Context, gameID string) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.awarded[gameID] {
+		return false, nil
+	}
+	r.awarded[gameID] = true
+	return true, nil
+}
+
+var _ port.GamePlayerRepo = (*statefulGamePlayerRepo)(nil)
 
 // wsTestOptions は newWSTestServer が組み立てる Manager/Handler の可変設定。
 type wsTestOptions struct {
@@ -52,7 +112,7 @@ type wsTestServer struct {
 	httpServer *httptest.Server
 	manager    *Manager
 
-	gamePlayerRepo *repository.MockGamePlayerRepository
+	gamePlayerRepo *statefulGamePlayerRepo
 
 	account     *apiaccountserverfake.Server
 	seedAccount func(firebaseUID, playerID string)
@@ -91,7 +151,7 @@ func newWSTestServer(t *testing.T, configure func(*wsTestOptions)) *wsTestServer
 	matchmakingClient := matchmakingclient.New(matchmakingFake.URL(), "test-instance")
 	battleClient := service.NewBattleClient(battleFake.URL())
 
-	gamePlayerRepo := repository.NewMockGamePlayerRepository()
+	gamePlayerRepo := newStatefulGamePlayerRepo()
 	internalSigner := internalauth.NewSigner(
 		internalauth.StaticHS256Resolver([]byte("test-secret"), internalauth.DefaultKeyID),
 		internalauth.DefaultKeyID,
