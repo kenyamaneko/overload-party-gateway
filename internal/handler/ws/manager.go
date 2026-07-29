@@ -56,6 +56,7 @@ func NewManager(
 	matchmakingTimeout time.Duration,
 	internalSigner *internalauth.Signer,
 	timerStore port.TimerStore,
+	disconnectTimeout time.Duration,
 ) *Manager {
 	m := &Manager{
 		battleClient:       battleClient,
@@ -76,7 +77,7 @@ func NewManager(
 		OnMatchmakingLeave:  m.cancelMatchmaking,
 		OnGameDisconnect:    func(playerID, gameID string) { m.Relay.NotifyOpponentDisconnected(playerID, gameID) },
 		OnGameReconnect:     func(playerID, gameID string, wasLate bool) { m.Relay.HandleReconnect(playerID, gameID, wasLate) },
-	}, timerStore)
+	}, disconnectTimeout, timerStore)
 
 	relay := NewGameRelay(hub, battleClient, accountClient, gamePlayerRepo, timerStore)
 

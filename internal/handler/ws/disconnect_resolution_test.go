@@ -25,7 +25,7 @@ func newDisconnectResolutionRelay(entries []port.GamePlayerEntry, timerStore *fa
 	hub := NewConnectionHub(HubCallbacks{
 		GetGameID:           func(string) (string, bool) { return "", false },
 		OnDisconnectTimeout: func(string, string) {},
-	}, store)
+	}, DefaultDisconnectTimeout, store)
 	repo := &mockGamePlayerRepo{lookupEntries: entries}
 	relay := NewGameRelay(hub, bc, nil, repo, store)
 	return relay, bc, hub

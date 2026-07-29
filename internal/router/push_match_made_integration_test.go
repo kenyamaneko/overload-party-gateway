@@ -118,7 +118,7 @@ var _ port.CardClient = (*fakeCardClient)(nil)
 func buildPushRouter(battleClient service.BattleClient) (*gin.Engine, *repository.PgGamePlayerRepository) {
 	gamePlayerRepo := repository.NewPgGamePlayerRepository(sharedPG.Pool)
 	processedMatchRepo := repository.NewPgProcessedMatchRepository(sharedPG.Pool)
-	wsManager := ws.NewManager(battleClient, nil, &fakeCardClient{}, nil, gamePlayerRepo, processedMatchRepo, 0, nil, nil)
+	wsManager := ws.NewManager(battleClient, nil, &fakeCardClient{}, nil, gamePlayerRepo, processedMatchRepo, 0, nil, nil, ws.DefaultDisconnectTimeout)
 	matchSub, err := pubsubadapter.NewMatchSubscriber(wsManager)
 	if err != nil {
 		panic(err)

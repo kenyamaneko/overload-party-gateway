@@ -13,9 +13,9 @@ import (
 	genws "github.com/kenyamaneko/overload-party-gateway/packages/ws-constants"
 )
 
-// disconnectTimeout は切断したプレイヤーに与える再接続猶予。
+// DefaultDisconnectTimeout は切断したプレイヤーに与える再接続猶予の既定値。
 // アプリの再起動を伴う復帰に届くよう 120 秒とする。
-const disconnectTimeout = 120 * time.Second
+const DefaultDisconnectTimeout = 120 * time.Second
 
 // timerMirrorTimeout は TimerStore への書き込み・削除の上限時間。写しの失敗が
 // 対戦の進行を止めないよう、短い上限で打ち切る。
@@ -64,15 +64,19 @@ type ConnectionHub struct {
 	// timerStore は切断猶予期限を Redis へ写す。未設定 (nil) の場合は写しを行わない
 	// （ローカル開発など Redis を使わない環境向け）。
 	timerStore port.TimerStore
+
+	// disconnectTimeout は切断したプレイヤーに与える再接続猶予。
+	disconnectTimeout time.Duration
 }
 
 // NewConnectionHub は ConnectionHub を生成します。timerStore は nil 可（写しを行わない）。
-func NewConnectionHub(cb HubCallbacks, timerStore port.TimerStore) *ConnectionHub {
+func NewConnectionHub(cb HubCallbacks, disconnectTimeout time.Duration, timerStore port.TimerStore) *ConnectionHub {
 	return &ConnectionHub{
-		connections: make(map[string]*Connection),
-		disconnects: make(map[string]*disconnectInfo),
-		cb:          cb,
-		timerStore:  timerStore,
+		connections:       make(map[string]*Connection),
+		disconnects:       make(map[string]*disconnectInfo),
+		cb:                cb,
+		timerStore:        timerStore,
+		disconnectTimeout: disconnectTimeout,
 	}
 }
 
@@ -162,8 +166,8 @@ func (h *ConnectionHub) Unregister(conn *Connection) {
 	var deadline time.Time
 	suppressOpponentNotify := h.isShuttingDown
 	if inGame {
-		deadline = time.Now().Add(disconnectTimeout)
-		timer := time.AfterFunc(disconnectTimeout, func() {
+		deadline = time.Now().Add(h.disconnectTimeout)
+		timer := time.AfterFunc(h.disconnectTimeout, func() {
 			h.mu.Lock()
 			delete(h.disconnects, conn.playerID)
 			h.mu.Unlock()
@@ -175,7 +179,7 @@ func (h *ConnectionHub) Unregister(conn *Connection) {
 			gameID: gameID,
 			timer:  timer,
 		}
-		slog.Info("player disconnected, timeout started", "player_id", conn.playerID, "timeout", disconnectTimeout)
+		slog.Info("player disconnected, timeout started", "player_id", conn.playerID, "timeout", h.disconnectTimeout)
 	}
 	h.mu.Unlock()
 
