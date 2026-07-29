@@ -289,7 +289,7 @@ func TestAwardGameExp(t *testing.T) {
 			assert.Equal(t, int32(1), account.calls.Load())
 		})
 
-		t.Run("2 人のゲームで player 1 が勝ったとき、付与依頼に両プレイヤー ID・勝者 1・理由・pvp が載る", func(t *testing.T) {
+		t.Run("2 人のゲームでプレイヤー 1 が勝ったとき、付与依頼に両プレイヤー ID・勝者 1・理由・pvp が載る", func(t *testing.T) {
 			repo := &mockGamePlayerRepo{
 				markAwardedReturn: true,
 				lookupEntries: []port.GamePlayerEntry{
