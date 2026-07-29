@@ -1,12 +1,9 @@
 package middleware
 
 import (
-	"context"
 	"net/http"
 	"strings"
 
-	firebase "firebase.google.com/go/v4"
-	"firebase.google.com/go/v4/auth"
 	"github.com/gin-gonic/gin"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
@@ -22,7 +19,7 @@ const playerIDKey contextKey = "player_id"
 const DevTokenPrefix = "dev-token-"
 
 // UseFirebaseAuth は Firebase ID トークンを検証する Gin middleware を返します
-func UseFirebaseAuth(authClient *auth.Client) gin.HandlerFunc {
+func UseFirebaseAuth(verifier port.TokenVerifier) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -36,13 +33,13 @@ func UseFirebaseAuth(authClient *auth.Client) gin.HandlerFunc {
 			return
 		}
 
-		token, err := authClient.VerifyIDToken(c.Request.Context(), idToken)
+		uid, err := verifier.VerifyIDToken(c.Request.Context(), idToken)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 			return
 		}
 
-		c.Set(string(firebaseUIDKey), token.UID)
+		c.Set(string(firebaseUIDKey), uid)
 		c.Next()
 	}
 }
@@ -88,13 +85,4 @@ func ResolvePlayer(accountClient port.AccountClient) gin.HandlerFunc {
 		c.Set(string(playerIDKey), player.PlayerID)
 		c.Next()
 	}
-}
-
-// NewFirebaseAuthClient は Firebase Auth クライアントを生成します
-func NewFirebaseAuthClient(ctx context.Context) (*auth.Client, error) {
-	app, err := firebase.NewApp(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	return app.Auth(ctx)
 }

@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -286,6 +287,165 @@ func TestUseDevAuthWithPlayerResolve(t *testing.T) {
 
 			require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 			assert.Equal(t, `{"player_id":"existing-id"}`, w.Body.String())
+		})
+	})
+}
+
+// stubTokenVerifier は port.TokenVerifier のテスト用実装。
+type stubTokenVerifier struct {
+	VerifyIDTokenFn func(ctx context.Context, idToken string) (string, error)
+}
+
+func (s *stubTokenVerifier) VerifyIDToken(ctx context.Context, idToken string) (string, error) {
+	return s.VerifyIDTokenFn(ctx, idToken)
+}
+
+func TestUseFirebaseAuth(t *testing.T) {
+	t.Run("Firebase ID トークン認証", func(t *testing.T) {
+		t.Run("検証に通るトークンのとき、200で UID を解決する", func(t *testing.T) {
+			verifier := &stubTokenVerifier{VerifyIDTokenFn: func(context.Context, string) (string, error) {
+				return "firebase-uid-1", nil
+			}}
+			r := gin.New()
+			r.Use(UseFirebaseAuth(verifier))
+			r.GET("/test", func(c *gin.Context) {
+				c.JSON(http.StatusOK, gin.H{"uid": GetFirebaseUID(c)})
+			})
+
+			req := httptest.NewRequest("GET", "/test", nil)
+			req.Header.Set("Authorization", "Bearer valid-token")
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+			assert.Equal(t, `{"uid":"firebase-uid-1"}`, w.Body.String())
+		})
+
+		t.Run("検証に失敗するトークンのとき、401になる", func(t *testing.T) {
+			verifier := &stubTokenVerifier{VerifyIDTokenFn: func(context.Context, string) (string, error) {
+				return "", errors.New("invalid signature")
+			}}
+			r := gin.New()
+			r.Use(UseFirebaseAuth(verifier))
+			r.GET("/test", func(c *gin.Context) {
+				c.JSON(http.StatusOK, gin.H{"uid": GetFirebaseUID(c)})
+			})
+
+			req := httptest.NewRequest("GET", "/test", nil)
+			req.Header.Set("Authorization", "Bearer invalid-token")
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			require.Equal(t, http.StatusUnauthorized, w.Code)
+		})
+
+		t.Run("Authorization header が無いとき、401になる", func(t *testing.T) {
+			verifier := &stubTokenVerifier{VerifyIDTokenFn: func(context.Context, string) (string, error) {
+				return "firebase-uid-1", nil
+			}}
+			r := gin.New()
+			r.Use(UseFirebaseAuth(verifier))
+			r.GET("/test", func(c *gin.Context) {
+				c.JSON(http.StatusOK, gin.H{"uid": GetFirebaseUID(c)})
+			})
+
+			req := httptest.NewRequest("GET", "/test", nil)
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			require.Equal(t, http.StatusUnauthorized, w.Code)
+		})
+
+		t.Run("Bearer 形式でないヘッダのとき、401になる", func(t *testing.T) {
+			verifier := &stubTokenVerifier{VerifyIDTokenFn: func(context.Context, string) (string, error) {
+				return "firebase-uid-1", nil
+			}}
+			r := gin.New()
+			r.Use(UseFirebaseAuth(verifier))
+			r.GET("/test", func(c *gin.Context) {
+				c.JSON(http.StatusOK, gin.H{"uid": GetFirebaseUID(c)})
+			})
+
+			req := httptest.NewRequest("GET", "/test", nil)
+			req.Header.Set("Authorization", "some-id-token")
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			require.Equal(t, http.StatusUnauthorized, w.Code)
+		})
+
+		t.Run("Bearer の後が空のとき、401になる", func(t *testing.T) {
+			verifier := &stubTokenVerifier{VerifyIDTokenFn: func(_ context.Context, idToken string) (string, error) {
+				if idToken == "" {
+					return "", errors.New("empty id token")
+				}
+				return "firebase-uid-1", nil
+			}}
+			r := gin.New()
+			r.Use(UseFirebaseAuth(verifier))
+			r.GET("/test", func(c *gin.Context) {
+				c.JSON(http.StatusOK, gin.H{"uid": GetFirebaseUID(c)})
+			})
+
+			req := httptest.NewRequest("GET", "/test", nil)
+			req.Header.Set("Authorization", "Bearer ")
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			require.Equal(t, http.StatusUnauthorized, w.Code)
+		})
+	})
+}
+
+func TestUseFirebaseAuthWithPlayerResolve(t *testing.T) {
+	t.Run("Firebase 認証とプレイヤー解決のチェイン", func(t *testing.T) {
+		t.Run("検証に通るトークンのとき、本人のプレイヤー ID が解決される", func(t *testing.T) {
+			fa := newStatefulAccountFake()
+			defer fa.close()
+			fa.seed("firebase-uid-1", "player-1")
+
+			verifier := &stubTokenVerifier{VerifyIDTokenFn: func(context.Context, string) (string, error) {
+				return "firebase-uid-1", nil
+			}}
+
+			r := gin.New()
+			r.Use(UseFirebaseAuth(verifier))
+			r.Use(ResolvePlayer(fa.client()))
+			r.GET("/test", func(c *gin.Context) {
+				c.JSON(http.StatusOK, gin.H{"player_id": GetPlayerID(c)})
+			})
+
+			req := httptest.NewRequest("GET", "/test", nil)
+			req.Header.Set("Authorization", "Bearer valid-token")
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+			assert.Equal(t, `{"player_id":"player-1"}`, w.Body.String())
+		})
+
+		t.Run("トークンは有効だがプレイヤー未登録のとき、401になる", func(t *testing.T) {
+			fa := newStatefulAccountFake()
+			defer fa.close()
+			// seed しないため FindByFirebaseUID は 404 (未登録) を返す。
+
+			verifier := &stubTokenVerifier{VerifyIDTokenFn: func(context.Context, string) (string, error) {
+				return "unregistered-uid", nil
+			}}
+
+			r := gin.New()
+			r.Use(UseFirebaseAuth(verifier))
+			r.Use(ResolvePlayer(fa.client()))
+			r.GET("/test", func(c *gin.Context) {
+				c.JSON(http.StatusOK, gin.H{})
+			})
+
+			req := httptest.NewRequest("GET", "/test", nil)
+			req.Header.Set("Authorization", "Bearer valid-token")
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusUnauthorized, w.Code)
 		})
 	})
 }
