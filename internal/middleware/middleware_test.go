@@ -381,8 +381,8 @@ func TestResolvePlayer(t *testing.T) {
 }
 
 func TestContextGetters(t *testing.T) {
-	t.Run("未設定時の context getter", func(t *testing.T) {
-		t.Run("GetFirebaseUID は未設定のとき、空文字を返す", func(t *testing.T) {
+	t.Run("context 値の取得", func(t *testing.T) {
+		t.Run("firebase_uid が未設定のとき、空文字を返す", func(t *testing.T) {
 			r := gin.New()
 			r.GET("/test", func(c *gin.Context) {
 				c.JSON(http.StatusOK, gin.H{"uid": GetFirebaseUID(c)})
@@ -395,7 +395,7 @@ func TestContextGetters(t *testing.T) {
 			assert.Equal(t, `{"uid":""}`, w.Body.String())
 		})
 
-		t.Run("GetPlayerID は未設定のとき、空文字を返す", func(t *testing.T) {
+		t.Run("player_id が未設定のとき、空文字を返す", func(t *testing.T) {
 			r := gin.New()
 			r.GET("/test", func(c *gin.Context) {
 				c.JSON(http.StatusOK, gin.H{"pid": GetPlayerID(c)})

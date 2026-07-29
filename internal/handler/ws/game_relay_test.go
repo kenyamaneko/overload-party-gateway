@@ -236,7 +236,7 @@ func TestBattleStateMeta_Parsing(t *testing.T) {
 
 func TestRunNpcTurns(t *testing.T) {
 	t.Run("NPC ターンの自動進行", func(t *testing.T) {
-		t.Run("初期結果が nil のとき、AdvanceNpcTurn を呼ばず nil を返す", func(t *testing.T) {
+		t.Run("初期結果が nil のとき、NPC ターンを進めず nil を返す", func(t *testing.T) {
 			relay, bc := newTestRelay()
 			ctx := context.Background()
 
@@ -301,7 +301,7 @@ func TestRunNpcTurns(t *testing.T) {
 			assert.Equal(t, 1, bc.advanceNpcCalls, "should stop immediately on GameOver")
 		})
 
-		t.Run("AdvanceNpcTurn がエラーのとき、直前の結果を返して止める", func(t *testing.T) {
+		t.Run("NPC ターンの進行がエラーのとき、直前の結果を返して止める", func(t *testing.T) {
 			relay, bc := newTestRelay()
 			ctx := context.Background()
 			bc.advanceNpcErr = errFake

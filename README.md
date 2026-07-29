@@ -62,6 +62,7 @@ REST エンドポイント契約は [data/openapi.yaml](data/openapi.yaml) を�
 | `APP_MIN_VERSION` | `0.1.0` | 最低必要バージョン |
 | `APP_LATEST_VERSION` | `0.1.0` | 最新バージョン |
 | `APP_FORCE_UPDATE` | `false` | 強制アップデートフラグ |
+| `APP_STORE_URL` | *(空)* | 強制アップデート時にクライアントが開くストア URL |
 
 ## 公開パッケージ
 
