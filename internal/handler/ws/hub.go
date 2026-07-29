@@ -2,7 +2,7 @@ package ws
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -86,7 +86,7 @@ func (h *ConnectionHub) Register(conn *Connection) {
 		reconnectGameID = info.gameID
 		stillInMemory = true
 		delete(h.disconnects, conn.playerID)
-		log.Printf("player %s reconnected", conn.playerID)
+		slog.Info("player reconnected", "player_id", conn.playerID)
 	}
 
 	if old, ok := h.connections[conn.playerID]; ok {
@@ -104,7 +104,7 @@ func (h *ConnectionHub) Register(conn *Connection) {
 	if !stillInMemory {
 		dl, found, err := h.mirrorGetDisconnectDeadline(conn.playerID)
 		if err != nil {
-			log.Printf("ERROR: player %s reconnect: read mirrored disconnect deadline: %v, stale disconnect resolution skipped", conn.playerID, err)
+			slog.Error("read mirrored disconnect deadline on reconnect, stale disconnect resolution skipped", "player_id", conn.playerID, "error", err)
 		} else if found {
 			reconnectGameID = dl.GameID
 			wasLate = !time.Now().Before(dl.Deadline)
@@ -168,14 +168,14 @@ func (h *ConnectionHub) Unregister(conn *Connection) {
 			delete(h.disconnects, conn.playerID)
 			h.mu.Unlock()
 
-			log.Printf("player %s disconnect timeout expired for game %s, forfeit", conn.playerID, gameID)
+			slog.Info("player disconnect timeout expired, forfeit", "player_id", conn.playerID, "game_id", gameID)
 			h.cb.OnDisconnectTimeout(conn.playerID, gameID)
 		})
 		h.disconnects[conn.playerID] = &disconnectInfo{
 			gameID: gameID,
 			timer:  timer,
 		}
-		log.Printf("player %s disconnected, %v timeout started", conn.playerID, disconnectTimeout)
+		slog.Info("player disconnected, timeout started", "player_id", conn.playerID, "timeout", disconnectTimeout)
 	}
 	h.mu.Unlock()
 
@@ -201,7 +201,7 @@ func (h *ConnectionHub) mirrorSetDisconnectDeadline(playerID, gameID string, dea
 	ctx, cancel := context.WithTimeout(context.Background(), timerMirrorTimeout)
 	defer cancel()
 	if err := h.timerStore.SetDisconnectDeadline(ctx, playerID, gameID, deadline); err != nil {
-		log.Printf("WARN: mirror disconnect deadline for player %s: %v", playerID, err)
+		slog.Warn("mirror disconnect deadline failed", "player_id", playerID, "error", err)
 	}
 }
 
@@ -214,7 +214,7 @@ func (h *ConnectionHub) mirrorClearDisconnectDeadline(playerID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), timerMirrorTimeout)
 	defer cancel()
 	if err := h.timerStore.ClearDisconnectDeadline(ctx, playerID); err != nil {
-		log.Printf("WARN: clear mirrored disconnect deadline for player %s: %v", playerID, err)
+		slog.Warn("clear mirrored disconnect deadline failed", "player_id", playerID, "error", err)
 	}
 }
 
@@ -297,7 +297,7 @@ func shutdownAll(ctx context.Context, notifiers []shutdownNotifier, code int, re
 	select {
 	case <-done:
 	case <-ctx.Done():
-		log.Printf("ws shutdown: timed out before deadline, notified %d/%d connection(s)",
-			notified.Load(), len(notifiers))
+		slog.Warn("ws shutdown timed out before deadline",
+			"notified", notified.Load(), "total", len(notifiers))
 	}
 }

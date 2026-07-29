@@ -3,8 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -37,34 +38,77 @@ type wsShutdownNotifier interface {
 	Shutdown(ctx context.Context)
 }
 
+// newCloudLoggingHandler は Cloud Logging に適合するログハンドラを生成する。
+func newCloudLoggingHandler() slog.Handler {
+	return slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
+			if a.Key == slog.LevelKey {
+				a.Key = "severity"
+				if level, ok := a.Value.Any().(slog.Level); ok {
+					switch {
+					case level >= slog.LevelError:
+						a.Value = slog.StringValue("ERROR")
+					case level >= slog.LevelWarn:
+						a.Value = slog.StringValue("WARNING")
+					case level >= slog.LevelInfo:
+						a.Value = slog.StringValue("INFO")
+					default:
+						a.Value = slog.StringValue("DEBUG")
+					}
+				}
+			}
+			if a.Key == slog.MessageKey {
+				a.Key = "message"
+			}
+			return a
+		},
+	})
+}
+
+// exitOnMissingConfig は必須設定の欠落を記録してプロセスを終了する。
+func exitOnMissingConfig(message string) {
+	slog.Error(message)
+	os.Exit(1)
+}
+
+// exitOnStartupFailure は起動時の失敗を記録してプロセスを終了する。
+func exitOnStartupFailure(message string, err error) {
+	slog.Error(message, "error", err)
+	os.Exit(1)
+}
+
 func main() {
 	ctx := context.Background()
 	cfg := config.Load()
 
+	// cmd/main は Cloud Run 上で動作し Cloud Logging に取り込まれるため、常に
+	// Cloud Logging 互換 JSON で出力する。ローカル実行のテキスト出力は cmd/local が担う。
+	slog.SetDefault(slog.New(newCloudLoggingHandler()).With("service", "gateway"))
+
 	if cfg.Env == "prod" && len(cfg.AllowedOrigins) == 0 {
-		log.Fatal("ALLOWED_ORIGINS must be set in production")
+		exitOnMissingConfig("ALLOWED_ORIGINS must be set in production")
 	}
 	if cfg.DatabaseConn == "" {
-		log.Fatal("DATABASE_CONN must be set")
+		exitOnMissingConfig("DATABASE_CONN must be set")
 	}
 	databaseIAMAuthEnabled := parseDatabaseIAMAuthEnabled(cfg.DatabaseIAMAuthEnabledRaw)
 	if databaseIAMAuthEnabled && cfg.CloudSQLConnectionName == "" {
-		log.Fatal("CLOUDSQL_CONNECTION_NAME must be set when DATABASE_IAM_AUTH_ENABLED=true")
+		exitOnMissingConfig("CLOUDSQL_CONNECTION_NAME must be set when DATABASE_IAM_AUTH_ENABLED=true")
 	}
 	if cfg.GoogleCloudProjectID == "" {
-		log.Fatal("GOOGLE_CLOUD_PROJECT_ID must be set")
+		exitOnMissingConfig("GOOGLE_CLOUD_PROJECT_ID must be set")
 	}
 	if cfg.InternalAuthSecret == "" {
-		log.Fatal("INTERNAL_AUTH_SECRET must be set")
+		exitOnMissingConfig("INTERNAL_AUTH_SECRET must be set")
 	}
 	if cfg.PubSubPushServiceAccountEmail == "" {
-		log.Fatal("PUBSUB_PUSH_SERVICE_ACCOUNT_EMAIL must be set")
+		exitOnMissingConfig("PUBSUB_PUSH_SERVICE_ACCOUNT_EMAIL must be set")
 	}
 	if cfg.PubSubPushAudience == "" {
-		log.Fatal("PUBSUB_PUSH_AUDIENCE must be set")
+		exitOnMissingConfig("PUBSUB_PUSH_AUDIENCE must be set")
 	}
 	if cfg.UpstashRedisURL == "" {
-		log.Fatal("UPSTASH_REDIS_URL must be set")
+		exitOnMissingConfig("UPSTASH_REDIS_URL must be set")
 	}
 
 	if cfg.Env == "prod" {
@@ -74,7 +118,7 @@ func main() {
 	// PostgreSQL 接続プール: gateway.game_players（gateway 所有）に使用
 	pool, closeDatabasePool, err := newDatabasePool(ctx, cfg.DatabaseConn, databaseIAMAuthEnabled, cfg.CloudSQLConnectionName)
 	if err != nil {
-		log.Fatalf("failed to create pg pool: %v", err)
+		exitOnStartupFailure("failed to create pg pool", err)
 	}
 	defer closeDatabasePool()
 	defer pool.Close()
@@ -82,14 +126,14 @@ func main() {
 	// Firestore クライアント (game_config)
 	fsClient, err := firestore.NewClient(ctx, cfg.GoogleCloudProjectID)
 	if err != nil {
-		log.Fatalf("failed to create firestore client: %v", err)
+		exitOnStartupFailure("failed to create firestore client", err)
 	}
 	defer func() { _ = fsClient.Close() }()
 
 	// Firebase Auth クライアント
 	authClient, err := middleware.NewFirebaseAuthClient(ctx)
 	if err != nil {
-		log.Fatalf("failed to create firebase auth client: %v", err)
+		exitOnStartupFailure("failed to create firebase auth client", err)
 	}
 
 	// gateway 所有の game_players / processed_matches リポジトリ
@@ -114,7 +158,7 @@ func main() {
 	// 到達不能でも各書き込み・読み出しがエラーを返すだけで対戦は継続する。
 	redisOpt, err := redis.ParseURL(cfg.UpstashRedisURL)
 	if err != nil {
-		log.Fatalf("failed to parse UPSTASH_REDIS_URL: %v", err)
+		exitOnStartupFailure("failed to parse UPSTASH_REDIS_URL", err)
 	}
 	redisClient := redis.NewClient(redisOpt)
 	defer func() { _ = redisClient.Close() }()
@@ -128,7 +172,7 @@ func main() {
 
 	matchSub, err := pubsubadapter.NewMatchSubscriber(wsManager)
 	if err != nil {
-		log.Fatalf("failed to create match subscriber: %v", err)
+		exitOnStartupFailure("failed to create match subscriber", err)
 	}
 
 	handlers := &router.Handlers{
@@ -137,7 +181,8 @@ func main() {
 	}
 
 	// ルーター
-	r := gin.Default()
+	r := gin.New()
+	r.Use(middleware.UseRequestLogger(), gin.Recovery())
 	r.Use(middleware.UseCORS(cfg.AllowedOrigins...))
 
 	r.GET("/health", func(c *gin.Context) {
@@ -176,7 +221,7 @@ func main() {
 	api.Use(middleware.ResolvePlayer(accountClient))
 	api.Use(middleware.IssueInternalAuth(internalSigner))
 	if err := router.RegisterForwardRoutes(api, cfg); err != nil {
-		log.Fatalf("failed to register forward routes: %v", err)
+		exitOnStartupFailure("failed to register forward routes", err)
 	}
 
 	srv := &http.Server{
@@ -190,10 +235,10 @@ func main() {
 	// Why: graceful shutdown 時に HTTP server と WS 接続への終了通知が確実に完了する
 	// まで main を block させるため errgroup で束ねる。
 	if err := runServices(srvCtx, cfg, srv, wsManager); err != nil {
-		log.Fatalf("server: %v", err)
+		exitOnStartupFailure("server", err)
 	}
 
-	log.Println("gateway server exited")
+	slog.Info("gateway server exited")
 }
 
 // runServices は HTTP server を errgroup で起動する。ctx キャンセル
@@ -208,7 +253,7 @@ func runServices(
 	g, gCtx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
-		log.Printf("gateway server starting on :%s (env=%s)", cfg.Port, cfg.Env)
+		slog.Info("gateway server starting", "port", cfg.Port, "env", cfg.Env)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			return fmt.Errorf("http server: %w", err)
 		}
@@ -217,7 +262,7 @@ func runServices(
 
 	g.Go(func() error {
 		<-gCtx.Done()
-		log.Println("notifying WS connections of shutdown...")
+		slog.Info("notifying WS connections of shutdown")
 		wsCtx, cancel := context.WithTimeout(context.Background(), ws.ShutdownNotifyTimeout)
 		defer cancel()
 		wsShutdown.Shutdown(wsCtx)
@@ -226,7 +271,7 @@ func runServices(
 
 	g.Go(func() error {
 		<-gCtx.Done()
-		log.Println("shutting down gracefully...")
+		slog.Info("shutting down gracefully")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), serverShutdownTimeout)
 		defer cancel()
 		if err := srv.Shutdown(shutdownCtx); err != nil {

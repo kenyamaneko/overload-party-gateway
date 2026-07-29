@@ -3,7 +3,7 @@ package ws
 import (
 	"context"
 	"errors"
-	"log"
+	"log/slog"
 	"time"
 
 	gamelogic "github.com/kenyamaneko/overload-party-battle/packages/game-logic-constants-go"
@@ -50,7 +50,7 @@ func (r *GameRelay) resetTurnTimer(gameID, activePlayerID string, timeBankSecond
 		r.timerMu.Unlock()
 
 		r.mirrorClearTurnDeadline(gameID)
-		log.Printf("turn timer expired for game %s, player %s", gameID, activePlayerID)
+		slog.Info("turn timer expired", "game_id", gameID, "player_id", activePlayerID)
 		r.handleTurnTimeout(gameID, activePlayerID)
 	})
 
@@ -85,7 +85,7 @@ func (r *GameRelay) mirrorSetTurnDeadline(gameID, activePlayerID string, deadlin
 	ctx, cancel := context.WithTimeout(context.Background(), timerMirrorTimeout)
 	defer cancel()
 	if err := r.timerStore.SetTurnDeadline(ctx, gameID, activePlayerID, deadline); err != nil {
-		log.Printf("WARN: mirror turn deadline for game %s: %v", gameID, err)
+		slog.Warn("mirror turn deadline failed", "game_id", gameID, "error", err)
 	}
 }
 
@@ -98,7 +98,7 @@ func (r *GameRelay) mirrorClearTurnDeadline(gameID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), timerMirrorTimeout)
 	defer cancel()
 	if err := r.timerStore.ClearTurnDeadline(ctx, gameID); err != nil {
-		log.Printf("WARN: clear mirrored turn deadline for game %s: %v", gameID, err)
+		slog.Warn("clear mirrored turn deadline failed", "game_id", gameID, "error", err)
 	}
 }
 
@@ -116,11 +116,11 @@ func (r *GameRelay) handleTurnTimeout(gameID, playerID string) {
 	bothDisconnected, err := r.areBothPlayersDisconnected(ctx, playerID, gameID)
 	cancel()
 	if err != nil {
-		log.Printf("ERROR: turn timeout: lookup game players (game=%s, player=%s): %v", gameID, playerID, err)
+		slog.Error("turn timeout: lookup game players failed", "game_id", gameID, "player_id", playerID, "error", err)
 		return
 	}
 	if bothDisconnected {
-		log.Printf("player %s turn timer expired but opponent is also disconnected for game %s, deferring resolution", playerID, gameID)
+		slog.Info("turn timer expired while opponent is also disconnected, deferring resolution", "player_id", playerID, "game_id", gameID)
 		return
 	}
 
@@ -134,7 +134,7 @@ func (r *GameRelay) handleTurnTimeout(gameID, playerID string) {
 	defer cancel2()
 	result, err := r.battleClient.ProcessAction(ctx2, gameID, pNum, gamelogic.ActionTypeForfeit, buildForfeitReason(gamelogic.WinReasonTurnTimeout))
 	if err != nil {
-		log.Printf("ERROR: turn timeout forfeit (game=%s, player=%s): %v", gameID, playerID, err)
+		slog.Error("turn timeout forfeit failed", "game_id", gameID, "player_id", playerID, "error", err)
 		// forfeit が battle server に到達しないとゲームが終了せず、両プレイヤーが
 		// 待ち続けてしまう。両プレイヤーに通知し、回復は再接続/監視に委ねる。
 		sendErrorToPlayer(r.hub, playerID, "turn_timeout_failed", "failed to register turn timeout", true)

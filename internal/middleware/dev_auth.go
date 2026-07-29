@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -111,7 +111,7 @@ func resolveOrCreateDevPlayer(ctx context.Context, accountClient port.AccountCli
 		}
 		return "", false, fmt.Errorf("register dev player: %w", err)
 	}
-	log.Printf("auto-created dev player: uid=%s playerID=%s (name unset until onboarding)", firebaseUID, newPlayer.PlayerID)
+	slog.Info("auto-created dev player", "firebase_uid", firebaseUID, "player_id", newPlayer.PlayerID)
 
 	return newPlayer.PlayerID, true, nil
 }

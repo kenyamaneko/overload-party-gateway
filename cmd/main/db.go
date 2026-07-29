@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"log/slog"
 	"net"
+	"os"
 
 	"cloud.google.com/go/cloudsqlconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -19,7 +19,8 @@ func parseDatabaseIAMAuthEnabled(raw string) bool {
 	case "false":
 		return false
 	default:
-		log.Fatalf("config: DATABASE_IAM_AUTH_ENABLED must be %q or %q, got %q", "true", "false", raw)
+		slog.Error("config: DATABASE_IAM_AUTH_ENABLED must be true or false", "value", raw)
+		os.Exit(1)
 		return false
 	}
 }

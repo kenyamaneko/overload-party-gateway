@@ -7,8 +7,9 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -35,12 +36,24 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
+// exitOnStartupFailure は起動時の失敗を記録してプロセスを終了する。
+func exitOnStartupFailure(message string, err error) {
+	slog.Error(message, "error", err)
+	os.Exit(1)
+}
+
 func main() {
-	log.Println("=== Overload Party Gateway (LOCAL MODE) ===")
+	// ローカルモードは開発者端末での実行を前提とするため、人間が読みやすいテキスト形式で
+	// 出力する (Cloud Run 上の cmd/main は Cloud Logging 互換 JSON)。
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	})).With("service", "gateway"))
+	slog.Info("gateway starting in local mode")
 
 	cfg := config.Load()
 	if cfg.DatabaseConn == "" {
-		log.Fatal("DATABASE_CONN must be set (gateway owns gateway.game_players)")
+		slog.Error("DATABASE_CONN must be set (gateway owns gateway.game_players)")
+		os.Exit(1)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -48,7 +61,7 @@ func main() {
 
 	pool, err := pgxpool.New(ctx, cfg.DatabaseConn)
 	if err != nil {
-		log.Fatalf("failed to create pg pool: %v", err)
+		exitOnStartupFailure("failed to create pg pool", err)
 	}
 	defer pool.Close()
 
@@ -61,12 +74,12 @@ func main() {
 	if cfg.GoogleCloudProjectID != "" {
 		fsClient, err := firestore.NewClient(ctx, cfg.GoogleCloudProjectID)
 		if err != nil {
-			log.Fatalf("failed to create firestore client: %v", err)
+			exitOnStartupFailure("failed to create firestore client", err)
 		}
 		defer func() { _ = fsClient.Close() }()
 		_ = repository.NewFirestoreGameConfigRepository(fsClient)
 	} else {
-		log.Println("GOOGLE_CLOUD_PROJECT_ID is unset; skipping Firestore client")
+		slog.Info("GOOGLE_CLOUD_PROJECT_ID is unset; skipping Firestore client")
 	}
 
 	cardClient := cardclient.New(cfg.CardServiceURL)
@@ -74,7 +87,8 @@ func main() {
 	accountClient := accountclient.New(cfg.AccountServiceURL)
 
 	if cfg.InternalAuthSecret == "" {
-		log.Fatal("INTERNAL_AUTH_SECRET must be set")
+		slog.Error("INTERNAL_AUTH_SECRET must be set")
+		os.Exit(1)
 	}
 	internalSigner := internalauth.NewSigner(
 		internalauth.StaticHS256Resolver([]byte(cfg.InternalAuthSecret), internalauth.DefaultKeyID),
@@ -87,13 +101,13 @@ func main() {
 	if cfg.UpstashRedisURL != "" {
 		redisOpt, err := redis.ParseURL(cfg.UpstashRedisURL)
 		if err != nil {
-			log.Fatalf("failed to parse UPSTASH_REDIS_URL: %v", err)
+			exitOnStartupFailure("failed to parse UPSTASH_REDIS_URL", err)
 		}
 		redisClient := redis.NewClient(redisOpt)
 		defer func() { _ = redisClient.Close() }()
 		timerStore = redistimer.NewStore(redisClient)
 	} else {
-		log.Println("UPSTASH_REDIS_URL is unset; skipping timer deadline mirroring")
+		slog.Info("UPSTASH_REDIS_URL is unset; skipping timer deadline mirroring")
 	}
 
 	battleClient := service.NewBattleClient(cfg.BattleServerURL)
@@ -103,7 +117,7 @@ func main() {
 
 	matchSub, err := pubsubadapter.NewMatchSubscriber(wsManager)
 	if err != nil {
-		log.Fatalf("failed to create match subscriber: %v", err)
+		exitOnStartupFailure("failed to create match subscriber", err)
 	}
 
 	handlers := &router.Handlers{
@@ -111,7 +125,8 @@ func main() {
 		PubSub: rest.NewPubSubPushHandler(matchSub),
 	}
 
-	r := gin.Default()
+	r := gin.New()
+	r.Use(middleware.UseRequestLogger(), gin.Recovery())
 	r.Use(middleware.UseCORS())
 
 	r.GET("/health", func(c *gin.Context) {
@@ -149,7 +164,7 @@ func main() {
 	api.Use(middleware.UseDevAuthWithPlayerResolve(accountClient))
 	api.Use(middleware.IssueInternalAuth(internalSigner))
 	if err := router.RegisterForwardRoutes(api, cfg); err != nil {
-		log.Fatalf("failed to register forward routes: %v", err)
+		exitOnStartupFailure("failed to register forward routes", err)
 	}
 
 	srv := &http.Server{
@@ -161,15 +176,14 @@ func main() {
 	defer stop()
 
 	go func() {
-		log.Println("gateway local server starting on :9001")
-		log.Println("  REST: http://localhost:9001/api/v1/")
+		slog.Info("gateway local server starting", "rest", "http://localhost:9001/api/v1/")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("listen: %v", err)
+			exitOnStartupFailure("listen failed", err)
 		}
 	}()
 
 	<-srvCtx.Done()
-	log.Println("shutting down...")
+	slog.Info("shutting down")
 
 	wsShutdownCtx, wsCancel := context.WithTimeout(context.Background(), ws.ShutdownNotifyTimeout)
 	wsManager.Shutdown(wsShutdownCtx)
@@ -179,7 +193,7 @@ func main() {
 	defer cancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Fatalf("server forced to shutdown: %v", err)
+		exitOnStartupFailure("server forced to shutdown", err)
 	}
-	log.Println("gateway local server exited")
+	slog.Info("gateway local server exited")
 }

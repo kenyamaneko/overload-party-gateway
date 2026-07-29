@@ -3,7 +3,7 @@ package ws
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -119,7 +119,7 @@ func (r *GameRelay) resolveStaleDisconnect(gameID, returningPlayerID string, ret
 
 	entries, err := r.gamePlayerRepo.LookupGamePlayers(ctx, gameID)
 	if err != nil {
-		log.Printf("ERROR: resolve stale disconnect: lookup game players (game=%s, player=%s): %v", gameID, returningPlayerID, err)
+		slog.Error("resolve stale disconnect: lookup game players failed", "game_id", gameID, "player_id", returningPlayerID, "error", err)
 		return
 	}
 	opponentID := opponentPlayerID(entries, returningPlayerID)
@@ -128,7 +128,7 @@ func (r *GameRelay) resolveStaleDisconnect(gameID, returningPlayerID string, ret
 	}
 	opponentExpired, err := r.hub.IsDisconnectDeadlineExpired(opponentID)
 	if err != nil {
-		log.Printf("ERROR: resolve stale disconnect: check opponent %s disconnect deadline for game %s: %v, leaving unresolved", opponentID, gameID, err)
+		slog.Error("resolve stale disconnect: check opponent disconnect deadline failed, leaving unresolved", "opponent_id", opponentID, "game_id", gameID, "error", err)
 		return
 	}
 	if !opponentExpired {
@@ -145,7 +145,7 @@ func (r *GameRelay) resolveStaleDisconnect(gameID, returningPlayerID string, ret
 	// 両者とも猶予切れのときは引き分けとするが、forfeit アクションは常に相手を
 	// 勝者にする契約のため battle の現行 API では表現できない。誤った勝者を
 	// 立てないため、未決着のまま残し要監視のログだけ残す。
-	log.Printf("ERROR: both players' disconnect grace expired for game %s (opponent=%s, returning=%s), leaving unresolved (draw not expressible via current forfeit API)", gameID, opponentID, returningPlayerID)
+	slog.Error("both players' disconnect grace expired, leaving unresolved (draw not expressible via current forfeit API)", "game_id", gameID, "opponent_id", opponentID, "returning_player_id", returningPlayerID)
 }
 
 // areBothPlayersDisconnected は gameID の 2 人対戦で playerID と対戦相手の双方が、
@@ -231,7 +231,7 @@ func (r *GameRelay) BroadcastToGame(gameID string, msg *WSMessage) {
 	// 念のためエラーログを出して継続する（broadcast 自体を panic させない）。
 	data, err := json.Marshal(msg)
 	if err != nil {
-		log.Printf("ERROR: marshal broadcast message for game %s (type=%s): %v", gameID, msg.Type, err)
+		slog.Error("marshal broadcast message failed", "game_id", gameID, "type", msg.Type, "error", err)
 		return
 	}
 
@@ -264,7 +264,7 @@ func (r *GameRelay) SendGameStateToPlayers(gameID string) {
 		}
 		state, err := r.battleClient.GetGameStateForPlayer(ctx, gameID, pNum)
 		if err != nil {
-			log.Printf("ERROR: get game state for player %s in game %s: %v", pid, gameID, err)
+			slog.Error("get game state for player failed", "player_id", pid, "game_id", gameID, "error", err)
 			sendErrorToPlayer(r.hub, pid, "game_state_error", "failed to retrieve game state", true)
 			continue
 		}
@@ -273,7 +273,7 @@ func (r *GameRelay) SendGameStateToPlayers(gameID string) {
 		if err := json.Unmarshal(state, &meta); err != nil {
 			// battle server からの state が想定外の構造。ターンタイマー更新は諦めるが
 			// クライアントへの状態転送自体は継続する（将来追加されたフィールドへの前方互換）。
-			log.Printf("ERROR: extract turn timer for player %s in game %s: %v", pid, gameID, err)
+			slog.Warn("extract turn timer failed", "player_id", pid, "game_id", gameID, "error", err)
 		} else if meta.IsMyTurn {
 			activePlayerID = pid
 			activeTimeBank = meta.MyView.TimeBank
@@ -306,7 +306,7 @@ func (r *GameRelay) SendTurnControlsToPlayers(gameID string) {
 		}
 		raw, err := r.battleClient.GetTurnControlsForPlayer(ctx, gameID, pNum)
 		if err != nil {
-			log.Printf("ERROR: get turn controls for player %s in game %s: %v", pid, gameID, err)
+			slog.Error("get turn controls for player failed", "player_id", pid, "game_id", gameID, "error", err)
 			sendErrorToPlayer(r.hub, pid, "turn_controls_error", "failed to retrieve turn controls", true)
 			continue
 		}
@@ -376,7 +376,7 @@ func mapToRaw(m map[string]interface{}) json.RawMessage {
 	}
 	raw, err := json.Marshal(m)
 	if err != nil {
-		log.Printf("ws: marshal action payload: %v", err)
+		slog.Warn("marshal action payload failed", "error", err)
 		return nil
 	}
 	return raw
@@ -392,15 +392,15 @@ const maxNpcTurnIterations = 200
 func (r *GameRelay) runNpcTurns(ctx context.Context, gameID, playerID string, current *service.ActionResult) *service.ActionResult {
 	for i := 0; current != nil && current.NpcPending && !current.GameOver; i++ {
 		if i >= maxNpcTurnIterations {
-			log.Printf("ERROR: runNpcTurns iteration cap reached (game=%s, player=%s) — possible battle server bug", gameID, playerID)
+			slog.Error("runNpcTurns iteration cap reached (possible battle server bug)", "game_id", gameID, "player_id", playerID)
 			return current
 		}
 		next, err := r.battleClient.AdvanceNpcTurn(ctx, gameID)
 		if err != nil {
 			if isCanceled(err) {
-				log.Printf("runNpcTurns canceled (game=%s, player=%s): %v", gameID, playerID, err)
+				slog.Info("runNpcTurns canceled", "game_id", gameID, "player_id", playerID, "error", err)
 			} else {
-				log.Printf("ERROR: advance NPC turn loop (game=%s, player=%s): %v", gameID, playerID, err)
+				slog.Error("advance NPC turn loop failed", "game_id", gameID, "player_id", playerID, "error", err)
 				sendErrorToPlayer(r.hub, playerID, "npc_turn_error", "failed to advance NPC turn", true)
 			}
 			return current
@@ -423,10 +423,10 @@ func (r *GameRelay) sendActionToPlayers(ctx context.Context, gameID string, pids
 		if err != nil {
 			if isCanceled(err) {
 				// 上流（典型的には WS 切断）でキャンセルされた。ループは続行不要、次プレイヤーへ。
-				log.Printf("get game state for action_performed canceled (player %s): %v", pid, err)
+				slog.Info("get game state for action_performed canceled", "player_id", pid, "error", err)
 				continue
 			}
-			log.Printf("ERROR: get game state for action_performed (player %s, game %s): %v", pid, gameID, err)
+			slog.Error("get game state for action_performed failed", "player_id", pid, "game_id", gameID, "error", err)
 			sendErrorToPlayer(r.hub, pid, "game_state_error", "failed to retrieve game state", true)
 			continue
 		}
@@ -471,7 +471,7 @@ func (r *GameRelay) HandleGameEnter(conn *Connection, data json.RawMessage) {
 			// 接続切断につき中止
 			return
 		}
-		log.Printf("ERROR: lookup player_num for %s in game %s: %v", conn.playerID, req.GameID, err)
+		slog.Error("lookup player_num failed", "player_id", conn.playerID, "game_id", req.GameID, "error", err)
 		sendError(conn, "game_error", "player not found in game", false)
 		return
 	}
@@ -506,7 +506,7 @@ func (r *GameRelay) advanceNpcIfNeeded(parentCtx context.Context, gameID, player
 		if isCanceled(err) {
 			return
 		}
-		log.Printf("ERROR: advance NPC turn (game %s): %v", gameID, err)
+		slog.Error("advance NPC turn failed", "game_id", gameID, "error", err)
 		sendErrorToPlayer(r.hub, playerID, "npc_turn_error", "failed to advance NPC turn", true)
 		return
 	}
@@ -530,7 +530,7 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 
 	pNum := r.resolvePlayerNum(conn.playerID)
 	if pNum == 0 {
-		log.Printf("ERROR: cannot resolve player_num for %s in game %s", conn.playerID, gameID)
+		slog.Error("cannot resolve player_num", "player_id", conn.playerID, "game_id", gameID)
 		sendError(conn, "game_error", "player not in game", false)
 		return
 	}
@@ -539,7 +539,7 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 		if isCanceled(err) {
 			return
 		}
-		log.Printf("ERROR: get game state for battle_start (player %s): %v", conn.playerID, err)
+		slog.Error("get game state for battle_start failed", "player_id", conn.playerID, "error", err)
 		sendErrorToPlayer(r.hub, conn.playerID, "game_state_error", "failed to retrieve game state", true)
 		return
 	}
@@ -549,7 +549,7 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 		if isCanceled(err) {
 			return
 		}
-		log.Printf("ERROR: lookup game players for battle_start (game %s): %v", gameID, err)
+		slog.Error("lookup game players for battle_start failed", "game_id", gameID, "error", err)
 		sendErrorToPlayer(r.hub, conn.playerID, "game_state_error", "failed to retrieve game metadata", true)
 		return
 	}
@@ -560,7 +560,7 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 
 	var clientState apibattle.ClientGameState
 	if err := json.Unmarshal(rawState, &clientState); err != nil {
-		log.Printf("ERROR: parse client game state for battle_start (game %s): %v", gameID, err)
+		slog.Error("parse client game state for battle_start failed", "game_id", gameID, "error", err)
 		sendErrorToPlayer(r.hub, conn.playerID, "game_state_error", "failed to parse game state", true)
 		return
 	}
@@ -602,7 +602,7 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 	if err := json.Unmarshal(rawState, &stateMeta); err != nil {
 		// turn_start メタが取れなくても battle_start は送信済み。クライアントは続く
 		// SendGameStateToPlayers の game_state で同等情報を得るため continue する。
-		log.Printf("ERROR: parse state meta for turn_start (game %s): %v", gameID, err)
+		slog.Warn("parse state meta for turn_start failed", "game_id", gameID, "error", err)
 		return
 	}
 	turnStartData := map[string]interface{}{
@@ -708,11 +708,11 @@ func (r *GameRelay) HandleDisconnectTimeout(playerID, gameID string) {
 	bothDisconnected, err := r.areBothPlayersDisconnected(ctx, playerID, gameID)
 	cancel()
 	if err != nil {
-		log.Printf("ERROR: disconnect timeout: lookup game players (game=%s, player=%s): %v", gameID, playerID, err)
+		slog.Error("disconnect timeout: lookup game players failed", "game_id", gameID, "player_id", playerID, "error", err)
 		return
 	}
 	if bothDisconnected {
-		log.Printf("player %s disconnect grace expired but opponent is also disconnected for game %s, deferring resolution", playerID, gameID)
+		slog.Info("disconnect grace expired while opponent is also disconnected, deferring resolution", "player_id", playerID, "game_id", gameID)
 		return
 	}
 
@@ -730,7 +730,7 @@ func (r *GameRelay) HandleDisconnectTimeout(playerID, gameID string) {
 		// 切断 forfeit は対戦相手にも影響する（ゲーム終了せず宙ぶらりんになる）。
 		// 接続は既に切れているので本人通知は不可能だが、対戦相手は DB 観測 / 別経路の
 		// 再接続でリカバリする想定。要監視。
-		log.Printf("ERROR: disconnect forfeit (game=%s, player=%s, opponent stuck risk): %v", gameID, playerID, err)
+		slog.Error("disconnect forfeit failed (opponent stuck risk)", "game_id", gameID, "player_id", playerID, "error", err)
 		return
 	}
 	if result != nil && result.GameOver {
@@ -771,7 +771,7 @@ func (r *GameRelay) lookupMatchType(ctx context.Context, gameID string) string {
 	}
 	entries, err := r.gamePlayerRepo.LookupGamePlayers(ctx, gameID)
 	if err != nil {
-		log.Printf("ERROR: lookup match type for game %s: %v", gameID, err)
+		slog.Error("lookup match type failed", "game_id", gameID, "error", err)
 		return ""
 	}
 	if len(entries) == 1 {

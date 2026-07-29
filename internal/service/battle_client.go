@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -181,7 +181,7 @@ func parseBattleError(statusCode int, body []byte) error {
 		Error string `json:"error"`
 	}
 	if err := json.Unmarshal(body, &errResp); err != nil {
-		log.Printf("failed to parse battle error response: %v", err)
+		slog.Warn("failed to parse battle error response", "error", err)
 	} else if errResp.Error != "" {
 		return errors.New(errResp.Error)
 	}

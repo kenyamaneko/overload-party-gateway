@@ -3,7 +3,7 @@ package ws
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -80,7 +80,7 @@ func (c *Connection) PlayerID() string {
 func (c *Connection) SendMessage(msg *WSMessage) {
 	data, err := json.Marshal(msg)
 	if err != nil {
-		log.Printf("marshal ws message: %v", err)
+		slog.Warn("marshal ws message failed", "error", err)
 		return
 	}
 	c.SendRaw(data)
@@ -98,7 +98,7 @@ func (c *Connection) SendRaw(data []byte) {
 	select {
 	case c.send <- data:
 	default:
-		log.Printf("send buffer full for player %s, dropping message", c.playerID)
+		slog.Warn("send buffer full, dropping message", "player_id", c.playerID)
 	}
 }
 
@@ -121,7 +121,7 @@ func (c *Connection) ReadPump(hub *ConnectionHub, manager *Manager) {
 		_, data, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
-				log.Printf("ws read error for player %s: %v", c.playerID, err)
+				slog.Warn("ws read error", "player_id", c.playerID, "error", err)
 			}
 			return
 		}
