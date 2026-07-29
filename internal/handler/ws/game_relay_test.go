@@ -45,11 +45,14 @@ type mockBattleClient struct {
 	processActionCalls []processActionCall
 }
 
-// createPvPGameCall records a single CreatePvPGame invocation's player summaries,
-// enough to tell distinct calls apart without needing full deck payloads.
+// createPvPGameCall records a single CreatePvPGame invocation's arguments.
 type createPvPGameCall struct {
-	player1Summary service.PlayerSummaryRequest
-	player2Summary service.PlayerSummaryRequest
+	deck1Cards       []service.BattleDeckCard
+	deck2Cards       []service.BattleDeckCard
+	deck1Initiatives service.DeckInitiatives
+	deck2Initiatives service.DeckInitiatives
+	player1Summary   service.PlayerSummaryRequest
+	player2Summary   service.PlayerSummaryRequest
 }
 
 type createPvPGameResponse struct {
@@ -77,10 +80,17 @@ func (m *mockBattleClient) StartNPCBattle(_ context.Context, _ []service.BattleD
 	return nil, nil
 }
 
-func (m *mockBattleClient) CreatePvPGame(_ context.Context, _, _ []service.BattleDeckCard, _, _ service.DeckInitiatives, player1Summary, player2Summary service.PlayerSummaryRequest) (*service.GameCreatedResult, error) {
+func (m *mockBattleClient) CreatePvPGame(_ context.Context, deck1Cards, deck2Cards []service.BattleDeckCard, deck1Initiatives, deck2Initiatives service.DeckInitiatives, player1Summary, player2Summary service.PlayerSummaryRequest) (*service.GameCreatedResult, error) {
 	m.createPvPGameMu.Lock()
 	defer m.createPvPGameMu.Unlock()
-	m.createPvPGameCalls = append(m.createPvPGameCalls, createPvPGameCall{player1Summary, player2Summary})
+	m.createPvPGameCalls = append(m.createPvPGameCalls, createPvPGameCall{
+		deck1Cards:       deck1Cards,
+		deck2Cards:       deck2Cards,
+		deck1Initiatives: deck1Initiatives,
+		deck2Initiatives: deck2Initiatives,
+		player1Summary:   player1Summary,
+		player2Summary:   player2Summary,
+	})
 	if len(m.createPvPGameQueue) > 0 {
 		r := m.createPvPGameQueue[0]
 		m.createPvPGameQueue = m.createPvPGameQueue[1:]
@@ -214,7 +224,7 @@ func TestBattleStateMeta_Parsing(t *testing.T) {
 
 func TestRunNpcTurns(t *testing.T) {
 	t.Run("NPC ターンの自動進行", func(t *testing.T) {
-		t.Run("初期結果が nil のとき、AdvanceNpcTurn を呼ばず nil を返す", func(t *testing.T) {
+		t.Run("初期結果が nil のとき、NPC ターンを進めず nil を返す", func(t *testing.T) {
 			relay, bc := newTestRelay()
 			ctx := context.Background()
 
@@ -279,7 +289,7 @@ func TestRunNpcTurns(t *testing.T) {
 			assert.Equal(t, 1, bc.advanceNpcCalls, "should stop immediately on GameOver")
 		})
 
-		t.Run("AdvanceNpcTurn がエラーのとき、直前の結果を返して止める", func(t *testing.T) {
+		t.Run("NPC ターンの進行がエラーのとき、直前の結果を返して止める", func(t *testing.T) {
 			relay, bc := newTestRelay()
 			ctx := context.Background()
 			bc.advanceNpcErr = errFake
