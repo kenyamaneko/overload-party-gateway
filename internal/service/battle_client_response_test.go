@@ -189,3 +189,57 @@ func TestBattleClient_GetTurnControlsForPlayer(t *testing.T) {
 		}
 	})
 }
+
+func TestBattleClient_PostErrorResponse(t *testing.T) {
+	t.Run("送信系の非 200 応答のエラー変換", func(t *testing.T) {
+		cases := []struct {
+			name    string
+			status  int
+			body    string
+			wantMsg string
+			call    func(context.Context, BattleClient) error
+		}{
+			{
+				name:    "アクション送信が 400 の構造化エラーを受けたとき、message をエラー文に含める",
+				status:  http.StatusBadRequest,
+				body:    `{"error":"invalid action"}`,
+				wantMsg: "invalid action",
+				call: func(ctx context.Context, c BattleClient) error {
+					_, err := c.ProcessAction(ctx, "game-1", 1, "play_card", json.RawMessage(`{}`))
+					return err
+				},
+			},
+			{
+				name:    "NPC 対戦の作成が 500 の非 JSON エラーを受けたとき、ステータスコードと body 文字列を含める",
+				status:  http.StatusInternalServerError,
+				body:    "boom",
+				wantMsg: "battle server returned 500: boom",
+				call: func(ctx context.Context, c BattleClient) error {
+					_, err := c.StartNPCBattle(ctx, nil, DeckInitiatives{}, "npc-1", PlayerSummaryRequest{}, PlayerSummaryRequest{})
+					return err
+				},
+			},
+			{
+				name:    "PvP 対戦の作成が 400 の構造化エラーを受けたとき、message をエラー文に含める",
+				status:  http.StatusBadRequest,
+				body:    `{"error":"deck mismatch"}`,
+				wantMsg: "deck mismatch",
+				call: func(ctx context.Context, c BattleClient) error {
+					_, err := c.CreatePvPGame(ctx, nil, nil, DeckInitiatives{}, DeckInitiatives{}, PlayerSummaryRequest{}, PlayerSummaryRequest{})
+					return err
+				},
+			},
+		}
+
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				srv := newBattleServer(t, tc.status, tc.body)
+				c := NewBattleClient(srv.URL)
+
+				err := tc.call(context.Background(), c)
+
+				require.EqualError(t, err, tc.wantMsg)
+			})
+		}
+	})
+}

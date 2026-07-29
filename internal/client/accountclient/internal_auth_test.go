@@ -10,7 +10,20 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
+
+// newStatusServer は指定ステータスと body を返す account サービスのスタブを生成する。
+func newStatusServer(t *testing.T, status int, body string) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(body))
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
 
 func TestClient_InjectsInternalAuthHeader(t *testing.T) {
 	t.Run("X-Internal-Auth header の注入", func(t *testing.T) {
@@ -28,5 +41,73 @@ func TestClient_InjectsInternalAuthHeader(t *testing.T) {
 			require.NoError(t, c.IncrementBattleCount(ctx))
 			assert.Equal(t, wantToken, got)
 		})
+	})
+}
+
+func TestClient_MapsDownstreamStatusToPortSentinel(t *testing.T) {
+	cases := []struct {
+		name    string
+		status  int
+		call    func(context.Context, *Client) error
+		wantErr error
+	}{
+		{
+			name:    "重複登録の 409 は ErrPlayerAlreadyRegistered に写像する",
+			status:  http.StatusConflict,
+			call:    func(ctx context.Context, c *Client) error { _, err := c.Register(ctx, "uid-1"); return err },
+			wantErr: port.ErrPlayerAlreadyRegistered,
+		},
+		{
+			name:    "未登録プレイヤーの 404 は ErrAccountNotFound に写像する",
+			status:  http.StatusNotFound,
+			call:    func(ctx context.Context, c *Client) error { _, err := c.Login(ctx, "uid-1"); return err },
+			wantErr: port.ErrAccountNotFound,
+		},
+	}
+
+	t.Run("登録・ログインの失敗応答の変換", func(t *testing.T) {
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				srv := newStatusServer(t, tc.status, `{}`)
+				c := New(srv.URL)
+
+				err := tc.call(context.Background(), c)
+
+				require.ErrorIs(t, err, tc.wantErr)
+			})
+		}
+	})
+}
+
+func TestClient_FindByFirebaseUID_FoldsNotFoundToNil(t *testing.T) {
+	cases := []struct {
+		name       string
+		status     int
+		wantPlayer bool
+	}{
+		{
+			name:       "未登録は 404 を (nil, nil) に畳む",
+			status:     http.StatusNotFound,
+			wantPlayer: false,
+		},
+		{
+			name:       "登録済みは player を返す",
+			status:     http.StatusOK,
+			wantPlayer: true,
+		},
+	}
+
+	t.Run("Firebase UID によるプレイヤー検索", func(t *testing.T) {
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				srv := newStatusServer(t, tc.status, `{}`)
+				c := New(srv.URL)
+
+				player, err := c.FindByFirebaseUID(context.Background(), "uid-1")
+
+				require.NoError(t, err)
+				assert.Equal(t, tc.wantPlayer, player != nil)
+			})
+		}
 	})
 }

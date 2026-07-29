@@ -72,10 +72,6 @@ func newMockBattleClient() *mockBattleClient {
 	return &mockBattleClient{}
 }
 
-func (m *mockBattleClient) GetNPCModels(_ context.Context) (json.RawMessage, error) {
-	return json.RawMessage(`[]`), nil
-}
-
 func (m *mockBattleClient) ListNpcModels(_ context.Context) ([]service.NpcModelEntry, error) {
 	return nil, nil
 }
@@ -152,14 +148,6 @@ func (m *mockBattleClient) AdvanceNpcTurn(_ context.Context, _ string) (*service
 		return r, nil
 	}
 	return m.advanceNpcResult, m.advanceNpcErr
-}
-
-func (m *mockBattleClient) GetGameLog(_ context.Context, _ string) (json.RawMessage, error) {
-	return nil, nil
-}
-
-func (m *mockBattleClient) GetGameLogText(_ context.Context, _ string) ([]byte, error) {
-	return nil, nil
 }
 
 // --- helpers ---
