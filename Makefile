@@ -1,4 +1,4 @@
-.PHONY: build test test-unit test-integration test-db-up test-db-down lint vet fmt \
+.PHONY: build test test-unit test-integration test-emulator-up test-emulator-down lint vet fmt \
        run run-local run-gateway \
        update-common clean help
 
@@ -11,9 +11,6 @@ endif
 # ─── Config ──────────────────────────────────────────────
 APP    := overload-party-gateway
 MODULE := github.com/kenyamaneko/$(APP)
-
-# ─── Common Repo ─────────────────────────────────────────
-COMMON_DIR  ?= $(CURDIR)/../overload-party-common
 
 # ─── Dependency ──────────────────────────────────────────
 # Gateway depends on multiple common sub-modules since ADR-015 Phase 3.
@@ -37,7 +34,8 @@ build:  ## Build Docker image
 	docker build -t $(APP) .
 
 # ─── Test & Lint ─────────────────────────────────────────
-TEST_DB_URL ?= postgres://testuser:testpass@localhost:5433/testdb?sslmode=disable
+FIRESTORE_EMULATOR_HOST ?= localhost:8080
+FIRESTORE_EMULATOR_CONTAINER := gateway-firestore-emulator
 
 test: test-unit  ## Run unit tests only (no Docker required)
 
@@ -46,14 +44,26 @@ test-all: test-unit test-integration  ## Run unit + integration tests
 test-unit:  ## Run unit tests
 	go test ./internal/... -count=1 -race
 
-test-integration: test-db-up  ## Run integration tests (requires Docker)
-	TEST_DB_URL="$(TEST_DB_URL)" go test ./internal/repository/ -run TestPg -count=1 -race -v
+test-integration: test-emulator-up  ## Run integration tests (requires Docker)
+	FIRESTORE_EMULATOR_HOST="$(FIRESTORE_EMULATOR_HOST)" \
+	GOOGLE_CLOUD_PROJECT_ID=overload-party-test \
+	go test -race -tags=integration ./internal/... -count=1 -v
 
-test-db-up:  ## Start test PostgreSQL container
-	docker compose -f $(COMMON_DIR)/db/docker-compose.test.yml up -d --wait
+test-emulator-up:  ## Start Firestore emulator container (reuses one already listening)
+	@if curl -sf http://$(FIRESTORE_EMULATOR_HOST) >/dev/null 2>&1; then \
+		echo "Firestore emulator already running at $(FIRESTORE_EMULATOR_HOST)"; \
+	else \
+		docker run -d --rm --name $(FIRESTORE_EMULATOR_CONTAINER) -p 8080:8080 \
+			gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators \
+			gcloud beta emulators firestore start --project=overload-party-test --host-port=0.0.0.0:8080; \
+		for i in $$(seq 1 30); do \
+			curl -sf http://$(FIRESTORE_EMULATOR_HOST) >/dev/null && break; sleep 1; \
+		done; \
+		curl -sf http://$(FIRESTORE_EMULATOR_HOST) >/dev/null || { echo "Firestore emulator failed to start"; exit 1; }; \
+	fi
 
-test-db-down:  ## Stop test PostgreSQL container
-	docker compose -f $(COMMON_DIR)/db/docker-compose.test.yml down
+test-emulator-down:  ## Stop Firestore emulator container
+	docker stop $(FIRESTORE_EMULATOR_CONTAINER)
 
 lint:  ## Run golangci-lint
 	golangci-lint run ./...
