@@ -32,3 +32,14 @@ CREATE TABLE gateway.game_players (
 );
 
 CREATE INDEX idx_gateway_game_players_player_id ON gateway.game_players(player_id);
+
+-- =============================================================================
+-- Match Dedup (schema: gateway)
+-- =============================================================================
+
+CREATE TABLE gateway.processed_matches (
+  match_id     VARCHAR(64) NOT NULL,             -- matchmaking の match_id (mch_<ULID>)
+  game_id      VARCHAR(26),                      -- battle.games(game_id) を参照 (app-level FK)。作成前は NULL
+  claimed_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (match_id)
+);

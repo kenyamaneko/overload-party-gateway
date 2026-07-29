@@ -110,6 +110,13 @@ channels:
       OpponentReconnectedMessage:
         $ref: "#/components/messages/OpponentReconnectedMessage"
 
+  ServerShutdown:
+    address: server_shutdown
+    description: サーバーが終了処理に入ったことを接続中のクライアントへ通知。送信後に WS 接続を閉じる。
+    messages:
+      ServerShutdownMessage:
+        $ref: "#/components/messages/ServerShutdownMessage"
+
 operations:
   # ─── Client → Server (gateway が receive する) ─────────────────────
   receiveGameEnter:
@@ -196,6 +203,12 @@ operations:
     channel:
       $ref: "#/channels/OpponentReconnected"
     summary: 対戦相手の再接続を通知。
+
+  sendServerShutdown:
+    action: send
+    channel:
+      $ref: "#/channels/ServerShutdown"
+    summary: サーバー終了処理の開始をクライアントへ通知。
 
 components:
   messages:
@@ -284,6 +297,12 @@ components:
       contentType: application/json
       payload:
         $ref: "#/components/schemas/OpponentReconnectedMessage"
+
+    ServerShutdownMessage:
+      name: ServerShutdownMessage
+      contentType: application/json
+      payload:
+        $ref: "#/components/schemas/ServerShutdownMessage"
 
   schemas:
     # ─── Client → Server payloads ───────────────────────────────────
@@ -436,3 +455,7 @@ components:
     OpponentReconnectedMessage:
       type: object
       description: 対戦相手の再接続通知 (空ペイロード)。
+
+    ServerShutdownMessage:
+      type: object
+      description: サーバー終了処理開始通知 (空ペイロード)。

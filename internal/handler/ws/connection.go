@@ -30,7 +30,21 @@ type Connection struct {
 	playerID string
 	send     chan []byte
 	mu       sync.Mutex
+	// isClosed は send チャネルの close / ctx の cancel 済みを表す。true になった後は
+	// 新規の送信を受け付けない。
 	isClosed bool
+	// connClosed は下層ソケットの close 済みを表す。isClosed とは別に管理し、
+	// Shutdown 経由の close では WritePump が close フレームを書き終えるまで
+	// ソケットの close を遅らせられるようにする。
+	connClosed bool
+	// closeCode / closeReason は WritePump が最終的に送出する close フレームの内容。
+	// beginClose が isClosed を立てる際に必ず設定する。
+	closeCode   int
+	closeReason string
+	// writeDone は closeConn（下層ソケットの実クローズ）が完了すると close される。
+	// Shutdown はこれを待つことで、プロセスが終了する前に close フレームの書き込みが
+	// 確実に完了しているようにする。
+	writeDone chan struct{}
 
 	// ctx は接続が閉じられた時点で cancel される。
 	// 下流の HTTP 呼び出しに引き回すことで、WS 切断時に in-flight な処理を即座に打ち切る。
@@ -42,11 +56,12 @@ type Connection struct {
 func NewConnection(conn *websocket.Conn, playerID string) *Connection {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Connection{
-		conn:     conn,
-		playerID: playerID,
-		send:     make(chan []byte, sendBufferSize),
-		ctx:      ctx,
-		cancel:   cancel,
+		conn:      conn,
+		playerID:  playerID,
+		send:      make(chan []byte, sendBufferSize),
+		writeDone: make(chan struct{}),
+		ctx:       ctx,
+		cancel:    cancel,
 	}
 }
 
@@ -138,7 +153,10 @@ func (c *Connection) WritePump() {
 			// deadline/close の失敗は接続が既に閉じている場合のみ。直後の WriteMessage または return → Close で処理される。
 			_ = c.conn.SetWriteDeadline(time.Now().Add(writeTimeout))
 			if !ok {
-				_ = c.conn.WriteMessage(websocket.CloseMessage, nil)
+				c.mu.Lock()
+				code, reason := c.closeCode, c.closeReason
+				c.mu.Unlock()
+				_ = c.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(code, reason))
 				return
 			}
 			if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
@@ -154,19 +172,54 @@ func (c *Connection) WritePump() {
 	}
 }
 
-// Close は接続をクローズします
+// Close は接続を即座にクローズします。close フレームの送出は待たず、下層ソケットも
+// 同時にクローズします。SIGTERM 時に終了を伝えてから閉じるには Shutdown を使ってください。
 func (c *Connection) Close() {
+	c.beginClose(websocket.CloseNormalClosure, "")
+	c.closeConn()
+}
+
+// Shutdown は終了通知メッセージを送出したうえで、WS close フレームに code と reason を
+// 載せてから接続を閉じます。close コードにより、クライアントはこの切断を異常な切断と
+// 区別できます。呼び出し元が終了処理の完了を確認できるよう、下層ソケットが実際に
+// クローズされるまで待って返ります。
+func (c *Connection) Shutdown(code int, reason string) {
+	c.SendMessage(&WSMessage{Type: genws.WSServerMsgServerShutdown})
+	c.beginClose(code, reason)
+	// 下層ソケットの close は WritePump が close フレームを書き終えた後、
+	// その defer 経由の Close 呼び出しが担う。ここで待たないと、close フレームの
+	// 書き込みを待たずにプロセスが終了しうる。
+	<-c.writeDone
+}
+
+// beginClose は close フレームの code/reason を確定し、send チャネルの close と ctx の
+// cancel を一度だけ行う。一度実行されると以降の呼び出しは no-op。
+func (c *Connection) beginClose(code int, reason string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if !c.isClosed {
-		c.isClosed = true
-		// 下流呼び出しを即座に打ち切るため close より先に cancel する。
-		if c.cancel != nil {
-			c.cancel()
-		}
-		close(c.send)
-		if c.conn != nil {
-			_ = c.conn.Close()
-		}
+	if c.isClosed {
+		return
 	}
+	c.isClosed = true
+	c.closeCode = code
+	c.closeReason = reason
+	// 下流呼び出しを即座に打ち切るため close より先に cancel する。
+	if c.cancel != nil {
+		c.cancel()
+	}
+	close(c.send)
+}
+
+// closeConn は下層ソケットを一度だけクローズし、待機中の Shutdown 呼び出し元に完了を知らせる。
+func (c *Connection) closeConn() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.connClosed {
+		return
+	}
+	c.connClosed = true
+	if c.conn != nil {
+		_ = c.conn.Close()
+	}
+	close(c.writeDone)
 }

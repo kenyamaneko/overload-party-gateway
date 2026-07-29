@@ -4,30 +4,30 @@
 
 ## 目次
 
-1. [概要](#1-概要)
-2. [認証と接続](#2-認証と接続)
-3. [切断とタイムアウト](#3-切断とタイムアウト)
-4. [Client → Server メッセージ](#4-client--server-メッセージ)
+1. [概要](#概要)
+2. [認証と接続](#認証と接続)
+3. [切断とタイムアウト](#切断とタイムアウト)
+4. [Client → Server メッセージ](#client--server-メッセージ)
    - [Matchmaking](#matchmaking)
    - [Game](#game)
    - [NPC Battle](#npc-battle)
    - [Ping](#ping)
-5. [Server → Client メッセージ](#5-server--client-メッセージ)
+5. [Server → Client メッセージ](#server--client-メッセージ)
    - [Matchmaking](#matchmaking-1)
    - [Game State](#game-state)
    - [Game Flow](#game-flow)
    - [NPC Battle](#npc-battle-1)
    - [Connection Status](#connection-status)
    - [Pong](#pong)
-6. [メッセージ一覧](#6-メッセージ一覧)
+6. [メッセージ一覧](#メッセージ一覧)
 
 ---
 
-## 1. 概要
+## 概要
 
 Gateway Server が提供する WebSocket API。リアルタイムのゲーム通信（マッチメイキング、ゲーム状態同期）に使用する。
 
-- REST API 契約: [API_REFERENCE.md](API_REFERENCE.md)
+- REST API 契約: [../data/openapi.yaml](../data/openapi.yaml)
 - サービス責務・契約: [FEATURE_SPEC.md](FEATURE_SPEC.md)
 - WS 終端方針・マッチメイキングの WS push 経路・Pod 単一性前提などの設計意図: [ARCHITECTURE.md](ARCHITECTURE.md)
 
@@ -55,7 +55,7 @@ Gateway Server が提供する WebSocket API。リアルタイムのゲーム通
 
 ---
 
-## 2. 認証と接続
+## 認証と接続
 
 ```
 GET /ws?token={token}
@@ -68,9 +68,8 @@ GET /ws?token={token}
 
 ### ローカル開発
 
-- `token` に `dev-token-{uid}` を指定（空でも可）
-- トークンが空の場合、`uid = "dev-anonymous"` として扱う
-- 未登録の uid に対してプレイヤーを自動作成
+- `token` に `dev-token-{uid}` を指定（空の場合は 401）
+- 未登録の uid は 401 で拒否する（プレイヤーは REST 側の dev 認証が自動作成する）
 
 ### Keep-alive
 
@@ -78,15 +77,16 @@ GET /ws?token={token}
 
 ---
 
-## 3. 切断とタイムアウト
+## 切断とタイムアウト
 
-- **切断タイムアウト:** ゲーム中にプレイヤーが切断した場合、60 秒以内に再接続しないと自動フォーフェイト（敗北扱い）となる
+- **切断タイムアウト:** ゲーム中にプレイヤーが切断した場合、対戦相手が接続中であれば 120 秒以内に再接続しないと自動フォーフェイト（敗北扱い）となる
+- **全員切断時:** 対戦中の全員が切断した場合はその場では決着せず、どちらかが復帰した時点で両者の猶予期限を評価する。対戦相手だけ猶予切れなら復帰した側の勝ち、両者とも猶予切れなら未決着のまま残る
 - **ターンタイムアウト:** 各ターンにはタイムバンク制限がある。超過すると自動フォーフェイトとなる
 - **再接続:** 再接続時はクライアントが `game_enter` を送信し、通常の `game_state` + `turn_controls` を受け取る
 
 ---
 
-## 4. Client → Server メッセージ
+## Client → Server メッセージ
 
 ### Matchmaking
 
@@ -212,7 +212,7 @@ NPC 対戦開始。即座にゲームが作成される（マッチメイキン�
 
 ---
 
-## 5. Server → Client メッセージ
+## Server → Client メッセージ
 
 ### Matchmaking
 
@@ -486,8 +486,10 @@ NPC 対戦開始。即座にゲームが作成される（マッチメイキン�
 | `invalid_data` | メッセージ受信時 | `false` | ペイロードのデシリアライズ失敗 |
 | `matchmaking_error` | `matchmaking_start` | `true`/`false` | デッキバリデーション失敗、バトル上限超過、キュー登録失敗 |
 | `npc_battle_error` | `npc_battle_start` | `true`/`false` | デッキバリデーション失敗、バトル上限超過、ゲーム作成失敗 |
+| `game_error` | `game_enter` / `game_action` | `false` | プレイヤーが対象ゲームに参加していない |
 | `game_state_error` | `game_enter` / ゲーム中 | `true` | バトルサーバーからの状態取得失敗 |
 | `turn_controls_error` | ゲーム中 | `true` | ターン制御情報の取得失敗 |
+| `npc_turn_error` | NPC ターン駆動中 | `true` | NPC ターンの進行失敗 |
 
 ---
 
@@ -517,7 +519,7 @@ NPC 対戦開始。即座にゲームが作成される（マッチメイキン�
 2. キューを順番に処理（各アクションにディレイを設けて再生）
 3. 最後の `game_state` を ground truth として適用
 
-> **Note:** 以下の `action_data` スキーマの SSoT は `data/event_schemas.yaml` である。フィールドを変更する場合は event_schemas.yaml を編集し、`generate_constants.py` を実行すること。
+> **Note:** `action_data` は battle 由来のイベントペイロードを `json.RawMessage` のまま pass-through する。gateway が組み立てるのは `battle_start` / `turn_start` の合成イベントのみ。
 
 ##### `battle_start` — バトル開始バナー
 
@@ -610,7 +612,7 @@ NPC 表示名:
 
 ---
 
-## 6. メッセージ一覧
+## メッセージ一覧
 
 ### Client → Server
 

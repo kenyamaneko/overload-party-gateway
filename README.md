@@ -1,6 +1,6 @@
 # overload-party-gateway
 
-クライアントが唯一通信する薄い WS/REST ゲートウェイ。認証・ルーティング・WebSocket リレーを担い、ドメインロジックはすべて下流 6 サービスに委譲する。
+クライアントが唯一通信する薄い WS/REST ゲートウェイ。認証・ルーティング・WebSocket リレーを担い、ドメインロジックはすべて下流サービスに委譲する。
 
 ## サービス間連携
 
@@ -17,12 +17,13 @@ Gateway (このサービス, :9001)
   ├─ HTTP → battle    (:9002)  ゲーム作成 / アクション / 状態取得
   ├─ HTTP → shop      (:9006)  商品 / 購入 / サブスクリプション
   ├─ HTTP → scenario  (:9007)  エピソード / スクリプト
-  ├─ PostgreSQL                 gateway.game_players (所有) + newsfeed.news_articles (read-only)
-  └─ Cloud Pub/Sub subscriber
-        └─ matchmaking-events-gateway         ← match_made
+  ├─ HTTP → news      (:9008)  ニュース記事
+  ├─ HTTP → support   (:9009)  お知らせ
+  ├─ PostgreSQL                 gateway.game_players (所有)
+  └─ POST /internal/v1/pubsub/match-made  ← Cloud Pub/Sub push 配信
 ```
 
-エンドポイント一覧は [docs/API_REFERENCE.md](docs/API_REFERENCE.md) を参照。
+REST エンドポイント契約は [data/openapi.yaml](data/openapi.yaml) を参照。
 
 ## 環境変数
 
@@ -33,8 +34,11 @@ Gateway (このサービス, :9001)
 | `PORT` | `9001` | リッスンポート |
 | `ENV` | `dev` | 動作環境 (`dev` / `stg` / `prod`) |
 | `LOG_LEVEL` | `info` | ログレベル |
-| `DATABASE_URL` | *(必須)* | PostgreSQL 接続文字列 (`gateway.game_players` + `newsfeed.news_articles`) |
+| `DATABASE_CONN` | *(必須)* | PostgreSQL 接続文字列 (`gateway.game_players`) |
+| `DATABASE_IAM_AUTH_ENABLED` | *(必須)* | Cloud SQL への接続を Cloud SQL Go Connector 経由の自動 IAM データベース認証で行うかどうか。`true` / `false` のいずれか必須で、フォールバックは無い |
+| `CLOUDSQL_CONNECTION_NAME` | *(空)* | Cloud SQL インスタンスの接続名 (`project:region:instance`)。`DATABASE_IAM_AUTH_ENABLED=true` のときのみ必須 |
 | `GOOGLE_CLOUD_PROJECT_ID` | *(必須)* | Google Cloud プロジェクト ID (Pub/Sub および Firestore game_config) |
+| `INTERNAL_AUTH_SECRET` | *(必須)* | 内部認証 JWT (HS256) の共有秘密鍵 |
 
 **ConfigMap (サービス URL):**
 
@@ -46,19 +50,15 @@ Gateway (このサービス, :9001)
 | `ACCOUNT_SERVICE_URL` | `http://localhost:9005` | Account サービス URL |
 | `SHOP_SERVICE_URL` | `http://localhost:9006` | Shop サービス URL |
 | `SCENARIO_SERVICE_URL` | `http://localhost:9007` | Scenario サービス URL |
-
-**ConfigMap (Pub/Sub):**
-
-| 変数名 | デフォルト | 説明 |
-|---|---|---|
-| `MATCHMAKING_SUBSCRIPTION` | `matchmaking-events-gateway` | matchmaking Pub/Sub サブスクリプション名 |
+| `NEWS_SERVICE_URL` | `http://localhost:9008` | News サービス URL |
+| `SUPPORT_SERVICE_URL` | `http://localhost:9009` | Support サービス URL |
 
 **ConfigMap (アプリ挙動):**
 
 | 変数名 | デフォルト | 説明 |
 |---|---|---|
 | `ALLOWED_ORIGINS` | *(空)* | CORS 許可オリジン (カンマ区切り、prod 必須) |
-| `MATCHMAKING_TIMEOUT_SEC` | `60` | プレイヤーごとのマッチメイク待ちタイムアウト秒 |
+| `MATCHMAKING_TIMEOUT_SEC` | `30` | プレイヤーごとのマッチメイク待ちタイムアウト秒 |
 | `APP_MIN_VERSION` | `0.1.0` | 最低必要バージョン |
 | `APP_LATEST_VERSION` | `0.1.0` | 最新バージョン |
 | `APP_FORCE_UPDATE` | `false` | 強制アップデートフラグ |
@@ -71,5 +71,6 @@ Gateway (このサービス, :9001)
 | `packages/ws-constants-npm/` | npm | 同上 (クライアント向け) |
 | `packages/api-gateway/` | Go | REST / WS エンベロープ型 |
 | `packages/api-gateway-npm/` | npm | 同上 (クライアント向け) |
+| `packages/internalauth-go/` | Go | 内部認証 JWT の検証 (下流サービス向け) |
 
-SSoT: `data/ws_constants.yaml` + `data/models.yaml` → `python3 scripts/generate_types.py` で再生成。`*_gen.go` / `*_gen.ts` は自動生成 — 直接編集しない。
+SSoT: `data/openapi.yaml` + `data/asyncapi.yaml`。`scripts/generate_types.sh` で `packages/api-gateway` の `*_gen.go` を再生成する。`*_gen.go` は自動生成のため直接編集しない。

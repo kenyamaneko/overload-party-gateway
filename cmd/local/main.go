@@ -16,9 +16,12 @@ import (
 
 	"cloud.google.com/go/firestore"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 
 	pubsubadapter "github.com/kenyamaneko/overload-party-gateway/internal/adapter/pubsub"
+	"github.com/kenyamaneko/overload-party-gateway/internal/adapter/redistimer"
 	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/cardclient"
@@ -27,14 +30,21 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/handler/rest"
 	ws "github.com/kenyamaneko/overload-party-gateway/internal/handler/ws"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
 	"github.com/kenyamaneko/overload-party-gateway/internal/router"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
+// exitOnStartupFailure は起動時の失敗を記録してプロセスを終了する。
+func exitOnStartupFailure(message string, err error) {
+	slog.Error(message, "error", err)
+	os.Exit(1)
+}
+
 func main() {
-	// ローカルモードは開発者端末での実行を前提とするため、人間が読みやすい
-	// テキスト形式で出力する (GKE 上の cmd/main は Cloud Logging 互換 JSON)。
+	// ローカルモードは開発者端末での実行を前提とするため、人間が読みやすいテキスト形式で
+	// 出力する (Cloud Run 上の cmd/main は Cloud Logging 互換 JSON)。
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 		Level: slog.LevelDebug,
 	})).With("service", "gateway"))
@@ -42,7 +52,7 @@ func main() {
 
 	cfg := config.Load()
 	if cfg.DatabaseConn == "" {
-		slog.Error("DATABASE_CONN must be set (gateway owns gateway.game_players and reads newsfeed.news_articles)")
+		slog.Error("DATABASE_CONN must be set (gateway owns gateway.game_players)")
 		os.Exit(1)
 	}
 
@@ -51,31 +61,29 @@ func main() {
 
 	pool, err := pgxpool.New(ctx, cfg.DatabaseConn)
 	if err != nil {
-		slog.Error("failed to create pg pool", "error", err)
-		os.Exit(1)
+		exitOnStartupFailure("failed to create pg pool", err)
 	}
 	defer pool.Close()
 
 	gamePlayerRepo := repository.NewPgGamePlayerRepository(pool)
+	processedMatchRepo := repository.NewPgProcessedMatchRepository(pool)
 
-	// ローカルモードでは Firestore (game_config) と matchmaking Pub/Sub subscriber は optional。
-	// GOOGLE_CLOUD_PROJECT_ID が未設定なら両方スキップする (NPC バトルがメインワークフロー)。
-	// FIRESTORE_EMULATOR_HOST が設定されていれば公式クライアントが自動的に
-	// エミュレーターへルーティングする。
+	// ローカルモードでは Firestore (game_config) は optional。GOOGLE_CLOUD_PROJECT_ID が
+	// 未設定ならスキップする (NPC バトルがメインワークフロー)。FIRESTORE_EMULATOR_HOST が
+	// 設定されていれば公式クライアントが自動的にエミュレーターへルーティングする。
 	if cfg.GoogleCloudProjectID != "" {
 		fsClient, err := firestore.NewClient(ctx, cfg.GoogleCloudProjectID)
 		if err != nil {
-			slog.Error("failed to create firestore client", "error", err)
-			os.Exit(1)
+			exitOnStartupFailure("failed to create firestore client", err)
 		}
 		defer func() { _ = fsClient.Close() }()
 		_ = repository.NewFirestoreGameConfigRepository(fsClient)
 	} else {
-		slog.Info("GOOGLE_CLOUD_PROJECT_ID is unset; skipping Firestore client and matchmaking Pub/Sub subscriber")
+		slog.Info("GOOGLE_CLOUD_PROJECT_ID is unset; skipping Firestore client")
 	}
 
 	cardClient := cardclient.New(cfg.CardServiceURL)
-	matchmakingClient := matchmakingclient.New(cfg.MatchmakingServiceURL)
+	matchmakingClient := matchmakingclient.New(cfg.MatchmakingServiceURL, uuid.Must(uuid.NewV7()).String())
 	accountClient := accountclient.New(cfg.AccountServiceURL)
 
 	if cfg.InternalAuthSecret == "" {
@@ -87,16 +95,37 @@ func main() {
 		internalauth.DefaultKeyID,
 	)
 
-	battleClient := service.NewBattleClient(cfg.BattleServerURL)
-	matchmakingTimeout := time.Duration(cfg.MatchmakingTimeoutSec) * time.Second
-	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, matchmakingTimeout, internalSigner)
-	wsHandler := ws.NewHandler(wsManager, nil, accountClient, nil)
-	handlers := &router.Handlers{
-		Auth: rest.NewAuthHandler(accountClient),
+	// 対戦ごとの計時の写しは UPSTASH_REDIS_URL が未設定なら行わない
+	// (docker-compose の redis サービスを使わないローカル起動でも動く状態を保つ)。
+	var timerStore port.TimerStore
+	if cfg.UpstashRedisURL != "" {
+		redisOpt, err := redis.ParseURL(cfg.UpstashRedisURL)
+		if err != nil {
+			exitOnStartupFailure("failed to parse UPSTASH_REDIS_URL", err)
+		}
+		redisClient := redis.NewClient(redisOpt)
+		defer func() { _ = redisClient.Close() }()
+		timerStore = redistimer.NewStore(redisClient)
+	} else {
+		slog.Info("UPSTASH_REDIS_URL is unset; skipping timer deadline mirroring")
 	}
 
-	r := gin.New()
-	r.Use(middleware.UseRequestLogger(), gin.Recovery())
+	battleClient := service.NewBattleClient(cfg.BattleServerURL)
+	matchmakingTimeout := time.Duration(cfg.MatchmakingTimeoutSec) * time.Second
+	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, processedMatchRepo, matchmakingTimeout, internalSigner, timerStore)
+	wsHandler := ws.NewHandler(wsManager, nil, accountClient, nil)
+
+	matchSub, err := pubsubadapter.NewMatchSubscriber(wsManager)
+	if err != nil {
+		exitOnStartupFailure("failed to create match subscriber", err)
+	}
+
+	handlers := &router.Handlers{
+		Auth:   rest.NewAuthHandler(accountClient),
+		PubSub: rest.NewPubSubPushHandler(matchSub),
+	}
+
+	r := gin.Default()
 	r.Use(middleware.UseCORS())
 
 	r.GET("/health", func(c *gin.Context) {
@@ -114,6 +143,11 @@ func main() {
 		pub.GET("/version", staticHandler.GetVersion)
 	}
 
+	// Pub/Sub push 配信の内部エンドポイント。ローカルモードは Pub/Sub エミュレーターを使うため
+	// 本物の Google 署名 OIDC トークンを用意できず、cmd/main のような push 認証は行わない。
+	internalGroup := r.Group("/internal/v1")
+	router.RegisterPubSubRoutes(internalGroup, handlers)
+
 	// ローカルモードは Firebase Auth エミュレーターを持たない (この compose スタックは
 	// Pub/Sub と Firestore のエミュレーターのみ提供する) ため、Firebase ID トークン検証の
 	// 代わりに dev-token を使い、その代償として prod (cmd/main) との認証非対称を許容する。
@@ -129,8 +163,7 @@ func main() {
 	api.Use(middleware.UseDevAuthWithPlayerResolve(accountClient))
 	api.Use(middleware.IssueInternalAuth(internalSigner))
 	if err := router.RegisterForwardRoutes(api, cfg); err != nil {
-		slog.Error("failed to register forward routes", "error", err)
-		os.Exit(1)
+		exitOnStartupFailure("failed to register forward routes", err)
 	}
 
 	srv := &http.Server{
@@ -141,45 +174,25 @@ func main() {
 	srvCtx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// matchmaking Pub/Sub subscriber も GOOGLE_CLOUD_PROJECT_ID が設定されたときだけ起動する。
-	// 未設定時のスキップログは Firestore 側の分岐で出力済み。
-	if cfg.GoogleCloudProjectID != "" {
-		stream, err := pubsubadapter.NewStream(srvCtx, cfg.GoogleCloudProjectID, cfg.MatchmakingSubscription)
-		if err != nil {
-			slog.Error("failed to create matchmaking stream", "error", err)
-			os.Exit(1)
-		}
-		defer func() { _ = stream.Close() }()
-		subscriber, err := pubsubadapter.NewMatchSubscriber(stream, wsManager)
-		if err != nil {
-			slog.Error("failed to create match subscriber", "error", err)
-			os.Exit(1)
-		}
-		go func() {
-			if err := subscriber.Run(srvCtx); err != nil && srvCtx.Err() == nil {
-				slog.Error("match subscriber error", "error", err)
-				os.Exit(1)
-			}
-		}()
-	}
-
 	go func() {
-		slog.Info("gateway local server starting", "addr", ":9001", "rest_base", "http://localhost:9001/api/v1/")
+		slog.Info("gateway local server starting", "rest", "http://localhost:9001/api/v1/")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("listen failed", "error", err)
-			os.Exit(1)
+			exitOnStartupFailure("listen failed", err)
 		}
 	}()
 
 	<-srvCtx.Done()
 	slog.Info("shutting down")
 
+	wsShutdownCtx, wsCancel := context.WithTimeout(context.Background(), ws.ShutdownNotifyTimeout)
+	wsManager.Shutdown(wsShutdownCtx)
+	wsCancel()
+
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		slog.Error("server forced to shutdown", "error", err)
-		os.Exit(1)
+		exitOnStartupFailure("server forced to shutdown", err)
 	}
 	slog.Info("gateway local server exited")
 }

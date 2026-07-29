@@ -35,10 +35,36 @@ type mockGamePlayerRepo struct {
 	// callOrder は MarkExpAwarded と LookupGamePlayers の呼出順を記録する。
 	// 「MarkExpAwarded を必ず先に実行」の契約を検証するため。
 	callOrder []string
+
+	insertCalls []insertGamePlayerCall
+	// insertErrForPlayerNum が非 0 のとき、その playerNum の InsertGamePlayer 呼出のみ
+	// insertErr を返す (0 = 全呼出に対して返す)。部分成功後のリトライを再現するため。
+	insertErr             error
+	insertErrForPlayerNum int
 }
 
-func (m *mockGamePlayerRepo) InsertGamePlayer(_ context.Context, _ string, _ int, _ string) error {
+// insertGamePlayerCall は mockGamePlayerRepo.InsertGamePlayer への 1 回の呼出を記録する。
+type insertGamePlayerCall struct {
+	gameID    string
+	playerNum int
+	playerID  string
+}
+
+func (m *mockGamePlayerRepo) InsertGamePlayer(_ context.Context, gameID string, playerNum int, playerID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.insertCalls = append(m.insertCalls, insertGamePlayerCall{gameID, playerNum, playerID})
+	if m.insertErr != nil && (m.insertErrForPlayerNum == 0 || m.insertErrForPlayerNum == playerNum) {
+		return m.insertErr
+	}
 	return nil
+}
+
+// snapshotInsertGamePlayerCalls は insertCalls を排他制御した上で複製して返す。
+func (m *mockGamePlayerRepo) snapshotInsertGamePlayerCalls() []insertGamePlayerCall {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]insertGamePlayerCall(nil), m.insertCalls...)
 }
 
 func (m *mockGamePlayerRepo) LookupPlayerNum(_ context.Context, _ string, _ string) (int, error) {
@@ -96,182 +122,152 @@ func setupAwardRelay(t *testing.T, repo port.GamePlayerRepo, account *awardCount
 	return relay
 }
 
-// ----------------------------------------------------------------------------
-// 早期 return（依存未設定）
-// ----------------------------------------------------------------------------
+func TestAwardGameExp(t *testing.T) {
+	t.Run("EXP 付与", func(t *testing.T) {
+		t.Run("repo も accountClient も無いとき、パニックせず戻る", func(t *testing.T) {
+			relay, _ := newTestRelay()
+			relay.awardGameExp("g1", 1, "lp_zero")
+		})
 
-func TestAwardGameExp_NoRepoNoClient_NoOp(t *testing.T) {
-	relay, _ := newTestRelay()
-	// パニックや副作用が無いことを確認するだけ
-	relay.awardGameExp("g1", 1, "lp_zero")
-}
+		t.Run("repo はあるが accountClient が無いとき、MarkExpAwarded を呼ばない", func(t *testing.T) {
+			relay, _ := newTestRelay()
+			repo := &mockGamePlayerRepo{}
+			relay.gamePlayerRepo = repo
+			// accountClient nil
 
-func TestAwardGameExp_NoAccountClient_DoesNotMark(t *testing.T) {
-	relay, _ := newTestRelay()
-	repo := &mockGamePlayerRepo{}
-	relay.gamePlayerRepo = repo
-	// accountClient nil
+			relay.awardGameExp("g1", 1, "lp_zero")
 
-	relay.awardGameExp("g1", 1, "lp_zero")
+			// accountClient が無いのに MarkExpAwarded を呼ぶと、フラグだけ立って付与されない状態になる。
+			// 二重付与は防げるが永久に EXP が付かないゾンビゲームになるため、絶対に呼んではならない。
+			assert.Equal(t, 0, repo.markAwardedCalls)
+		})
 
-	// accountClient が無いのに MarkExpAwarded が呼ばれると、フラグだけ立って付与されない状態になる。
-	// → 二重付与は防げるが、永久に EXP が付かないゾンビゲームになるため、絶対に呼んではならない。
-	assert.Equal(t, 0, repo.markAwardedCalls)
-}
+		t.Run("初回付与のとき、mark→lookup の順で実行し account に付与する", func(t *testing.T) {
+			repo := &mockGamePlayerRepo{
+				markAwardedReturn: true,
+				lookupEntries: []port.GamePlayerEntry{
+					{PlayerNum: 1, PlayerID: "p1"},
+					{PlayerNum: 2, PlayerID: "p2"},
+				},
+			}
+			account := &awardCounter{}
+			relay := setupAwardRelay(t, repo, account)
 
-// ----------------------------------------------------------------------------
-// 冪等性: 正常系
-// ----------------------------------------------------------------------------
+			relay.awardGameExp("g1", 1, "lp_zero")
 
-func TestAwardGameExp_FirstCall_AwardsAndMarks(t *testing.T) {
-	repo := &mockGamePlayerRepo{
-		markAwardedReturn: true,
-		lookupEntries: []port.GamePlayerEntry{
-			{PlayerNum: 1, PlayerID: "p1"},
-			{PlayerNum: 2, PlayerID: "p2"},
-		},
-	}
-	account := &awardCounter{}
-	relay := setupAwardRelay(t, repo, account)
+			assert.Equal(t, 1, repo.markAwardedCalls)
+			assert.Equal(t, 1, repo.lookupCalls)
+			assert.Equal(t, int32(1), account.calls.Load())
+			assert.Equal(t, []string{"mark", "lookup"}, repo.callOrder,
+				"MarkExpAwarded MUST be called before LookupGamePlayers (idempotency invariant)")
+		})
 
-	relay.awardGameExp("g1", 1, "lp_zero")
+		t.Run("対戦相手が 1 エントリ (NPC) のとき、account に付与する", func(t *testing.T) {
+			repo := &mockGamePlayerRepo{
+				markAwardedReturn: true,
+				lookupEntries: []port.GamePlayerEntry{
+					{PlayerNum: 1, PlayerID: "p1"},
+				},
+			}
+			account := &awardCounter{}
+			relay := setupAwardRelay(t, repo, account)
 
-	assert.Equal(t, 1, repo.markAwardedCalls)
-	assert.Equal(t, 1, repo.lookupCalls)
-	assert.Equal(t, int32(1), account.calls.Load())
-	assert.Equal(t, []string{"mark", "lookup"}, repo.callOrder,
-		"MarkExpAwarded MUST be called before LookupGamePlayers (idempotency invariant)")
-}
+			relay.awardGameExp("g1", 1, "lp_zero")
 
-func TestAwardGameExp_NPC_OneEntry(t *testing.T) {
-	repo := &mockGamePlayerRepo{
-		markAwardedReturn: true,
-		lookupEntries: []port.GamePlayerEntry{
-			{PlayerNum: 1, PlayerID: "p1"},
-		},
-	}
-	account := &awardCounter{}
-	relay := setupAwardRelay(t, repo, account)
+			assert.Equal(t, int32(1), account.calls.Load())
+		})
 
-	relay.awardGameExp("g1", 1, "lp_zero")
+		t.Run("既に awarded 済みのとき、lookup も付与もしない", func(t *testing.T) {
+			repo := &mockGamePlayerRepo{
+				markAwardedReturn: false, // フラグは既に立っていた
+			}
+			account := &awardCounter{}
+			relay := setupAwardRelay(t, repo, account)
 
-	assert.Equal(t, int32(1), account.calls.Load())
-}
+			relay.awardGameExp("g1", 1, "lp_zero")
 
-// ----------------------------------------------------------------------------
-// 冪等性: 既に awarded（重複呼び出し）
-// ----------------------------------------------------------------------------
+			assert.Equal(t, 1, repo.markAwardedCalls)
+			assert.Equal(t, 0, repo.lookupCalls, "must not look up players if already awarded")
+			assert.Equal(t, int32(0), account.calls.Load(), "must not award twice")
+		})
 
-func TestAwardGameExp_AlreadyAwarded_SkipsLookupAndAward(t *testing.T) {
-	repo := &mockGamePlayerRepo{
-		markAwardedReturn: false, // フラグは既に立っていた
-	}
-	account := &awardCounter{}
-	relay := setupAwardRelay(t, repo, account)
+		t.Run("MarkExpAwarded が失敗するとき、付与せず lookup も呼ばない", func(t *testing.T) {
+			// フラグ書き込みに失敗したら付与せず返す。強引に付与すると次回リトライで二重付与に
+			// なるため、失敗したら諦めて要監視 (ERROR ログ) が正しい。次回同じ game_id が来たら
+			// MarkExpAwarded が再試行され、成功すれば付与される。
+			repo := &mockGamePlayerRepo{
+				markAwardedErr: errors.New("db down"),
+			}
+			account := &awardCounter{}
+			relay := setupAwardRelay(t, repo, account)
 
-	relay.awardGameExp("g1", 1, "lp_zero")
+			relay.awardGameExp("g1", 1, "lp_zero")
 
-	assert.Equal(t, 1, repo.markAwardedCalls)
-	assert.Equal(t, 0, repo.lookupCalls, "must not look up players if already awarded")
-	assert.Equal(t, int32(0), account.calls.Load(), "must not award twice")
-}
+			assert.Equal(t, 1, repo.markAwardedCalls)
+			assert.Equal(t, 0, repo.lookupCalls, "lookup must be skipped when mark fails — otherwise we'd risk double-award on retry")
+			assert.Equal(t, int32(0), account.calls.Load())
+		})
 
-// ----------------------------------------------------------------------------
-// 冪等性: MarkExpAwarded 失敗
-// ----------------------------------------------------------------------------
+		t.Run("LookupGamePlayers が失敗するとき、付与しない", func(t *testing.T) {
+			// マークは成功 (フラグは立った) したがプレイヤー解決で失敗。次回呼んでも MarkExpAwarded が
+			// false を返すため二重付与にはならない。このゲームの EXP は失われる (ERROR ログで監視)。
+			repo := &mockGamePlayerRepo{
+				markAwardedReturn: true,
+				lookupErr:         errors.New("db down"),
+			}
+			account := &awardCounter{}
+			relay := setupAwardRelay(t, repo, account)
 
-// 最重要ケース: フラグ書き込みに失敗したら、付与せずに返す。
-// このとき LookupGamePlayers / AwardGameExp は呼ばれない。
-// → 次回同じ game_id が来たら MarkExpAwarded が再試行され、成功すれば付与される。
-//
-// この方針の意味: マーク失敗時に強引に付与してしまうと、次回リトライで二重付与になる。
-// よって「失敗したら諦めて要監視 (ERROR ログ)」が正しい。
-func TestAwardGameExp_MarkError_DoesNotAward(t *testing.T) {
-	repo := &mockGamePlayerRepo{
-		markAwardedErr: errors.New("db down"),
-	}
-	account := &awardCounter{}
-	relay := setupAwardRelay(t, repo, account)
+			relay.awardGameExp("g1", 1, "lp_zero")
 
-	relay.awardGameExp("g1", 1, "lp_zero")
+			assert.Equal(t, 1, repo.markAwardedCalls)
+			assert.Equal(t, 1, repo.lookupCalls)
+			assert.Equal(t, int32(0), account.calls.Load())
+		})
 
-	assert.Equal(t, 1, repo.markAwardedCalls)
-	assert.Equal(t, 0, repo.lookupCalls, "lookup must be skipped when mark fails — otherwise we'd risk double-award on retry")
-	assert.Equal(t, int32(0), account.calls.Load())
-}
+		t.Run("account が 500 を返すとき、フラグは立ったまま再試行されない", func(t *testing.T) {
+			// AwardGameExp の RPC が失敗。フラグは既に立っているので二重付与にはならないが EXP が
+			// 失われる。次回 game_id が来ても MarkExpAwarded が false を返すため自動再試行はされない
+			// (手動オペレーションが必要)。
+			repo := &mockGamePlayerRepo{
+				markAwardedReturn: true,
+				lookupEntries: []port.GamePlayerEntry{
+					{PlayerNum: 1, PlayerID: "p1"},
+					{PlayerNum: 2, PlayerID: "p2"},
+				},
+			}
+			account := &awardCounter{respCode: http.StatusInternalServerError}
+			relay := setupAwardRelay(t, repo, account)
 
-// ----------------------------------------------------------------------------
-// 冪等性: LookupGamePlayers 失敗
-// ----------------------------------------------------------------------------
+			relay.awardGameExp("g1", 1, "lp_zero")
 
-// マークは成功（フラグは立った）したが、プレイヤー解決で失敗。
-// AwardGameExp は呼ばない。次回呼んでも MarkExpAwarded が false を返すので二重付与にはならない。
-// → このゲームの EXP は失われる（ERROR ログで監視）。
-func TestAwardGameExp_LookupError_DoesNotAward(t *testing.T) {
-	repo := &mockGamePlayerRepo{
-		markAwardedReturn: true,
-		lookupErr:         errors.New("db down"),
-	}
-	account := &awardCounter{}
-	relay := setupAwardRelay(t, repo, account)
+			assert.Equal(t, 1, repo.markAwardedCalls, "flag is set first; this is an accepted invariant")
+			assert.Equal(t, int32(1), account.calls.Load(), "we attempted award once")
 
-	relay.awardGameExp("g1", 1, "lp_zero")
+			// 再呼び出しは MarkExpAwarded で false が返るのでスキップされる (リアル DB の挙動だが、
+			// ここではモックを再設定して再現)。
+			repo.markAwardedReturn = false
+			relay.awardGameExp("g1", 1, "lp_zero")
+			assert.Equal(t, int32(1), account.calls.Load(), "no retry — EXP is permanently lost without manual intervention")
+		})
 
-	assert.Equal(t, 1, repo.markAwardedCalls)
-	assert.Equal(t, 1, repo.lookupCalls)
-	assert.Equal(t, int32(0), account.calls.Load())
-}
+		t.Run("PlayerNum が 1/2 以外のとき、パニックせず付与する", func(t *testing.T) {
+			// PlayerNum が 1/2 以外 (不整合データ) でも player1ID/player2ID の組み立てで panic しない。
+			repo := &mockGamePlayerRepo{
+				markAwardedReturn: true,
+				lookupEntries: []port.GamePlayerEntry{
+					{PlayerNum: 99, PlayerID: "weird"},
+				},
+			}
+			account := &awardCounter{}
+			relay := setupAwardRelay(t, repo, account)
 
-// ----------------------------------------------------------------------------
-// account サービス側でのエラー
-// ----------------------------------------------------------------------------
-
-// AwardGameExp の RPC が失敗。フラグは既に立っているので二重付与にはならないが、
-// EXP が失われる。要監視。次回 game_id が来ても MarkExpAwarded が false を返すため
-// 自動再試行はされない（手動オペレーションが必要）。
-func TestAwardGameExp_AccountServerError_FlagAlreadyMarked(t *testing.T) {
-	repo := &mockGamePlayerRepo{
-		markAwardedReturn: true,
-		lookupEntries: []port.GamePlayerEntry{
-			{PlayerNum: 1, PlayerID: "p1"},
-			{PlayerNum: 2, PlayerID: "p2"},
-		},
-	}
-	account := &awardCounter{respCode: http.StatusInternalServerError}
-	relay := setupAwardRelay(t, repo, account)
-
-	relay.awardGameExp("g1", 1, "lp_zero")
-
-	assert.Equal(t, 1, repo.markAwardedCalls, "flag is set first; this is an accepted invariant")
-	assert.Equal(t, int32(1), account.calls.Load(), "we attempted award once")
-
-	// 再呼び出しは MarkExpAwarded で false が返るのでスキップされる（リアル DB の挙動だが、
-	// ここではモックを再設定して再現）
-	repo.markAwardedReturn = false
-	relay.awardGameExp("g1", 1, "lp_zero")
-	assert.Equal(t, int32(1), account.calls.Load(), "no retry — EXP is permanently lost without manual intervention")
-}
-
-// ----------------------------------------------------------------------------
-// 入力データ伝播
-// ----------------------------------------------------------------------------
-
-// awardGameExp が entries.PlayerNum に基づいて player1ID/player2ID を組み立てることを検証。
-// PlayerNum が 1/2 以外の場合（不整合データ）でも panic しないことを担保する。
-func TestAwardGameExp_UnknownPlayerNum_DoesNotPanic(t *testing.T) {
-	repo := &mockGamePlayerRepo{
-		markAwardedReturn: true,
-		lookupEntries: []port.GamePlayerEntry{
-			{PlayerNum: 99, PlayerID: "weird"},
-		},
-	}
-	account := &awardCounter{}
-	relay := setupAwardRelay(t, repo, account)
-
-	require.NotPanics(t, func() {
-		relay.awardGameExp("g1", 1, "lp_zero")
+			require.NotPanics(t, func() {
+				relay.awardGameExp("g1", 1, "lp_zero")
+			})
+			// PlayerNum=99 は player1ID/player2ID のどちらにも入らないが AwardGameExp は呼ばれる
+			// (空文字 ID をどう処理するかは account の責務)。
+			assert.Equal(t, int32(1), account.calls.Load())
+		})
 	})
-	// PlayerNum=99 は player1ID/player2ID のどちらにも入らないが、AwardGameExp は呼ばれる
-	// （account 側で空文字 ID をどう処理するかは account の責務）
-	assert.Equal(t, int32(1), account.calls.Load())
 }
