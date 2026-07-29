@@ -188,7 +188,7 @@ func TestCancelTurnTimer(t *testing.T) {
 
 func TestTurnTimerNetworkBuffer_Constant(t *testing.T) {
 	t.Run("ネットワークバッファ定数", func(t *testing.T) {
-		t.Run("turnTimerNetworkBuffer が正の値である", func(t *testing.T) {
+		t.Run("ネットワークバッファが正の値である", func(t *testing.T) {
 			// 0 だと境界での誤 forfeit が発生し、負だと意味的におかしい。
 			assert.Greater(t, turnTimerNetworkBuffer, time.Duration(0),
 				"buffer must be positive to absorb network latency")
