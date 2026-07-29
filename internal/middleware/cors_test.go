@@ -90,6 +90,13 @@ func TestCORS(t *testing.T) {
 				wantHeaders:    allowHeaders,
 				wantMaxAge:     corsMaxAge,
 			},
+			{
+				name:           "許可されない Origin からの preflight のとき、204 で応答せず CORS ヘッダなしで後続処理に渡る",
+				allowedOrigins: []string{"http://example.com"},
+				method:         http.MethodOptions,
+				reqHeaders:     map[string]string{"Origin": "http://evil.com"},
+				wantCode:       http.StatusOK,
+			},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
