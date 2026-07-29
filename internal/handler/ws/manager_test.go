@@ -17,16 +17,24 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
-// fakeCardClient は port.CardClient のテスト用実装。HandleMatchMade のデッキ解決先
-// として使うだけなので、内容の妥当性は問わず空デッキを返す。
-type fakeCardClient struct{}
+// fakeCardClient は port.CardClient のテスト用実装。deckID ごとにデッキ内容・施策・
+// エラーを差し替えられる。ゼロ値は空デッキを返すだけなので、デッキ内容を問わない
+// テストはゼロ値のまま使える。
+type fakeCardClient struct {
+	deckCards       map[int64][]apicard.DeckCard
+	deckInitiatives map[int64]port.DeckInitiatives
+	getDeckCardsErr map[int64]error
+}
 
 func (f *fakeCardClient) ListAllCards(context.Context) ([]*apicard.CardDefinition, error) {
 	return nil, nil
 }
 
-func (f *fakeCardClient) GetDeckCards(context.Context, int64) ([]apicard.DeckCard, port.DeckInitiatives, error) {
-	return nil, port.DeckInitiatives{}, nil
+func (f *fakeCardClient) GetDeckCards(_ context.Context, deckID int64) ([]apicard.DeckCard, port.DeckInitiatives, error) {
+	if err, ok := f.getDeckCardsErr[deckID]; ok {
+		return nil, port.DeckInitiatives{}, err
+	}
+	return f.deckCards[deckID], f.deckInitiatives[deckID], nil
 }
 
 func (f *fakeCardClient) ValidateDeckForBattle(context.Context, int64) error {
@@ -125,7 +133,13 @@ var _ port.ProcessedMatchRepo = (*fakeProcessedMatchRepo)(nil)
 // Manager を返す。WS 経路 (accountClient / matchmakingClient / internalSigner) は
 // HandleMatchMade から参照されないため nil のままにする。
 func newTestManagerForMatchMade(bc *mockBattleClient, gamePlayerRepo port.GamePlayerRepo, dedupRepo port.ProcessedMatchRepo) *Manager {
-	return NewManager(bc, nil, &fakeCardClient{}, nil, gamePlayerRepo, dedupRepo, 0, nil, nil)
+	return newTestManagerWithCards(bc, &fakeCardClient{}, gamePlayerRepo, dedupRepo)
+}
+
+// newTestManagerWithCards はデッキ解決の内容までを検証するテスト向けに、card クライアントを
+// 差し替えられる Manager を返す。
+func newTestManagerWithCards(bc *mockBattleClient, cardClient port.CardClient, gamePlayerRepo port.GamePlayerRepo, dedupRepo port.ProcessedMatchRepo) *Manager {
+	return NewManager(bc, nil, cardClient, nil, gamePlayerRepo, dedupRepo, 0, nil, nil)
 }
 
 func matchMadeEvent(matchID string) apimatchmaking.MatchMadeEvent {
@@ -303,6 +317,105 @@ func TestHandleMatchMade(t *testing.T) {
 			require.Len(t, calls, 2)
 			assert.Equal(t, "g6", calls[0].gameID)
 			assert.Equal(t, "g6", calls[1].gameID)
+		})
+	})
+
+	t.Run("マッチ成立イベントからのゲーム作成", func(t *testing.T) {
+		participantCountCases := []struct {
+			name    string
+			players []apimatchmaking.MatchedPlayer
+		}{
+			{
+				name:    "参加者が 0 人のとき、ゲームを作成せずエラーを返す",
+				players: nil,
+			},
+			{
+				name: "参加者が 1 人のとき、ゲームを作成せずエラーを返す",
+				players: []apimatchmaking.MatchedPlayer{
+					{PlayerID: "TST-P1", DeckID: 11},
+				},
+			},
+			{
+				name: "参加者が 3 人のとき、ゲームを作成せずエラーを返す",
+				players: []apimatchmaking.MatchedPlayer{
+					{PlayerID: "TST-P1", DeckID: 11},
+					{PlayerID: "TST-P2", DeckID: 22},
+					{PlayerID: "TST-P3", DeckID: 33},
+				},
+			},
+		}
+		for _, tc := range participantCountCases {
+			t.Run(tc.name, func(t *testing.T) {
+				bc := newMockBattleClient()
+				m := newTestManagerForMatchMade(bc, &mockGamePlayerRepo{}, newFakeProcessedMatchRepo())
+
+				err := m.HandleMatchMade(context.Background(), apimatchmaking.MatchMadeEvent{
+					MatchID: "mch_participants", Players: tc.players,
+				})
+
+				require.Error(t, err)
+				assert.Empty(t, bc.snapshotCreatePvPGameCalls())
+			})
+		}
+
+		t.Run("同じカードを 2 枚積んだデッキのとき、作成依頼には 1 枚ずつ展開して載る", func(t *testing.T) {
+			bc := newMockBattleClient()
+			bc.createPvPGameResult = &service.GameCreatedResult{GameID: "g_decks"}
+			cardClient := &fakeCardClient{
+				deckCards: map[int64][]apicard.DeckCard{
+					10: {{CardID: "TST-0001", ArtNo: 1, Count: 1}},
+					20: {{CardID: "TST-0002", ArtNo: 3, Count: 2}},
+				},
+			}
+			m := newTestManagerWithCards(bc, cardClient, &mockGamePlayerRepo{}, newFakeProcessedMatchRepo())
+
+			err := m.HandleMatchMade(context.Background(), matchMadeEvent("mch_decks"))
+
+			require.NoError(t, err)
+			calls := bc.snapshotCreatePvPGameCalls()
+			require.Len(t, calls, 1)
+			assert.Equal(t, []service.BattleDeckCard{{CardID: "TST-0001", ArtNo: 1}}, calls[0].deck1Cards)
+			assert.Equal(t, []service.BattleDeckCard{
+				{CardID: "TST-0002", ArtNo: 3},
+				{CardID: "TST-0002", ArtNo: 3},
+			}, calls[0].deck2Cards)
+		})
+
+		t.Run("参加者の名前とレベルが食い違うとき、作成依頼のサマリにそれぞれの値が別々に載る", func(t *testing.T) {
+			bc := newMockBattleClient()
+			bc.createPvPGameResult = &service.GameCreatedResult{GameID: "g_summary"}
+			m := newTestManagerForMatchMade(bc, &mockGamePlayerRepo{}, newFakeProcessedMatchRepo())
+			event := apimatchmaking.MatchMadeEvent{
+				MatchID: "mch_summary",
+				Players: []apimatchmaking.MatchedPlayer{
+					{PlayerID: "TST-P1", DeckID: 11, Name: "TST-A", Level: 5},
+					{PlayerID: "TST-P2", DeckID: 22, Name: "TST-B", Level: 9},
+				},
+			}
+
+			err := m.HandleMatchMade(context.Background(), event)
+
+			require.NoError(t, err)
+			calls := bc.snapshotCreatePvPGameCalls()
+			require.Len(t, calls, 1)
+			wantLevel1, wantLevel2 := int64(5), int64(9)
+			assert.Equal(t, service.PlayerSummaryRequest{Name: "TST-A", Level: &wantLevel1}, calls[0].player1Summary)
+			assert.Equal(t, service.PlayerSummaryRequest{Name: "TST-B", Level: &wantLevel2}, calls[0].player2Summary)
+		})
+
+		t.Run("片方のデッキ解決が失敗するとき、ゲームを作成せずエラーを返す", func(t *testing.T) {
+			bc := newMockBattleClient()
+			cardClient := &fakeCardClient{
+				getDeckCardsErr: map[int64]error{20: errors.New("card service down")},
+			}
+			gamePlayerRepo := &mockGamePlayerRepo{}
+			m := newTestManagerWithCards(bc, cardClient, gamePlayerRepo, newFakeProcessedMatchRepo())
+
+			err := m.HandleMatchMade(context.Background(), matchMadeEvent("mch_deck_fail"))
+
+			require.Error(t, err)
+			assert.Empty(t, bc.snapshotCreatePvPGameCalls())
+			assert.Empty(t, gamePlayerRepo.snapshotInsertGamePlayerCalls())
 		})
 	})
 }
