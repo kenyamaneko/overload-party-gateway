@@ -125,7 +125,8 @@ func main() {
 		PubSub: rest.NewPubSubPushHandler(matchSub),
 	}
 
-	r := gin.Default()
+	r := gin.New()
+	r.Use(middleware.UseRequestLogger(), gin.Recovery())
 	r.Use(middleware.UseCORS())
 
 	r.GET("/health", func(c *gin.Context) {

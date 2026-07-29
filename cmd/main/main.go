@@ -181,7 +181,8 @@ func main() {
 	}
 
 	// ルーター
-	r := gin.Default()
+	r := gin.New()
+	r.Use(middleware.UseRequestLogger(), gin.Recovery())
 	r.Use(middleware.UseCORS(cfg.AllowedOrigins...))
 
 	r.GET("/health", func(c *gin.Context) {
