@@ -29,63 +29,20 @@ func newErrorSigner() *internalauth.Signer {
 	)
 }
 
-func TestIssueInternalAuth_TokenInjected(t *testing.T) {
-	engine := gin.New()
-	var observedToken string
-	var observedOK bool
-	engine.GET("/test",
-		func(c *gin.Context) {
-			c.Set(string(playerIDKey), "player-123")
-			c.Next()
-		},
-		IssueInternalAuth(newTestSigner()),
-		func(c *gin.Context) {
-			observedToken, observedOK = internalauth.TokenFrom(c.Request.Context())
-			c.Status(http.StatusOK)
-		},
-	)
-
-	rr := httptest.NewRecorder()
-	engine.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/test", nil))
-
-	require.Equal(t, http.StatusOK, rr.Code)
-	assert.True(t, observedOK)
-	assert.NotEmpty(t, observedToken)
-}
-
-func TestIssueInternalAuth_Failure(t *testing.T) {
-	cases := []struct {
-		name        string
-		setupPlayer gin.HandlerFunc
-		signer      *internalauth.Signer
-		wantStatus  int
-	}{
-		{
-			name:        "player_id 未設定で 401 を返す",
-			setupPlayer: func(c *gin.Context) { c.Next() },
-			signer:      newTestSigner(),
-			wantStatus:  http.StatusUnauthorized,
-		},
-		{
-			name: "signer のエラーで 500 を返す",
-			setupPlayer: func(c *gin.Context) {
-				c.Set(string(playerIDKey), "player-123")
-				c.Next()
-			},
-			signer:     newErrorSigner(),
-			wantStatus: http.StatusInternalServerError,
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
+func TestIssueInternalAuth(t *testing.T) {
+	t.Run("内部認証 token の発行と注入", func(t *testing.T) {
+		t.Run("player_id があるとき、token を発行し Request.Context に注入する", func(t *testing.T) {
 			engine := gin.New()
-			var sawDownstream bool
+			var observedToken string
+			var observedOK bool
 			engine.GET("/test",
-				tc.setupPlayer,
-				IssueInternalAuth(tc.signer),
 				func(c *gin.Context) {
-					sawDownstream = true
+					c.Set(string(playerIDKey), "player-123")
+					c.Next()
+				},
+				IssueInternalAuth(newTestSigner()),
+				func(c *gin.Context) {
+					observedToken, observedOK = internalauth.TokenFrom(c.Request.Context())
 					c.Status(http.StatusOK)
 				},
 			)
@@ -93,8 +50,53 @@ func TestIssueInternalAuth_Failure(t *testing.T) {
 			rr := httptest.NewRecorder()
 			engine.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/test", nil))
 
-			require.Equal(t, tc.wantStatus, rr.Code)
-			assert.False(t, sawDownstream)
+			require.Equal(t, http.StatusOK, rr.Code)
+			assert.True(t, observedOK)
+			assert.NotEmpty(t, observedToken)
 		})
-	}
+
+		cases := []struct {
+			name        string
+			setupPlayer gin.HandlerFunc
+			signer      *internalauth.Signer
+			wantStatus  int
+		}{
+			{
+				name:        "player_id が未設定のとき、401 になり下流に到達しない",
+				setupPlayer: func(c *gin.Context) { c.Next() },
+				signer:      newTestSigner(),
+				wantStatus:  http.StatusUnauthorized,
+			},
+			{
+				name: "signer がエラーのとき、500 になり下流に到達しない",
+				setupPlayer: func(c *gin.Context) {
+					c.Set(string(playerIDKey), "player-123")
+					c.Next()
+				},
+				signer:     newErrorSigner(),
+				wantStatus: http.StatusInternalServerError,
+			},
+		}
+
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				engine := gin.New()
+				var sawDownstream bool
+				engine.GET("/test",
+					tc.setupPlayer,
+					IssueInternalAuth(tc.signer),
+					func(c *gin.Context) {
+						sawDownstream = true
+						c.Status(http.StatusOK)
+					},
+				)
+
+				rr := httptest.NewRecorder()
+				engine.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/test", nil))
+
+				require.Equal(t, tc.wantStatus, rr.Code)
+				assert.False(t, sawDownstream)
+			})
+		}
+	})
 }

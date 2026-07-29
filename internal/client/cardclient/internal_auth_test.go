@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/kenyamaneko/overload-party-card/packages/api-card/apicardclient"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
@@ -14,23 +15,24 @@ import (
 
 // TestClient_InjectsInternalAuthHeader は呼び出しに内部認証トークンが X-Internal-Auth として乗ることを検証する。
 func TestClient_InjectsInternalAuthHeader(t *testing.T) {
-	const wantToken = "test.jwt.token"
-	var got string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		got = r.Header.Get(internalauth.HeaderName)
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`[]`))
-	}))
-	defer srv.Close()
+	t.Run("X-Internal-Auth header の注入", func(t *testing.T) {
+		t.Run("ctx に格納した token が X-Internal-Auth header として送られる", func(t *testing.T) {
+			const wantToken = "test.jwt.token"
+			var got string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				got = r.Header.Get(internalauth.HeaderName)
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`[]`))
+			}))
+			defer srv.Close()
 
-	c := New(srv.URL)
-	ctx := internalauth.WithToken(context.Background(), wantToken)
-	if _, err := c.ListAllCards(ctx); err != nil {
-		t.Fatalf("ListAllCards: %v", err)
-	}
-	if got != wantToken {
-		t.Errorf("X-Internal-Auth = %q, want %q", got, wantToken)
-	}
+			c := New(srv.URL)
+			ctx := internalauth.WithToken(context.Background(), wantToken)
+			_, err := c.ListAllCards(ctx)
+			require.NoError(t, err)
+			assert.Equal(t, wantToken, got)
+		})
+	})
 }
 
 // TestClient_ValidateDeckForBattle_MapsStatus は検証結果のステータスが呼び出し元へ SDK sentinel として伝播することを検証する。

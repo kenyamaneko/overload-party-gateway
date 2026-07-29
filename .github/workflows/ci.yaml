@@ -4,12 +4,6 @@ name: CI
 on:
   pull_request:
     branches: [main]
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
-      - '.vscode/**'
-      - '.gitignore'
-      - 'LICENSE'
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -20,7 +14,23 @@ permissions:
   id-token: write
 
 jobs:
+  changes:
+    runs-on: ubicloud-standard-2
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.detect.outputs.changed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Detect code change
+        id: detect
+        uses: kenyamaneko/overload-party-common/.github/actions/detect-code-change@main
+
   lint:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubicloud-standard-2
     timeout-minutes: 10
     steps:
@@ -45,6 +55,8 @@ jobs:
           GOPRIVATE: github.com/kenyamaneko/*
 
   test-unit:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubicloud-standard-2
     timeout-minutes: 20
     steps:
@@ -60,13 +72,21 @@ jobs:
           app-id: ${{ vars.CROSS_REPO_DEPS_APP_ID }}
           private-key: ${{ secrets.CROSS_REPO_DEPS_APP_PRIVATE_KEY }}
       - name: Run unit tests
-        run: go test -race ./internal/... -count=1 -coverprofile=coverage.out
+        run: go test -race ./internal/... -count=1 -coverprofile=coverage.out -json | tee go-test-unit.json
         env:
           GOPRIVATE: github.com/kenyamaneko/*
+      - name: Report test results
+        if: ${{ !cancelled() }}
+        uses: kenyamaneko/overload-party-common/.github/actions/go-test-report@main
+        with:
+          json-path: go-test-unit.json
+          title: 単体テスト結果
       - name: Report coverage
         run: go tool cover -func=coverage.out | tail -1 >> "$GITHUB_STEP_SUMMARY"
 
   test-integration:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubicloud-standard-2
     timeout-minutes: 30
     steps:
@@ -99,13 +119,21 @@ jobs:
           app-id: ${{ vars.CROSS_REPO_DEPS_APP_ID }}
           private-key: ${{ secrets.CROSS_REPO_DEPS_APP_PRIVATE_KEY }}
       - name: Run integration tests
-        run: go test -race -tags=integration ./internal/... -count=1
+        run: go test -race -tags=integration ./internal/... -count=1 -json | tee go-test-integration.json
         env:
           GOPRIVATE: github.com/kenyamaneko/*
           FIRESTORE_EMULATOR_HOST: localhost:9041
           GOOGLE_CLOUD_PROJECT_ID: overload-party-test
+      - name: Report test results
+        if: ${{ !cancelled() }}
+        uses: kenyamaneko/overload-party-common/.github/actions/go-test-report@main
+        with:
+          json-path: go-test-integration.json
+          title: 結合テスト結果
 
   codegen-sync:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubicloud-standard-2
     timeout-minutes: 10
     steps:

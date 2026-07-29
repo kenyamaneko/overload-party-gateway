@@ -24,13 +24,18 @@ type Config struct {
 	NewsServiceURL        string
 	SupportServiceURL     string
 
-	// game_players / news_articles は gateway が直接 Postgres に接続して読み書きする
+	// game_players は gateway が直接 Postgres に接続して読み書きする
 	DatabaseConn string
 
-	// GoogleCloudProjectID は Pub/Sub および Firestore (game_config) の対象プロジェクト ID。
+	// DatabaseIAMAuthEnabledRaw は Cloud SQL への接続方式を選ぶ生の環境変数値。cmd/main が検証する。
+	DatabaseIAMAuthEnabledRaw string
+
+	// CloudSQLConnectionName は Cloud SQL インスタンスの接続名 (project:region:instance)。
+	CloudSQLConnectionName string
+
+	// GoogleCloudProjectID は Firestore (game_config) の対象プロジェクト ID。
 	// ローカル/CI では FIRESTORE_EMULATOR_HOST を別途設定することでエミュレーターに接続する。
-	GoogleCloudProjectID    string
-	MatchmakingSubscription string
+	GoogleCloudProjectID string
 
 	// matchmaking_start 後のプレイヤー待機タイムアウト（秒）。
 	// タイムアウト時に gateway がエラーを push し、上流の enqueue をキャンセルする。
@@ -42,6 +47,17 @@ type Config struct {
 
 	// InternalAuthSecret は内部認証 JWT (HS256) の共有秘密鍵。
 	InternalAuthSecret string
+
+	// PubSubPushServiceAccountEmail は match-made push subscription の OIDC トークンを
+	// 署名する Pub/Sub push 用サービスアカウントの email。
+	PubSubPushServiceAccountEmail string
+	// PubSubPushAudience は match-made push subscription の OIDC トークンに期待する aud クレーム
+	// (Terraform 側で明示 audience を設定していないため push endpoint の URL と一致する)。
+	PubSubPushAudience string
+
+	// UpstashRedisURL は対戦ごとの計時 (切断猶予・ターン) の写しを保持する
+	// Upstash Redis の接続 URL。未設定の場合は写しを行わない。
+	UpstashRedisURL string
 }
 
 // Load は環境変数からサービス設定を読み込みます
@@ -62,18 +78,24 @@ func Load() *Config {
 		NewsServiceURL:        getEnv("NEWS_SERVICE_URL", "http://localhost:9008"),
 		SupportServiceURL:     getEnv("SUPPORT_SERVICE_URL", "http://localhost:9009"),
 
-		DatabaseConn: getEnv("DATABASE_CONN", ""),
+		DatabaseConn:              getEnv("DATABASE_CONN", ""),
+		DatabaseIAMAuthEnabledRaw: getEnv("DATABASE_IAM_AUTH_ENABLED", ""),
+		CloudSQLConnectionName:    getEnv("CLOUDSQL_CONNECTION_NAME", ""),
 
-		GoogleCloudProjectID:    getEnv("GOOGLE_CLOUD_PROJECT_ID", ""),
-		MatchmakingSubscription: getEnv("MATCHMAKING_SUBSCRIPTION", "matchmaking-events-gateway"),
+		GoogleCloudProjectID: getEnv("GOOGLE_CLOUD_PROJECT_ID", ""),
 
-		MatchmakingTimeoutSec: getEnvInt("MATCHMAKING_TIMEOUT_SEC", 60),
+		MatchmakingTimeoutSec: getEnvInt("MATCHMAKING_TIMEOUT_SEC", 30),
 
 		AppMinVersion:    getEnv("APP_MIN_VERSION", "0.1.0"),
 		AppLatestVersion: getEnv("APP_LATEST_VERSION", "0.1.0"),
 		AppForceUpdate:   getEnv("APP_FORCE_UPDATE", "false") == "true",
 
 		InternalAuthSecret: getEnv("INTERNAL_AUTH_SECRET", ""),
+
+		PubSubPushServiceAccountEmail: getEnv("PUBSUB_PUSH_SERVICE_ACCOUNT_EMAIL", ""),
+		PubSubPushAudience:            getEnv("PUBSUB_PUSH_AUDIENCE", ""),
+
+		UpstashRedisURL: getEnv("UPSTASH_REDIS_URL", ""),
 	}
 }
 

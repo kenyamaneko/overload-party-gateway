@@ -54,186 +54,186 @@ func newCapturingBackend(t *testing.T, status int, body string) (*httptest.Serve
 	return srv, got
 }
 
-// TestNewForwarder は forwarder の振る舞いを method / body / query / status /
-// auth header の各観点で検証する。
 func TestNewForwarder(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	cases := []struct {
-		name           string
-		token          string
-		method         string
-		reqPath        string
-		reqBody        string
-		backendStatus  int
-		backendBody    string
-		wantBackend    capturedRequest
-		wantClientCode int
-		wantClientBody string
-	}{
-		{
-			name:          "GET 透過 + X-Internal-Auth 注入",
-			token:         "test-token-abc",
-			method:        http.MethodGet,
-			reqPath:       "/api/v1/account/me",
-			reqBody:       "",
-			backendStatus: http.StatusOK,
-			backendBody:   `{"player_id":"p1"}`,
-			wantBackend: capturedRequest{
-				method: http.MethodGet,
-				path:   "/api/v1/account/me",
-				query:  "",
-				body:   "",
-				auth:   "test-token-abc",
+	t.Run("リクエストの透過転送", func(t *testing.T) {
+		cases := []struct {
+			name           string
+			token          string
+			method         string
+			reqPath        string
+			reqBody        string
+			backendStatus  int
+			backendBody    string
+			wantBackend    capturedRequest
+			wantClientCode int
+			wantClientBody string
+		}{
+			{
+				name:          "GET のとき、body なしで透過し X-Internal-Auth を注入する",
+				token:         "test-token-abc",
+				method:        http.MethodGet,
+				reqPath:       "/api/v1/account/me",
+				reqBody:       "",
+				backendStatus: http.StatusOK,
+				backendBody:   `{"player_id":"p1"}`,
+				wantBackend: capturedRequest{
+					method: http.MethodGet,
+					path:   "/api/v1/account/me",
+					query:  "",
+					body:   "",
+					auth:   "test-token-abc",
+				},
+				wantClientCode: http.StatusOK,
+				wantClientBody: `{"player_id":"p1"}`,
 			},
-			wantClientCode: http.StatusOK,
-			wantClientBody: `{"player_id":"p1"}`,
-		},
-		{
-			name:          "POST は body と query を保持",
-			token:         "token-2",
-			method:        http.MethodPost,
-			reqPath:       "/api/v1/shop/purchase?platform=ios",
-			reqBody:       `{"product_id":"x"}`,
-			backendStatus: http.StatusCreated,
-			backendBody:   `{"ok":true}`,
-			wantBackend: capturedRequest{
-				method: http.MethodPost,
-				path:   "/api/v1/shop/purchase",
-				query:  "platform=ios",
-				body:   `{"product_id":"x"}`,
-				auth:   "token-2",
+			{
+				name:          "POST のとき、body と query を保持して透過する",
+				token:         "token-2",
+				method:        http.MethodPost,
+				reqPath:       "/api/v1/shop/purchase?platform=ios",
+				reqBody:       `{"product_id":"x"}`,
+				backendStatus: http.StatusCreated,
+				backendBody:   `{"ok":true}`,
+				wantBackend: capturedRequest{
+					method: http.MethodPost,
+					path:   "/api/v1/shop/purchase",
+					query:  "platform=ios",
+					body:   `{"product_id":"x"}`,
+					auth:   "token-2",
+				},
+				wantClientCode: http.StatusCreated,
+				wantClientBody: `{"ok":true}`,
 			},
-			wantClientCode: http.StatusCreated,
-			wantClientBody: `{"ok":true}`,
-		},
-		{
-			name:          "PUT も passthrough",
-			token:         "token-put",
-			method:        http.MethodPut,
-			reqPath:       "/api/v1/cards/decks/1",
-			reqBody:       `{"deck_name":"d"}`,
-			backendStatus: http.StatusOK,
-			backendBody:   `{"deck_id":1}`,
-			wantBackend: capturedRequest{
-				method: http.MethodPut,
-				path:   "/api/v1/cards/decks/1",
-				query:  "",
-				body:   `{"deck_name":"d"}`,
-				auth:   "token-put",
+			{
+				name:          "PUT のとき、透過する",
+				token:         "token-put",
+				method:        http.MethodPut,
+				reqPath:       "/api/v1/cards/decks/1",
+				reqBody:       `{"deck_name":"d"}`,
+				backendStatus: http.StatusOK,
+				backendBody:   `{"deck_id":1}`,
+				wantBackend: capturedRequest{
+					method: http.MethodPut,
+					path:   "/api/v1/cards/decks/1",
+					query:  "",
+					body:   `{"deck_name":"d"}`,
+					auth:   "token-put",
+				},
+				wantClientCode: http.StatusOK,
+				wantClientBody: `{"deck_id":1}`,
 			},
-			wantClientCode: http.StatusOK,
-			wantClientBody: `{"deck_id":1}`,
-		},
-		{
-			name:          "DELETE も passthrough",
-			token:         "token-del",
-			method:        http.MethodDelete,
-			reqPath:       "/api/v1/cards/decks/1",
-			reqBody:       "",
-			backendStatus: http.StatusNoContent,
-			backendBody:   "",
-			wantBackend: capturedRequest{
-				method: http.MethodDelete,
-				path:   "/api/v1/cards/decks/1",
-				query:  "",
-				body:   "",
-				auth:   "token-del",
+			{
+				name:          "DELETE のとき、透過する",
+				token:         "token-del",
+				method:        http.MethodDelete,
+				reqPath:       "/api/v1/cards/decks/1",
+				reqBody:       "",
+				backendStatus: http.StatusNoContent,
+				backendBody:   "",
+				wantBackend: capturedRequest{
+					method: http.MethodDelete,
+					path:   "/api/v1/cards/decks/1",
+					query:  "",
+					body:   "",
+					auth:   "token-del",
+				},
+				wantClientCode: http.StatusNoContent,
+				wantClientBody: "",
 			},
-			wantClientCode: http.StatusNoContent,
-			wantClientBody: "",
-		},
-		{
-			name:          "downstream 404 が透過する",
-			token:         "token-3",
-			method:        http.MethodGet,
-			reqPath:       "/api/v1/cards/decks/999",
-			reqBody:       "",
-			backendStatus: http.StatusNotFound,
-			backendBody:   `{"error":"deck not found"}`,
-			wantBackend: capturedRequest{
-				method: http.MethodGet,
-				path:   "/api/v1/cards/decks/999",
-				query:  "",
-				body:   "",
-				auth:   "token-3",
+			{
+				name:          "downstream が 404 のとき、そのまま透過する",
+				token:         "token-3",
+				method:        http.MethodGet,
+				reqPath:       "/api/v1/cards/decks/999",
+				reqBody:       "",
+				backendStatus: http.StatusNotFound,
+				backendBody:   `{"error":"deck not found"}`,
+				wantBackend: capturedRequest{
+					method: http.MethodGet,
+					path:   "/api/v1/cards/decks/999",
+					query:  "",
+					body:   "",
+					auth:   "token-3",
+				},
+				wantClientCode: http.StatusNotFound,
+				wantClientBody: `{"error":"deck not found"}`,
 			},
-			wantClientCode: http.StatusNotFound,
-			wantClientBody: `{"error":"deck not found"}`,
-		},
-		{
-			name:          "downstream 500 が透過する",
-			token:         "token-5xx",
-			method:        http.MethodGet,
-			reqPath:       "/api/v1/news/articles",
-			reqBody:       "",
-			backendStatus: http.StatusInternalServerError,
-			backendBody:   `{"error":"db down"}`,
-			wantBackend: capturedRequest{
-				method: http.MethodGet,
-				path:   "/api/v1/news/articles",
-				query:  "",
-				body:   "",
-				auth:   "token-5xx",
+			{
+				name:          "downstream が 500 のとき、そのまま透過する",
+				token:         "token-5xx",
+				method:        http.MethodGet,
+				reqPath:       "/api/v1/news/articles",
+				reqBody:       "",
+				backendStatus: http.StatusInternalServerError,
+				backendBody:   `{"error":"db down"}`,
+				wantBackend: capturedRequest{
+					method: http.MethodGet,
+					path:   "/api/v1/news/articles",
+					query:  "",
+					body:   "",
+					auth:   "token-5xx",
+				},
+				wantClientCode: http.StatusInternalServerError,
+				wantClientBody: `{"error":"db down"}`,
 			},
-			wantClientCode: http.StatusInternalServerError,
-			wantClientBody: `{"error":"db down"}`,
-		},
-		{
-			name:          "internal auth token なし = header 空",
-			token:         "",
-			method:        http.MethodGet,
-			reqPath:       "/api/v1/news/articles",
-			reqBody:       "",
-			backendStatus: http.StatusOK,
-			backendBody:   `[]`,
-			wantBackend: capturedRequest{
-				method: http.MethodGet,
-				path:   "/api/v1/news/articles",
-				query:  "",
-				body:   "",
-				auth:   "",
+			{
+				name:          "token が無いとき、X-Internal-Auth を空にして透過する",
+				token:         "",
+				method:        http.MethodGet,
+				reqPath:       "/api/v1/news/articles",
+				reqBody:       "",
+				backendStatus: http.StatusOK,
+				backendBody:   `[]`,
+				wantBackend: capturedRequest{
+					method: http.MethodGet,
+					path:   "/api/v1/news/articles",
+					query:  "",
+					body:   "",
+					auth:   "",
+				},
+				wantClientCode: http.StatusOK,
+				wantClientBody: `[]`,
 			},
-			wantClientCode: http.StatusOK,
-			wantClientBody: `[]`,
-		},
-	}
+		}
 
-	for _, tc := range cases {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			backend, got := newCapturingBackend(t, tc.backendStatus, tc.backendBody)
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				backend, got := newCapturingBackend(t, tc.backendStatus, tc.backendBody)
 
-			fwd, err := rest.NewForwarder(backend.URL)
-			require.NoError(t, err)
+				fwd, err := rest.NewForwarder(backend.URL)
+				require.NoError(t, err)
 
-			r := gin.New()
-			r.Use(withInternalAuth(tc.token))
-			r.Any("/api/v1/*path", fwd)
+				r := gin.New()
+				r.Use(withInternalAuth(tc.token))
+				r.Any("/api/v1/*path", fwd)
 
-			// ReverseProxy 内部で CloseNotify を呼ぶため、httptest.NewRecorder
-			// (CloseNotifier 未実装) ではなく httptest.NewServer を使って実 HTTP
-			// セマンティクスで叩く。
-			gw := httptest.NewServer(r)
-			defer gw.Close()
+				// ReverseProxy 内部で CloseNotify を呼ぶため、httptest.NewRecorder
+				// (CloseNotifier 未実装) ではなく httptest.NewServer を使って実 HTTP
+				// セマンティクスで叩く。
+				gw := httptest.NewServer(r)
+				defer gw.Close()
 
-			req, err := http.NewRequest(tc.method, gw.URL+tc.reqPath, strings.NewReader(tc.reqBody))
-			require.NoError(t, err)
-			resp, err := http.DefaultClient.Do(req)
-			require.NoError(t, err)
-			defer func() { _ = resp.Body.Close() }()
+				req, err := http.NewRequest(tc.method, gw.URL+tc.reqPath, strings.NewReader(tc.reqBody))
+				require.NoError(t, err)
+				resp, err := http.DefaultClient.Do(req)
+				require.NoError(t, err)
+				defer func() { _ = resp.Body.Close() }()
 
-			respBody, _ := io.ReadAll(resp.Body)
+				respBody, _ := io.ReadAll(resp.Body)
 
-			assert.Equal(t, tc.wantBackend, *got)
-			assert.Equal(t, tc.wantClientCode, resp.StatusCode)
-			assert.Equal(t, tc.wantClientBody, string(respBody))
+				assert.Equal(t, tc.wantBackend, *got)
+				assert.Equal(t, tc.wantClientCode, resp.StatusCode)
+				assert.Equal(t, tc.wantClientBody, string(respBody))
+			})
+		}
+	})
+
+	t.Run("targetURL の検証", func(t *testing.T) {
+		t.Run("不正な targetURL のとき、エラーになる", func(t *testing.T) {
+			_, err := rest.NewForwarder("://not-a-url")
+			require.Error(t, err)
 		})
-	}
-}
-
-// 不正な targetURL は err を返す
-func TestNewForwarder_InvalidURL(t *testing.T) {
-	_, err := rest.NewForwarder("://not-a-url")
-	require.Error(t, err)
+	})
 }

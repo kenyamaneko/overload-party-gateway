@@ -27,22 +27,22 @@ func newStatusServer(t *testing.T, status int, body string) *httptest.Server {
 
 // TestClient_InjectsInternalAuthHeader は呼び出しに内部認証トークンが X-Internal-Auth として乗ることを検証する。
 func TestClient_InjectsInternalAuthHeader(t *testing.T) {
-	const wantToken = "test.jwt.token"
-	var got string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		got = r.Header.Get(internalauth.HeaderName)
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer srv.Close()
+	t.Run("X-Internal-Auth header の注入", func(t *testing.T) {
+		t.Run("ctx に格納した token が X-Internal-Auth header として送られる", func(t *testing.T) {
+			const wantToken = "test.jwt.token"
+			var got string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				got = r.Header.Get(internalauth.HeaderName)
+				w.WriteHeader(http.StatusNoContent)
+			}))
+			defer srv.Close()
 
-	c := New(srv.URL)
-	ctx := internalauth.WithToken(context.Background(), wantToken)
-	if err := c.IncrementBattleCount(ctx); err != nil {
-		t.Fatalf("IncrementBattleCount: %v", err)
-	}
-	if got != wantToken {
-		t.Errorf("X-Internal-Auth = %q, want %q", got, wantToken)
-	}
+			c := New(srv.URL)
+			ctx := internalauth.WithToken(context.Background(), wantToken)
+			require.NoError(t, c.IncrementBattleCount(ctx))
+			assert.Equal(t, wantToken, got)
+		})
+	})
 }
 
 // TestClient_MapsDownstreamStatusToPortSentinel は account の HTTP ステータスが port sentinel に写像されることを検証する。
