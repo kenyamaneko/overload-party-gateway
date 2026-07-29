@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/config"
+	apigateway "github.com/kenyamaneko/overload-party-gateway/packages/api-gateway"
 )
 
 // StaticHandler は version など gateway 自身が保持する静的情報の REST エンドポイントを処理します
@@ -20,9 +21,10 @@ func NewStaticHandler(cfg *config.Config) *StaticHandler {
 
 // GetVersion はアプリバージョン情報を返します
 func (h *StaticHandler) GetVersion(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"minimumVersion": h.cfg.AppMinVersion,
-		"latestVersion":  h.cfg.AppLatestVersion,
-		"forceUpdate":    h.cfg.AppForceUpdate,
+	c.JSON(http.StatusOK, apigateway.VersionResponse{
+		MinimumVersion: h.cfg.AppMinVersion,
+		LatestVersion:  h.cfg.AppLatestVersion,
+		ForceUpdate:    h.cfg.AppForceUpdate,
+		StoreURL:       h.cfg.AppStoreURL,
 	})
 }
