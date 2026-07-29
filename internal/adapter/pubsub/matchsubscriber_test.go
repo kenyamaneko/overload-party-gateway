@@ -6,17 +6,12 @@ import (
 	"errors"
 	"sync"
 	"testing"
-	"time"
 
 	apimatchmaking "github.com/kenyamaneko/overload-party-matchmaking/packages/api-matchmaking"
 	"github.com/kenyamaneko/overload-party-matchmaking/packages/api-matchmaking/apimatchmakingfake"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// matchMadeTopic は apimatchmakingfake.PublishMatchMade が内部で使う topic 名と一致させた
-// テスト用ローカル定数。低レベル broker.Publish 経由で raw payload を投げるケースで使う。
-const matchMadeTopic = "match-made"
 
 // fakeMatchHandler は port.MatchEventHandler のテスト用スタブ。
 // 受信した event と error を記録し、テストから振る舞いを制御できる。
@@ -39,147 +34,79 @@ func (h *fakeMatchHandler) count() int {
 	return len(h.received)
 }
 
-func TestMatchSubscriber(t *testing.T) {
+// wireBytes は matchmaking 送信側 fake 経由で MatchMadeEvent を実際の wire 形式へ
+// marshal する。matchmaking が schema を変えたら本テストが compile / 実行で
+// 破綻して乖離を検知できるようにするため、直接 json.Marshal せずこの経路を使う。
+func wireBytes(t *testing.T, ev apimatchmaking.MatchMadeEvent) []byte {
+	t.Helper()
+	pub := apimatchmakingfake.NewPublisher(apimatchmakingfake.NewBroker())
+	require.NoError(t, apimatchmakingfake.PublishMatchMade(context.Background(), pub, ev))
+	published := pub.Published()
+	require.Len(t, published, 1)
+	return published[0].Data
+}
+
+func TestMatchSubscriber_ProcessMessage(t *testing.T) {
 	validPlayers := []apimatchmaking.MatchedPlayer{
 		{PlayerID: "p-1", DeckID: 10},
 		{PlayerID: "p-2", DeckID: 20},
 	}
 
-	t.Run("マッチ成立イベントの購読", func(t *testing.T) {
-		// matchmaking 送信側 fake 経由で publish 型をそのまま使い、matchmaking が schema を
-		// 変えたら本テストが compile / 実行で破綻して乖離を検知できるようにする。
-		tests := []struct {
-			name          string
-			publish       func(ctx context.Context, pub *apimatchmakingfake.Publisher, broker *apimatchmakingfake.Broker)
-			handlerErr    error
-			wantAck       bool
-			assertHandler func(t *testing.T, h *fakeMatchHandler)
-		}{
-			{
-				name: "有効なマッチ成立イベントのとき、処理に委譲して ACK になる",
-				publish: func(ctx context.Context, pub *apimatchmakingfake.Publisher, _ *apimatchmakingfake.Broker) {
-					_ = apimatchmakingfake.PublishMatchMade(ctx, pub, apimatchmaking.MatchMadeEvent{
-						MatchID: "mch_1",
-						Players: validPlayers,
-					})
-				},
-				wantAck: true,
-				assertHandler: func(t *testing.T, h *fakeMatchHandler) {
-					require.Equal(t, 1, h.count())
-					assert.Equal(t, "mch_1", h.received[0].MatchID)
-					assert.Equal(t, apimatchmaking.EventTypeMatchMade, h.received[0].EventType)
-					require.Len(t, h.received[0].Players, 2)
-					assert.Equal(t, "p-1", h.received[0].Players[0].PlayerID)
-				},
-			},
-			{
-				name: "不正な JSON のとき、握りつぶさず NACK になり処理に渡らない",
-				publish: func(_ context.Context, _ *apimatchmakingfake.Publisher, broker *apimatchmakingfake.Broker) {
-					broker.Publish(matchMadeTopic, []byte("not-json"))
-				},
-				wantAck: false,
-				assertHandler: func(t *testing.T, h *fakeMatchHandler) {
-					assert.Zero(t, h.count())
-				},
-			},
-			{
-				name: "未知の event_type のとき、責務外として ACK になり処理に渡らない",
-				publish: func(_ context.Context, _ *apimatchmakingfake.Publisher, broker *apimatchmakingfake.Broker) {
-					payload, _ := json.Marshal(apimatchmaking.MatchMadeEvent{
-						EventType: "unknown",
-						MatchID:   "mch_unk",
-						Players:   validPlayers,
-					})
-					broker.Publish(matchMadeTopic, payload)
-				},
-				wantAck: true,
-				assertHandler: func(t *testing.T, h *fakeMatchHandler) {
-					assert.Zero(t, h.count(), "event_type フィルタで handler に到達しない")
-				},
-			},
-			{
-				name: "処理が失敗するとき、処理は呼ばれた上で NACK になる",
-				publish: func(ctx context.Context, pub *apimatchmakingfake.Publisher, _ *apimatchmakingfake.Broker) {
-					_ = apimatchmakingfake.PublishMatchMade(ctx, pub, apimatchmaking.MatchMadeEvent{
-						MatchID: "mch_fail",
-						Players: validPlayers,
-					})
-				},
-				handlerErr: errors.New("handler failed"),
-				wantAck:    false,
-				assertHandler: func(t *testing.T, h *fakeMatchHandler) {
-					assert.Equal(t, 1, h.count(), "handler は呼ばれた")
-				},
-			},
-		}
-
-		for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-				broker := apimatchmakingfake.NewBroker()
-				pub := apimatchmakingfake.NewPublisher(broker)
-				stream := apimatchmakingfake.NewStream(
-					apimatchmakingfake.NewSubscriber(broker),
-					matchMadeTopic,
-				)
-
-				handler := &fakeMatchHandler{err: tt.handlerErr}
-				sub, err := NewMatchSubscriber(stream, handler)
-				require.NoError(t, err)
-
-				ctx, cancel := context.WithCancel(context.Background())
-				defer cancel()
-
-				started := make(chan struct{})
-				go func() {
-					close(started)
-					_ = sub.Run(ctx)
-				}()
-				<-started
-
-				tt.publish(ctx, pub, broker)
-
-				handlerErr := stream.ExpectHandled(t, time.Second)
-				assert.Equal(t, tt.wantAck, handlerErr == nil, "ack 判定 (nil=ack, err=%v)", handlerErr)
-
-				tt.assertHandler(t, handler)
-			})
-		}
-
-		t.Run("同一マッチ ID が 2 回届くとき、Pod 単位の重複排除で処理は 1 回だけ実行される", func(t *testing.T) {
-			// matchmaking の Exactly-Once Delivery が万一破綻した場合の Pod 単位 safety net。
-			// 2 回目は Pod-local dedup map により handler に到達せず ACK される。
-			broker := apimatchmakingfake.NewBroker()
-			pub := apimatchmakingfake.NewPublisher(broker)
-			stream := apimatchmakingfake.NewStream(
-				apimatchmakingfake.NewSubscriber(broker),
-				matchMadeTopic,
-			)
+	t.Run("マッチ成立イベントの処理", func(t *testing.T) {
+		t.Run("有効なマッチ成立イベントのとき、エラーを返さず受信した内容をそのまま処理に渡す", func(t *testing.T) {
 			handler := &fakeMatchHandler{}
-			sub, err := NewMatchSubscriber(stream, handler)
+			sub, err := NewMatchSubscriber(handler)
+			require.NoError(t, err)
+			data := wireBytes(t, apimatchmaking.MatchMadeEvent{MatchID: "mch_1", Players: validPlayers})
+
+			err = sub.ProcessMessage(context.Background(), data)
+
+			require.NoError(t, err)
+			require.Equal(t, 1, handler.count())
+			assert.Equal(t, "mch_1", handler.received[0].MatchID)
+			assert.Equal(t, apimatchmaking.EventTypeMatchMade, handler.received[0].EventType)
+			require.Len(t, handler.received[0].Players, 2)
+			assert.Equal(t, "p-1", handler.received[0].Players[0].PlayerID)
+		})
+
+		t.Run("不正な JSON のとき、エラーを返しマッチ成立イベントの処理は実行されない", func(t *testing.T) {
+			handler := &fakeMatchHandler{}
+			sub, err := NewMatchSubscriber(handler)
 			require.NoError(t, err)
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			started := make(chan struct{})
-			go func() {
-				close(started)
-				_ = sub.Run(ctx)
-			}()
-			<-started
+			err = sub.ProcessMessage(context.Background(), []byte("not-json"))
 
-			ev := apimatchmaking.MatchMadeEvent{
-				MatchID: "mch_dup",
-				Players: []apimatchmaking.MatchedPlayer{
-					{PlayerID: "p-1", DeckID: 10},
-					{PlayerID: "p-2", DeckID: 20},
-				},
-			}
-			require.NoError(t, apimatchmakingfake.PublishMatchMade(ctx, pub, ev))
-			require.NoError(t, stream.ExpectHandled(t, time.Second))
-			require.NoError(t, apimatchmakingfake.PublishMatchMade(ctx, pub, ev))
-			require.NoError(t, stream.ExpectHandled(t, time.Second))
+			assert.Error(t, err)
+			assert.Zero(t, handler.count())
+		})
 
-			assert.Equal(t, 1, handler.count(), "重複 matchId は Pod-local dedup で 1 回のみ handler に届く")
+		t.Run("未知の event_type のとき、エラーを返さず責務外としてマッチ成立イベントの処理は実行されない", func(t *testing.T) {
+			handler := &fakeMatchHandler{}
+			sub, err := NewMatchSubscriber(handler)
+			require.NoError(t, err)
+			payload, marshalErr := json.Marshal(apimatchmaking.MatchMadeEvent{
+				EventType: "unknown",
+				MatchID:   "mch_unk",
+				Players:   validPlayers,
+			})
+			require.NoError(t, marshalErr)
+
+			err = sub.ProcessMessage(context.Background(), payload)
+
+			require.NoError(t, err)
+			assert.Zero(t, handler.count())
+		})
+
+		t.Run("マッチ成立イベントの処理が失敗するとき、エラーを返し処理は実行される", func(t *testing.T) {
+			handler := &fakeMatchHandler{err: errors.New("handler failed")}
+			sub, err := NewMatchSubscriber(handler)
+			require.NoError(t, err)
+			data := wireBytes(t, apimatchmaking.MatchMadeEvent{MatchID: "mch_fail", Players: validPlayers})
+
+			err = sub.ProcessMessage(context.Background(), data)
+
+			assert.Error(t, err)
+			assert.Equal(t, 1, handler.count(), "マッチ成立イベントの処理は実行された")
 		})
 	})
 }

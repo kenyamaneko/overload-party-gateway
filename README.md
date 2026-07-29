@@ -20,8 +20,7 @@ Gateway (このサービス, :9001)
   ├─ HTTP → news      (:9008)  ニュース記事
   ├─ HTTP → support   (:9009)  お知らせ
   ├─ PostgreSQL                 gateway.game_players (所有)
-  └─ Cloud Pub/Sub subscriber
-        └─ matchmaking-events-gateway         ← match_made
+  └─ POST /internal/v1/pubsub/match-made  ← Cloud Pub/Sub push 配信
 ```
 
 REST エンドポイント契約は [data/openapi.yaml](data/openapi.yaml) を参照。
@@ -36,6 +35,8 @@ REST エンドポイント契約は [data/openapi.yaml](data/openapi.yaml) を�
 | `ENV` | `dev` | 動作環境 (`dev` / `stg` / `prod`) |
 | `LOG_LEVEL` | `info` | ログレベル |
 | `DATABASE_CONN` | *(必須)* | PostgreSQL 接続文字列 (`gateway.game_players`) |
+| `DATABASE_IAM_AUTH_ENABLED` | *(必須)* | Cloud SQL への接続を Cloud SQL Go Connector 経由の自動 IAM データベース認証で行うかどうか。`true` / `false` のいずれか必須で、フォールバックは無い |
+| `CLOUDSQL_CONNECTION_NAME` | *(空)* | Cloud SQL インスタンスの接続名 (`project:region:instance`)。`DATABASE_IAM_AUTH_ENABLED=true` のときのみ必須 |
 | `GOOGLE_CLOUD_PROJECT_ID` | *(必須)* | Google Cloud プロジェクト ID (Pub/Sub および Firestore game_config) |
 | `INTERNAL_AUTH_SECRET` | *(必須)* | 内部認証 JWT (HS256) の共有秘密鍵 |
 
@@ -52,18 +53,12 @@ REST エンドポイント契約は [data/openapi.yaml](data/openapi.yaml) を�
 | `NEWS_SERVICE_URL` | `http://localhost:9008` | News サービス URL |
 | `SUPPORT_SERVICE_URL` | `http://localhost:9009` | Support サービス URL |
 
-**ConfigMap (Pub/Sub):**
-
-| 変数名 | デフォルト | 説明 |
-|---|---|---|
-| `MATCHMAKING_SUBSCRIPTION` | `matchmaking-events-gateway` | matchmaking Pub/Sub サブスクリプション名 |
-
 **ConfigMap (アプリ挙動):**
 
 | 変数名 | デフォルト | 説明 |
 |---|---|---|
 | `ALLOWED_ORIGINS` | *(空)* | CORS 許可オリジン (カンマ区切り、prod 必須) |
-| `MATCHMAKING_TIMEOUT_SEC` | `60` | プレイヤーごとのマッチメイク待ちタイムアウト秒 |
+| `MATCHMAKING_TIMEOUT_SEC` | `30` | プレイヤーごとのマッチメイク待ちタイムアウト秒 |
 | `APP_MIN_VERSION` | `0.1.0` | 最低必要バージョン |
 | `APP_LATEST_VERSION` | `0.1.0` | 最新バージョン |
 | `APP_FORCE_UPDATE` | `false` | 強制アップデートフラグ |

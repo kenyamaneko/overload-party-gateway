@@ -15,9 +15,12 @@ import (
 
 	"cloud.google.com/go/firestore"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 
 	pubsubadapter "github.com/kenyamaneko/overload-party-gateway/internal/adapter/pubsub"
+	"github.com/kenyamaneko/overload-party-gateway/internal/adapter/redistimer"
 	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/cardclient"
@@ -26,6 +29,7 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/handler/rest"
 	ws "github.com/kenyamaneko/overload-party-gateway/internal/handler/ws"
 	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
 	"github.com/kenyamaneko/overload-party-gateway/internal/router"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
@@ -36,7 +40,7 @@ func main() {
 
 	cfg := config.Load()
 	if cfg.DatabaseConn == "" {
-		log.Fatal("DATABASE_CONN must be set (gateway owns gateway.game_players and reads newsfeed.news_articles)")
+		log.Fatal("DATABASE_CONN must be set (gateway owns gateway.game_players)")
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -49,11 +53,11 @@ func main() {
 	defer pool.Close()
 
 	gamePlayerRepo := repository.NewPgGamePlayerRepository(pool)
+	processedMatchRepo := repository.NewPgProcessedMatchRepository(pool)
 
-	// ローカルモードでは Firestore (game_config) と matchmaking Pub/Sub subscriber は optional。
-	// GOOGLE_CLOUD_PROJECT_ID が未設定なら両方スキップする (NPC バトルがメインワークフロー)。
-	// FIRESTORE_EMULATOR_HOST が設定されていれば公式クライアントが自動的に
-	// エミュレーターへルーティングする。
+	// ローカルモードでは Firestore (game_config) は optional。GOOGLE_CLOUD_PROJECT_ID が
+	// 未設定ならスキップする (NPC バトルがメインワークフロー)。FIRESTORE_EMULATOR_HOST が
+	// 設定されていれば公式クライアントが自動的にエミュレーターへルーティングする。
 	if cfg.GoogleCloudProjectID != "" {
 		fsClient, err := firestore.NewClient(ctx, cfg.GoogleCloudProjectID)
 		if err != nil {
@@ -62,11 +66,11 @@ func main() {
 		defer func() { _ = fsClient.Close() }()
 		_ = repository.NewFirestoreGameConfigRepository(fsClient)
 	} else {
-		log.Println("GOOGLE_CLOUD_PROJECT_ID is unset; skipping Firestore client and matchmaking Pub/Sub subscriber")
+		log.Println("GOOGLE_CLOUD_PROJECT_ID is unset; skipping Firestore client")
 	}
 
 	cardClient := cardclient.New(cfg.CardServiceURL)
-	matchmakingClient := matchmakingclient.New(cfg.MatchmakingServiceURL)
+	matchmakingClient := matchmakingclient.New(cfg.MatchmakingServiceURL, uuid.Must(uuid.NewV7()).String())
 	accountClient := accountclient.New(cfg.AccountServiceURL)
 
 	if cfg.InternalAuthSecret == "" {
@@ -77,12 +81,34 @@ func main() {
 		internalauth.DefaultKeyID,
 	)
 
+	// 対戦ごとの計時の写しは UPSTASH_REDIS_URL が未設定なら行わない
+	// (docker-compose の redis サービスを使わないローカル起動でも動く状態を保つ)。
+	var timerStore port.TimerStore
+	if cfg.UpstashRedisURL != "" {
+		redisOpt, err := redis.ParseURL(cfg.UpstashRedisURL)
+		if err != nil {
+			log.Fatalf("failed to parse UPSTASH_REDIS_URL: %v", err)
+		}
+		redisClient := redis.NewClient(redisOpt)
+		defer func() { _ = redisClient.Close() }()
+		timerStore = redistimer.NewStore(redisClient)
+	} else {
+		log.Println("UPSTASH_REDIS_URL is unset; skipping timer deadline mirroring")
+	}
+
 	battleClient := service.NewBattleClient(cfg.BattleServerURL)
 	matchmakingTimeout := time.Duration(cfg.MatchmakingTimeoutSec) * time.Second
-	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, matchmakingTimeout, internalSigner)
+	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, processedMatchRepo, matchmakingTimeout, internalSigner, timerStore)
 	wsHandler := ws.NewHandler(wsManager, nil, accountClient, nil)
+
+	matchSub, err := pubsubadapter.NewMatchSubscriber(wsManager)
+	if err != nil {
+		log.Fatalf("failed to create match subscriber: %v", err)
+	}
+
 	handlers := &router.Handlers{
-		Auth: rest.NewAuthHandler(accountClient),
+		Auth:   rest.NewAuthHandler(accountClient),
+		PubSub: rest.NewPubSubPushHandler(matchSub),
 	}
 
 	r := gin.Default()
@@ -102,6 +128,11 @@ func main() {
 		staticHandler := rest.NewStaticHandler(cfg)
 		pub.GET("/version", staticHandler.GetVersion)
 	}
+
+	// Pub/Sub push 配信の内部エンドポイント。ローカルモードは Pub/Sub エミュレーターを使うため
+	// 本物の Google 署名 OIDC トークンを用意できず、cmd/main のような push 認証は行わない。
+	internalGroup := r.Group("/internal/v1")
+	router.RegisterPubSubRoutes(internalGroup, handlers)
 
 	// ローカルモードは Firebase Auth エミュレーターを持たない (この compose スタックは
 	// Pub/Sub と Firestore のエミュレーターのみ提供する) ため、Firebase ID トークン検証の
@@ -129,25 +160,6 @@ func main() {
 	srvCtx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// matchmaking Pub/Sub subscriber も GOOGLE_CLOUD_PROJECT_ID が設定されたときだけ起動する。
-	// 未設定時のスキップログは Firestore 側の分岐で出力済み。
-	if cfg.GoogleCloudProjectID != "" {
-		stream, err := pubsubadapter.NewStream(srvCtx, cfg.GoogleCloudProjectID, cfg.MatchmakingSubscription)
-		if err != nil {
-			log.Fatalf("failed to create matchmaking stream: %v", err)
-		}
-		defer func() { _ = stream.Close() }()
-		subscriber, err := pubsubadapter.NewMatchSubscriber(stream, wsManager)
-		if err != nil {
-			log.Fatalf("failed to create match subscriber: %v", err)
-		}
-		go func() {
-			if err := subscriber.Run(srvCtx); err != nil && srvCtx.Err() == nil {
-				log.Fatalf("match subscriber error: %v", err)
-			}
-		}()
-	}
-
 	go func() {
 		log.Println("gateway local server starting on :9001")
 		log.Println("  REST: http://localhost:9001/api/v1/")
@@ -158,6 +170,10 @@ func main() {
 
 	<-srvCtx.Done()
 	log.Println("shutting down...")
+
+	wsShutdownCtx, wsCancel := context.WithTimeout(context.Background(), ws.ShutdownNotifyTimeout)
+	wsManager.Shutdown(wsShutdownCtx)
+	wsCancel()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

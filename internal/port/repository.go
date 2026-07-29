@@ -26,3 +26,19 @@ type GamePlayerEntry struct {
 type GameConfigRepo interface {
 	GetInt64(ctx context.Context, key string) (int64, error)
 }
+
+// ProcessedMatchRepo は match_made イベントの永続的な重複排除を管理します。
+// battle のゲーム作成は matchId に対して冪等ではないため、Claim で処理を開始した
+// matchId を記録し、battle 呼び出し前に失敗したら Release で記録を取り消し、
+// battle 呼び出しが成功したら RecordGameCreated で結果の gameID を記録します。
+// GameIDFor は再送時に battle を再呼び出しせず結果を復元するために使います。
+type ProcessedMatchRepo interface {
+	// Claim は matchId の処理を排他的に開始します。既に claim 済みなら claimed=false を返します。
+	Claim(ctx context.Context, matchID string) (claimed bool, err error)
+	// Release は battle 呼び出し前の失敗時に Claim を取り消します。
+	Release(ctx context.Context, matchID string) error
+	// RecordGameCreated は claim 済みの matchId に対して作成された battle game の ID を記録します。
+	RecordGameCreated(ctx context.Context, matchID, gameID string) error
+	// GameIDFor は matchId に対して既に作成済みの battle game の ID を返します。未作成なら found=false です。
+	GameIDFor(ctx context.Context, matchID string) (gameID string, found bool, err error)
+}

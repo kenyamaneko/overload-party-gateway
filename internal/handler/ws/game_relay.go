@@ -49,15 +49,20 @@ type GameRelay struct {
 
 	timerMu    sync.Mutex
 	turnTimers map[string]*turnTimerInfo // gameID → active turn timer
+
+	// timerStore はターン期限を Redis へ写す。未設定 (nil) の場合は写しを行わない
+	// （ローカル開発など Redis を使わない環境向け）。
+	timerStore port.TimerStore
 }
 
 // NewGameRelay は GameRelay を生成します。
-// accountClient / gamePlayerRepo は nil 可（mock モード / テスト用）。
+// accountClient / gamePlayerRepo / timerStore は nil 可（mock モード / テスト用 / 写し無し）。
 func NewGameRelay(
 	hub *ConnectionHub,
 	battleClient service.BattleClient,
 	accountClient port.AccountClient,
 	gamePlayerRepo port.GamePlayerRepo,
+	timerStore port.TimerStore,
 ) *GameRelay {
 	return &GameRelay{
 		hub:            hub,
@@ -67,6 +72,7 @@ func NewGameRelay(
 		gameMembers:    make(map[string][]string),
 		playerGames:    make(map[string]playerSession),
 		turnTimers:     make(map[string]*turnTimerInfo),
+		timerStore:     timerStore,
 	}
 }
 
@@ -89,6 +95,89 @@ func (r *GameRelay) NotifyOpponentDisconnected(playerID, gameID string) {
 // NotifyOpponentReconnected は切断したプレイヤーの復帰時に対戦相手に opponent_reconnected を送信します
 func (r *GameRelay) NotifyOpponentReconnected(playerID, gameID string) {
 	r.sendToOpponent(playerID, gameID, genws.WSServerMsgOpponentReconnected)
+}
+
+// HandleReconnect はプレイヤーが切断していたゲームへ復帰した際の処理です。
+// wasLate は復帰したプレイヤー自身の猶予期限が既に過ぎていたかを表します。
+//
+// resolveStaleDisconnect は WS ハンドシェイク中に同期実行すると pump 起動を遅らせるため、別 goroutine で実行する。
+func (r *GameRelay) HandleReconnect(playerID, gameID string, wasLate bool) {
+	r.NotifyOpponentReconnected(playerID, gameID)
+	go r.resolveStaleDisconnect(gameID, playerID, wasLate)
+}
+
+// resolveStaleDisconnect は全員切断のまま決着していなかった対戦を、戻ってきた
+// プレイヤーを起点に評価します。対戦相手が接続中、または対戦相手の猶予が
+// まだ残っている場合は何もしません (対戦相手不在の対戦継続、または通常の
+// 復帰として扱う)。
+func (r *GameRelay) resolveStaleDisconnect(gameID, returningPlayerID string, returningWasLate bool) {
+	if r.gamePlayerRepo == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), downstreamCallTimeout)
+	defer cancel()
+
+	entries, err := r.gamePlayerRepo.LookupGamePlayers(ctx, gameID)
+	if err != nil {
+		log.Printf("ERROR: resolve stale disconnect: lookup game players (game=%s, player=%s): %v", gameID, returningPlayerID, err)
+		return
+	}
+	opponentID := opponentPlayerID(entries, returningPlayerID)
+	if opponentID == "" || r.hub.IsConnected(opponentID) {
+		return
+	}
+	opponentExpired, err := r.hub.IsDisconnectDeadlineExpired(opponentID)
+	if err != nil {
+		log.Printf("ERROR: resolve stale disconnect: check opponent %s disconnect deadline for game %s: %v, leaving unresolved", opponentID, gameID, err)
+		return
+	}
+	if !opponentExpired {
+		return
+	}
+
+	if !returningWasLate {
+		// 対戦相手だけ猶予切れ → 復帰した側の勝ち。既存の forfeit 経路を対戦相手の
+		// playerID で呼び出すことで、対戦相手の forfeit として処理する。
+		r.HandleDisconnectTimeout(opponentID, gameID)
+		return
+	}
+
+	// 両者とも猶予切れのときは引き分けとするが、forfeit アクションは常に相手を
+	// 勝者にする契約のため battle の現行 API では表現できない。誤った勝者を
+	// 立てないため、未決着のまま残し要監視のログだけ残す。
+	log.Printf("ERROR: both players' disconnect grace expired for game %s (opponent=%s, returning=%s), leaving unresolved (draw not expressible via current forfeit API)", gameID, opponentID, returningPlayerID)
+}
+
+// areBothPlayersDisconnected は gameID の 2 人対戦で playerID と対戦相手の双方が、
+// 現在 WS 接続を持たないかを判定する。gamePlayerRepo が無い場合や対戦相手が
+// 解決できない場合 (NPC 戦など) は false を返す。
+func (r *GameRelay) areBothPlayersDisconnected(ctx context.Context, playerID, gameID string) (bool, error) {
+	if r.gamePlayerRepo == nil {
+		return false, nil
+	}
+	entries, err := r.gamePlayerRepo.LookupGamePlayers(ctx, gameID)
+	if err != nil {
+		return false, err
+	}
+	opponentID := opponentPlayerID(entries, playerID)
+	if opponentID == "" {
+		return false, nil
+	}
+	return !r.hub.IsConnected(playerID) && !r.hub.IsConnected(opponentID), nil
+}
+
+// opponentPlayerID は 2 人制のゲームで selfID の対戦相手の playerID を返す。
+// 該当が無い場合 (NPC 戦や不整合データ) は空文字を返す。
+func opponentPlayerID(entries []port.GamePlayerEntry, selfID string) string {
+	if len(entries) != 2 {
+		return ""
+	}
+	for _, e := range entries {
+		if e.PlayerID != selfID {
+			return e.PlayerID
+		}
+	}
+	return ""
 }
 
 func (r *GameRelay) sendToOpponent(playerID, gameID, msgType string) {
@@ -575,7 +664,8 @@ func (r *GameRelay) HandleGameAction(ctx context.Context, conn *Connection, data
 }
 
 // leaveAllPlayers はゲームの全プレイヤーのメンバーシップを解除する。
-// game over 後に gameMembers / playerGames をクリーンアップする。
+// game over 後に gameMembers / playerGames をクリーンアップし、対戦を終えた
+// プレイヤーの切断猶予期限の写しも合わせて削除する。
 func (r *GameRelay) leaveAllPlayers(gameID string) {
 	r.mu.RLock()
 	players := make([]string, len(r.gameMembers[gameID]))
@@ -583,6 +673,7 @@ func (r *GameRelay) leaveAllPlayers(gameID string) {
 	r.mu.RUnlock()
 	for _, pid := range players {
 		r.LeaveGame(pid)
+		r.hub.ClearDisconnectDeadline(pid)
 	}
 }
 
@@ -608,7 +699,23 @@ func (r *GameRelay) HandleUseStamp(conn *Connection, data json.RawMessage) {
 
 // HandleDisconnectTimeout は切断タイムアウト後の forfeit を処理します。
 // forfeit reason の方針については handleTurnTimeout のコメントを参照。
+//
+// 対戦相手も切断中の場合はこの時点では決着させない。両者とも不在の対戦は
+// その場では勝者を決める理由が無く、次にどちらかが戻ってきた時点で
+// resolveStaleDisconnect が改めて評価する。手番の計時もそのため止めない。
 func (r *GameRelay) HandleDisconnectTimeout(playerID, gameID string) {
+	ctx, cancel := context.WithTimeout(context.Background(), downstreamCallTimeout)
+	bothDisconnected, err := r.areBothPlayersDisconnected(ctx, playerID, gameID)
+	cancel()
+	if err != nil {
+		log.Printf("ERROR: disconnect timeout: lookup game players (game=%s, player=%s): %v", gameID, playerID, err)
+		return
+	}
+	if bothDisconnected {
+		log.Printf("player %s disconnect grace expired but opponent is also disconnected for game %s, deferring resolution", playerID, gameID)
+		return
+	}
+
 	r.cancelTurnTimer(gameID)
 
 	pNum := r.resolvePlayerNum(playerID)
@@ -616,9 +723,9 @@ func (r *GameRelay) HandleDisconnectTimeout(playerID, gameID string) {
 		return
 	}
 	// 切断タイムアウトは WS コネクション喪失後に発火するので Background ベースで実行する。
-	ctx, cancel := context.WithTimeout(context.Background(), downstreamCallTimeout)
-	defer cancel()
-	result, err := r.battleClient.ProcessAction(ctx, gameID, pNum, gamelogic.ActionTypeForfeit, buildForfeitReason(gamelogic.WinReasonDisconnect))
+	ctx2, cancel2 := context.WithTimeout(context.Background(), downstreamCallTimeout)
+	defer cancel2()
+	result, err := r.battleClient.ProcessAction(ctx2, gameID, pNum, gamelogic.ActionTypeForfeit, buildForfeitReason(gamelogic.WinReasonDisconnect))
 	if err != nil {
 		// 切断 forfeit は対戦相手にも影響する（ゲーム終了せず宙ぶらりんになる）。
 		// 接続は既に切れているので本人通知は不可能だが、対戦相手は DB 観測 / 別経路の
