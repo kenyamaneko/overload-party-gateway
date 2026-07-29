@@ -47,7 +47,6 @@ func TestClient_GetDeckCards(t *testing.T) {
 	})
 }
 
-// TestClient_GetDeckCards_PropagatesDownstreamError は card の失敗ステータスが呼び出し元へ SDK sentinel として伝播することを検証する。
 func TestClient_GetDeckCards_PropagatesDownstreamError(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -66,20 +65,22 @@ func TestClient_GetDeckCards_PropagatesDownstreamError(t *testing.T) {
 		},
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				w.WriteHeader(tc.status)
-			}))
-			defer srv.Close()
+	t.Run("デッキカード取得の失敗応答の伝播", func(t *testing.T) {
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					w.WriteHeader(tc.status)
+				}))
+				defer srv.Close()
 
-			c := New(srv.URL)
-			ctx := internalauth.WithToken(context.Background(), "test.jwt.token")
-			cards, initiatives, err := c.GetDeckCards(ctx, 1)
+				c := New(srv.URL)
+				ctx := internalauth.WithToken(context.Background(), "test.jwt.token")
+				cards, initiatives, err := c.GetDeckCards(ctx, 1)
 
-			require.ErrorIs(t, err, tc.wantErr)
-			assert.Nil(t, cards)
-			assert.Equal(t, port.DeckInitiatives{}, initiatives)
-		})
-	}
+				require.ErrorIs(t, err, tc.wantErr)
+				assert.Nil(t, cards)
+				assert.Equal(t, port.DeckInitiatives{}, initiatives)
+			})
+		}
+	})
 }

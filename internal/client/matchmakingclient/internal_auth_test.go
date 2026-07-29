@@ -24,7 +24,6 @@ func newStatusServer(t *testing.T, status int) *httptest.Server {
 	return srv
 }
 
-// TestClient_InjectsInternalAuthHeader は呼び出しに内部認証トークンが X-Internal-Auth として乗ることを検証する。
 func TestClient_InjectsInternalAuthHeader(t *testing.T) {
 	t.Run("X-Internal-Auth header の注入", func(t *testing.T) {
 		t.Run("ctx に格納した token が X-Internal-Auth header として送られる", func(t *testing.T) {
@@ -44,7 +43,6 @@ func TestClient_InjectsInternalAuthHeader(t *testing.T) {
 	})
 }
 
-// TestClient_Enqueue_MapsStatusToSentinel は受付停止 (503) を port sentinel に写像し、その他の失敗は SDK sentinel を透過することを検証する。
 func TestClient_Enqueue_MapsStatusToSentinel(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -63,19 +61,20 @@ func TestClient_Enqueue_MapsStatusToSentinel(t *testing.T) {
 		},
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			srv := newStatusServer(t, tc.status)
-			c := New(srv.URL, "test-instance-id")
+	t.Run("マッチング登録の失敗応答の変換", func(t *testing.T) {
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				srv := newStatusServer(t, tc.status)
+				c := New(srv.URL, "test-instance-id")
 
-			err := c.Enqueue(context.Background(), 42, "alice", 7)
+				err := c.Enqueue(context.Background(), 42, "alice", 7)
 
-			require.ErrorIs(t, err, tc.wantErr)
-		})
-	}
+				require.ErrorIs(t, err, tc.wantErr)
+			})
+		}
+	})
 }
 
-// TestClient_Cancel_FoldsAndMapsStatus はキャンセルが 404/200 を成功に畳み、受付停止を port sentinel に写像することを検証する。
 func TestClient_Cancel_FoldsAndMapsStatus(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -99,14 +98,16 @@ func TestClient_Cancel_FoldsAndMapsStatus(t *testing.T) {
 		},
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			srv := newStatusServer(t, tc.status)
-			c := New(srv.URL, "test-instance-id")
+	t.Run("マッチング取消の応答の変換", func(t *testing.T) {
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				srv := newStatusServer(t, tc.status)
+				c := New(srv.URL, "test-instance-id")
 
-			err := c.Cancel(context.Background())
+				err := c.Cancel(context.Background())
 
-			require.ErrorIs(t, err, tc.wantErr)
-		})
-	}
+				require.ErrorIs(t, err, tc.wantErr)
+			})
+		}
+	})
 }

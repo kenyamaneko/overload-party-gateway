@@ -13,7 +13,6 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
 )
 
-// TestClient_InjectsInternalAuthHeader は呼び出しに内部認証トークンが X-Internal-Auth として乗ることを検証する。
 func TestClient_InjectsInternalAuthHeader(t *testing.T) {
 	t.Run("X-Internal-Auth header の注入", func(t *testing.T) {
 		t.Run("ctx に格納した token が X-Internal-Auth header として送られる", func(t *testing.T) {
@@ -35,7 +34,6 @@ func TestClient_InjectsInternalAuthHeader(t *testing.T) {
 	})
 }
 
-// TestClient_ValidateDeckForBattle_MapsStatus は検証結果のステータスが呼び出し元へ SDK sentinel として伝播することを検証する。
 func TestClient_ValidateDeckForBattle_MapsStatus(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -64,18 +62,20 @@ func TestClient_ValidateDeckForBattle_MapsStatus(t *testing.T) {
 		},
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				w.WriteHeader(tc.status)
-			}))
-			defer srv.Close()
+	t.Run("対戦用デッキ検証の応答の変換", func(t *testing.T) {
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					w.WriteHeader(tc.status)
+				}))
+				defer srv.Close()
 
-			c := New(srv.URL)
-			ctx := internalauth.WithToken(context.Background(), "test.jwt.token")
-			err := c.ValidateDeckForBattle(ctx, 1)
+				c := New(srv.URL)
+				ctx := internalauth.WithToken(context.Background(), "test.jwt.token")
+				err := c.ValidateDeckForBattle(ctx, 1)
 
-			require.ErrorIs(t, err, tc.wantErr)
-		})
-	}
+				require.ErrorIs(t, err, tc.wantErr)
+			})
+		}
+	})
 }

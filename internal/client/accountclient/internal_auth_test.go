@@ -25,7 +25,6 @@ func newStatusServer(t *testing.T, status int, body string) *httptest.Server {
 	return srv
 }
 
-// TestClient_InjectsInternalAuthHeader は呼び出しに内部認証トークンが X-Internal-Auth として乗ることを検証する。
 func TestClient_InjectsInternalAuthHeader(t *testing.T) {
 	t.Run("X-Internal-Auth header の注入", func(t *testing.T) {
 		t.Run("ctx に格納した token が X-Internal-Auth header として送られる", func(t *testing.T) {
@@ -45,7 +44,6 @@ func TestClient_InjectsInternalAuthHeader(t *testing.T) {
 	})
 }
 
-// TestClient_MapsDownstreamStatusToPortSentinel は account の HTTP ステータスが port sentinel に写像されることを検証する。
 func TestClient_MapsDownstreamStatusToPortSentinel(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -67,19 +65,20 @@ func TestClient_MapsDownstreamStatusToPortSentinel(t *testing.T) {
 		},
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			srv := newStatusServer(t, tc.status, `{}`)
-			c := New(srv.URL)
+	t.Run("登録・ログインの失敗応答の変換", func(t *testing.T) {
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				srv := newStatusServer(t, tc.status, `{}`)
+				c := New(srv.URL)
 
-			err := tc.call(context.Background(), c)
+				err := tc.call(context.Background(), c)
 
-			require.ErrorIs(t, err, tc.wantErr)
-		})
-	}
+				require.ErrorIs(t, err, tc.wantErr)
+			})
+		}
+	})
 }
 
-// TestClient_FindByFirebaseUID_FoldsNotFoundToNil は未登録 (404) を未登録の正常表現 (nil, nil) に畳むことを検証する。
 func TestClient_FindByFirebaseUID_FoldsNotFoundToNil(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -98,15 +97,17 @@ func TestClient_FindByFirebaseUID_FoldsNotFoundToNil(t *testing.T) {
 		},
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			srv := newStatusServer(t, tc.status, `{}`)
-			c := New(srv.URL)
+	t.Run("Firebase UID によるプレイヤー検索", func(t *testing.T) {
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				srv := newStatusServer(t, tc.status, `{}`)
+				c := New(srv.URL)
 
-			player, err := c.FindByFirebaseUID(context.Background(), "uid-1")
+				player, err := c.FindByFirebaseUID(context.Background(), "uid-1")
 
-			require.NoError(t, err)
-			assert.Equal(t, tc.wantPlayer, player != nil)
-		})
-	}
+				require.NoError(t, err)
+				assert.Equal(t, tc.wantPlayer, player != nil)
+			})
+		}
+	})
 }
