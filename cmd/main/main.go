@@ -18,6 +18,7 @@ import (
 
 	pubsubadapter "github.com/kenyamaneko/overload-party-gateway/internal/adapter/pubsub"
 	"github.com/kenyamaneko/overload-party-gateway/internal/adapter/redistimer"
+	"github.com/kenyamaneko/overload-party-gateway/internal/auth/firebaseauth"
 	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/cardclient"
@@ -131,7 +132,7 @@ func main() {
 	defer func() { _ = fsClient.Close() }()
 
 	// Firebase Auth クライアント
-	authClient, err := middleware.NewFirebaseAuthClient(ctx)
+	authClient, err := firebaseauth.NewClient(ctx)
 	if err != nil {
 		exitOnStartupFailure("failed to create firebase auth client", err)
 	}
@@ -213,7 +214,7 @@ func main() {
 	router.RegisterPubSubRoutes(internalGroup, handlers)
 
 	v1 := r.Group("/api/v1")
-	v1.Use(middleware.UseFirebaseAuth(authClient))
+	v1.Use(middleware.UseFirebaseAuth(firebaseauth.NewVerifier(authClient)))
 
 	router.RegisterAuthRoutes(v1, handlers)
 
