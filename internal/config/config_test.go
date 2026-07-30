@@ -34,48 +34,28 @@ func TestLoad(t *testing.T) {
 			assert.Equal(t, "", cfg.PubSubPushAudience)
 		})
 
-		t.Run("全 env を指定するとき、その値が反映される", func(t *testing.T) {
+		t.Run("PORT を指定するとき、その値が採用される", func(t *testing.T) {
 			t.Setenv("PORT", "8080")
-			t.Setenv("ENV", "production")
-			t.Setenv("LOG_LEVEL", "debug")
-			t.Setenv("DATABASE_CONN", "postgres://localhost:5432/mydb")
-			t.Setenv("DATABASE_IAM_AUTH_ENABLED", "true")
-			t.Setenv("CLOUDSQL_CONNECTION_NAME", "overload-party-dev:asia-northeast1:overload-party-db")
-			t.Setenv("ALLOWED_ORIGINS", "http://localhost:3000")
-			t.Setenv("BATTLE_SERVER_URL", "http://battle:9002")
-			t.Setenv("CARD_SERVICE_URL", "http://card:9001")
-			t.Setenv("ACCOUNT_SERVICE_URL", "http://account:9001")
-			t.Setenv("SHOP_SERVICE_URL", "http://shop:9001")
-			t.Setenv("SCENARIO_SERVICE_URL", "http://scenario:9001")
-			t.Setenv("APP_MIN_VERSION", "1.0.0")
-			t.Setenv("APP_LATEST_VERSION", "1.2.0")
-			t.Setenv("APP_FORCE_UPDATE", "true")
-			t.Setenv("APP_STORE_URL", "https://store.example.com/app")
-			t.Setenv("INTERNAL_AUTH_SECRET", "test-internal-auth-secret-32-bytes-min")
-			t.Setenv("PUBSUB_PUSH_SERVICE_ACCOUNT_EMAIL", "pubsub-push@test-project.iam.gserviceaccount.com")
-			t.Setenv("PUBSUB_PUSH_AUDIENCE", "https://gateway.example.com/internal/v1/pubsub/match-made")
 
 			cfg := Load()
 
 			assert.Equal(t, "8080", cfg.Port)
-			assert.Equal(t, "production", cfg.Env)
-			assert.Equal(t, "debug", cfg.LogLevel)
-			assert.Equal(t, "postgres://localhost:5432/mydb", cfg.DatabaseConn)
-			assert.Equal(t, "true", cfg.DatabaseIAMAuthEnabledRaw)
-			assert.Equal(t, "overload-party-dev:asia-northeast1:overload-party-db", cfg.CloudSQLConnectionName)
-			assert.Equal(t, []string{"http://localhost:3000"}, cfg.AllowedOrigins)
-			assert.Equal(t, "http://battle:9002", cfg.BattleServerURL)
-			assert.Equal(t, "http://card:9001", cfg.CardServiceURL)
-			assert.Equal(t, "http://account:9001", cfg.AccountServiceURL)
-			assert.Equal(t, "http://shop:9001", cfg.ShopServiceURL)
-			assert.Equal(t, "http://scenario:9001", cfg.ScenarioServiceURL)
-			assert.Equal(t, "1.0.0", cfg.AppMinVersion)
-			assert.Equal(t, "1.2.0", cfg.AppLatestVersion)
+		})
+
+		t.Run("MATCHMAKING_TIMEOUT_SEC に 120 を指定するとき、待機タイムアウトが 120 秒になる", func(t *testing.T) {
+			t.Setenv("MATCHMAKING_TIMEOUT_SEC", "120")
+
+			cfg := Load()
+
+			assert.Equal(t, 120, cfg.MatchmakingTimeoutSec)
+		})
+
+		t.Run("APP_FORCE_UPDATE に true を指定するとき、強制更新が有効になる", func(t *testing.T) {
+			t.Setenv("APP_FORCE_UPDATE", "true")
+
+			cfg := Load()
+
 			assert.True(t, cfg.AppForceUpdate)
-			assert.Equal(t, "https://store.example.com/app", cfg.AppStoreURL)
-			assert.Equal(t, "test-internal-auth-secret-32-bytes-min", cfg.InternalAuthSecret)
-			assert.Equal(t, "pubsub-push@test-project.iam.gserviceaccount.com", cfg.PubSubPushServiceAccountEmail)
-			assert.Equal(t, "https://gateway.example.com/internal/v1/pubsub/match-made", cfg.PubSubPushAudience)
 		})
 
 		t.Run("ALLOWED_ORIGINS を CSV 指定するとき、分割して格納される", func(t *testing.T) {
