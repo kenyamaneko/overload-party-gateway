@@ -20,9 +20,9 @@ func newTestHub(timerStore *fakeTimerStore, inGame bool, gameID string) *Connect
 		OnDisconnectTimeout: func(string, string) {},
 	}
 	if timerStore == nil {
-		return NewConnectionHub(cb, nil)
+		return NewConnectionHub(cb, DefaultDisconnectTimeout, nil)
 	}
-	return NewConnectionHub(cb, timerStore)
+	return NewConnectionHub(cb, DefaultDisconnectTimeout, timerStore)
 }
 
 func TestUnregister(t *testing.T) {
@@ -133,7 +133,7 @@ func TestRegister_WasLate(t *testing.T) {
 				OnGameReconnect: func(playerID, gameID string, wasLate bool) {
 					calls = append(calls, reconnectCall{playerID, gameID, wasLate})
 				},
-			}, nil)
+			}, DefaultDisconnectTimeout, nil)
 			conn := NewConnection(nil, "p1")
 			hub.Register(conn)
 			hub.Unregister(conn)
@@ -157,7 +157,7 @@ func TestRegister_WasLate(t *testing.T) {
 				OnGameReconnect: func(playerID, gameID string, wasLate bool) {
 					calls = append(calls, reconnectCall{playerID, gameID, wasLate})
 				},
-			}, store)
+			}, DefaultDisconnectTimeout, store)
 
 			hub.Register(NewConnection(nil, "p1"))
 
@@ -178,7 +178,7 @@ func TestRegister_WasLate(t *testing.T) {
 				OnGameReconnect: func(playerID, gameID string, wasLate bool) {
 					calls = append(calls, reconnectCall{playerID, gameID, wasLate})
 				},
-			}, store)
+			}, DefaultDisconnectTimeout, store)
 
 			hub.Register(NewConnection(nil, "p1"))
 
@@ -196,7 +196,7 @@ func TestRegister_WasLate(t *testing.T) {
 				OnGameReconnect: func(playerID, gameID string, wasLate bool) {
 					calls = append(calls, reconnectCall{playerID, gameID, wasLate})
 				},
-			}, store)
+			}, DefaultDisconnectTimeout, store)
 
 			hub.Register(NewConnection(nil, "p1"))
 
@@ -212,7 +212,7 @@ func TestRegister_WasLate(t *testing.T) {
 				OnGameReconnect: func(playerID, gameID string, wasLate bool) {
 					calls = append(calls, reconnectCall{playerID, gameID, wasLate})
 				},
-			}, store)
+			}, DefaultDisconnectTimeout, store)
 
 			hub.Register(NewConnection(nil, "p1"))
 
