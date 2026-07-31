@@ -1,0 +1,59 @@
+name: Test viewpoint catalog
+
+# main の状態のテスト名からテスト観点カタログを作り、GitHub Pages に公開する。
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: test-catalog-${{ github.ref }}
+  # GitHub Pages への deploy を含むため、後続の push で打ち切らない
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  # 呼び出す ci.yaml が Google Cloud の OIDC 認証に使う
+  id-token: write
+
+jobs:
+  test:
+    uses: ./.github/workflows/ci.yaml
+    secrets: inherit
+
+  publish:
+    name: Publish test viewpoint catalog
+    needs: test
+    if: needs.test.outputs.code-changed == 'true'
+    runs-on: ubicloud-standard-2
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Download test results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: go-test-*
+          merge-multiple: true
+      - name: Render test viewpoint catalog
+        uses: kenyamaneko/overload-party-common/.github/actions/test-catalog@main
+        with:
+          title: gateway テスト観点カタログ
+          sections: |
+            外から見た振る舞い:単体テスト:go-json:go-test-unit.json:github.com/kenyamaneko/overload-party-gateway/internal/handler/,github.com/kenyamaneko/overload-party-gateway/internal/middleware,github.com/kenyamaneko/overload-party-gateway/internal/router
+            内部の挙動:単体テスト:go-json:go-test-unit.json:github.com/kenyamaneko/overload-party-gateway/internal/adapter/,github.com/kenyamaneko/overload-party-gateway/internal/auth/,github.com/kenyamaneko/overload-party-gateway/internal/client/,github.com/kenyamaneko/overload-party-gateway/internal/config,github.com/kenyamaneko/overload-party-gateway/internal/repository,github.com/kenyamaneko/overload-party-gateway/internal/service,github.com/kenyamaneko/overload-party-gateway/internal/specdrift
+            外から見た振る舞い:結合テスト:go-json:go-test-integration.json:github.com/kenyamaneko/overload-party-gateway/internal/handler/,github.com/kenyamaneko/overload-party-gateway/internal/middleware,github.com/kenyamaneko/overload-party-gateway/internal/router
+            内部の挙動:結合テスト:go-json:go-test-integration.json:github.com/kenyamaneko/overload-party-gateway/internal/adapter/,github.com/kenyamaneko/overload-party-gateway/internal/auth/,github.com/kenyamaneko/overload-party-gateway/internal/client/,github.com/kenyamaneko/overload-party-gateway/internal/config,github.com/kenyamaneko/overload-party-gateway/internal/repository,github.com/kenyamaneko/overload-party-gateway/internal/service,github.com/kenyamaneko/overload-party-gateway/internal/specdrift
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
