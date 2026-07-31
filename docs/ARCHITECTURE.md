@@ -26,7 +26,7 @@ battle は **意図的に passive な REST-only エンジン** として配置�
 
 ## 認証信頼境界
 
-クライアント → gateway 入り口で Firebase ID Token を検証する（gateway）。検証済み FirebaseUID を accountclient 経由で PlayerID に解決した後、PlayerID を載せた内部認証 JWT (HS256) を発行し、`X-Internal-Auth` ヘッダで下流サービスへ渡す。下流サービスは共有秘密鍵でこの JWT を検証し、JWT 内の PlayerID を信頼する（検証部品は `packages/internalauth-go` として配布）。
+クライアント → gateway 入り口で Firebase ID Token を検証する（gateway）。検証済み FirebaseUID を accountclient 経由で PlayerID に解決した後、PlayerID を載せた内部認証 JWT (RS256) を発行し、`X-Internal-Auth` ヘッダで下流サービスへ渡す。署名鍵は gateway だけが持ち、下流サービスは対応する公開鍵でこの JWT を検証して、JWT 内の PlayerID を信頼する（検証部品は `packages/internalauth-go` として配布）。下流は検証できるが偽造はできない。
 
 内部認証 JWT が運ぶのはプレイヤーが誰であるかだけで、呼び出し元が gateway であることは示さない。共有秘密鍵は検証する側が署名もできるため、鍵を持てば任意のプレイヤーになりすませる。誰が下流に到達できるかは基盤側の到達制御で決める分担になっており、その設計と内部トークンの非対称鍵化は [ADR-057](https://github.com/kenyamaneko/overload-party-common/blob/main/docs/adr/057-cloudrun-service-auth-iam-and-rs256.md) にある。
 

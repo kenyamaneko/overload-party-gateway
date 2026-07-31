@@ -1,6 +1,11 @@
 package internalauth
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"testing"
 	"time"
@@ -10,26 +15,39 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const (
-	testSecretValue = "test-internal-auth-secret-do-not-use-in-prod-xxxxx"
-	testPlayerID    = "player-123"
-)
+const testPlayerID = "player-123"
 
-// signWithKid は HS256 で kid header 付き JWT を組み立てる test helper。
-func signWithKid(t *testing.T, secret []byte, kid string, claims jwt.RegisteredClaims) string {
+// newTestKey はテスト専用の RSA 鍵を生成する。鍵長は検証速度を優先して 2048 bit にする。
+func newTestKey(t *testing.T) *rsa.PrivateKey {
 	t.Helper()
-	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	return key
+}
+
+// newTestEd25519PublicKey は RSA 以外の鍵を用意する test helper。
+func newTestEd25519PublicKey(t *testing.T) ed25519.PublicKey {
+	t.Helper()
+	pub, _, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	return pub
+}
+
+// signWithKid は RS256 で kid header 付き JWT を組み立てる test helper。
+func signWithKid(t *testing.T, key *rsa.PrivateKey, kid string, claims jwt.RegisteredClaims) string {
+	t.Helper()
+	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	tok.Header["kid"] = kid
-	signed, err := tok.SignedString(secret)
+	signed, err := tok.SignedString(key)
 	require.NoError(t, err)
 	return signed
 }
 
-// signWithoutKid は kid header を持たない HS256 JWT を組み立てる test helper。
-func signWithoutKid(t *testing.T, secret []byte, claims jwt.RegisteredClaims) string {
+// signWithoutKid は kid header を持たない RS256 JWT を組み立てる test helper。
+func signWithoutKid(t *testing.T, key *rsa.PrivateKey, claims jwt.RegisteredClaims) string {
 	t.Helper()
-	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	signed, err := tok.SignedString(secret)
+	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	signed, err := tok.SignedString(key)
 	require.NoError(t, err)
 	return signed
 }
@@ -44,12 +62,12 @@ func validClaims(now time.Time) jwt.RegisteredClaims {
 }
 
 func TestVerifier_Verify(t *testing.T) {
-	secret := []byte(testSecretValue)
-	v := NewVerifier(StaticHS256Resolver(secret, DefaultKeyID))
+	key := newTestKey(t)
+	v := NewVerifier(StaticPublicKeyResolver(&key.PublicKey, DefaultKeyID))
 
 	t.Run("JWT の検証", func(t *testing.T) {
 		t.Run("有効な JWT のとき、sub を player_id として返す", func(t *testing.T) {
-			token := signWithKid(t, secret, string(DefaultKeyID), validClaims(time.Now()))
+			token := signWithKid(t, key, string(DefaultKeyID), validClaims(time.Now()))
 
 			got, err := v.Verify(token)
 			require.NoError(t, err)
@@ -58,7 +76,7 @@ func TestVerifier_Verify(t *testing.T) {
 
 		t.Run("期限切れ JWT のとき、ErrTokenExpired になる", func(t *testing.T) {
 			now := time.Now()
-			expiredToken := signWithKid(t, secret, string(DefaultKeyID), jwt.RegisteredClaims{
+			expiredToken := signWithKid(t, key, string(DefaultKeyID), jwt.RegisteredClaims{
 				Subject:   testPlayerID,
 				Issuer:    ExpectedIssuer,
 				IssuedAt:  jwt.NewNumericDate(now.Add(-1 * time.Hour)),
@@ -78,13 +96,22 @@ func TestVerifier_Verify(t *testing.T) {
 		noneAlgToken, err := noneAlgTok.SignedString(jwt.UnsafeAllowNoneSignatureType)
 		require.NoError(t, err)
 
+		// 対称鍵で署名した token を事前生成する。公開鍵を HMAC の秘密鍵として
+		// 扱わせる alg 混同攻撃を拒否することの確認に使う。
+		hmacTok := jwt.NewWithClaims(jwt.SigningMethodHS256, validClaims(now))
+		hmacTok.Header["kid"] = string(DefaultKeyID)
+		publicKeyDER, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
+		require.NoError(t, err)
+		hmacToken, err := hmacTok.SignedString(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: publicKeyDER}))
+		require.NoError(t, err)
+
 		rejectCases := []struct {
 			name  string
 			token string
 		}{
 			{
-				name:  "署名が不一致のとき、拒否される",
-				token: signWithKid(t, []byte("wrong-secret-for-signing-must-be-long-enough-32b"), string(DefaultKeyID), validClaims(now)),
+				name:  "別の鍵で署名されているとき、拒否される",
+				token: signWithKid(t, newTestKey(t), string(DefaultKeyID), validClaims(now)),
 			},
 			{
 				name:  "空の token のとき、拒否される",
@@ -96,15 +123,15 @@ func TestVerifier_Verify(t *testing.T) {
 			},
 			{
 				name:  "kid header が無いとき、拒否される",
-				token: signWithoutKid(t, secret, validClaims(now)),
+				token: signWithoutKid(t, key, validClaims(now)),
 			},
 			{
 				name:  "未知の kid のとき、拒否される",
-				token: signWithKid(t, secret, "v999", validClaims(now)),
+				token: signWithKid(t, key, "v999", validClaims(now)),
 			},
 			{
 				name: "想定外の iss のとき、拒否される",
-				token: signWithKid(t, secret, string(DefaultKeyID), jwt.RegisteredClaims{
+				token: signWithKid(t, key, string(DefaultKeyID), jwt.RegisteredClaims{
 					Subject:   testPlayerID,
 					Issuer:    "evil-issuer",
 					IssuedAt:  jwt.NewNumericDate(now),
@@ -116,8 +143,12 @@ func TestVerifier_Verify(t *testing.T) {
 				token: noneAlgToken,
 			},
 			{
+				name:  "公開鍵を鍵にした HS256 で署名されているとき、拒否される",
+				token: hmacToken,
+			},
+			{
 				name: "sub が空のとき、拒否される",
-				token: signWithKid(t, secret, string(DefaultKeyID), jwt.RegisteredClaims{
+				token: signWithKid(t, key, string(DefaultKeyID), jwt.RegisteredClaims{
 					Subject:   "",
 					Issuer:    ExpectedIssuer,
 					IssuedAt:  jwt.NewNumericDate(now),
@@ -135,22 +166,57 @@ func TestVerifier_Verify(t *testing.T) {
 	})
 }
 
-func TestStaticHS256Resolver(t *testing.T) {
-	secret := []byte(testSecretValue)
+func TestStaticPublicKeyResolver(t *testing.T) {
+	key := newTestKey(t)
 
-	t.Run("HS256 鍵の解決", func(t *testing.T) {
-		t.Run("登録済みの kid のとき、secret を返す", func(t *testing.T) {
-			resolver := StaticHS256Resolver(secret, DefaultKeyID)
+	t.Run("公開鍵の解決", func(t *testing.T) {
+		t.Run("登録済みの kid のとき、公開鍵を返す", func(t *testing.T) {
+			resolver := StaticPublicKeyResolver(&key.PublicKey, DefaultKeyID)
 
 			got, err := resolver(DefaultKeyID)
 			require.NoError(t, err)
-			assert.Equal(t, secret, got)
+			assert.Equal(t, &key.PublicKey, got)
 		})
 
 		t.Run("未知の kid のとき、エラーになる", func(t *testing.T) {
-			resolver := StaticHS256Resolver(secret, DefaultKeyID)
+			resolver := StaticPublicKeyResolver(&key.PublicKey, DefaultKeyID)
 			_, err := resolver(KeyID("v999"))
 			require.Error(t, err)
+		})
+	})
+}
+
+func TestParsePublicKeyPEM(t *testing.T) {
+	t.Run("PEM 公開鍵の読み取り", func(t *testing.T) {
+		t.Run("正しい PEM のとき、署名の検証に使える鍵が得られる", func(t *testing.T) {
+			key := newTestKey(t)
+			der, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
+			require.NoError(t, err)
+			encoded := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: der})
+
+			parsed, err := ParsePublicKeyPEM(encoded)
+			require.NoError(t, err)
+
+			token := signWithKid(t, key, string(DefaultKeyID), validClaims(time.Now()))
+			got, err := NewVerifier(StaticPublicKeyResolver(parsed, DefaultKeyID)).Verify(token)
+			require.NoError(t, err)
+			assert.Equal(t, testPlayerID, got)
+		})
+
+		t.Run("PEM でないとき、エラーになる", func(t *testing.T) {
+			_, err := ParsePublicKeyPEM([]byte("not-a-pem"))
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "PEM")
+		})
+
+		t.Run("RSA 以外の鍵のとき、エラーになる", func(t *testing.T) {
+			der, err := x509.MarshalPKIXPublicKey(newTestEd25519PublicKey(t))
+			require.NoError(t, err)
+			encoded := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: der})
+
+			_, err = ParsePublicKeyPEM(encoded)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "want RSA")
 		})
 	})
 }

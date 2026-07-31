@@ -2,6 +2,8 @@ package ws
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -152,8 +154,10 @@ func newWSTestServer(t *testing.T, configure func(*wsTestOptions)) *wsTestServer
 	battleClient := service.NewBattleClient(battleFake.URL())
 
 	gamePlayerRepo := newStatefulGamePlayerRepo()
+	internalAuthKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
 	internalSigner := internalauth.NewSigner(
-		internalauth.StaticHS256Resolver([]byte("test-secret"), internalauth.DefaultKeyID),
+		internalauth.StaticPrivateKeyResolver(internalAuthKey, internalauth.DefaultKeyID),
 		internalauth.DefaultKeyID,
 	)
 

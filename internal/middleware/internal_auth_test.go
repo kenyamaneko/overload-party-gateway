@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -13,18 +15,20 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
 )
 
-const testSecret = "test-secret-32-bytes-long-xxxxxxxx"
-
 func newTestSigner() *internalauth.Signer {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		panic(err)
+	}
 	return internalauth.NewSigner(
-		internalauth.StaticHS256Resolver([]byte(testSecret), internalauth.DefaultKeyID),
+		internalauth.StaticPrivateKeyResolver(key, internalauth.DefaultKeyID),
 		internalauth.DefaultKeyID,
 	)
 }
 
 func newErrorSigner() *internalauth.Signer {
 	return internalauth.NewSigner(
-		func(internalauth.KeyID) ([]byte, error) { return nil, errors.New("boom") },
+		func(internalauth.KeyID) (*rsa.PrivateKey, error) { return nil, errors.New("boom") },
 		internalauth.DefaultKeyID,
 	)
 }

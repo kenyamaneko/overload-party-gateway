@@ -13,8 +13,8 @@ const TokenContextKey = "internal_auth_token"
 // ExpectedIssuer は受理する iss クレーム値。
 const ExpectedIssuer = "overload-party-gateway"
 
-// KeyID は HMAC 鍵を識別する文字列。
+// KeyID は署名鍵を識別する文字列。
 type KeyID string
 
-// DefaultKeyID は HMAC 鍵を識別する初期 key ID。
+// DefaultKeyID は署名鍵を識別する初期 key ID。
 const DefaultKeyID KeyID = "v1"
