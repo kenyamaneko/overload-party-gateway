@@ -99,8 +99,8 @@ func main() {
 	if cfg.GoogleCloudProjectID == "" {
 		exitOnMissingConfig("GOOGLE_CLOUD_PROJECT_ID must be set")
 	}
-	if cfg.InternalAuthSecret == "" {
-		exitOnMissingConfig("INTERNAL_AUTH_SECRET must be set")
+	if cfg.InternalAuthPrivateKey == "" {
+		exitOnMissingConfig("INTERNAL_AUTH_PRIVATE_KEY must be set")
 	}
 	if cfg.PubSubPushServiceAccountEmail == "" {
 		exitOnMissingConfig("PUBSUB_PUSH_SERVICE_ACCOUNT_EMAIL must be set")
@@ -149,8 +149,12 @@ func main() {
 	matchmakingClient := matchmakingclient.New(cfg.MatchmakingServiceURL, uuid.Must(uuid.NewV7()).String())
 	accountClient := accountclient.New(cfg.AccountServiceURL)
 
+	internalAuthKey, err := internalauth.ParsePrivateKeyPEM([]byte(cfg.InternalAuthPrivateKey))
+	if err != nil {
+		exitOnMissingConfig(fmt.Sprintf("INTERNAL_AUTH_PRIVATE_KEY is invalid: %v", err))
+	}
 	internalSigner := internalauth.NewSigner(
-		internalauth.StaticHS256Resolver([]byte(cfg.InternalAuthSecret), internalauth.DefaultKeyID),
+		internalauth.StaticPrivateKeyResolver(internalAuthKey, internalauth.DefaultKeyID),
 		internalauth.DefaultKeyID,
 	)
 

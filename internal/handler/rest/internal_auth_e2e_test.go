@@ -1,6 +1,8 @@
 package rest
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -19,10 +21,10 @@ import (
 func TestInternalAuth_E2E(t *testing.T) {
 	t.Run("内部認証 JWT の end-to-end 伝搬", func(t *testing.T) {
 		t.Run("player_id を設定して下流を呼ぶと、署名済み JWT が X-Internal-Auth として転送される", func(t *testing.T) {
-			const (
-				secret   = "e2e-test-secret-32-bytes-or-longer"
-				playerID = "player-e2e-123"
-			)
+			const playerID = "player-e2e-123"
+
+			signingKey, err := rsa.GenerateKey(rand.Reader, 2048)
+			require.NoError(t, err)
 
 			var got string
 			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -33,7 +35,7 @@ func TestInternalAuth_E2E(t *testing.T) {
 			defer upstream.Close()
 
 			signer := internalauth.NewSigner(
-				internalauth.StaticHS256Resolver([]byte(secret), internalauth.DefaultKeyID),
+				internalauth.StaticPrivateKeyResolver(signingKey, internalauth.DefaultKeyID),
 				internalauth.DefaultKeyID,
 			)
 			cc := cardclient.New(upstream.URL)
@@ -62,12 +64,12 @@ func TestInternalAuth_E2E(t *testing.T) {
 			claims := &jwt.RegisteredClaims{}
 			parser := jwt.NewParser(jwt.WithoutClaimsValidation())
 			parsed, err := parser.ParseWithClaims(got, claims, func(*jwt.Token) (any, error) {
-				return []byte(secret), nil
+				return &signingKey.PublicKey, nil
 			})
 			require.NoError(t, err, "failed to parse JWT")
 			require.True(t, parsed.Valid, "JWT signature invalid")
 
-			assert.Equal(t, "HS256", parsed.Method.Alg(), "alg")
+			assert.Equal(t, "RS256", parsed.Method.Alg(), "alg")
 			assert.Equal(t, string(internalauth.DefaultKeyID), parsed.Header["kid"], "kid")
 			assert.Equal(t, playerID, claims.Subject, "sub should equal player_id")
 			assert.Equal(t, internalauth.Issuer, claims.Issuer, "iss")

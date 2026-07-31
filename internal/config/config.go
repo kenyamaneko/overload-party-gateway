@@ -46,8 +46,8 @@ type Config struct {
 	AppForceUpdate   bool
 	AppStoreURL      string
 
-	// InternalAuthSecret は内部認証 JWT (HS256) の共有秘密鍵。
-	InternalAuthSecret string
+	// InternalAuthPrivateKey は内部認証 JWT (RS256) の署名鍵。PEM 形式。
+	InternalAuthPrivateKey string
 
 	// PubSubPushServiceAccountEmail は match-made push subscription の OIDC トークンを
 	// 署名する Pub/Sub push 用サービスアカウントの email。
@@ -92,7 +92,7 @@ func Load() *Config {
 		AppForceUpdate:   getEnv("APP_FORCE_UPDATE", "false") == "true",
 		AppStoreURL:      getEnv("APP_STORE_URL", ""),
 
-		InternalAuthSecret: getEnv("INTERNAL_AUTH_SECRET", ""),
+		InternalAuthPrivateKey: getEnv("INTERNAL_AUTH_PRIVATE_KEY", ""),
 
 		PubSubPushServiceAccountEmail: getEnv("PUBSUB_PUSH_SERVICE_ACCOUNT_EMAIL", ""),
 		PubSubPushAudience:            getEnv("PUBSUB_PUSH_AUDIENCE", ""),

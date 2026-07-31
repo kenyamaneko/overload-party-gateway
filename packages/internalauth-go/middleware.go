@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// VerifyInternalAuth は X-Internal-Auth (HMAC JWT) の検証を行う Gin middleware を返す。
+// VerifyInternalAuth は X-Internal-Auth (署名済み JWT) の検証を行う Gin middleware を返す。
 // header 欠落 / 検証失敗時はいずれも 401 を返す。
 func VerifyInternalAuth(verifier Verifier) gin.HandlerFunc {
 	return func(c *gin.Context) {

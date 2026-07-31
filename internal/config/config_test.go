@@ -29,7 +29,7 @@ func TestLoad(t *testing.T) {
 			assert.Equal(t, "0.1.0", cfg.AppLatestVersion)
 			assert.False(t, cfg.AppForceUpdate)
 			assert.Equal(t, "", cfg.AppStoreURL)
-			assert.Equal(t, "", cfg.InternalAuthSecret)
+			assert.Equal(t, "", cfg.InternalAuthPrivateKey)
 			assert.Equal(t, "", cfg.PubSubPushServiceAccountEmail)
 			assert.Equal(t, "", cfg.PubSubPushAudience)
 		})

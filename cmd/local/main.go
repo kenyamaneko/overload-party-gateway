@@ -86,12 +86,17 @@ func main() {
 	matchmakingClient := matchmakingclient.New(cfg.MatchmakingServiceURL, uuid.Must(uuid.NewV7()).String())
 	accountClient := accountclient.New(cfg.AccountServiceURL)
 
-	if cfg.InternalAuthSecret == "" {
-		slog.Error("INTERNAL_AUTH_SECRET must be set")
+	if cfg.InternalAuthPrivateKey == "" {
+		slog.Error("INTERNAL_AUTH_PRIVATE_KEY must be set")
+		os.Exit(1)
+	}
+	internalAuthKey, err := internalauth.ParsePrivateKeyPEM([]byte(cfg.InternalAuthPrivateKey))
+	if err != nil {
+		slog.Error("INTERNAL_AUTH_PRIVATE_KEY is invalid", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 	internalSigner := internalauth.NewSigner(
-		internalauth.StaticHS256Resolver([]byte(cfg.InternalAuthSecret), internalauth.DefaultKeyID),
+		internalauth.StaticPrivateKeyResolver(internalAuthKey, internalauth.DefaultKeyID),
 		internalauth.DefaultKeyID,
 	)
 
