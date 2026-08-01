@@ -8,7 +8,7 @@ on:
     outputs:
       code-changed:
         description: "'true' when the run touched code. The test results exist only then."
-        value: ${{ jobs.changes.outputs.code }}
+        value: ${{ jobs.ci.outputs.code-changed }}
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -20,166 +20,10 @@ permissions:
   id-token: write
 
 jobs:
-  changes:
-    runs-on: ubicloud-standard-2
-    timeout-minutes: 5
-    outputs:
-      code: ${{ steps.detect.outputs.changed }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Detect code change
-        id: detect
-        uses: kenyamaneko/overload-party-common/.github/actions/detect-code-change@main
-
-  lint:
-    needs: changes
-    if: needs.changes.outputs.code == 'true'
-    runs-on: ubicloud-standard-2
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - name: Configure Go private modules
-        uses: kenyamaneko/overload-party-common/.github/actions/setup-go-private-modules@main
-        with:
-          app-id: ${{ vars.CROSS_REPO_DEPS_APP_ID }}
-          private-key: ${{ secrets.CROSS_REPO_DEPS_APP_PRIVATE_KEY }}
-      # golangci-lint-action のビルド済みバイナリは Go 1.25 未対応のため
-      # go install でソースからビルドして使う
-      - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6
-      - name: Run lint
-        run: golangci-lint run --timeout 5m ./...
-        env:
-          GOPRIVATE: github.com/kenyamaneko/*
-
-  test-unit:
-    needs: changes
-    if: needs.changes.outputs.code == 'true'
-    runs-on: ubicloud-standard-2
-    timeout-minutes: 20
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - name: Configure Go private modules
-        uses: kenyamaneko/overload-party-common/.github/actions/setup-go-private-modules@main
-        with:
-          app-id: ${{ vars.CROSS_REPO_DEPS_APP_ID }}
-          private-key: ${{ secrets.CROSS_REPO_DEPS_APP_PRIVATE_KEY }}
-      - name: Run unit tests
-        run: go test -race ./internal/... -count=1 -coverprofile=coverage.out -json | tee go-test-unit.json
-        env:
-          GOPRIVATE: github.com/kenyamaneko/*
-      - name: Report test results
-        if: ${{ !cancelled() }}
-        uses: kenyamaneko/overload-party-common/.github/actions/go-test-report@main
-        with:
-          json-path: go-test-unit.json
-          title: 単体テスト結果
-      - name: Report coverage
-        run: go tool cover -func=coverage.out | tail -1 >> "$GITHUB_STEP_SUMMARY"
-      # 同一 run 内でテスト観点カタログを組むためだけに使うので保持は最短にする
-      - name: Upload unit test results
-        uses: actions/upload-artifact@v4
-        with:
-          name: go-test-unit
-          path: go-test-unit.json
-          retention-days: 1
-
-  test-integration:
-    needs: changes
-    if: needs.changes.outputs.code == 'true'
-    runs-on: ubicloud-standard-2
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - name: Set up Java (Firestore emulator runtime)
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-      - name: Set up gcloud (Firestore emulator)
-        uses: google-github-actions/setup-gcloud@v2
-      - name: Install Firestore emulator component
-        run: gcloud components install cloud-firestore-emulator beta --quiet
-      - name: Start Firestore emulator
-        run: |
-          gcloud emulators firestore start --host-port=localhost:9041 >/tmp/firestore.log 2>&1 &
-          for i in {1..30}; do
-            if curl -sf http://localhost:9041 >/dev/null; then exit 0; fi
-            sleep 1
-          done
-          echo "Firestore emulator failed to start"; cat /tmp/firestore.log; exit 1
-      - name: Configure Go private modules
-        uses: kenyamaneko/overload-party-common/.github/actions/setup-go-private-modules@main
-        with:
-          app-id: ${{ vars.CROSS_REPO_DEPS_APP_ID }}
-          private-key: ${{ secrets.CROSS_REPO_DEPS_APP_PRIVATE_KEY }}
-      - name: Run integration tests
-        run: go test -race -tags=integration ./internal/... -count=1 -json | tee go-test-integration.json
-        env:
-          GOPRIVATE: github.com/kenyamaneko/*
-          FIRESTORE_EMULATOR_HOST: localhost:9041
-          GOOGLE_CLOUD_PROJECT_ID: overload-party-test
-      - name: Report test results
-        if: ${{ !cancelled() }}
-        uses: kenyamaneko/overload-party-common/.github/actions/go-test-report@main
-        with:
-          json-path: go-test-integration.json
-          title: 結合テスト結果
-      # 同一 run 内でテスト観点カタログを組むためだけに使うので保持は最短にする
-      - name: Upload integration test results
-        uses: actions/upload-artifact@v4
-        with:
-          name: go-test-integration
-          path: go-test-integration.json
-          retention-days: 1
-
-  codegen-sync:
-    needs: changes
-    if: needs.changes.outputs.code == 'true'
-    runs-on: ubicloud-standard-2
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - name: Configure private repo auth
-        uses: kenyamaneko/overload-party-common/.github/actions/setup-go-private-modules@main
-        with:
-          app-id: ${{ vars.CROSS_REPO_DEPS_APP_ID }}
-          private-key: ${{ secrets.CROSS_REPO_DEPS_APP_PRIVATE_KEY }}
-      - name: Install Python dependencies
-        run: |
-          pip install \
-            "overload-party-codegen-tools @ git+https://github.com/kenyamaneko/overload-party-common.git@main#subdirectory=packages/codegen-tools" \
-            "overload-party-asyncapi-codegen-tools @ git+https://github.com/kenyamaneko/overload-party-common.git@main#subdirectory=packages/asyncapi-codegen-tools"
-      - name: Install oapi-codegen
-        run: go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.7.0
-      - name: Run codegen (OpenAPI + AsyncAPI)
-        run: scripts/generate_types.sh
-      - name: Check for drift
-        run: .github/scripts/ci/check-codegen-drift.sh
+  ci:
+    uses: kenyamaneko/overload-party-common/.github/workflows/go-service-ci.yaml@main
+    with:
+      test-packages: ./internal/...
+      collect-unit-coverage: true
+      needs-firestore-emulator: true
+    secrets: inherit
