@@ -164,28 +164,31 @@ GitHub Rulesets で以下を設定する（account / shop と同等）。
 - PR マージのみ許可（linear history）
 - force push 禁止、削除禁止
 - 履歴書き換え禁止
-- 必須ステータスチェック: CI / lint, CI / test-unit, CI / test-integration, CI / codegen-sync が green
+- 必須ステータスチェック: ci / lint, ci / test-unit, ci / test-integration, ci / image-scan, ci / codegen-sync が green
 - required reviews: 1（self-approve 不可）
 - マージ元ブランチ制限: `release/*` と `hotfix/*` のみ
+
+チェック名の `ci` は `ci.yaml` の呼び出し側ジョブ名で、続く名前は common の `go-service-ci.yaml` のジョブ名。
 
 ### release/*
 
 - 直 push 禁止。PR 経由のマージのみ
 - force push 禁止、削除は手動で可
-- 必須ステータスチェック: CI / lint, CI / test-unit, CI / test-integration が green
+- 必須ステータスチェック: ci / lint, ci / test-unit, ci / test-integration が green
 
 ### develop
 
 - 直 push 禁止
 - PR マージのみ許可
-- 必須ステータスチェック: CI / lint, CI / test-unit, CI / test-integration が green
+- 必須ステータスチェック: ci / lint, ci / test-unit, ci / test-integration が green
 - required reviews: 不要（一人開発での速度優先）
 
 ## CI/CD パイプライン
 
 | ワークフロー | トリガー | 役割 |
 |---|---|---|
-| [ci.yaml](../.github/workflows/ci.yaml) | PR: main (将来的に develop / release/** も) | lint + test + `generate_types.sh` の出力ドリフト検出 (codegen-sync) |
+| [ci.yaml](../.github/workflows/ci.yaml) | PR: main (将来的に develop / release/** も) | lint + test + 脆弱性スキャン + `generate_types.sh` の出力ドリフト検出 (codegen-sync)。中身は common の `go-service-ci.yaml` に集約している |
+| [test-catalog.yaml](../.github/workflows/test-catalog.yaml) | push: main | `ci.yaml` を呼び、そのテスト結果からテスト観点カタログを生成して GitHub Pages に公開 |
 | [deploy.yaml](../.github/workflows/deploy.yaml) | push: main | Docker image build & push |
 | [publish.yaml](../.github/workflows/publish.yaml) | push: main (packages/** 変更時) + workflow_dispatch | `packages/` 配下 Go モジュールのタグ付け + npm パッケージの Cloudsmith 公開 |
 | `release-tag.yaml`（未整備） | PR closed (merged) to main | `release/*` または `hotfix/*` が main にマージされた時に SemVer タグを自動作成 |
