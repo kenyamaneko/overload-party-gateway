@@ -1,8 +1,6 @@
 # post-merge image build & push は deploy.yaml に分離
 name: CI
 
-# PR の品質ゲート。ブランチ保護の required status check として使う。
-# main への push では test-catalog.yaml から呼ばれ、テスト観点カタログの元になる。
 on:
   pull_request:
     branches: [main]
