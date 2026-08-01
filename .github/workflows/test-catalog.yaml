@@ -12,8 +12,6 @@ concurrency:
 
 permissions:
   contents: read
-  # 呼び出す ci.yaml が Google Cloud の OIDC 認証に使う
-  id-token: write
 
 jobs:
   test:
