@@ -4,10 +4,6 @@
 [repos.yaml](https://github.com/kenyamaneko/overload-party-common/blob/main/rules/repos.yaml) が
 `flow: github-flow` と宣言しており、共通ルール (`keyandnotes-rules` の `rules/flow/github-flow.md`) に従う。
 
-## ブランチ
-
-`main` が唯一の永続ブランチで、短命の `feature/*` を切って PR でマージする。
-
 ## ブランチ保護設定
 
 GitHub Ruleset で `main` に以下を設定している。
