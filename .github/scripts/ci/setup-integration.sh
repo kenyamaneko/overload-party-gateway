@@ -6,15 +6,15 @@ GOOGLE_CLOUD_PROJECT_ID=overload-party-test
 HEALTH_CHECK_TIMEOUT_SEC=30
 
 gcloud emulators firestore start --host-port="localhost:${FIRESTORE_PORT}" >/tmp/firestore.log 2>&1 &
-started=false
+is_started=false
 for _ in $(seq 1 "${HEALTH_CHECK_TIMEOUT_SEC}"); do
   if curl -sf "http://localhost:${FIRESTORE_PORT}" >/dev/null; then
-    started=true
+    is_started=true
     break
   fi
   sleep 1
 done
-if [ "$started" = false ]; then
+if [ "$is_started" = false ]; then
   echo "Firestore emulator failed to start"
   cat /tmp/firestore.log
   exit 1
