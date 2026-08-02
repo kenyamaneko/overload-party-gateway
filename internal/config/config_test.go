@@ -124,6 +124,21 @@ func TestFromEnv(t *testing.T) {
 			assert.Equal(t, "rediss://default:token@redis.test:6379", cfg.UpstashRedisURL)
 		})
 
+		t.Run("アプリの最低バージョンに 1.0.0・最新バージョンに 1.2.0・ストア URL を指定するとき、その 3 つが設定に入る", func(t *testing.T) {
+			setEnv(t, mergeEnv(validEnv, map[string]string{
+				"APP_MIN_VERSION":    "1.0.0",
+				"APP_LATEST_VERSION": "1.2.0",
+				"APP_STORE_URL":      "https://store.test/app",
+			}))
+
+			cfg, err := FromEnv()
+
+			require.NoError(t, err)
+			assert.Equal(t, "1.0.0", cfg.AppMinVersion)
+			assert.Equal(t, "1.2.0", cfg.AppLatestVersion)
+			assert.Equal(t, "https://store.test/app", cfg.AppStoreURL)
+		})
+
 		t.Run("PORT に 8080 を指定するとき、待受ポートが 8080 になる", func(t *testing.T) {
 			setEnv(t, mergeEnv(validEnv, map[string]string{"PORT": "8080"}))
 
