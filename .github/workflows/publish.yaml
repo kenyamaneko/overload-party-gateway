@@ -1,24 +1,27 @@
 name: publish packages
 
-# On every push to main that touches packages/**, this workflow tags each
-# changed Go module with packages/<name>/vX.Y.Z and publishes the npm
-# packages to Cloudsmith.
-
+# 桁は後方互換を壊すかどうかの判断であり変更内容から導けないため、人が選んで実行する。
 on:
-  push:
-    branches: [main]
-    paths:
-      - "packages/**"
-      - ".github/workflows/publish.yaml"
-      - ".github/scripts/publish/**"
   workflow_dispatch:
     inputs:
       bump:
         description: "Version bump (patch / minor / major)"
-        required: false
+        required: true
         default: "patch"
         type: choice
         options: [patch, minor, major]
+      target:
+        description: "Package to publish (auto = detect changes since the last tag)"
+        required: true
+        default: "auto"
+        type: choice
+        options:
+          - auto
+          - ws-constants
+          - api-gateway
+          - internalauth-go
+          - ws-constants-npm
+          - api-gateway-npm
 
 concurrency:
   group: publish-${{ github.ref }}
@@ -42,21 +45,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Detect changed packages
         id: filter
-        uses: dorny/paths-filter@v3
-        with:
-          filters: |
-            ws_constants_go:
-              - 'packages/ws-constants/**'
-            api_gateway_go:
-              - 'packages/api-gateway/**'
-            internalauth_go:
-              - 'packages/internalauth-go/**'
-            ws_constants_npm:
-              - 'packages/ws-constants-npm/**'
-            api_gateway_npm:
-              - 'packages/api-gateway-npm/**'
+        env:
+          TARGET: ${{ inputs.target }}
+        run: .github/scripts/publish/detect-changes.sh
 
   tag-go-modules:
     needs: detect-changes
@@ -65,8 +60,7 @@ jobs:
     if: |
       needs.detect-changes.outputs.ws_constants_go == 'true' ||
       needs.detect-changes.outputs.api_gateway_go == 'true' ||
-      needs.detect-changes.outputs.internalauth_go == 'true' ||
-      github.event_name == 'workflow_dispatch'
+      needs.detect-changes.outputs.internalauth_go == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -79,52 +73,52 @@ jobs:
           go-version: "1.25"
 
       - name: Build ws-constants
-        if: needs.detect-changes.outputs.ws_constants_go == 'true' || github.event_name == 'workflow_dispatch'
+        if: needs.detect-changes.outputs.ws_constants_go == 'true'
         working-directory: packages/ws-constants
         run: go build ./...
       - name: Determine ws-constants tag
         id: ws_tag
-        if: needs.detect-changes.outputs.ws_constants_go == 'true' || github.event_name == 'workflow_dispatch'
+        if: needs.detect-changes.outputs.ws_constants_go == 'true'
         env:
           PREFIX: packages/ws-constants/v
-          BUMP: ${{ inputs.bump || 'patch' }}
+          BUMP: ${{ inputs.bump }}
         run: .github/scripts/publish/next-tag.sh
       - name: Tag ws-constants
-        if: needs.detect-changes.outputs.ws_constants_go == 'true' || github.event_name == 'workflow_dispatch'
+        if: needs.detect-changes.outputs.ws_constants_go == 'true'
         env:
           TAG: ${{ steps.ws_tag.outputs.tag }}
         run: .github/scripts/publish/tag-and-push.sh
 
       - name: Build api-gateway
-        if: needs.detect-changes.outputs.api_gateway_go == 'true' || github.event_name == 'workflow_dispatch'
+        if: needs.detect-changes.outputs.api_gateway_go == 'true'
         working-directory: packages/api-gateway
         run: go build ./...
       - name: Determine api-gateway tag
         id: api_tag
-        if: needs.detect-changes.outputs.api_gateway_go == 'true' || github.event_name == 'workflow_dispatch'
+        if: needs.detect-changes.outputs.api_gateway_go == 'true'
         env:
           PREFIX: packages/api-gateway/v
-          BUMP: ${{ inputs.bump || 'patch' }}
+          BUMP: ${{ inputs.bump }}
         run: .github/scripts/publish/next-tag.sh
       - name: Tag api-gateway
-        if: needs.detect-changes.outputs.api_gateway_go == 'true' || github.event_name == 'workflow_dispatch'
+        if: needs.detect-changes.outputs.api_gateway_go == 'true'
         env:
           TAG: ${{ steps.api_tag.outputs.tag }}
         run: .github/scripts/publish/tag-and-push.sh
 
       - name: Build internalauth-go
-        if: needs.detect-changes.outputs.internalauth_go == 'true' || github.event_name == 'workflow_dispatch'
+        if: needs.detect-changes.outputs.internalauth_go == 'true'
         working-directory: packages/internalauth-go
         run: go build ./...
       - name: Determine internalauth-go tag
         id: ia_tag
-        if: needs.detect-changes.outputs.internalauth_go == 'true' || github.event_name == 'workflow_dispatch'
+        if: needs.detect-changes.outputs.internalauth_go == 'true'
         env:
           PREFIX: packages/internalauth-go/v
-          BUMP: ${{ inputs.bump || 'patch' }}
+          BUMP: ${{ inputs.bump }}
         run: .github/scripts/publish/next-tag.sh
       - name: Tag internalauth-go
-        if: needs.detect-changes.outputs.internalauth_go == 'true' || github.event_name == 'workflow_dispatch'
+        if: needs.detect-changes.outputs.internalauth_go == 'true'
         env:
           TAG: ${{ steps.ia_tag.outputs.tag }}
         run: .github/scripts/publish/tag-and-push.sh
@@ -135,8 +129,7 @@ jobs:
     timeout-minutes: 20
     if: |
       needs.detect-changes.outputs.ws_constants_npm == 'true' ||
-      needs.detect-changes.outputs.api_gateway_npm == 'true' ||
-      github.event_name == 'workflow_dispatch'
+      needs.detect-changes.outputs.api_gateway_npm == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -150,52 +143,52 @@ jobs:
 
       - name: Determine ws-constants-npm tag
         id: ws_npm_tag
-        if: needs.detect-changes.outputs.ws_constants_npm == 'true' || github.event_name == 'workflow_dispatch'
+        if: needs.detect-changes.outputs.ws_constants_npm == 'true'
         env:
           PREFIX: packages/ws-constants-npm/v
-          BUMP: ${{ inputs.bump || 'patch' }}
+          BUMP: ${{ inputs.bump }}
         run: .github/scripts/publish/next-tag.sh
       - name: Build ws-constants-npm
-        if: needs.detect-changes.outputs.ws_constants_npm == 'true' || github.event_name == 'workflow_dispatch'
+        if: needs.detect-changes.outputs.ws_constants_npm == 'true'
         working-directory: packages/ws-constants-npm
         env:
           TAG: ${{ steps.ws_npm_tag.outputs.tag }}
           PREFIX: packages/ws-constants-npm/v
         run: ../../.github/scripts/publish/build-npm.sh
       - name: Publish ws-constants-npm to Cloudsmith
-        if: needs.detect-changes.outputs.ws_constants_npm == 'true' || github.event_name == 'workflow_dispatch'
+        if: needs.detect-changes.outputs.ws_constants_npm == 'true'
         uses: kenyamaneko/overload-party-common/.github/actions/publish-to-cloudsmith@main
         with:
           format: npm
           package-path: packages/ws-constants-npm
       - name: Tag ws-constants-npm
-        if: needs.detect-changes.outputs.ws_constants_npm == 'true' || github.event_name == 'workflow_dispatch'
+        if: needs.detect-changes.outputs.ws_constants_npm == 'true'
         env:
           TAG: ${{ steps.ws_npm_tag.outputs.tag }}
         run: .github/scripts/publish/tag-and-push.sh
 
       - name: Determine api-gateway-npm tag
         id: api_npm_tag
-        if: needs.detect-changes.outputs.api_gateway_npm == 'true' || github.event_name == 'workflow_dispatch'
+        if: needs.detect-changes.outputs.api_gateway_npm == 'true'
         env:
           PREFIX: packages/api-gateway-npm/v
-          BUMP: ${{ inputs.bump || 'patch' }}
+          BUMP: ${{ inputs.bump }}
         run: .github/scripts/publish/next-tag.sh
       - name: Build api-gateway-npm
-        if: needs.detect-changes.outputs.api_gateway_npm == 'true' || github.event_name == 'workflow_dispatch'
+        if: needs.detect-changes.outputs.api_gateway_npm == 'true'
         working-directory: packages/api-gateway-npm
         env:
           TAG: ${{ steps.api_npm_tag.outputs.tag }}
           PREFIX: packages/api-gateway-npm/v
         run: ../../.github/scripts/publish/build-npm.sh
       - name: Publish api-gateway-npm to Cloudsmith
-        if: needs.detect-changes.outputs.api_gateway_npm == 'true' || github.event_name == 'workflow_dispatch'
+        if: needs.detect-changes.outputs.api_gateway_npm == 'true'
         uses: kenyamaneko/overload-party-common/.github/actions/publish-to-cloudsmith@main
         with:
           format: npm
           package-path: packages/api-gateway-npm
       - name: Tag api-gateway-npm
-        if: needs.detect-changes.outputs.api_gateway_npm == 'true' || github.event_name == 'workflow_dispatch'
+        if: needs.detect-changes.outputs.api_gateway_npm == 'true'
         env:
           TAG: ${{ steps.api_npm_tag.outputs.tag }}
         run: .github/scripts/publish/tag-and-push.sh
