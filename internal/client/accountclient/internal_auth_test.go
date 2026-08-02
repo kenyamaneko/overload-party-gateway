@@ -36,7 +36,7 @@ func TestClient_InjectsInternalAuthHeader(t *testing.T) {
 			}))
 			defer srv.Close()
 
-			c := New(srv.URL)
+			c := New(srv.URL, &http.Client{})
 			ctx := internalauth.WithToken(context.Background(), wantToken)
 			require.NoError(t, c.IncrementBattleCount(ctx))
 			assert.Equal(t, wantToken, got)
@@ -69,7 +69,7 @@ func TestClient_MapsDownstreamStatusToPortSentinel(t *testing.T) {
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
 				srv := newStatusServer(t, tc.status, `{}`)
-				c := New(srv.URL)
+				c := New(srv.URL, &http.Client{})
 
 				err := tc.call(context.Background(), c)
 
@@ -101,7 +101,7 @@ func TestClient_FindByFirebaseUID_FoldsNotFoundToNil(t *testing.T) {
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
 				srv := newStatusServer(t, tc.status, `{}`)
-				c := New(srv.URL)
+				c := New(srv.URL, &http.Client{})
 
 				player, err := c.FindByFirebaseUID(context.Background(), "uid-1")
 

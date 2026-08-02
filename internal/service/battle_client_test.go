@@ -27,7 +27,7 @@ func TestStartNPCBattle(t *testing.T) {
 			}))
 			defer srv.Close()
 
-			c := NewBattleClient(srv.URL)
+			c := NewBattleClient(srv.URL, &http.Client{})
 			initiatives := DeckInitiatives{RoutineID: wantRoutine, SpecialID: wantSpecial}
 			_, err := c.StartNPCBattle(context.Background(), nil, initiatives, "npc-1", PlayerSummaryRequest{}, PlayerSummaryRequest{})
 			require.NoError(t, err)
@@ -54,7 +54,7 @@ func TestCreatePvPGame(t *testing.T) {
 			}))
 			defer srv.Close()
 
-			c := NewBattleClient(srv.URL)
+			c := NewBattleClient(srv.URL, &http.Client{})
 			deck1 := DeckInitiatives{RoutineID: deck1Routine, SpecialID: deck1Special}
 			deck2 := DeckInitiatives{RoutineID: deck2Routine, SpecialID: deck2Special}
 			_, err := c.CreatePvPGame(context.Background(), nil, nil, deck1, deck2, PlayerSummaryRequest{}, PlayerSummaryRequest{})

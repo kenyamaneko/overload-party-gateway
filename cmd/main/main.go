@@ -23,6 +23,7 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/cardclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/matchmakingclient"
+	"github.com/kenyamaneko/overload-party-gateway/internal/client/runauth"
 	"github.com/kenyamaneko/overload-party-gateway/internal/config"
 	"github.com/kenyamaneko/overload-party-gateway/internal/handler/rest"
 	ws "github.com/kenyamaneko/overload-party-gateway/internal/handler/ws"
@@ -144,10 +145,28 @@ func main() {
 	// クライアント到達性は起動時に検証するため、repo を生成だけしておく。
 	_ = repository.NewFirestoreGameConfigRepository(fsClient)
 
-	// 外部サービスクライアント
-	cardClient := cardclient.New(cfg.CardServiceURL)
-	matchmakingClient := matchmakingclient.New(cfg.MatchmakingServiceURL, uuid.Must(uuid.NewV7()).String())
-	accountClient := accountclient.New(cfg.AccountServiceURL)
+	// 外部サービスクライアント。Cloud Run の呼び出し IAM は audience ごとの ID トークンを
+	// 見るため、呼び出し先ごとに別のクライアントを用意する。
+	cardHTTP, err := runauth.NewClient(ctx, cfg.CardServiceURL)
+	if err != nil {
+		exitOnMissingConfig(err.Error())
+	}
+	matchmakingHTTP, err := runauth.NewClient(ctx, cfg.MatchmakingServiceURL)
+	if err != nil {
+		exitOnMissingConfig(err.Error())
+	}
+	accountHTTP, err := runauth.NewClient(ctx, cfg.AccountServiceURL)
+	if err != nil {
+		exitOnMissingConfig(err.Error())
+	}
+	battleHTTP, err := runauth.NewClient(ctx, cfg.BattleServerURL)
+	if err != nil {
+		exitOnMissingConfig(err.Error())
+	}
+
+	cardClient := cardclient.New(cfg.CardServiceURL, cardHTTP)
+	matchmakingClient := matchmakingclient.New(cfg.MatchmakingServiceURL, uuid.Must(uuid.NewV7()).String(), matchmakingHTTP)
+	accountClient := accountclient.New(cfg.AccountServiceURL, accountHTTP)
 
 	internalAuthKey, err := internalauth.ParsePrivateKeyPEM([]byte(cfg.InternalAuthPrivateKey))
 	if err != nil {
@@ -170,7 +189,7 @@ func main() {
 	timerStore := redistimer.NewStore(redisClient)
 
 	// Battle クライアント（HTTP → battle server）
-	battleClient := service.NewBattleClient(cfg.BattleServerURL)
+	battleClient := service.NewBattleClient(cfg.BattleServerURL, battleHTTP)
 	matchmakingTimeout := time.Duration(cfg.MatchmakingTimeoutSec) * time.Second
 	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, processedMatchRepo, matchmakingTimeout, internalSigner, timerStore, ws.DefaultDisconnectTimeout)
 	wsHandler := ws.NewHandler(wsManager, authClient, accountClient, cfg.AllowedOrigins)

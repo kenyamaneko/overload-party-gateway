@@ -68,7 +68,7 @@ func newStatefulAccountFake() *statefulAccountFake {
 
 func (s *statefulAccountFake) close() { s.server.Close() }
 func (s *statefulAccountFake) client() *accountclient.Client {
-	return accountclient.New(s.server.URL())
+	return accountclient.New(s.server.URL(), &http.Client{})
 }
 
 func (s *statefulAccountFake) seed(firebaseUID, playerID string) {
@@ -257,7 +257,7 @@ func TestUseDevAuthWithPlayerResolve(t *testing.T) {
 				fa := newSequencedAccountFake(t, tc.findStatuses, tc.registerStatus)
 
 				r := gin.New()
-				r.Use(UseDevAuthWithPlayerResolve(accountclient.New(fa.URL())))
+				r.Use(UseDevAuthWithPlayerResolve(accountclient.New(fa.URL(), &http.Client{})))
 				r.GET("/test", func(c *gin.Context) {
 					c.JSON(http.StatusOK, gin.H{"player_id": GetPlayerID(c)})
 				})
@@ -275,7 +275,7 @@ func TestUseDevAuthWithPlayerResolve(t *testing.T) {
 			fa := newSequencedAccountFake(t, []int{http.StatusNotFound, http.StatusOK}, http.StatusConflict)
 
 			r := gin.New()
-			r.Use(UseDevAuthWithPlayerResolve(accountclient.New(fa.URL())))
+			r.Use(UseDevAuthWithPlayerResolve(accountclient.New(fa.URL(), &http.Client{})))
 			r.GET("/test", func(c *gin.Context) {
 				c.JSON(http.StatusOK, gin.H{"player_id": GetPlayerID(c)})
 			})
@@ -526,7 +526,7 @@ func TestResolvePlayer(t *testing.T) {
 				c.Set(string(firebaseUIDKey), "uid1")
 				c.Next()
 			})
-			r.Use(ResolvePlayer(accountclient.New(fa.URL())))
+			r.Use(ResolvePlayer(accountclient.New(fa.URL(), &http.Client{})))
 			r.GET("/test", func(c *gin.Context) {
 				c.JSON(http.StatusOK, gin.H{})
 			})
