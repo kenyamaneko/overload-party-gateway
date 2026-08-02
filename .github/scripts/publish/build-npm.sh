@@ -7,7 +7,6 @@ set -euo pipefail
 : "${PREFIX:?PREFIX env required}"
 
 version="${TAG#${PREFIX}}"
-rm -f package-lock.json
 npm install --no-package-lock
 npm version "${version}" --no-git-tag-version
 npm run build
