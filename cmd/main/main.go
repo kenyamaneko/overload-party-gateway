@@ -81,17 +81,18 @@ func exitOnStartupFailure(message string, err error) {
 
 func main() {
 	ctx := context.Background()
-	cfg := config.Load()
 
 	// cmd/main は Cloud Run 上で動作し Cloud Logging に取り込まれるため、常に
 	// Cloud Logging 互換 JSON で出力する。ローカル実行のテキスト出力は cmd/local が担う。
 	slog.SetDefault(slog.New(newCloudLoggingHandler()).With("service", "gateway"))
 
+	cfg, err := config.FromEnv()
+	if err != nil {
+		exitOnMissingConfig(err.Error())
+	}
+
 	if cfg.Env == "prod" && len(cfg.AllowedOrigins) == 0 {
 		exitOnMissingConfig("ALLOWED_ORIGINS must be set in production")
-	}
-	if cfg.DatabaseConn == "" {
-		exitOnMissingConfig("DATABASE_CONN must be set")
 	}
 	databaseIAMAuthEnabled := parseDatabaseIAMAuthEnabled(cfg.DatabaseIAMAuthEnabledRaw)
 	if databaseIAMAuthEnabled && cfg.CloudSQLConnectionName == "" {
@@ -99,9 +100,6 @@ func main() {
 	}
 	if cfg.GoogleCloudProjectID == "" {
 		exitOnMissingConfig("GOOGLE_CLOUD_PROJECT_ID must be set")
-	}
-	if cfg.InternalAuthPrivateKey == "" {
-		exitOnMissingConfig("INTERNAL_AUTH_PRIVATE_KEY must be set")
 	}
 	if cfg.PubSubPushServiceAccountEmail == "" {
 		exitOnMissingConfig("PUBSUB_PUSH_SERVICE_ACCOUNT_EMAIL must be set")

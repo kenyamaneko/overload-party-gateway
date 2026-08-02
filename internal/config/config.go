@@ -1,17 +1,23 @@
 package config
 
 import (
-	"log/slog"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
 )
 
+const (
+	defaultPort                  = "9001"
+	defaultEnv                   = "dev"
+	defaultAppVersion            = "0.1.0"
+	defaultMatchmakingTimeoutSec = 30
+)
+
 // Config は gateway サービスの設定を保持します
 type Config struct {
-	Port     string
-	Env      string
-	LogLevel string
+	Port string
+	Env  string
 
 	AllowedOrigins []string
 
@@ -57,48 +63,80 @@ type Config struct {
 	PubSubPushAudience string
 
 	// UpstashRedisURL は対戦ごとの計時 (切断猶予・ターン) の写しを保持する
-	// Upstash Redis の接続 URL。未設定の場合は写しを行わない。
+	// Upstash Redis の接続 URL。
 	UpstashRedisURL string
 }
 
-// Load は環境変数からサービス設定を読み込みます
-func Load() *Config {
-	return &Config{
-		Port:     getEnv("PORT", "9001"),
-		Env:      getEnv("ENV", "dev"),
-		LogLevel: getEnv("LOG_LEVEL", "info"),
+// FromEnv は環境変数からサービス設定を構築します。
+// 未設定の必須環境変数があれば即エラーで返し、デフォルトへの暗黙 fallback は行いません。
+func FromEnv() (*Config, error) {
+	cfg := &Config{
+		Port: getEnv("PORT", defaultPort),
+		Env:  getEnv("ENV", defaultEnv),
 
-		AllowedOrigins: splitCSV(getEnv("ALLOWED_ORIGINS", "")),
+		AllowedOrigins: splitCSV(os.Getenv("ALLOWED_ORIGINS")),
 
-		BattleServerURL:       getEnv("BATTLE_SERVER_URL", "http://localhost:9002"),
-		CardServiceURL:        getEnv("CARD_SERVICE_URL", "http://localhost:9003"),
-		MatchmakingServiceURL: getEnv("MATCHMAKING_SERVICE_URL", "http://localhost:9004"),
-		AccountServiceURL:     getEnv("ACCOUNT_SERVICE_URL", "http://localhost:9005"),
-		ShopServiceURL:        getEnv("SHOP_SERVICE_URL", "http://localhost:9006"),
-		ScenarioServiceURL:    getEnv("SCENARIO_SERVICE_URL", "http://localhost:9007"),
-		NewsServiceURL:        getEnv("NEWS_SERVICE_URL", "http://localhost:9008"),
-		SupportServiceURL:     getEnv("SUPPORT_SERVICE_URL", "http://localhost:9009"),
+		DatabaseConn:              os.Getenv("DATABASE_CONN"),
+		DatabaseIAMAuthEnabledRaw: os.Getenv("DATABASE_IAM_AUTH_ENABLED"),
+		CloudSQLConnectionName:    os.Getenv("CLOUDSQL_CONNECTION_NAME"),
 
-		DatabaseConn:              getEnv("DATABASE_CONN", ""),
-		DatabaseIAMAuthEnabledRaw: getEnv("DATABASE_IAM_AUTH_ENABLED", ""),
-		CloudSQLConnectionName:    getEnv("CLOUDSQL_CONNECTION_NAME", ""),
+		GoogleCloudProjectID: os.Getenv("GOOGLE_CLOUD_PROJECT_ID"),
 
-		GoogleCloudProjectID: getEnv("GOOGLE_CLOUD_PROJECT_ID", ""),
+		AppMinVersion:    getEnv("APP_MIN_VERSION", defaultAppVersion),
+		AppLatestVersion: getEnv("APP_LATEST_VERSION", defaultAppVersion),
+		AppStoreURL:      os.Getenv("APP_STORE_URL"),
 
-		MatchmakingTimeoutSec: getEnvInt("MATCHMAKING_TIMEOUT_SEC", 30),
+		InternalAuthPrivateKey: os.Getenv("INTERNAL_AUTH_PRIVATE_KEY"),
 
-		AppMinVersion:    getEnv("APP_MIN_VERSION", "0.1.0"),
-		AppLatestVersion: getEnv("APP_LATEST_VERSION", "0.1.0"),
-		AppForceUpdate:   getEnv("APP_FORCE_UPDATE", "false") == "true",
-		AppStoreURL:      getEnv("APP_STORE_URL", ""),
+		PubSubPushServiceAccountEmail: os.Getenv("PUBSUB_PUSH_SERVICE_ACCOUNT_EMAIL"),
+		PubSubPushAudience:            os.Getenv("PUBSUB_PUSH_AUDIENCE"),
 
-		InternalAuthPrivateKey: getEnv("INTERNAL_AUTH_PRIVATE_KEY", ""),
-
-		PubSubPushServiceAccountEmail: getEnv("PUBSUB_PUSH_SERVICE_ACCOUNT_EMAIL", ""),
-		PubSubPushAudience:            getEnv("PUBSUB_PUSH_AUDIENCE", ""),
-
-		UpstashRedisURL: getEnv("UPSTASH_REDIS_URL", ""),
+		UpstashRedisURL: os.Getenv("UPSTASH_REDIS_URL"),
 	}
+
+	// 下流サービスの URL が欠けたまま起動すると、その宛先への転送が実行時まで
+	// 誤りに見えないため、gateway が転送先に持つ 8 本すべてを必須にする。
+	downstreamURLs := []struct {
+		key   string
+		field *string
+	}{
+		{"BATTLE_SERVER_URL", &cfg.BattleServerURL},
+		{"CARD_SERVICE_URL", &cfg.CardServiceURL},
+		{"MATCHMAKING_SERVICE_URL", &cfg.MatchmakingServiceURL},
+		{"ACCOUNT_SERVICE_URL", &cfg.AccountServiceURL},
+		{"SHOP_SERVICE_URL", &cfg.ShopServiceURL},
+		{"SCENARIO_SERVICE_URL", &cfg.ScenarioServiceURL},
+		{"NEWS_SERVICE_URL", &cfg.NewsServiceURL},
+		{"SUPPORT_SERVICE_URL", &cfg.SupportServiceURL},
+	}
+	for _, u := range downstreamURLs {
+		v := os.Getenv(u.key)
+		if v == "" {
+			return nil, fmt.Errorf("config: %s is required", u.key)
+		}
+		*u.field = v
+	}
+
+	if cfg.DatabaseConn == "" {
+		return nil, fmt.Errorf("config: DATABASE_CONN is required (gateway owns gateway.game_players)")
+	}
+	if cfg.InternalAuthPrivateKey == "" {
+		return nil, fmt.Errorf("config: INTERNAL_AUTH_PRIVATE_KEY is required")
+	}
+
+	forceUpdate, err := getEnvBool("APP_FORCE_UPDATE", false)
+	if err != nil {
+		return nil, err
+	}
+	cfg.AppForceUpdate = forceUpdate
+
+	timeoutSec, err := getEnvInt("MATCHMAKING_TIMEOUT_SEC", defaultMatchmakingTimeoutSec)
+	if err != nil {
+		return nil, err
+	}
+	cfg.MatchmakingTimeoutSec = timeoutSec
+
+	return cfg, nil
 }
 
 func splitCSV(s string) []string {
@@ -115,6 +153,7 @@ func splitCSV(s string) []string {
 	return out
 }
 
+// getEnv は環境変数を読み取る。未設定なら fallback を返す。
 func getEnv(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
@@ -122,16 +161,30 @@ func getEnv(key, fallback string) string {
 	return fallback
 }
 
-// getEnvInt は環境変数を int として読み取る。未設定なら fallback、不正値なら fail-fast。
-func getEnvInt(key string, fallback int) int {
+// getEnvInt は環境変数を int として読み取る。未設定なら fallback、不正値ならエラーを返す。
+func getEnvInt(key string, fallback int) (int, error) {
 	v := os.Getenv(key)
 	if v == "" {
-		return fallback
+		return fallback, nil
 	}
 	n, err := strconv.Atoi(v)
 	if err != nil {
-		slog.Error("config env var is not a valid int", "key", key, "value", v)
-		os.Exit(1)
+		return 0, fmt.Errorf("config: %s %q: %w", key, v, err)
 	}
-	return n
+	return n, nil
+}
+
+// getEnvBool は環境変数を bool として読み取る。未設定なら fallback、不正値ならエラーを返す。
+func getEnvBool(key string, fallback bool) (bool, error) {
+	v := os.Getenv(key)
+	switch v {
+	case "":
+		return fallback, nil
+	case "true":
+		return true, nil
+	case "false":
+		return false, nil
+	default:
+		return false, fmt.Errorf("config: %s must be %q or %q, got %q", key, "true", "false", v)
+	}
 }

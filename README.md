@@ -35,7 +35,6 @@ REST エンドポイント契約は [data/openapi.yaml](data/openapi.yaml) を�
 |---|---|---|
 | `PORT` | `9001` | リッスンポート |
 | `ENV` | `dev` | 動作環境 (`dev` / `stg` / `prod`) |
-| `LOG_LEVEL` | `info` | ログレベル |
 | `DATABASE_CONN` | *(必須)* | PostgreSQL 接続文字列 (`gateway.game_players`) |
 | `DATABASE_IAM_AUTH_ENABLED` | *(必須)* | Cloud SQL への接続を Cloud SQL Go Connector 経由の自動 IAM データベース認証で行うかどうか。`true` / `false` のいずれか必須で、フォールバックは無い |
 | `CLOUDSQL_CONNECTION_NAME` | *(空)* | Cloud SQL インスタンスの接続名 (`project:region:instance`)。`DATABASE_IAM_AUTH_ENABLED=true` のときのみ必須 |
@@ -44,16 +43,18 @@ REST エンドポイント契約は [data/openapi.yaml](data/openapi.yaml) を�
 
 **ConfigMap (サービス URL):**
 
+8 本すべてが必須で、未設定または空なら起動時に落ちる。欠けた宛先への転送は実行時まで誤りが見えないため、既定値へのフォールバックを持たない。
+
 | 変数名 | デフォルト | 説明 |
 |---|---|---|
-| `BATTLE_SERVER_URL` | `http://localhost:9002` | Battle サービス URL |
-| `CARD_SERVICE_URL` | `http://localhost:9003` | Card サービス URL |
-| `MATCHMAKING_SERVICE_URL` | `http://localhost:9004` | Matchmaking サービス URL |
-| `ACCOUNT_SERVICE_URL` | `http://localhost:9005` | Account サービス URL |
-| `SHOP_SERVICE_URL` | `http://localhost:9006` | Shop サービス URL |
-| `SCENARIO_SERVICE_URL` | `http://localhost:9007` | Scenario サービス URL |
-| `NEWS_SERVICE_URL` | `http://localhost:9008` | News サービス URL |
-| `SUPPORT_SERVICE_URL` | `http://localhost:9009` | Support サービス URL |
+| `BATTLE_SERVER_URL` | *(必須)* | Battle サービス URL |
+| `CARD_SERVICE_URL` | *(必須)* | Card サービス URL |
+| `MATCHMAKING_SERVICE_URL` | *(必須)* | Matchmaking サービス URL |
+| `ACCOUNT_SERVICE_URL` | *(必須)* | Account サービス URL |
+| `SHOP_SERVICE_URL` | *(必須)* | Shop サービス URL |
+| `SCENARIO_SERVICE_URL` | *(必須)* | Scenario サービス URL |
+| `NEWS_SERVICE_URL` | *(必須)* | News サービス URL |
+| `SUPPORT_SERVICE_URL` | *(必須)* | Support サービス URL |
 
 **ConfigMap (アプリ挙動):**
 
@@ -63,7 +64,7 @@ REST エンドポイント契約は [data/openapi.yaml](data/openapi.yaml) を�
 | `MATCHMAKING_TIMEOUT_SEC` | `30` | プレイヤーごとのマッチメイク待ちタイムアウト秒 |
 | `APP_MIN_VERSION` | `0.1.0` | 最低必要バージョン |
 | `APP_LATEST_VERSION` | `0.1.0` | 最新バージョン |
-| `APP_FORCE_UPDATE` | `false` | 強制アップデートフラグ |
+| `APP_FORCE_UPDATE` | `false` | 強制アップデートフラグ。設定するなら `true` / `false` のいずれかで、他の値は起動時エラー |
 | `APP_STORE_URL` | *(空)* | 強制アップデート時にクライアントが開くストア URL |
 
 ## 公開パッケージ
