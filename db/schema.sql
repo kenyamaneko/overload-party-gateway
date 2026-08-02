@@ -40,6 +40,7 @@ CREATE INDEX idx_gateway_game_players_player_id ON gateway.game_players(player_i
 CREATE TABLE gateway.processed_matches (
   match_id     VARCHAR(64) NOT NULL,             -- matchmaking の match_id (mch_<ULID>)
   game_id      VARCHAR(26),                      -- battle.games(game_id) を参照 (app-level FK)。作成前は NULL
+  notified     BOOLEAN NOT NULL DEFAULT FALSE,   -- 成立通知の送信済みフラグ（再配信での二重通知防止）
   claimed_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (match_id)
 );

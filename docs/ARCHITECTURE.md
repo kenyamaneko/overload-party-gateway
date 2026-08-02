@@ -41,6 +41,13 @@ battle の `CreatePvPGame` は matchId に対して冪等ではなく、呼び�
 - battle 呼び出し自体が失敗した場合のみ claim を解放し、Pub/Sub のリトライで再度 claim できるようにする。gameID 記録後の失敗 (`game_players` 挿入など) では claim を解放しない。解放すると再送のたびに battle を再度呼び出し、二重にゲームを作ってしまうため
 - claim 済みだが gameID がまだ記録されていない状態で再送されると (battle 呼び出しが競合中、または記録直前でプロセスが停止した場合)、二重作成を避けるためその回は処理をスキップする。この状態からの自動回復は無く、運用での検知に委ねる
 
+## 成立通知の一度きりの送出
+
+同じ成立イベントが何度届いても、成立通知 (`match_found`) は 1 回だけ送られる。`gateway.processed_matches.notified` を冪等キーとして使い、`UPDATE ... SET notified = true WHERE ... AND notified = false` で影響行を得た呼び出しだけが WS へ送出する。プロセスの再起動をまたいでも判定できるよう、フラグは DB に置く。
+
+- `game_players` の挿入を終えてからフラグを立てるため、対戦の記録に失敗した回は通知を送らずエラーを返す
+- 記録に失敗した回はフラグが false のまま残り、Pub/Sub の再配信で記録が成功したときに通知が送られる
+
 ## EXP 付与の冪等性設計
 
 `gateway.game_players.exp_awarded` フラグを DB レベルの冪等キーとして使う。`UPDATE ... SET exp_awarded = true WHERE ... AND exp_awarded = false` の影響行数が 0 なら即座に return し、1 を得た呼び出しだけが accountclient に付与 RPC を投げる。ゲーム終了は game_action の応答・切断猶予切れ・ターンタイムアウトの複数経路から検知され、インスタンスの再起動をまたいで再度検知されることもあるため、冪等キーは DB に置く。
@@ -75,7 +82,7 @@ gateway がドメイン状態を持たないと言いつつ 1 つだけ DB テ�
 
 | エンドポイント | 副作用 | 冪等性の担保 |
 |---|---|---|
-| `POST /internal/v1/pubsub/match-made` | battle ゲーム作成 + `game_players` 挿入 + WS push | 「match_made の二重ゲーム作成防止」の永続 dedup |
+| `POST /internal/v1/pubsub/match-made` | battle ゲーム作成 + `game_players` 挿入 + WS push | 「match_made の二重ゲーム作成防止」「成立通知の一度きりの送出」の永続 dedup |
 
 gateway は match_made 専用の受け口として位置づけられ、他サービスが発行するイベントを複数の購読先へ配信する用途で購読しない (ADR-027)。本エンドポイントは Cloud Run が allUsers に公開されるため、[ADR-057](https://github.com/kenyamaneko/overload-party-common/blob/main/docs/adr/057-cloudrun-service-auth-iam-and-rs256.md) が定める呼び出し IAM による到達制御が効かず、代わりに push リクエストに載る Google 発行 OIDC ID トークンをアプリ層で検証する。push 配信の subscription 設定 (push endpoint の URL、dead letter policy 等) はこのリポジトリからは導けない。Terraform 側の設定と併せて変更すること。
 

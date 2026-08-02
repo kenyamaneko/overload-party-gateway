@@ -55,8 +55,9 @@ type recordGameCreatedCall struct {
 type fakeProcessedMatchRepo struct {
 	mu sync.Mutex
 
-	claimed map[string]bool
-	gameIDs map[string]string
+	claimed  map[string]bool
+	gameIDs  map[string]string
+	notified map[string]bool
 
 	claimCalls   []string
 	releaseCalls []string
@@ -70,8 +71,9 @@ type fakeProcessedMatchRepo struct {
 
 func newFakeProcessedMatchRepo() *fakeProcessedMatchRepo {
 	return &fakeProcessedMatchRepo{
-		claimed: make(map[string]bool),
-		gameIDs: make(map[string]string),
+		claimed:  make(map[string]bool),
+		gameIDs:  make(map[string]string),
+		notified: make(map[string]bool),
 	}
 }
 
@@ -119,6 +121,16 @@ func (f *fakeProcessedMatchRepo) GameIDFor(_ context.Context, matchID string) (s
 	}
 	gameID, found := f.gameIDs[matchID]
 	return gameID, found, nil
+}
+
+func (f *fakeProcessedMatchRepo) MarkNotified(_ context.Context, matchID string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if !f.claimed[matchID] || f.notified[matchID] {
+		return false, nil
+	}
+	f.notified[matchID] = true
+	return true, nil
 }
 
 func (f *fakeProcessedMatchRepo) snapshotReleaseCalls() []string {

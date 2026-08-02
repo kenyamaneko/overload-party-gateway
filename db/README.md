@@ -15,5 +15,6 @@ Post ADR-014, gateway owns the `gateway` PostgreSQL schema. The DDL SSoT is
   `battle.games(game_id)` the same way.
 - `gateway.processed_matches` — persistent dedup for `match_made` push
   redelivery. `match_id` is claimed before calling battle, and `game_id` is
-  recorded once battle returns the created game. `game_id` references
-  `battle.games(game_id)` as an app-level (not SQL) FK.
+  recorded once battle returns the created game. `notified` is set by the single
+  call that wins the right to send the `match_found` notification. `game_id`
+  references `battle.games(game_id)` as an app-level (not SQL) FK.
