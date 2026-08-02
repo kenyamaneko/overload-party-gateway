@@ -98,5 +98,44 @@ func TestPgProcessedMatchRepository(t *testing.T) {
 			require.NoError(t, err)
 			assert.False(t, found)
 		})
+
+		t.Run("まだ通知していない matchId のとき、成立通知の送信権を取得できる", func(t *testing.T) {
+			sharedPG.Truncate(t)
+			repo := repository.NewPgProcessedMatchRepository(sharedPG.Pool)
+			ctx := context.Background()
+			_, err := repo.Claim(ctx, "mch_6")
+			require.NoError(t, err)
+
+			marked, err := repo.MarkNotified(ctx, "mch_6")
+
+			require.NoError(t, err)
+			assert.True(t, marked)
+		})
+
+		t.Run("既に通知した matchId のとき、成立通知の送信権を取得できない", func(t *testing.T) {
+			sharedPG.Truncate(t)
+			repo := repository.NewPgProcessedMatchRepository(sharedPG.Pool)
+			ctx := context.Background()
+			_, err := repo.Claim(ctx, "mch_7")
+			require.NoError(t, err)
+			_, err = repo.MarkNotified(ctx, "mch_7")
+			require.NoError(t, err)
+
+			marked, err := repo.MarkNotified(ctx, "mch_7")
+
+			require.NoError(t, err)
+			assert.False(t, marked)
+		})
+
+		t.Run("処理を開始したことが無い matchId のとき、成立通知の送信権を取得できない", func(t *testing.T) {
+			sharedPG.Truncate(t)
+			repo := repository.NewPgProcessedMatchRepository(sharedPG.Pool)
+			ctx := context.Background()
+
+			marked, err := repo.MarkNotified(ctx, "mch_never_claimed")
+
+			require.NoError(t, err)
+			assert.False(t, marked)
+		})
 	})
 }

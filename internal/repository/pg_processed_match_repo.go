@@ -58,6 +58,18 @@ func (r *PgProcessedMatchRepository) RecordGameCreated(ctx context.Context, matc
 	return nil
 }
 
+// MarkNotified は成立通知の送信権を排他的に取得します。既に送信済みなら marked=false を返します。
+func (r *PgProcessedMatchRepository) MarkNotified(ctx context.Context, matchID string) (bool, error) {
+	tag, err := connFrom(ctx, r.pool).Exec(ctx,
+		`UPDATE gateway.processed_matches SET notified = true WHERE match_id = $1 AND notified = false`,
+		matchID,
+	)
+	if err != nil {
+		return false, fmt.Errorf("mark processed match notified: %w", err)
+	}
+	return tag.RowsAffected() > 0, nil
+}
+
 // GameIDFor は matchId に対して既に作成済みの battle game の ID を返します。未作成なら found=false です。
 func (r *PgProcessedMatchRepository) GameIDFor(ctx context.Context, matchID string) (string, bool, error) {
 	var gameID *string

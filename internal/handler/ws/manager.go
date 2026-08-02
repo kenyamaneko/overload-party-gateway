@@ -346,6 +346,15 @@ func (m *Manager) HandleMatchMade(ctx context.Context, event apimatchmaking.Matc
 		}
 	}
 
+	notified, err := m.processedMatchRepo.MarkNotified(ctx, event.MatchID)
+	if err != nil {
+		return fmt.Errorf("match_made: mark notified %s: %w", event.MatchID, err)
+	}
+	if !notified {
+		slog.Info("match_made: already notified, skipping", "match_id", event.MatchID, "game_id", gameID)
+		return nil
+	}
+
 	m.Relay.NotifyMatchFound(gameID, event.Players[0].PlayerID, event.Players[1].PlayerID)
 	return nil
 }

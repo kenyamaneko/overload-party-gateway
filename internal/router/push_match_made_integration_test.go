@@ -7,31 +7,52 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	apiaccount "github.com/kenyamaneko/overload-party-account/packages/api-account"
+	"github.com/kenyamaneko/overload-party-account/packages/api-account/apiaccountserverfake"
 	apicard "github.com/kenyamaneko/overload-party-card/packages/api-card"
 	apimatchmaking "github.com/kenyamaneko/overload-party-matchmaking/packages/api-matchmaking"
+	"github.com/kenyamaneko/overload-party-matchmaking/packages/api-matchmaking/apimatchmakingserverfake"
 
 	pubsubadapter "github.com/kenyamaneko/overload-party-gateway/internal/adapter/pubsub"
+	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
+	"github.com/kenyamaneko/overload-party-gateway/internal/client/matchmakingclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/handler/rest"
 	ws "github.com/kenyamaneko/overload-party-gateway/internal/handler/ws"
+	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository/postgrestest"
 	"github.com/kenyamaneko/overload-party-gateway/internal/router"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
+	genws "github.com/kenyamaneko/overload-party-gateway/packages/ws-constants"
 )
 
-const matchMadePushPath = "/internal/v1/pubsub/match-made"
+const (
+	matchMadePushPath = "/internal/v1/pubsub/match-made"
+	wsPath            = "/ws"
+
+	testPlayer1ID  = "11111111-1111-1111-1111-111111111111"
+	testPlayer2ID  = "22222222-2222-2222-2222-222222222222"
+	testPlayer1UID = "TST-UID-P1"
+	testPlayer2UID = "TST-UID-P2"
+
+	matchFoundWait   = 5 * time.Second
+	noMatchFoundWait = 500 * time.Millisecond
+)
 
 var sharedPG *postgrestest.Postgres
 
@@ -112,13 +133,38 @@ func (f *fakeCardClient) ValidateDeckForBattle(context.Context, int64) error {
 
 var _ port.CardClient = (*fakeCardClient)(nil)
 
-// buildPushRouter は「HTTP push → router → MatchSubscriber → Manager → repo → DB」を
-// 実 DB まで直結した router を、既存の DB 状態を消さずに組み立てる。プロセス再起動を
+// failingGamePlayerRepo は先頭 failNextCalls 回の挿入だけを失敗させ、以降は実 DB の
+// リポジトリへ委譲する。対戦の記録が失敗した回とその後の再配信を再現するために使う。
+type failingGamePlayerRepo struct {
+	*repository.PgGamePlayerRepository
+	mu            sync.Mutex
+	failNextCalls int
+}
+
+func (r *failingGamePlayerRepo) InsertGamePlayer(ctx context.Context, gameID string, playerNum int, playerID string) error {
+	r.mu.Lock()
+	if r.failNextCalls > 0 {
+		r.failNextCalls--
+		r.mu.Unlock()
+		return errors.New("game_players unavailable")
+	}
+	r.mu.Unlock()
+	return r.PgGamePlayerRepository.InsertGamePlayer(ctx, gameID, playerNum, playerID)
+}
+
+var _ port.GamePlayerRepo = (*failingGamePlayerRepo)(nil)
+
+// buildPushEngine は「HTTP push → router → MatchSubscriber → Manager → repo → DB」を
+// 実 DB まで直結した engine を、既存の DB 状態を消さずに組み立てる。プロセス再起動を
 // 模すテストで、r1 が残した永続状態を r2 が引き継ぐ形を再現するために使う。
-func buildPushRouter(battleClient service.BattleClient) (*gin.Engine, *repository.PgGamePlayerRepository) {
-	gamePlayerRepo := repository.NewPgGamePlayerRepository(sharedPG.Pool)
+func buildPushEngine(
+	battleClient service.BattleClient,
+	gamePlayerRepo port.GamePlayerRepo,
+	accountClient port.AccountClient,
+	matchmakingClient port.MatchmakingClient,
+) (*gin.Engine, *ws.Manager) {
 	processedMatchRepo := repository.NewPgProcessedMatchRepository(sharedPG.Pool)
-	wsManager := ws.NewManager(battleClient, nil, &fakeCardClient{}, nil, gamePlayerRepo, processedMatchRepo, 0, nil, nil, ws.DefaultDisconnectTimeout)
+	wsManager := ws.NewManager(battleClient, accountClient, &fakeCardClient{}, matchmakingClient, gamePlayerRepo, processedMatchRepo, 0, nil, nil, ws.DefaultDisconnectTimeout)
 	matchSub, err := pubsubadapter.NewMatchSubscriber(wsManager)
 	if err != nil {
 		panic(err)
@@ -129,6 +175,13 @@ func buildPushRouter(battleClient service.BattleClient) (*gin.Engine, *repositor
 	r := gin.New()
 	internalGroup := r.Group("/internal/v1")
 	router.RegisterPubSubRoutes(internalGroup, handlers)
+	return r, wsManager
+}
+
+// buildPushRouter は push 受け口だけの router と実 DB のリポジトリを返す。
+func buildPushRouter(battleClient service.BattleClient) (*gin.Engine, *repository.PgGamePlayerRepository) {
+	gamePlayerRepo := repository.NewPgGamePlayerRepository(sharedPG.Pool)
+	r, _ := buildPushEngine(battleClient, gamePlayerRepo, nil, nil)
 	return r, gamePlayerRepo
 }
 
@@ -149,14 +202,98 @@ func doMatchMadePush(t *testing.T, r *gin.Engine, payload []byte) *httptest.Resp
 	return w
 }
 
+// findPlayerByFirebaseUID は WS 接続時の firebaseUID → playerID 解決を account の代役として担う。
+func findPlayerByFirebaseUID(firebaseUID string) (int, any) {
+	switch firebaseUID {
+	case testPlayer1UID:
+		return http.StatusOK, apiaccount.PlayerResponse{PlayerID: testPlayer1ID, FirebaseUID: firebaseUID}
+	case testPlayer2UID:
+		return http.StatusOK, apiaccount.PlayerResponse{PlayerID: testPlayer2ID, FirebaseUID: firebaseUID}
+	default:
+		return http.StatusNotFound, nil
+	}
+}
+
+// notifyTestEnv は push 受け口と、成立通知の宛先となる 2 人の WS 接続を保持する。
+type notifyTestEnv struct {
+	router *gin.Engine
+	p1Conn *websocket.Conn
+	p2Conn *websocket.Conn
+}
+
+// newNotifyTestEnv は DB を空にしたうえで push 受け口と WS 接続の入口を同じ Manager に
+// 載せ、両プレイヤーが接続済みの環境を返す。
+func newNotifyTestEnv(t *testing.T, battleClient service.BattleClient, gamePlayerRepo port.GamePlayerRepo) *notifyTestEnv {
+	t.Helper()
+	sharedPG.Truncate(t)
+
+	accountFake := apiaccountserverfake.NewServer()
+	t.Cleanup(accountFake.Close)
+	accountFake.FindByFirebaseUIDFn = findPlayerByFirebaseUID
+	matchmakingFake := apimatchmakingserverfake.NewServer()
+	t.Cleanup(matchmakingFake.Close)
+
+	accountClient := accountclient.New(accountFake.URL(), &http.Client{})
+	matchmakingClient := matchmakingclient.New(matchmakingFake.URL(), "test-instance", &http.Client{})
+
+	r, wsManager := buildPushEngine(battleClient, gamePlayerRepo, accountClient, matchmakingClient)
+	r.GET(wsPath, ws.NewHandler(wsManager, nil, accountClient, nil).HandleUpgrade)
+
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+
+	return &notifyTestEnv{
+		router: r,
+		p1Conn: dialPlayer(t, srv, testPlayer1UID),
+		p2Conn: dialPlayer(t, srv, testPlayer2UID),
+	}
+}
+
+// dialPlayer は uid のプレイヤーとして WS 接続を確立する。
+func dialPlayer(t *testing.T, srv *httptest.Server, uid string) *websocket.Conn {
+	t.Helper()
+	url := strings.Replace(srv.URL, "http://", "ws://", 1) + wsPath + "?token=" + middleware.DevTokenPrefix + uid
+	conn, resp, err := websocket.DefaultDialer.Dial(url, nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusSwitchingProtocols, resp.StatusCode)
+	t.Cleanup(func() { _ = conn.Close() })
+	return conn
+}
+
+// readMatchFoundGameID は成立通知を 1 件受信し、通知された gameID を返す。
+func readMatchFoundGameID(t *testing.T, conn *websocket.Conn) string {
+	t.Helper()
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(matchFoundWait)))
+	_, raw, err := conn.ReadMessage()
+	require.NoError(t, err)
+
+	var msg ws.WSMessage
+	require.NoError(t, json.Unmarshal(raw, &msg))
+	require.Equal(t, genws.WSServerMsgMatchFound, msg.Type)
+	var body ws.MatchFoundMessage
+	require.NoError(t, json.Unmarshal(msg.Data, &body))
+	return body.GameID
+}
+
+// requireNoNotification は noMatchFoundWait の間 WS に何も届かないことを確かめる。
+func requireNoNotification(t *testing.T, conn *websocket.Conn) {
+	t.Helper()
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(noMatchFoundWait)))
+	_, raw, err := conn.ReadMessage()
+	require.Error(t, err, "unexpected ws message: %s", raw)
+	var netErr net.Error
+	require.ErrorAs(t, err, &netErr)
+	assert.True(t, netErr.Timeout(), "ws read must end by the read deadline, got %v", err)
+}
+
 func matchMadePayload(t *testing.T, matchID string) []byte {
 	t.Helper()
 	data, err := json.Marshal(apimatchmaking.MatchMadeEvent{
 		EventType: apimatchmaking.EventTypeMatchMade,
 		MatchID:   matchID,
 		Players: []apimatchmaking.MatchedPlayer{
-			{PlayerID: "11111111-1111-1111-1111-111111111111", DeckID: 1, Name: "p1", Level: 1},
-			{PlayerID: "22222222-2222-2222-2222-222222222222", DeckID: 2, Name: "p2", Level: 1},
+			{PlayerID: testPlayer1ID, DeckID: 1, Name: "p1", Level: 1},
+			{PlayerID: testPlayer2ID, DeckID: 2, Name: "p2", Level: 1},
 		},
 	})
 	require.NoError(t, err)
@@ -232,6 +369,56 @@ func TestPushMatchMadeE2E(t *testing.T) {
 			entries, err := gamePlayerRepo.LookupGamePlayers(context.Background(), "01ARZ3NDEKTSV4RRFFQ69G5FA5")
 			require.NoError(t, err)
 			assert.Len(t, entries, 2)
+		})
+	})
+}
+
+func TestPushMatchMadeNotification(t *testing.T) {
+	t.Run("push 受け口経由の成立通知", func(t *testing.T) {
+		t.Run("同じ成立イベントが二度届いても、成立通知は各プレイヤーに1回だけ送られる", func(t *testing.T) {
+			bc := &fakeBattleClient{gameID: "01ARZ3NDEKTSV4RRFFQ69G5FB1"}
+			env := newNotifyTestEnv(t, bc, repository.NewPgGamePlayerRepository(sharedPG.Pool))
+			payload := matchMadePayload(t, "mch_e2e_notify_dup")
+
+			require.Equal(t, http.StatusOK, doMatchMadePush(t, env.router, payload).Code)
+			require.Equal(t, http.StatusOK, doMatchMadePush(t, env.router, payload).Code)
+
+			assert.Equal(t, "01ARZ3NDEKTSV4RRFFQ69G5FB1", readMatchFoundGameID(t, env.p1Conn))
+			assert.Equal(t, "01ARZ3NDEKTSV4RRFFQ69G5FB1", readMatchFoundGameID(t, env.p2Conn))
+			requireNoNotification(t, env.p1Conn)
+			requireNoNotification(t, env.p2Conn)
+		})
+
+		t.Run("対戦の記録に失敗したとき、成立通知は送られず push 応答が 500 になる", func(t *testing.T) {
+			bc := &fakeBattleClient{gameID: "01ARZ3NDEKTSV4RRFFQ69G5FB2"}
+			repo := &failingGamePlayerRepo{
+				PgGamePlayerRepository: repository.NewPgGamePlayerRepository(sharedPG.Pool),
+				failNextCalls:          1,
+			}
+			env := newNotifyTestEnv(t, bc, repo)
+			payload := matchMadePayload(t, "mch_e2e_notify_fail")
+
+			w := doMatchMadePush(t, env.router, payload)
+
+			assert.Equal(t, http.StatusInternalServerError, w.Code)
+			requireNoNotification(t, env.p1Conn)
+			requireNoNotification(t, env.p2Conn)
+		})
+
+		t.Run("対戦の記録に失敗した成立イベントが再配信され記録に成功すると、そこで成立通知が送られる", func(t *testing.T) {
+			bc := &fakeBattleClient{gameID: "01ARZ3NDEKTSV4RRFFQ69G5FB3"}
+			repo := &failingGamePlayerRepo{
+				PgGamePlayerRepository: repository.NewPgGamePlayerRepository(sharedPG.Pool),
+				failNextCalls:          1,
+			}
+			env := newNotifyTestEnv(t, bc, repo)
+			payload := matchMadePayload(t, "mch_e2e_notify_retry")
+			require.Equal(t, http.StatusInternalServerError, doMatchMadePush(t, env.router, payload).Code)
+
+			require.Equal(t, http.StatusOK, doMatchMadePush(t, env.router, payload).Code)
+
+			assert.Equal(t, "01ARZ3NDEKTSV4RRFFQ69G5FB3", readMatchFoundGameID(t, env.p1Conn))
+			assert.Equal(t, "01ARZ3NDEKTSV4RRFFQ69G5FB3", readMatchFoundGameID(t, env.p2Conn))
 		})
 	})
 }

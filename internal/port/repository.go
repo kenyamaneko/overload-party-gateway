@@ -41,4 +41,6 @@ type ProcessedMatchRepo interface {
 	RecordGameCreated(ctx context.Context, matchID, gameID string) error
 	// GameIDFor は matchId に対して既に作成済みの battle game の ID を返します。未作成なら found=false です。
 	GameIDFor(ctx context.Context, matchID string) (gameID string, found bool, err error)
+	// MarkNotified は成立通知の送信権を排他的に取得します。既に送信済みなら marked=false を返します。
+	MarkNotified(ctx context.Context, matchID string) (marked bool, err error)
 }
