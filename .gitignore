@@ -16,6 +16,10 @@ bin/
 go.work
 go.work.sum
 
+# npm
+node_modules/
+packages/*-npm/dist/
+
 # Coverage
 coverage*.out
 
