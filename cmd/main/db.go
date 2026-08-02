@@ -5,25 +5,10 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
-	"os"
 
 	"cloud.google.com/go/cloudsqlconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
-
-// parseDatabaseIAMAuthEnabled は "true"/"false" を要求し、それ以外は fail-fast する。
-func parseDatabaseIAMAuthEnabled(raw string) bool {
-	switch raw {
-	case "true":
-		return true
-	case "false":
-		return false
-	default:
-		slog.Error("config: DATABASE_IAM_AUTH_ENABLED must be true or false", "value", raw)
-		os.Exit(1)
-		return false
-	}
-}
 
 // newDatabasePool は IAM 認証設定に応じた接続方式で DB 接続プールを構築する。
 func newDatabasePool(ctx context.Context, databaseConn string, iamAuthEnabled bool, cloudSQLConnectionName string) (*pgxpool.Pool, func(), error) {

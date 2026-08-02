@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -38,11 +39,40 @@ var allEnvKeys = []string{
 	"UPSTASH_REDIS_URL",
 }
 
-// setEnv は os.Getenv が "" と unset を区別しない性質を使い、未指定キーに "" を渡して未設定を再現する。
+var requiredKeys = []string{
+	"BATTLE_SERVER_URL",
+	"CARD_SERVICE_URL",
+	"MATCHMAKING_SERVICE_URL",
+	"ACCOUNT_SERVICE_URL",
+	"SHOP_SERVICE_URL",
+	"SCENARIO_SERVICE_URL",
+	"NEWS_SERVICE_URL",
+	"SUPPORT_SERVICE_URL",
+	"DATABASE_CONN",
+	"INTERNAL_AUTH_PRIVATE_KEY",
+}
+
+var keysWithDefault = []string{
+	"PORT",
+	"ENV",
+	"APP_MIN_VERSION",
+	"APP_LATEST_VERSION",
+	"MATCHMAKING_TIMEOUT_SEC",
+	"APP_FORCE_UPDATE",
+}
+
+// setEnv は envs に無いキーを未設定にする。空文字の設定と未設定を区別する仕様を確かめるため、
+// t.Setenv が登録する復元処理を残したまま os.Unsetenv で未設定にする。
 func setEnv(t *testing.T, envs map[string]string) {
 	t.Helper()
 	for _, k := range allEnvKeys {
-		t.Setenv(k, envs[k])
+		v, ok := envs[k]
+		if !ok {
+			t.Setenv(k, "")
+			require.NoError(t, os.Unsetenv(k))
+			continue
+		}
+		t.Setenv(k, v)
 	}
 }
 
@@ -53,6 +83,12 @@ func mergeEnv(maps ...map[string]string) map[string]string {
 			out[k] = v
 		}
 	}
+	return out
+}
+
+func withoutEnv(base map[string]string, key string) map[string]string {
+	out := mergeEnv(base)
+	delete(out, key)
 	return out
 }
 
@@ -184,61 +220,45 @@ func TestFromEnv(t *testing.T) {
 			assert.Equal(t, []string{"http://localhost:3000", "https://example.com"}, cfg.AllowedOrigins)
 		})
 
+		for _, key := range requiredKeys {
+			t.Run(key+" が未設定のとき、その変数名を挙げたエラーになる", func(t *testing.T) {
+				setEnv(t, withoutEnv(validEnv, key))
+
+				cfg, err := FromEnv()
+
+				require.Error(t, err)
+				assert.Nil(t, cfg)
+				assert.Contains(t, err.Error(), key+" is required")
+			})
+
+			t.Run(key+" が空文字のとき、その変数名を挙げたエラーになる", func(t *testing.T) {
+				setEnv(t, mergeEnv(validEnv, map[string]string{key: ""}))
+
+				cfg, err := FromEnv()
+
+				require.Error(t, err)
+				assert.Nil(t, cfg)
+				assert.Contains(t, err.Error(), key+" is required")
+			})
+		}
+
+		for _, key := range keysWithDefault {
+			t.Run(key+" が空文字のとき、既定値を使わずその変数名を挙げたエラーになる", func(t *testing.T) {
+				setEnv(t, mergeEnv(validEnv, map[string]string{key: ""}))
+
+				cfg, err := FromEnv()
+
+				require.Error(t, err)
+				assert.Nil(t, cfg)
+				assert.Contains(t, err.Error(), key+" is set but empty")
+			})
+		}
+
 		invalidCases := []struct {
 			name    string
 			envs    map[string]string
 			wantErr string
 		}{
-			{
-				name:    "BATTLE_SERVER_URL が未設定または空のとき、その変数名を挙げたエラーになる",
-				envs:    mergeEnv(validEnv, map[string]string{"BATTLE_SERVER_URL": ""}),
-				wantErr: "BATTLE_SERVER_URL is required",
-			},
-			{
-				name:    "CARD_SERVICE_URL が未設定または空のとき、その変数名を挙げたエラーになる",
-				envs:    mergeEnv(validEnv, map[string]string{"CARD_SERVICE_URL": ""}),
-				wantErr: "CARD_SERVICE_URL is required",
-			},
-			{
-				name:    "MATCHMAKING_SERVICE_URL が未設定または空のとき、その変数名を挙げたエラーになる",
-				envs:    mergeEnv(validEnv, map[string]string{"MATCHMAKING_SERVICE_URL": ""}),
-				wantErr: "MATCHMAKING_SERVICE_URL is required",
-			},
-			{
-				name:    "ACCOUNT_SERVICE_URL が未設定または空のとき、その変数名を挙げたエラーになる",
-				envs:    mergeEnv(validEnv, map[string]string{"ACCOUNT_SERVICE_URL": ""}),
-				wantErr: "ACCOUNT_SERVICE_URL is required",
-			},
-			{
-				name:    "SHOP_SERVICE_URL が未設定または空のとき、その変数名を挙げたエラーになる",
-				envs:    mergeEnv(validEnv, map[string]string{"SHOP_SERVICE_URL": ""}),
-				wantErr: "SHOP_SERVICE_URL is required",
-			},
-			{
-				name:    "SCENARIO_SERVICE_URL が未設定または空のとき、その変数名を挙げたエラーになる",
-				envs:    mergeEnv(validEnv, map[string]string{"SCENARIO_SERVICE_URL": ""}),
-				wantErr: "SCENARIO_SERVICE_URL is required",
-			},
-			{
-				name:    "NEWS_SERVICE_URL が未設定または空のとき、その変数名を挙げたエラーになる",
-				envs:    mergeEnv(validEnv, map[string]string{"NEWS_SERVICE_URL": ""}),
-				wantErr: "NEWS_SERVICE_URL is required",
-			},
-			{
-				name:    "SUPPORT_SERVICE_URL が未設定または空のとき、その変数名を挙げたエラーになる",
-				envs:    mergeEnv(validEnv, map[string]string{"SUPPORT_SERVICE_URL": ""}),
-				wantErr: "SUPPORT_SERVICE_URL is required",
-			},
-			{
-				name:    "DATABASE_CONN が未設定または空のとき、その変数名を挙げたエラーになる",
-				envs:    mergeEnv(validEnv, map[string]string{"DATABASE_CONN": ""}),
-				wantErr: "DATABASE_CONN is required",
-			},
-			{
-				name:    "INTERNAL_AUTH_PRIVATE_KEY が未設定または空のとき、その変数名を挙げたエラーになる",
-				envs:    mergeEnv(validEnv, map[string]string{"INTERNAL_AUTH_PRIVATE_KEY": ""}),
-				wantErr: "INTERNAL_AUTH_PRIVATE_KEY is required",
-			},
 			{
 				name:    "MATCHMAKING_TIMEOUT_SEC が数値でない abc のとき、その変数名を挙げたエラーになる",
 				envs:    mergeEnv(validEnv, map[string]string{"MATCHMAKING_TIMEOUT_SEC": "abc"}),
@@ -259,6 +279,40 @@ func TestFromEnv(t *testing.T) {
 				require.Error(t, err)
 				assert.Nil(t, cfg)
 				assert.Contains(t, err.Error(), tc.wantErr)
+			})
+		}
+	})
+}
+
+func TestParseBool(t *testing.T) {
+	t.Run("真偽値を要求する環境変数の解釈", func(t *testing.T) {
+		t.Run(`"true" のとき、有効になる`, func(t *testing.T) {
+			enabled, err := ParseBool("TEST_FLAG", "true")
+
+			require.NoError(t, err)
+			assert.True(t, enabled)
+		})
+
+		t.Run(`"false" のとき、無効になる`, func(t *testing.T) {
+			enabled, err := ParseBool("TEST_FLAG", "false")
+
+			require.NoError(t, err)
+			assert.False(t, enabled)
+		})
+
+		invalidCases := []struct {
+			name  string
+			value string
+		}{
+			{name: `"yes" のとき、変数名と受け付ける値を挙げたエラーになる`, value: "yes"},
+			{name: `空文字のとき、変数名と受け付ける値を挙げたエラーになる`, value: ""},
+		}
+		for _, tc := range invalidCases {
+			t.Run(tc.name, func(t *testing.T) {
+				_, err := ParseBool("TEST_FLAG", tc.value)
+
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), `TEST_FLAG must be "true" or "false"`)
 			})
 		}
 	})

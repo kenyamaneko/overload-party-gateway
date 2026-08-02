@@ -29,6 +29,8 @@ REST エンドポイント契約は [data/openapi.yaml](data/openapi.yaml) を�
 
 ## 環境変数
 
+既定値のある変数は、未設定なら既定値を使い、空文字が設定されていれば起動時にエラーで止まる。値を投入する側が渡した空文字を既定値で覆い隠さないため。
+
 **Deployment env (インフラ層):**
 
 | 変数名 | デフォルト | 説明 |
@@ -66,6 +68,21 @@ REST エンドポイント契約は [data/openapi.yaml](data/openapi.yaml) を�
 | `APP_LATEST_VERSION` | `0.1.0` | 最新バージョン |
 | `APP_FORCE_UPDATE` | `false` | 強制アップデートフラグ。設定するなら `true` / `false` のいずれかで、他の値は起動時エラー |
 | `APP_STORE_URL` | *(空)* | 強制アップデート時にクライアントが開くストア URL |
+
+## ローカル実行
+
+```
+cp .env.example .env
+make run-local
+```
+
+`.env` は Makefile が読み込んで export する。`.env.example` は下流サービスの宛先 8 本と `DATABASE_CONN` を上のサービス間連携図のポートで埋めてあり、値の書き換えなしで起動する。
+
+`INTERNAL_AUTH_PRIVATE_KEY` だけは `.env` に置けない。PEM が複数行で Makefile の `include` に載らないため、`make run-local` が `.localdev/` に RSA 鍵を生成して環境変数として渡す。生成には `openssl` を使う。
+
+`make run-local` が起動するのは `cmd/local` で、Firebase ID トークンの代わりに `dev-token-{uid}` を受け付ける。PostgreSQL と下流サービスへの接続は要求時まで遅延するため、それらが落ちていても起動して `/health` は 200 を返す。転送を伴う操作には宛先の起動が要る。
+
+`make run-gateway` が起動するのは Cloud Run 向けの `cmd/main` で、Firebase Auth・Firestore・Pub/Sub push 検証を前提とするため Google の資格情報 (ADC) が別途要る。
 
 ## 公開パッケージ
 

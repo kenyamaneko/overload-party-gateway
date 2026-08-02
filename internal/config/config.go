@@ -70,9 +70,26 @@ type Config struct {
 // FromEnv は環境変数からサービス設定を構築します。
 // 未設定の必須環境変数があれば即エラーで返し、デフォルトへの暗黙 fallback は行いません。
 func FromEnv() (*Config, error) {
+	port, err := getEnv("PORT", defaultPort)
+	if err != nil {
+		return nil, err
+	}
+	env, err := getEnv("ENV", defaultEnv)
+	if err != nil {
+		return nil, err
+	}
+	appMinVersion, err := getEnv("APP_MIN_VERSION", defaultAppVersion)
+	if err != nil {
+		return nil, err
+	}
+	appLatestVersion, err := getEnv("APP_LATEST_VERSION", defaultAppVersion)
+	if err != nil {
+		return nil, err
+	}
+
 	cfg := &Config{
-		Port: getEnv("PORT", defaultPort),
-		Env:  getEnv("ENV", defaultEnv),
+		Port: port,
+		Env:  env,
 
 		AllowedOrigins: splitCSV(os.Getenv("ALLOWED_ORIGINS")),
 
@@ -82,8 +99,8 @@ func FromEnv() (*Config, error) {
 
 		GoogleCloudProjectID: os.Getenv("GOOGLE_CLOUD_PROJECT_ID"),
 
-		AppMinVersion:    getEnv("APP_MIN_VERSION", defaultAppVersion),
-		AppLatestVersion: getEnv("APP_LATEST_VERSION", defaultAppVersion),
+		AppMinVersion:    appMinVersion,
+		AppLatestVersion: appLatestVersion,
 		AppStoreURL:      os.Getenv("APP_STORE_URL"),
 
 		InternalAuthPrivateKey: os.Getenv("INTERNAL_AUTH_PRIVATE_KEY"),
@@ -153,18 +170,50 @@ func splitCSV(s string) []string {
 	return out
 }
 
-// getEnv は環境変数を読み取る。未設定なら fallback を返す。
-func getEnv(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
+// ParseBool は環境変数の値を "true" / "false" のみ受け付けて解釈します。
+func ParseBool(key, value string) (bool, error) {
+	switch value {
+	case "true":
+		return true, nil
+	case "false":
+		return false, nil
+	default:
+		return false, fmt.Errorf("config: %s must be %q or %q, got %q", key, "true", "false", value)
 	}
-	return fallback
 }
 
-// getEnvInt は環境変数を int として読み取る。未設定なら fallback、不正値ならエラーを返す。
-func getEnvInt(key string, fallback int) (int, error) {
-	v := os.Getenv(key)
+// lookupEnv は環境変数を読み取り、値と設定済みかどうかを返す。空文字が設定されていればエラーを返す。
+// 値を投入する側が空文字を渡した状況は、既定値で動いてよい未設定とは別の設定ミスであるため区別する。
+func lookupEnv(key string) (string, bool, error) {
+	v, ok := os.LookupEnv(key)
+	if !ok {
+		return "", false, nil
+	}
 	if v == "" {
+		return "", false, fmt.Errorf("config: %s is set but empty (unset it to use the default)", key)
+	}
+	return v, true, nil
+}
+
+// getEnv は環境変数を読み取る。未設定なら fallback、空文字ならエラーを返す。
+func getEnv(key, fallback string) (string, error) {
+	v, isSet, err := lookupEnv(key)
+	if err != nil {
+		return "", err
+	}
+	if !isSet {
+		return fallback, nil
+	}
+	return v, nil
+}
+
+// getEnvInt は環境変数を int として読み取る。未設定なら fallback、空文字と不正値ならエラーを返す。
+func getEnvInt(key string, fallback int) (int, error) {
+	v, isSet, err := lookupEnv(key)
+	if err != nil {
+		return 0, err
+	}
+	if !isSet {
 		return fallback, nil
 	}
 	n, err := strconv.Atoi(v)
@@ -174,17 +223,14 @@ func getEnvInt(key string, fallback int) (int, error) {
 	return n, nil
 }
 
-// getEnvBool は環境変数を bool として読み取る。未設定なら fallback、不正値ならエラーを返す。
+// getEnvBool は環境変数を bool として読み取る。未設定なら fallback、空文字と不正値ならエラーを返す。
 func getEnvBool(key string, fallback bool) (bool, error) {
-	v := os.Getenv(key)
-	switch v {
-	case "":
-		return fallback, nil
-	case "true":
-		return true, nil
-	case "false":
-		return false, nil
-	default:
-		return false, fmt.Errorf("config: %s must be %q or %q, got %q", key, "true", "false", v)
+	v, isSet, err := lookupEnv(key)
+	if err != nil {
+		return false, err
 	}
+	if !isSet {
+		return fallback, nil
+	}
+	return ParseBool(key, v)
 }

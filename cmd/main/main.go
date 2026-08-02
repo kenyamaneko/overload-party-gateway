@@ -94,7 +94,10 @@ func main() {
 	if cfg.Env == "prod" && len(cfg.AllowedOrigins) == 0 {
 		exitOnMissingConfig("ALLOWED_ORIGINS must be set in production")
 	}
-	databaseIAMAuthEnabled := parseDatabaseIAMAuthEnabled(cfg.DatabaseIAMAuthEnabledRaw)
+	databaseIAMAuthEnabled, err := config.ParseBool("DATABASE_IAM_AUTH_ENABLED", cfg.DatabaseIAMAuthEnabledRaw)
+	if err != nil {
+		exitOnMissingConfig(err.Error())
+	}
 	if databaseIAMAuthEnabled && cfg.CloudSQLConnectionName == "" {
 		exitOnMissingConfig("CLOUDSQL_CONNECTION_NAME must be set when DATABASE_IAM_AUTH_ENABLED=true")
 	}
