@@ -82,9 +82,11 @@ func main() {
 		slog.Info("GOOGLE_CLOUD_PROJECT_ID is unset; skipping Firestore client")
 	}
 
-	cardClient := cardclient.New(cfg.CardServiceURL)
-	matchmakingClient := matchmakingclient.New(cfg.MatchmakingServiceURL, uuid.Must(uuid.NewV7()).String())
-	accountClient := accountclient.New(cfg.AccountServiceURL)
+	// ローカルの下流は Cloud Run ではなく呼び出し IAM が無いため、ID トークンを付けない。
+	localHTTP := &http.Client{}
+	cardClient := cardclient.New(cfg.CardServiceURL, localHTTP)
+	matchmakingClient := matchmakingclient.New(cfg.MatchmakingServiceURL, uuid.Must(uuid.NewV7()).String(), localHTTP)
+	accountClient := accountclient.New(cfg.AccountServiceURL, localHTTP)
 
 	if cfg.InternalAuthPrivateKey == "" {
 		slog.Error("INTERNAL_AUTH_PRIVATE_KEY must be set")
@@ -115,7 +117,7 @@ func main() {
 		slog.Info("UPSTASH_REDIS_URL is unset; skipping timer deadline mirroring")
 	}
 
-	battleClient := service.NewBattleClient(cfg.BattleServerURL)
+	battleClient := service.NewBattleClient(cfg.BattleServerURL, localHTTP)
 	matchmakingTimeout := time.Duration(cfg.MatchmakingTimeoutSec) * time.Second
 	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, processedMatchRepo, matchmakingTimeout, internalSigner, timerStore, ws.DefaultDisconnectTimeout)
 	wsHandler := ws.NewHandler(wsManager, nil, accountClient, nil)

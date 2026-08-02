@@ -38,7 +38,7 @@ func TestInternalAuth_E2E(t *testing.T) {
 				internalauth.StaticPrivateKeyResolver(signingKey, internalauth.DefaultKeyID),
 				internalauth.DefaultKeyID,
 			)
-			cc := cardclient.New(upstream.URL)
+			cc := cardclient.New(upstream.URL, &http.Client{})
 
 			r := gin.New()
 			r.Use(func(c *gin.Context) {

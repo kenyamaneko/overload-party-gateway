@@ -43,7 +43,7 @@ func TestAuthHandler_Register(t *testing.T) {
 					Name: nil,
 				}
 			}
-			h := NewAuthHandler(accountclient.New(fa.URL()))
+			h := NewAuthHandler(accountclient.New(fa.URL(), &http.Client{}))
 
 			r := gin.New()
 			r.Use(withFirebaseUID("uid-new"))
@@ -62,7 +62,7 @@ func TestAuthHandler_Register(t *testing.T) {
 		t.Run("firebase_uid が無いとき、401 になる", func(t *testing.T) {
 			fa := apiaccountserverfake.NewServer()
 			defer fa.Close()
-			h := NewAuthHandler(accountclient.New(fa.URL()))
+			h := NewAuthHandler(accountclient.New(fa.URL(), &http.Client{}))
 
 			r := gin.New()
 			r.POST("/register", h.Register)
@@ -80,7 +80,7 @@ func TestAuthHandler_Register(t *testing.T) {
 			fa.RegisterFn = func(_ apiaccount.RegisterRequest) (int, any) {
 				return http.StatusConflict, nil
 			}
-			h := NewAuthHandler(accountclient.New(fa.URL()))
+			h := NewAuthHandler(accountclient.New(fa.URL(), &http.Client{}))
 
 			r := gin.New()
 			r.Use(withFirebaseUID("uid-dup"))
@@ -99,7 +99,7 @@ func TestAuthHandler_Register(t *testing.T) {
 			fa.RegisterFn = func(_ apiaccount.RegisterRequest) (int, any) {
 				return http.StatusInternalServerError, nil
 			}
-			h := NewAuthHandler(accountclient.New(fa.URL()))
+			h := NewAuthHandler(accountclient.New(fa.URL(), &http.Client{}))
 
 			r := gin.New()
 			r.Use(withFirebaseUID("uid-x"))
@@ -127,7 +127,7 @@ func TestAuthHandler_Login(t *testing.T) {
 					Name:        &name,
 				}
 			}
-			h := NewAuthHandler(accountclient.New(fa.URL()))
+			h := NewAuthHandler(accountclient.New(fa.URL(), &http.Client{}))
 
 			r := gin.New()
 			r.Use(withFirebaseUID("uid-x"))
@@ -147,7 +147,7 @@ func TestAuthHandler_Login(t *testing.T) {
 			fa.LoginFn = func(_ apiaccount.LoginRequest) (int, any) {
 				return http.StatusNotFound, nil
 			}
-			h := NewAuthHandler(accountclient.New(fa.URL()))
+			h := NewAuthHandler(accountclient.New(fa.URL(), &http.Client{}))
 
 			r := gin.New()
 			r.Use(withFirebaseUID("uid-unknown"))
@@ -163,7 +163,7 @@ func TestAuthHandler_Login(t *testing.T) {
 		t.Run("firebase_uid が無いとき、401 になる", func(t *testing.T) {
 			fa := apiaccountserverfake.NewServer()
 			defer fa.Close()
-			h := NewAuthHandler(accountclient.New(fa.URL()))
+			h := NewAuthHandler(accountclient.New(fa.URL(), &http.Client{}))
 
 			r := gin.New()
 			r.POST("/login", h.Login)
@@ -181,7 +181,7 @@ func TestAuthHandler_Login(t *testing.T) {
 			fa.LoginFn = func(_ apiaccount.LoginRequest) (int, any) {
 				return http.StatusInternalServerError, nil
 			}
-			h := NewAuthHandler(accountclient.New(fa.URL()))
+			h := NewAuthHandler(accountclient.New(fa.URL(), &http.Client{}))
 
 			r := gin.New()
 			r.Use(withFirebaseUID("uid"))

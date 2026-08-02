@@ -30,7 +30,7 @@ func TestBattleClient_ProcessAction(t *testing.T) {
 				_, _ = w.Write([]byte(`{}`))
 			}))
 			t.Cleanup(srv.Close)
-			c := NewBattleClient(srv.URL)
+			c := NewBattleClient(srv.URL, &http.Client{})
 
 			_, err := c.ProcessAction(context.Background(), "game-1", 1, "play_card", json.RawMessage(`{`))
 
@@ -64,7 +64,7 @@ func TestBattleClient_ProcessAction(t *testing.T) {
 					_, _ = w.Write([]byte(`{}`))
 				}))
 				t.Cleanup(srv.Close)
-				c := NewBattleClient(srv.URL)
+				c := NewBattleClient(srv.URL, &http.Client{})
 
 				_, err := c.ProcessAction(context.Background(), "game-1", 1, "play_card", tc.data)
 
@@ -102,7 +102,7 @@ func TestBattleClient_GetGameStateForPlayer(t *testing.T) {
 		for _, tc := range statusCases {
 			t.Run(tc.name, func(t *testing.T) {
 				srv := newBattleServer(t, tc.status, tc.body)
-				c := NewBattleClient(srv.URL)
+				c := NewBattleClient(srv.URL, &http.Client{})
 
 				got, err := c.GetGameStateForPlayer(context.Background(), "game-1", 1)
 				require.ErrorIs(t, err, tc.wantErr)
@@ -133,7 +133,7 @@ func TestBattleClient_GetGameStateForPlayer(t *testing.T) {
 		for _, tc := range errorCases {
 			t.Run(tc.name, func(t *testing.T) {
 				srv := newBattleServer(t, tc.status, tc.body)
-				c := NewBattleClient(srv.URL)
+				c := NewBattleClient(srv.URL, &http.Client{})
 
 				got, err := c.GetGameStateForPlayer(context.Background(), "game-1", 1)
 				require.Nil(t, got)
@@ -180,7 +180,7 @@ func TestBattleClient_GetTurnControlsForPlayer(t *testing.T) {
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
 				srv := newBattleServer(t, tc.status, tc.body)
-				c := NewBattleClient(srv.URL)
+				c := NewBattleClient(srv.URL, &http.Client{})
 
 				got, err := c.GetTurnControlsForPlayer(context.Background(), "game-1", 1)
 				require.NoError(t, err)
@@ -234,7 +234,7 @@ func TestBattleClient_PostErrorResponse(t *testing.T) {
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
 				srv := newBattleServer(t, tc.status, tc.body)
-				c := NewBattleClient(srv.URL)
+				c := NewBattleClient(srv.URL, &http.Client{})
 
 				err := tc.call(context.Background(), c)
 

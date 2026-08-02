@@ -20,7 +20,7 @@ func TestClient_SendsGatewayInstanceID(t *testing.T) {
 			srv, received := newEnqueueRecorder(t)
 			defer srv.Close()
 
-			c := New(srv.URL, wantInstanceID)
+			c := New(srv.URL, wantInstanceID, &http.Client{})
 			require.NoError(t, c.Enqueue(context.Background(), 42, "alice", 7))
 
 			require.Len(t, *received, 1)
@@ -31,7 +31,7 @@ func TestClient_SendsGatewayInstanceID(t *testing.T) {
 			srv, received := newEnqueueRecorder(t)
 			defer srv.Close()
 
-			c := New(srv.URL, "test-instance-id")
+			c := New(srv.URL, "test-instance-id", &http.Client{})
 			require.NoError(t, c.Enqueue(context.Background(), 42, "alice", 7))
 			require.NoError(t, c.Enqueue(context.Background(), 43, "bob", 3))
 

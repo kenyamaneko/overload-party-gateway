@@ -54,11 +54,14 @@ type battleClient struct {
 	client  *http.Client
 }
 
-// NewBattleClient は battle server への HTTP クライアントを生成します
-func NewBattleClient(baseURL string) BattleClient {
+// NewBattleClient は battle server への HTTP クライアントを生成します。
+// httpClient には Cloud Run 上では ID トークンを付与するものを、ローカルでは素のものを渡します。
+func NewBattleClient(baseURL string, httpClient *http.Client) BattleClient {
+	c := *httpClient
+	c.Timeout = battleClientTimeout
 	return &battleClient{
 		baseURL: baseURL,
-		client:  &http.Client{Timeout: battleClientTimeout},
+		client:  &c,
 	}
 }
 

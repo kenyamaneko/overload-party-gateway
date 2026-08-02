@@ -23,8 +23,10 @@ type Client struct {
 var _ port.CardClient = (*Client)(nil)
 
 // New は card サービスクライアントを生成する。baseURL の解析失敗は実行不可なので panic する。
-func New(baseURL string) *Client {
+// httpClient には Cloud Run 上では ID トークンを付与するものを、ローカルでは素のものを渡す。
+func New(baseURL string, httpClient *http.Client) *Client {
 	api, err := apicardclient.New(baseURL,
+		apicardclient.WithHTTPClient(httpClient),
 		apicardclient.WithRequestEditorFn(func(ctx context.Context, req *http.Request) error {
 			internalauth.InjectHeader(ctx, req.Header)
 			return nil

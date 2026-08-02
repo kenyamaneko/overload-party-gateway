@@ -148,10 +148,10 @@ func newWSTestServer(t *testing.T, configure func(*wsTestOptions)) *wsTestServer
 
 	seedAccount := wireStatefulFindByFirebaseUID(accountFake)
 
-	accountClient := accountclient.New(accountFake.URL())
-	cardClient := cardclient.New(cardFake.URL())
-	matchmakingClient := matchmakingclient.New(matchmakingFake.URL(), "test-instance")
-	battleClient := service.NewBattleClient(battleFake.URL())
+	accountClient := accountclient.New(accountFake.URL(), &http.Client{})
+	cardClient := cardclient.New(cardFake.URL(), &http.Client{})
+	matchmakingClient := matchmakingclient.New(matchmakingFake.URL(), "test-instance", &http.Client{})
+	battleClient := service.NewBattleClient(battleFake.URL(), &http.Client{})
 
 	gamePlayerRepo := newStatefulGamePlayerRepo()
 	internalAuthKey, err := rsa.GenerateKey(rand.Reader, 2048)

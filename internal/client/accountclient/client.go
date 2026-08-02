@@ -22,8 +22,10 @@ type Client struct {
 var _ port.AccountClient = (*Client)(nil)
 
 // New は account サービスクライアントを生成する。
-func New(baseURL string) *Client {
+// httpClient には Cloud Run 上では ID トークンを付与するものを、ローカルでは素のものを渡す。
+func New(baseURL string, httpClient *http.Client) *Client {
 	api, err := apiaccountclient.New(baseURL,
+		apiaccountclient.WithHTTPClient(httpClient),
 		apiaccountclient.WithRequestEditorFn(func(ctx context.Context, req *http.Request) error {
 			internalauth.InjectHeader(ctx, req.Header)
 			return nil

@@ -25,7 +25,7 @@ func TestClient_InjectsInternalAuthHeader(t *testing.T) {
 			}))
 			defer srv.Close()
 
-			c := New(srv.URL)
+			c := New(srv.URL, &http.Client{})
 			ctx := internalauth.WithToken(context.Background(), wantToken)
 			_, err := c.ListAllCards(ctx)
 			require.NoError(t, err)
@@ -70,7 +70,7 @@ func TestClient_ValidateDeckForBattle_MapsStatus(t *testing.T) {
 				}))
 				defer srv.Close()
 
-				c := New(srv.URL)
+				c := New(srv.URL, &http.Client{})
 				ctx := internalauth.WithToken(context.Background(), "test.jwt.token")
 				err := c.ValidateDeckForBattle(ctx, 1)
 

@@ -36,7 +36,7 @@ func TestClient_GetDeckCards(t *testing.T) {
 			}))
 			defer srv.Close()
 
-			c := New(srv.URL)
+			c := New(srv.URL, &http.Client{})
 			ctx := internalauth.WithToken(context.Background(), "test.jwt.token")
 			cards, initiatives, err := c.GetDeckCards(ctx, 1)
 			require.NoError(t, err)
@@ -73,7 +73,7 @@ func TestClient_GetDeckCards_PropagatesDownstreamError(t *testing.T) {
 				}))
 				defer srv.Close()
 
-				c := New(srv.URL)
+				c := New(srv.URL, &http.Client{})
 				ctx := internalauth.WithToken(context.Background(), "test.jwt.token")
 				cards, initiatives, err := c.GetDeckCards(ctx, 1)
 

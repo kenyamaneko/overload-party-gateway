@@ -25,8 +25,10 @@ var _ port.MatchmakingClient = (*Client)(nil)
 // New は matchmaking サービスクライアントを生成する。
 // instanceID は gateway プロセスを識別する値で、matchmaking はこれが切り替わったときに
 // 待機を引き継げないキューを空にする。プロセスが生きている間は同じ値を送り続ける必要がある。
-func New(baseURL, instanceID string) *Client {
+// httpClient には Cloud Run 上では ID トークンを付与するものを、ローカルでは素のものを渡す。
+func New(baseURL, instanceID string, httpClient *http.Client) *Client {
 	api, err := apimatchmakingclient.New(baseURL,
+		apimatchmakingclient.WithHTTPClient(httpClient),
 		apimatchmakingclient.WithRequestEditorFn(func(ctx context.Context, req *http.Request) error {
 			internalauth.InjectHeader(ctx, req.Header)
 			return nil

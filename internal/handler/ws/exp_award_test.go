@@ -137,7 +137,7 @@ func setupAwardRelay(t *testing.T, repo port.GamePlayerRepo, account *awardCount
 
 	relay, _ := newTestRelay()
 	relay.gamePlayerRepo = repo
-	relay.accountClient = accountclient.New(srv.URL)
+	relay.accountClient = accountclient.New(srv.URL, &http.Client{})
 	return relay
 }
 
