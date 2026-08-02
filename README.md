@@ -94,4 +94,6 @@ make run-local
 | `packages/api-gateway-npm/` | npm | 同上 (クライアント向け) |
 | `packages/internalauth-go/` | Go | 内部認証 JWT の検証 (下流サービス向け) |
 
-SSoT: `data/openapi.yaml` + `data/asyncapi.yaml`。`scripts/generate_types.sh` で `packages/api-gateway` の `*_gen.go` を再生成する。`*_gen.go` は自動生成のため直接編集しない。
+SSoT: `data/openapi.yaml` + `data/asyncapi.yaml`。`make generate-types` (`scripts/generate_types.sh`) で `packages/api-gateway` の `*_gen.go` と `packages/ws-constants-npm/src/index.ts` を再生成する。生成物は直接編集しない。
+
+WS メッセージ種別だけは全件が `packages/ws-constants/constants.go` にある。`data/asyncapi.yaml` は payload を持つ種別しか載せず、battle 由来の生 JSON をそのまま積む種別 (`game_state` や `pong` など) を表現できないためである。TypeScript 版はこの Go 定数から生成し、両者の食い違いは CI の codegen-sync ジョブ (再生成して差分が出たら失敗) が検出する。

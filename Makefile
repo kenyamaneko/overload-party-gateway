@@ -1,6 +1,6 @@
 .PHONY: build test test-unit test-integration test-emulator-up test-emulator-down lint vet fmt \
        check-env run run-local run-gateway \
-       update-common clean help
+       update-common generate-types clean help
 
 # ─── Environment ─────────────────────────────────────────
 ifneq (,$(wildcard .env))
@@ -28,6 +28,10 @@ update-common:  ## Update common packages to latest and re-vendor
 	go mod tidy
 	go mod vendor
 	@echo "vendor/ updated — don't forget to commit the changes"
+
+# ─── Codegen ─────────────────────────────────────────────
+generate-types:  ## Regenerate contract types (api-gateway *_gen.go, ws-constants-npm)
+	scripts/generate_types.sh
 
 # ─── Build ───────────────────────────────────────────────
 build:  ## Build Docker image
