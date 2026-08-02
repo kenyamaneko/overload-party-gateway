@@ -1,6 +1,10 @@
 # Environment
 .env
 .env.*
+!.env.example
+
+# Locally generated development keys
+.localdev/
 
 # IDE
 .idea/

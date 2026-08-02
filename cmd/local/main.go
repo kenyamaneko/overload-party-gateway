@@ -50,10 +50,9 @@ func main() {
 	})).With("service", "gateway"))
 	slog.Info("gateway starting in local mode")
 
-	cfg := config.Load()
-	if cfg.DatabaseConn == "" {
-		slog.Error("DATABASE_CONN must be set (gateway owns gateway.game_players)")
-		os.Exit(1)
+	cfg, err := config.FromEnv()
+	if err != nil {
+		exitOnStartupFailure("failed to load config", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -88,14 +87,9 @@ func main() {
 	matchmakingClient := matchmakingclient.New(cfg.MatchmakingServiceURL, uuid.Must(uuid.NewV7()).String(), localHTTP)
 	accountClient := accountclient.New(cfg.AccountServiceURL, localHTTP)
 
-	if cfg.InternalAuthPrivateKey == "" {
-		slog.Error("INTERNAL_AUTH_PRIVATE_KEY must be set")
-		os.Exit(1)
-	}
 	internalAuthKey, err := internalauth.ParsePrivateKeyPEM([]byte(cfg.InternalAuthPrivateKey))
 	if err != nil {
-		slog.Error("INTERNAL_AUTH_PRIVATE_KEY is invalid", slog.String("error", err.Error()))
-		os.Exit(1)
+		exitOnStartupFailure("INTERNAL_AUTH_PRIVATE_KEY is invalid", err)
 	}
 	internalSigner := internalauth.NewSigner(
 		internalauth.StaticPrivateKeyResolver(internalAuthKey, internalauth.DefaultKeyID),

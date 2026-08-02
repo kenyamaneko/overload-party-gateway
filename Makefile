@@ -1,5 +1,5 @@
 .PHONY: build test test-unit test-integration test-emulator-up test-emulator-down lint vet fmt \
-       run run-local run-gateway \
+       check-env run run-local run-gateway \
        update-common clean help
 
 # ─── Environment ─────────────────────────────────────────
@@ -75,17 +75,25 @@ fmt:  ## Format code
 	goimports -w -local $(MODULE) .
 
 # ─── Run ─────────────────────────────────────────────────
+# 内部認証の署名鍵は複数行の PEM で .env に書けないため、ローカル用の鍵を生成してレシピで渡す。
+INTERNAL_AUTH_KEY := .localdev/internal-auth-private-key.pem
+
+$(INTERNAL_AUTH_KEY):
+	@mkdir -p $(dir $@)
+	@openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out $@ 2>/dev/null
+	@echo "generated local internal auth signing key: $@"
+
+check-env:
+	@test -f .env || { echo ".env not found. run: cp .env.example .env"; exit 1; }
+
 run: run-local  ## Run gateway server (alias)
 
-run-local:  ## Run local gateway server (no DB/Firebase, in-memory mock repos)
+run-local: check-env $(INTERNAL_AUTH_KEY)  ## Run gateway in local mode (dev-token auth; needs .env)
 	-@lsof -ti:9001 | xargs kill 2>/dev/null; true
-	go run ./cmd/local
+	INTERNAL_AUTH_PRIVATE_KEY="$$(cat $(INTERNAL_AUTH_KEY))" go run ./cmd/local
 
-run-gateway:  ## Run gateway server (PostgreSQL mode)
-	DATABASE_CONN="postgresql://dev:dev@localhost:5432/overload_party" \
-	DATABASE_IAM_AUTH_ENABLED=false \
-	ENV=dev \
-	go run ./cmd/main
+run-gateway: check-env $(INTERNAL_AUTH_KEY)  ## Run gateway in Cloud Run mode (needs .env + Google credentials)
+	INTERNAL_AUTH_PRIVATE_KEY="$$(cat $(INTERNAL_AUTH_KEY))" go run ./cmd/main
 
 # ─── Misc ────────────────────────────────────────────────
 clean:  ## Remove build artifacts
