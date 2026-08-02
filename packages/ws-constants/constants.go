@@ -5,6 +5,10 @@
 // envelope のみで完結するメッセージ (例: pong / game_state / turn_controls
 // 等の battle 由来 raw JSON のみを data に積むタイプ) も列挙する。
 // asyncapi.yaml と本ファイルの drift は drift_test.go で検出される。
+//
+// 本ファイルは packages/ws-constants-npm/src/index.ts の生成元でもあり、定数の
+// 接頭辞 WSServerMsg / WSClientMsg が送信方向を決める。どちらの接頭辞も持たない
+// 定数を置くと生成が失敗する。
 package ws
 
 // WS server message types (server → client).

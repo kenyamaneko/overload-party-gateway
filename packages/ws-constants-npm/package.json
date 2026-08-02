@@ -1,7 +1,7 @@
 {
   "name": "@kenyamaneko/overload-party-ws-constants",
   "version": "0.0.0",
-  "description": "Overload Party WebSocket message type constants (WSServerMsg* / WSClientMsg*). Auto-generated from data/gateway_ws_constants.yaml.",
+  "description": "Overload Party WebSocket message type constants (WSServerMsg* / WSClientMsg*). Generated from packages/ws-constants/constants.go.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
