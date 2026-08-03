@@ -29,7 +29,7 @@ const (
 	WSServerMsgOpponentDisconnected = "opponent_disconnected"
 	WSServerMsgOpponentReconnected  = "opponent_reconnected"
 	WSServerMsgGameStateRestore     = "game_state_restore"
-	WSServerMsgServerShutdown       = "server_shutdown"
+	WSServerMsgServerUpdate         = "server_update"
 )
 
 // WS client message types (client → server).

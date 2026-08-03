@@ -90,7 +90,7 @@ type OpponentDisconnectedMessage struct {
 type OpponentReconnectedMessage struct {
 }
 
-// ServerShutdownMessage は サーバー終了処理開始通知 (空ペイロード)。
-type ServerShutdownMessage struct {
+// ServerUpdateMessage は サーバー更新による接続終了の通知 (空ペイロード)。
+type ServerUpdateMessage struct {
 }
 

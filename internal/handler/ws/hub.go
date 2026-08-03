@@ -259,7 +259,7 @@ func (h *ConnectionHub) SendRawToPlayer(playerID string, data []byte) {
 	}
 }
 
-// Shutdown は呼び出し時点で登録中の接続へ終了を通知してから閉じます。ctx の期限までに完了しなかった
+// Shutdown は呼び出し時点で登録中の接続へサーバー更新を通知してから閉じます。ctx の期限までに完了しなかった
 // 接続は待たずに諦めます（ベストエフォート）。対戦中の接続の切断猶予には関与しません。
 func (h *ConnectionHub) Shutdown(ctx context.Context) {
 	h.mu.Lock()
@@ -270,7 +270,7 @@ func (h *ConnectionHub) Shutdown(ctx context.Context) {
 	}
 	h.mu.Unlock()
 
-	shutdownAll(ctx, notifiers, websocket.CloseGoingAway, genws.WSServerMsgServerShutdown)
+	shutdownAll(ctx, notifiers, websocket.CloseGoingAway, genws.WSServerMsgServerUpdate)
 }
 
 // shutdownAll は各 notifier の Shutdown を並行に呼び出し、ctx の期限まで完了を待つ。
