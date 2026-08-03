@@ -77,7 +77,7 @@ func wsMessageTypeConstants() []string {
 		genws.WSServerMsgOpponentDisconnected,
 		genws.WSServerMsgOpponentReconnected,
 		genws.WSServerMsgGameStateRestore,
-		genws.WSServerMsgServerShutdown,
+		genws.WSServerMsgServerUpdate,
 		// client
 		genws.WSClientMsgGameEnter,
 		genws.WSClientMsgMatchmakingStart,

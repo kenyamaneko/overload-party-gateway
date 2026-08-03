@@ -39,7 +39,7 @@ func TestShutdownAll(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 
-			shutdownAll(ctx, targets, websocket.CloseGoingAway, genws.WSServerMsgServerShutdown)
+			shutdownAll(ctx, targets, websocket.CloseGoingAway, genws.WSServerMsgServerUpdate)
 
 			assert.EqualValues(t, 2, atomic.LoadInt32(&calls))
 		})
@@ -57,7 +57,7 @@ func TestShutdownAll(t *testing.T) {
 			defer cancel()
 
 			start := time.Now()
-			shutdownAll(ctx, targets, websocket.CloseGoingAway, genws.WSServerMsgServerShutdown)
+			shutdownAll(ctx, targets, websocket.CloseGoingAway, genws.WSServerMsgServerUpdate)
 			elapsed := time.Since(start)
 
 			assert.Less(t, elapsed, 2*time.Second,
@@ -69,7 +69,7 @@ func TestShutdownAll(t *testing.T) {
 			defer cancel()
 
 			start := time.Now()
-			shutdownAll(ctx, nil, websocket.CloseGoingAway, genws.WSServerMsgServerShutdown)
+			shutdownAll(ctx, nil, websocket.CloseGoingAway, genws.WSServerMsgServerUpdate)
 			elapsed := time.Since(start)
 
 			assert.Less(t, elapsed, 500*time.Millisecond,
@@ -101,7 +101,7 @@ func TestConnectionHubShutdown(t *testing.T) {
 				c.mu.Unlock()
 				assert.True(t, isClosed, "connection should be marked closed after hub shutdown")
 				assert.Equal(t, websocket.CloseGoingAway, code)
-				assert.Equal(t, genws.WSServerMsgServerShutdown, reason)
+				assert.Equal(t, genws.WSServerMsgServerUpdate, reason)
 			}
 		})
 

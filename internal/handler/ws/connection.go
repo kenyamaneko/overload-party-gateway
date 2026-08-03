@@ -179,12 +179,12 @@ func (c *Connection) Close() {
 	c.closeConn()
 }
 
-// Shutdown は終了通知メッセージを送出したうえで、WS close フレームに code と reason を
+// Shutdown はサーバー更新の通知メッセージを送出したうえで、WS close フレームに code と reason を
 // 載せてから接続を閉じます。close コードにより、クライアントはこの切断を異常な切断と
 // 区別できます。呼び出し元が終了処理の完了を確認できるよう、下層ソケットが実際に
 // クローズされるまで待って返ります。
 func (c *Connection) Shutdown(code int, reason string) {
-	c.SendMessage(&WSMessage{Type: genws.WSServerMsgServerShutdown})
+	c.SendMessage(&WSMessage{Type: genws.WSServerMsgServerUpdate})
 	c.beginClose(code, reason)
 	// 下層ソケットの close は WritePump が close フレームを書き終えた後、
 	// その defer 経由の Close 呼び出しが担う。ここで待たないと、close フレームの
