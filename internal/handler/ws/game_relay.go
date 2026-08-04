@@ -142,10 +142,24 @@ func (r *GameRelay) resolveStaleDisconnect(gameID, returningPlayerID string, ret
 		return
 	}
 
-	// 両者とも猶予切れのときは引き分けとするが、forfeit アクションは常に相手を
-	// 勝者にする契約のため battle の現行 API では表現できない。誤った勝者を
-	// 立てないため、未決着のまま残し要監視のログだけ残す。
-	slog.Error("both players' disconnect grace expired, leaving unresolved (draw not expressible via current forfeit API)", "game_id", gameID, "opponent_id", opponentID, "returning_player_id", returningPlayerID)
+	// 両者強制決着は勝者をプレイヤー番号から決めないため、復帰した側の番号を渡す。
+	pNum := playerNumOf(entries, returningPlayerID)
+	if pNum == 0 {
+		slog.Error("resolve stale disconnect: returning player has no slot in the game, leaving unresolved", "game_id", gameID, "returning_player_id", returningPlayerID)
+		return
+	}
+
+	r.cancelTurnTimer(gameID)
+	result, err := r.battleClient.ProcessAction(ctx, gameID, pNum, gamelogic.ActionTypeForfeitBoth, buildForfeitReason(gamelogic.WinReasonDisconnect))
+	if err != nil {
+		// 未決着のまま残った対戦は次に誰かが戻るまで解消しないため、要監視。
+		slog.Error("both-side forfeit failed, game left unresolved", "game_id", gameID, "opponent_id", opponentID, "returning_player_id", returningPlayerID, "error", err)
+		return
+	}
+	if result != nil && result.GameOver {
+		r.broadcastGameOver(gameID, result.WinningPlayerNum, result.WinReason)
+		r.leaveAllPlayers(gameID)
+	}
 }
 
 // areBothPlayersDisconnected は gameID の 2 人対戦で playerID と対戦相手の双方が、
@@ -178,6 +192,17 @@ func opponentPlayerID(entries []port.GamePlayerEntry, selfID string) string {
 		}
 	}
 	return ""
+}
+
+// playerNumOf は entries から playerID のプレイヤー番号を返す。
+// 該当が無い場合は 0 を返す。
+func playerNumOf(entries []port.GamePlayerEntry, playerID string) int {
+	for _, e := range entries {
+		if e.PlayerID == playerID {
+			return e.PlayerNum
+		}
+	}
+	return 0
 }
 
 func (r *GameRelay) sendToOpponent(playerID, gameID, msgType string) {
