@@ -81,7 +81,7 @@ gateway は Cloud Run の最大インスタンス数を 1 に固定している�
 gateway がドメイン状態を持たないと言いつつ 1 つだけ DB テーブルを持っている理由:
 
 - **EXP 付与の冪等キー** (「EXP 付与の冪等性設計」): インメモリ dedup はインスタンスの再起動で消えるため、永続化が必要
-- **playerNum の索引**: WS message ごとに battle に `playerNum` を問い合わせるのはコストが大きい。match_made 時に確定する `playerID → playerNum` を gateway 側にキャッシュし、以降の game_enter / game_action で参照する
+- **playerNum の索引**: WS message ごとに battle に `playerNum` を問い合わせるのはコストが大きい。match_made 時に確定する `playerID → playerNum` を gateway 側にキャッシュし、以降の game_enter / game_action で参照する。インメモリのプレイヤーセッションはこのテーブルの写しであり、入室前のプレイヤーやプロセス再起動で写しが失われた場合はテーブルから引き直す
 
 どちらも「WS session 境界の冪等性・低レイテンシ要件」に由来する。battle にこれを寄せると、battle が WS 概念を持ち込むことになり「battle の passive 設計に起因する gateway 側 orchestration」の分業が崩れる。
 

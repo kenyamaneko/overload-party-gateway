@@ -136,7 +136,7 @@ gateway プロセスが入れ替わると、前のプロセスが待機してい
 
 ### game_action
 
-1. GameRelay の `playerNum` を使って battle に ProcessAction を委譲
+1. 入室時に控えた `playerNum`（無ければ `game_players` テーブルから解決）を使って battle に ProcessAction を委譲
 2. `action_performed` を対戦相手に送信（各プレイヤー視点の情報秘匿済み状態を個別取得）
 3. NPC 対戦の場合、「NPC ターン駆動」のポーリング駆動に入る
 4. `game_state` + `turn_controls` を全プレイヤーに送信

@@ -194,7 +194,7 @@ func (m *Manager) HandleMessage(conn *Connection, msg *WSMessage) {
 		m.Relay.HandleGameAction(ctx, conn, msg.Data)
 
 	case genws.WSClientMsgUseStamp:
-		m.Relay.HandleUseStamp(conn, msg.Data)
+		m.Relay.HandleUseStamp(ctx, conn, msg.Data)
 
 	case genws.WSClientMsgPing:
 		conn.SendMessage(&WSMessage{Type: genws.WSServerMsgPong})

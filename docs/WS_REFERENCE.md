@@ -484,12 +484,13 @@ NPC 対戦開始。即座にゲームが作成される（マッチメイキン�
 |---|---|---|---|
 | `invalid_message` | メッセージ受信時 | `false` | JSON パース失敗 |
 | `invalid_data` | メッセージ受信時 | `false` | ペイロードのデシリアライズ失敗 |
-| `matchmaking_error` | `matchmaking_start` / マッチ成立時 | `true`/`false` | デッキバリデーション失敗、バトル上限超過、キュー登録失敗、成立したマッチの相手が接続していない |
+| `matchmaking_error` | `matchmaking_start` / `matchmaking_cancel` / マッチ待機のタイムアウト時 / マッチ成立時 | `true`/`false` | デッキバリデーション失敗、バトル上限超過、キュー登録失敗、キャンセル失敗、待機が制限時間を超過、成立したマッチの相手が接続していない |
 | `npc_battle_error` | `npc_battle_start` | `true`/`false` | デッキバリデーション失敗、バトル上限超過、ゲーム作成失敗 |
-| `game_error` | `game_enter` / `game_action` | `false` | プレイヤーが対象ゲームに参加していない |
+| `game_error` | `game_enter` / `game_action` | `false` | プレイヤーの対象ゲームでのスロット番号を引けない（未参加、または参加者情報の取得失敗） |
 | `game_state_error` | `game_enter` / ゲーム中 | `true` | バトルサーバーからの状態取得失敗 |
 | `turn_controls_error` | ゲーム中 | `true` | ターン制御情報の取得失敗 |
-| `npc_turn_error` | NPC ターン駆動中 | `true` | NPC ターンの進行失敗 |
+| `npc_turn_error` | `game_enter` / NPC ターン駆動中 | `true` | NPC ターンの進行失敗 |
+| `turn_timeout_failed` | ターンタイマー期限切れ時 | `true` | タイムアウト負けのバトルサーバーへの登録失敗 |
 
 ---
 
