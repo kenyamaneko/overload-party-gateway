@@ -213,9 +213,10 @@ func opponentPlayerID(entries []port.GamePlayerEntry, selfID string) string {
 // 人間が座っていないスロットは空文字になる。
 func playerIDsBySlot(entries []port.GamePlayerEntry) (player1ID, player2ID string) {
 	for _, e := range entries {
-		if e.PlayerNum == 1 {
+		switch e.PlayerNum {
+		case 1:
 			player1ID = e.PlayerID
-		} else if e.PlayerNum == 2 {
+		case 2:
 			player2ID = e.PlayerID
 		}
 	}
