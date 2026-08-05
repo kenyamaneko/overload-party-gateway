@@ -5,6 +5,7 @@ package repository_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -80,6 +81,28 @@ func TestPgGamePlayerRepository(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Empty(t, counts)
+		})
+	})
+
+	t.Run("対戦のプレイヤースロットの読み出し", func(t *testing.T) {
+		t.Run("登録した対戦のとき、スロットごとのプレイヤーと行の作成時刻を返す", func(t *testing.T) {
+			sharedPG.Truncate(t)
+			repo := repository.NewPgGamePlayerRepository(sharedPG.Pool)
+			ctx := context.Background()
+			insertedAt := time.Now()
+			require.NoError(t, repo.InsertGamePlayer(ctx, "g1", 1, testPlayer1ID))
+			require.NoError(t, repo.InsertGamePlayer(ctx, "g1", 2, testPlayer2ID))
+
+			entries, err := repo.LookupGamePlayers(ctx, "g1")
+
+			require.NoError(t, err)
+			require.Len(t, entries, 2)
+			assert.Equal(t, 1, entries[0].PlayerNum)
+			assert.Equal(t, testPlayer1ID, entries[0].PlayerID)
+			assert.Equal(t, 2, entries[1].PlayerNum)
+			assert.Equal(t, testPlayer2ID, entries[1].PlayerID)
+			assert.WithinDuration(t, insertedAt, entries[0].CreatedAt, time.Minute)
+			assert.WithinDuration(t, insertedAt, entries[1].CreatedAt, time.Minute)
 		})
 	})
 }

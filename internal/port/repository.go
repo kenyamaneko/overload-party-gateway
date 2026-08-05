@@ -2,6 +2,7 @@ package port
 
 import (
 	"context"
+	"time"
 )
 
 // GamePlayerRepo はプレイヤーとゲームスロットの対応を管理します。
@@ -22,11 +23,13 @@ type GamePlayerRepo interface {
 type GamePlayerEntry struct {
 	PlayerNum int
 	PlayerID  string
+	CreatedAt time.Time
 }
 
 // InvalidatedGameRepo は停止によって無効になった対戦の記録を管理します。
-// gateway は停止時に進行中の対戦を記録するだけに留め、battle 上で決着させるのは
-// 次の起動で行う。決着まで記録が残るため、途中で落ちた対戦もやり直せる。
+// gateway は停止時に進行中の対戦を記録するだけに留め、battle 上で決着させるのと
+// 消費バトル回数を戻すのは次の起動で行う。どちらも済むまで記録が残るため、
+// 途中で落ちた対戦もやり直せる。
 type InvalidatedGameRepo interface {
 	// MarkInvalidated は対戦を無効として記録します。記録済みの対戦は変更しません。
 	MarkInvalidated(ctx context.Context, gameIDs []string) error
@@ -34,6 +37,10 @@ type InvalidatedGameRepo interface {
 	ListUnfinished(ctx context.Context) ([]string, error)
 	// MarkFinished は battle 上で決着したことを記録します。
 	MarkFinished(ctx context.Context, gameID string) error
+	// ListRevertPending は battle 上で決着済みで、まだ消費バトル回数を戻していない対戦の ID を返します。
+	ListRevertPending(ctx context.Context) ([]string, error)
+	// MarkReverted は消費バトル回数を戻したことを記録します。
+	MarkReverted(ctx context.Context, gameID string) error
 	// IsInvalidated は対戦が無効として記録済みかを返します。
 	IsInvalidated(ctx context.Context, gameID string) (bool, error)
 }

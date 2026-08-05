@@ -68,7 +68,7 @@ func (r *statefulGamePlayerRepo) InsertGamePlayer(_ context.Context, gameID stri
 			return nil // ON CONFLICT DO NOTHING
 		}
 	}
-	r.entries[gameID] = append(r.entries[gameID], port.GamePlayerEntry{PlayerNum: playerNum, PlayerID: playerID})
+	r.entries[gameID] = append(r.entries[gameID], port.GamePlayerEntry{PlayerNum: playerNum, PlayerID: playerID, CreatedAt: time.Now()})
 	return nil
 }
 

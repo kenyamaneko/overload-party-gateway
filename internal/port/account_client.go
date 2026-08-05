@@ -3,6 +3,7 @@ package port
 import (
 	"context"
 	"errors"
+	"time"
 
 	apiaccount "github.com/kenyamaneko/overload-party-account/packages/api-account"
 )
@@ -22,4 +23,7 @@ type AccountClient interface {
 	GetBattleLimit(ctx context.Context) (*apiaccount.BattleLimitResponse, error)
 	IncrementBattleCount(ctx context.Context) error
 	AwardGameExp(ctx context.Context, p1ID, p2ID string, winnerNum int64, reason, matchType string) error
+	// RevertBattleCount は無効になった対戦で消費したバトル回数を両プレイヤーに戻します。
+	// consumedAt は回数を消費した時刻で、account はこの時刻のゲーム日から戻す先を決めます。
+	RevertBattleCount(ctx context.Context, gameID, p1ID, p2ID string, consumedAt time.Time) error
 }

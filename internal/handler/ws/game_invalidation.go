@@ -6,6 +6,7 @@ import (
 	"time"
 
 	gamelogic "github.com/kenyamaneko/overload-party-battle/packages/game-logic-constants-go"
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 // pvpHumanSlots は PvP の対戦が持つ人間プレイヤーのスロット数。
@@ -87,11 +88,20 @@ func (r *GameRelay) activeGameIDs() []string {
 	return gameIDs
 }
 
-// RecoverInvalidatedGames は無効として記録された対戦を battle 上で決着させます。起動時に呼ばれます。
+// RecoverInvalidatedGames は無効として記録された対戦を battle 上で決着させ、
+// 消費バトル回数を両プレイヤーに戻します。起動時に呼ばれます。
+//
+// 返却を決着の後に回すのは、決着できなかった対戦の回数を戻さないため。
 func (r *GameRelay) RecoverInvalidatedGames(ctx context.Context) {
 	if r.invalidatedGameRepo == nil {
 		return
 	}
+	r.finishInvalidatedGames(ctx)
+	r.revertInvalidatedGameBattleCounts(ctx)
+}
+
+// finishInvalidatedGames は決着していない無効な対戦をまとめて決着させる。
+func (r *GameRelay) finishInvalidatedGames(ctx context.Context) {
 	gameIDs, err := r.invalidatedGameRepo.ListUnfinished(ctx)
 	if err != nil {
 		slog.Error("invalidated game recovery: list failed", "error", err)
@@ -136,6 +146,61 @@ func (r *GameRelay) clearDisconnectDeadlines(ctx context.Context, gameID string)
 	for _, e := range entries {
 		r.hub.ClearDisconnectDeadline(e.PlayerID)
 	}
+}
+
+// revertInvalidatedGameBattleCounts は決着した無効な対戦の消費バトル回数を戻す。
+func (r *GameRelay) revertInvalidatedGameBattleCounts(ctx context.Context) {
+	if r.accountClient == nil || r.gamePlayerRepo == nil {
+		return
+	}
+	gameIDs, err := r.invalidatedGameRepo.ListRevertPending(ctx)
+	if err != nil {
+		slog.Error("battle count revert: list failed", "error", err)
+		return
+	}
+	if len(gameIDs) == 0 {
+		return
+	}
+	slog.Info("reverting battle counts of invalidated games", "game_count", len(gameIDs))
+	for _, gameID := range gameIDs {
+		r.revertBattleCount(ctx, gameID)
+	}
+}
+
+// revertBattleCount は対戦の消費バトル回数を両プレイヤーに戻し、返却済みとして記録する。
+//
+// account は同じ対戦への返却を 1 回だけ適用するため、記録に失敗して次の起動でやり直しても
+// 回数は二重に戻らない。
+func (r *GameRelay) revertBattleCount(ctx context.Context, gameID string) {
+	entries, err := r.gamePlayerRepo.LookupGamePlayers(ctx, gameID)
+	if err != nil {
+		slog.Error("battle count revert: lookup players failed, retried on next startup", "game_id", gameID, "error", err)
+		return
+	}
+	player1ID, player2ID := playerIDsBySlot(entries)
+	if player1ID == "" || player2ID == "" {
+		// account の返却は異なる 2 つのプレイヤー ID を要求するため、人間が 2 人揃わない対戦は送らない。
+		slog.Error("battle count revert: game has no two human players, skipped", "game_id", gameID)
+		return
+	}
+	if err := r.accountClient.RevertBattleCount(ctx, gameID, player1ID, player2ID, earliestCreatedAt(entries)); err != nil {
+		slog.Error("battle count revert failed, retried on next startup", "game_id", gameID, "error", err)
+		return
+	}
+	if err := r.invalidatedGameRepo.MarkReverted(ctx, gameID); err != nil {
+		slog.Error("battle count revert: mark reverted failed, revert retried on next startup", "game_id", gameID, "error", err)
+	}
+}
+
+// earliestCreatedAt は entries の中で最も早い作成時刻を返す。
+func earliestCreatedAt(entries []port.GamePlayerEntry) time.Time {
+	var earliest time.Time
+	for _, e := range entries {
+		if earliest.IsZero() || e.CreatedAt.Before(earliest) {
+			earliest = e.CreatedAt
+		}
+	}
+	return earliest
 }
 
 // isGameInvalidated は対戦が無効として記録済みかを返す。記録先が未設定なら false を返す。

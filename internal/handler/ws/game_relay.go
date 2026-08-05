@@ -209,6 +209,19 @@ func opponentPlayerID(entries []port.GamePlayerEntry, selfID string) string {
 	return ""
 }
 
+// playerIDsBySlot は entries からスロット 1 と 2 のプレイヤー ID を返す。
+// 人間が座っていないスロットは空文字になる。
+func playerIDsBySlot(entries []port.GamePlayerEntry) (player1ID, player2ID string) {
+	for _, e := range entries {
+		if e.PlayerNum == 1 {
+			player1ID = e.PlayerID
+		} else if e.PlayerNum == 2 {
+			player2ID = e.PlayerID
+		}
+	}
+	return player1ID, player2ID
+}
+
 // playerNumOf は entries から playerID のプレイヤー番号を返す。
 // 該当が無い場合は 0 を返す。
 func playerNumOf(entries []port.GamePlayerEntry, playerID string) int {

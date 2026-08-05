@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	apiaccount "github.com/kenyamaneko/overload-party-account/packages/api-account"
 	"github.com/kenyamaneko/overload-party-account/packages/api-account/apiaccountclient"
@@ -86,6 +87,16 @@ func (c *Client) AwardGameExp(ctx context.Context, p1ID, p2ID string, winnerNum 
 		WinnerNum: winnerNum,
 		Reason:    reason,
 		MatchType: matchType,
+	}))
+}
+
+// RevertBattleCount は無効になった対戦で消費したバトル回数を両プレイヤーに戻す。
+func (c *Client) RevertBattleCount(ctx context.Context, gameID, p1ID, p2ID string, consumedAt time.Time) error {
+	return toPortErr(c.api.RevertBattleCount(ctx, apiaccount.RevertBattleCountRequest{
+		GameID:           gameID,
+		Player1ID:        p1ID,
+		Player2ID:        p2ID,
+		ConsumedAtMillis: consumedAt.UnixMilli(),
 	}))
 }
 
