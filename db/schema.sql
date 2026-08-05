@@ -12,6 +12,8 @@
 --   - player_id は account.players を参照するが、スキーマをまたぐため FK は張らず
 --     app-level integrity で担保する (ADR-014)。
 --   - gateway.game_players には updated_at カラムが無いためトリガー関数は不要。
+--   - gateway.invalidated_games は停止で無効になった対戦を記録する。停止時は記録だけを
+--     行い、battle 上での決着は次の起動で行う。
 
 -- =============================================================================
 -- Schemas
@@ -44,3 +46,18 @@ CREATE TABLE gateway.processed_matches (
   claimed_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (match_id)
 );
+
+-- =============================================================================
+-- Invalidated Games (schema: gateway)
+-- =============================================================================
+
+CREATE TABLE gateway.invalidated_games (
+  game_id         VARCHAR(26) NOT NULL,          -- battle.games(game_id) を参照 (app-level FK)
+  invalidated_at  TIMESTAMPTZ NOT NULL DEFAULT now(), -- 停止時に無効として記録した時刻
+  finished_at     TIMESTAMPTZ,                   -- battle 上で決着させた時刻。未決着は NULL
+  PRIMARY KEY (game_id)
+);
+
+-- 記録は決着後も残り続けるため、起動時の走査が未決着の行だけを見るように部分索引を張る。
+CREATE INDEX idx_gateway_invalidated_games_unfinished
+  ON gateway.invalidated_games(invalidated_at) WHERE finished_at IS NULL;

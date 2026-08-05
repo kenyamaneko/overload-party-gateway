@@ -13,12 +13,29 @@ type GamePlayerRepo interface {
 	LookupPlayerNum(ctx context.Context, gameID string, playerID string) (int, error)
 	LookupGamePlayers(ctx context.Context, gameID string) ([]GamePlayerEntry, error)
 	MarkExpAwarded(ctx context.Context, gameID string) (bool, error)
+	// CountPlayersByGame は指定したゲームごとの人間プレイヤーのスロット数を、
+	// gameID をキーにして返します。行が無いゲームはキーごと含みません。
+	CountPlayersByGame(ctx context.Context, gameIDs []string) (map[string]int, error)
 }
 
 // GamePlayerEntry はゲーム内のプレイヤースロット情報を保持します
 type GamePlayerEntry struct {
 	PlayerNum int
 	PlayerID  string
+}
+
+// InvalidatedGameRepo は停止によって無効になった対戦の記録を管理します。
+// gateway は停止時に進行中の対戦を記録するだけに留め、battle 上で決着させるのは
+// 次の起動で行う。決着まで記録が残るため、途中で落ちた対戦もやり直せる。
+type InvalidatedGameRepo interface {
+	// MarkInvalidated は対戦を無効として記録します。記録済みの対戦は変更しません。
+	MarkInvalidated(ctx context.Context, gameIDs []string) error
+	// ListUnfinished は無効の記録があり、まだ battle 上で決着していない対戦の ID を返します。
+	ListUnfinished(ctx context.Context) ([]string, error)
+	// MarkFinished は battle 上で決着したことを記録します。
+	MarkFinished(ctx context.Context, gameID string) error
+	// IsInvalidated は対戦が無効として記録済みかを返します。
+	IsInvalidated(ctx context.Context, gameID string) (bool, error)
 }
 
 // GameConfigRepo はゲーム設定値の読み取りを抽象化するインターフェースです。

@@ -70,6 +70,29 @@ func (r *PgGamePlayerRepository) LookupGamePlayers(ctx context.Context, gameID s
 	return entries, rows.Err()
 }
 
+// CountPlayersByGame は指定したゲームごとの人間プレイヤーのスロット数を取得します
+func (r *PgGamePlayerRepository) CountPlayersByGame(ctx context.Context, gameIDs []string) (map[string]int, error) {
+	rows, err := connFrom(ctx, r.pool).Query(ctx,
+		`SELECT game_id, count(*) FROM gateway.game_players WHERE game_id = ANY($1) GROUP BY game_id`,
+		gameIDs,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("count players by game: %w", err)
+	}
+	defer rows.Close()
+
+	counts := make(map[string]int, len(gameIDs))
+	for rows.Next() {
+		var gameID string
+		var count int
+		if err := rows.Scan(&gameID, &count); err != nil {
+			return nil, fmt.Errorf("scan player count: %w", err)
+		}
+		counts[gameID] = count
+	}
+	return counts, rows.Err()
+}
+
 // MarkExpAwarded は経験値付与済みフラグを設定します
 func (r *PgGamePlayerRepository) MarkExpAwarded(ctx context.Context, gameID string) (bool, error) {
 	tag, err := connFrom(ctx, r.pool).Exec(ctx,

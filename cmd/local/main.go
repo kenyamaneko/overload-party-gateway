@@ -36,6 +36,9 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
+// invalidatedGameRecoveryTimeout は前回の停止で無効になった対戦を決着させる処理の上限時間。
+const invalidatedGameRecoveryTimeout = 60 * time.Second
+
 // exitOnStartupFailure は起動時の失敗を記録してプロセスを終了する。
 func exitOnStartupFailure(message string, err error) {
 	slog.Error(message, "error", err)
@@ -66,6 +69,7 @@ func main() {
 
 	gamePlayerRepo := repository.NewPgGamePlayerRepository(pool)
 	processedMatchRepo := repository.NewPgProcessedMatchRepository(pool)
+	invalidatedGameRepo := repository.NewPgInvalidatedGameRepository(pool)
 
 	// ローカルモードでは Firestore (game_config) は optional。GOOGLE_CLOUD_PROJECT_ID が
 	// 未設定ならスキップする (NPC バトルがメインワークフロー)。FIRESTORE_EMULATOR_HOST が
@@ -113,7 +117,7 @@ func main() {
 
 	battleClient := service.NewBattleClient(cfg.BattleServerURL, localHTTP)
 	matchmakingTimeout := time.Duration(cfg.MatchmakingTimeoutSec) * time.Second
-	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, processedMatchRepo, matchmakingTimeout, internalSigner, timerStore, ws.DefaultDisconnectTimeout)
+	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, processedMatchRepo, invalidatedGameRepo, matchmakingTimeout, internalSigner, timerStore, ws.DefaultDisconnectTimeout)
 	wsHandler := ws.NewHandler(wsManager, nil, accountClient, nil)
 
 	matchSub, err := pubsubadapter.NewMatchSubscriber(wsManager)
@@ -181,6 +185,12 @@ func main() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			exitOnStartupFailure("listen failed", err)
 		}
+	}()
+
+	go func() {
+		recoveryCtx, cancel := context.WithTimeout(context.Background(), invalidatedGameRecoveryTimeout)
+		defer cancel()
+		wsManager.RecoverInvalidatedGames(recoveryCtx)
 	}()
 
 	<-srvCtx.Done()

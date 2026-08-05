@@ -164,7 +164,8 @@ func buildPushEngine(
 	matchmakingClient port.MatchmakingClient,
 ) (*gin.Engine, *ws.Manager) {
 	processedMatchRepo := repository.NewPgProcessedMatchRepository(sharedPG.Pool)
-	wsManager := ws.NewManager(battleClient, accountClient, &fakeCardClient{}, matchmakingClient, gamePlayerRepo, processedMatchRepo, 0, nil, nil, ws.DefaultDisconnectTimeout)
+	invalidatedGameRepo := repository.NewPgInvalidatedGameRepository(sharedPG.Pool)
+	wsManager := ws.NewManager(battleClient, accountClient, &fakeCardClient{}, matchmakingClient, gamePlayerRepo, processedMatchRepo, invalidatedGameRepo, 0, nil, nil, ws.DefaultDisconnectTimeout)
 	matchSub, err := pubsubadapter.NewMatchSubscriber(wsManager)
 	if err != nil {
 		panic(err)

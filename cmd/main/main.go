@@ -35,9 +35,13 @@ import (
 
 const serverShutdownTimeout = 10 * time.Second
 
-// wsShutdownNotifier は errgroup で束ねる WS 終了通知の最小契約。
-type wsShutdownNotifier interface {
+// invalidatedGameRecoveryTimeout は前回の停止で無効になった対戦を決着させる処理の上限時間。
+const invalidatedGameRecoveryTimeout = 60 * time.Second
+
+// wsLifecycle は errgroup で束ねる WS のプロセス起動時・終了時の処理の最小契約。
+type wsLifecycle interface {
 	Shutdown(ctx context.Context)
+	RecoverInvalidatedGames(ctx context.Context)
 }
 
 // newCloudLoggingHandler は Cloud Logging に適合するログハンドラを生成する。
@@ -139,9 +143,10 @@ func main() {
 		exitOnStartupFailure("failed to create firebase auth client", err)
 	}
 
-	// gateway 所有の game_players / processed_matches リポジトリ
+	// gateway 所有の game_players / processed_matches / invalidated_games リポジトリ
 	gamePlayerRepo := repository.NewPgGamePlayerRepository(pool)
 	processedMatchRepo := repository.NewPgProcessedMatchRepository(pool)
+	invalidatedGameRepo := repository.NewPgInvalidatedGameRepository(pool)
 	// game_config は現在 gateway の runtime パスから参照していない。
 	// クライアント到達性は起動時に検証するため、repo を生成だけしておく。
 	_ = repository.NewFirestoreGameConfigRepository(fsClient)
@@ -192,7 +197,7 @@ func main() {
 	// Battle クライアント（HTTP → battle server）
 	battleClient := service.NewBattleClient(cfg.BattleServerURL, battleHTTP)
 	matchmakingTimeout := time.Duration(cfg.MatchmakingTimeoutSec) * time.Second
-	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, processedMatchRepo, matchmakingTimeout, internalSigner, timerStore, ws.DefaultDisconnectTimeout)
+	wsManager := ws.NewManager(battleClient, accountClient, cardClient, matchmakingClient, gamePlayerRepo, processedMatchRepo, invalidatedGameRepo, matchmakingTimeout, internalSigner, timerStore, ws.DefaultDisconnectTimeout)
 	wsHandler := ws.NewHandler(wsManager, authClient, accountClient, cfg.AllowedOrigins)
 
 	matchSub, err := pubsubadapter.NewMatchSubscriber(wsManager)
@@ -273,7 +278,7 @@ func runServices(
 	ctx context.Context,
 	cfg *config.Config,
 	srv *http.Server,
-	wsShutdown wsShutdownNotifier,
+	wsRuntime wsLifecycle,
 ) error {
 	g, gCtx := errgroup.WithContext(ctx)
 
@@ -285,12 +290,20 @@ func runServices(
 		return nil
 	})
 
+	// 前回の停止の後始末は listener の待受を遅らせないよう、待受と並行して走らせる。
+	g.Go(func() error {
+		recoveryCtx, cancel := context.WithTimeout(context.Background(), invalidatedGameRecoveryTimeout)
+		defer cancel()
+		wsRuntime.RecoverInvalidatedGames(recoveryCtx)
+		return nil
+	})
+
 	g.Go(func() error {
 		<-gCtx.Done()
 		slog.Info("notifying WS connections of shutdown")
 		wsCtx, cancel := context.WithTimeout(context.Background(), ws.ShutdownNotifyTimeout)
 		defer cancel()
-		wsShutdown.Shutdown(wsCtx)
+		wsRuntime.Shutdown(wsCtx)
 		return nil
 	})
 
