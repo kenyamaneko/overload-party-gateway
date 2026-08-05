@@ -14,6 +14,8 @@ import re
 import sys
 from pathlib import Path
 
+from codegen_tools.go_format import format_go_source
+
 # (フィールド名, JSON タグ) のペアで identify する。
 PASSTHROUGH_FIELDS: list[tuple[str, str]] = [
     ("Data", "data"),
@@ -38,9 +40,9 @@ def main(path: str) -> None:
         pattern = re.compile(
             rf"(\b{field}\s+)map\[string\]interface\{{\}}(\s+`json:\"{tag}\"`)"
         )
-        src = pattern.sub(rf"\1json.RawMessage      \2", src)
+        src = pattern.sub(r"\1json.RawMessage\2", src)
 
-    p.write_text(src, encoding="utf-8")
+    p.write_text(format_go_source(src), encoding="utf-8")
 
 
 if __name__ == "__main__":
