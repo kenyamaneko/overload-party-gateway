@@ -3,16 +3,21 @@ package ws
 import (
 	"context"
 	"errors"
+	"net/http"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	apiaccount "github.com/kenyamaneko/overload-party-account/packages/api-account"
+	"github.com/kenyamaneko/overload-party-account/packages/api-account/apiaccountserverfake"
 	gamelogic "github.com/kenyamaneko/overload-party-battle/packages/game-logic-constants-go"
 	apicard "github.com/kenyamaneko/overload-party-card/packages/api-card"
 	apimatchmaking "github.com/kenyamaneko/overload-party-matchmaking/packages/api-matchmaking"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
@@ -429,6 +434,104 @@ func TestHandleMatchMade(t *testing.T) {
 			assert.Empty(t, bc.snapshotCreatePvPGameCalls())
 			assert.Empty(t, gamePlayerRepo.snapshotInsertGamePlayerCalls())
 		})
+
+		t.Run("ゲーム作成が失敗するとき、スロットを保存せずエラーを返す", func(t *testing.T) {
+			bc := newMockBattleClient()
+			bc.createPvPGameErr = errors.New("battle create failed")
+			gamePlayerRepo := &mockGamePlayerRepo{}
+			m := newTestManagerForMatchMade(bc, gamePlayerRepo, newFakeProcessedMatchRepo())
+
+			err := m.HandleMatchMade(context.Background(), matchMadeEvent("mch_create_fail"))
+
+			require.Error(t, err)
+			require.Len(t, bc.snapshotCreatePvPGameCalls(), 1, "battle must still have been asked to create the game")
+			assert.Empty(t, gamePlayerRepo.snapshotInsertGamePlayerCalls())
+		})
+	})
+
+	t.Run("デッキのバトル転送形式への展開", func(t *testing.T) {
+		expansionCases := []struct {
+			name           string
+			p1Deck         []apicard.DeckCard
+			wantDeck1Cards []service.BattleDeckCard
+		}{
+			{
+				name:           "デッキが空のとき、0枚で依頼される",
+				p1Deck:         []apicard.DeckCard{},
+				wantDeck1Cards: []service.BattleDeckCard{},
+			},
+			{
+				name:           "1種で枚数1のとき、その1枚だけになる",
+				p1Deck:         []apicard.DeckCard{{CardID: "TST-0001", ArtNo: 2, Count: 1}},
+				wantDeck1Cards: []service.BattleDeckCard{{CardID: "TST-0001", ArtNo: 2}},
+			},
+			{
+				name:   "1種で枚数3のとき、同じカードが3枚に複製される",
+				p1Deck: []apicard.DeckCard{{CardID: "TST-0001", ArtNo: 1, Count: 3}},
+				wantDeck1Cards: []service.BattleDeckCard{
+					{CardID: "TST-0001", ArtNo: 1},
+					{CardID: "TST-0001", ArtNo: 1},
+					{CardID: "TST-0001", ArtNo: 1},
+				},
+			},
+			{
+				name: "複数種のとき、宣言順に枚数分ずつ展開される",
+				p1Deck: []apicard.DeckCard{
+					{CardID: "TST-0001", ArtNo: 1, Count: 2},
+					{CardID: "TST-0002", ArtNo: 1, Count: 1},
+				},
+				wantDeck1Cards: []service.BattleDeckCard{
+					{CardID: "TST-0001", ArtNo: 1},
+					{CardID: "TST-0001", ArtNo: 1},
+					{CardID: "TST-0002", ArtNo: 1},
+				},
+			},
+		}
+		for _, tc := range expansionCases {
+			t.Run(tc.name, func(t *testing.T) {
+				bc := newMockBattleClient()
+				bc.createPvPGameResult = &service.GameCreatedResult{GameID: "g_expand"}
+				cardClient := &fakeCardClient{
+					deckCards: map[int64][]apicard.DeckCard{
+						10: tc.p1Deck,
+						// p2 側は展開ロジックに影響しない固定の 1 枚デッキ。p1 側の展開結果だけを見る。
+						20: {{CardID: "TST-9999", ArtNo: 1, Count: 1}},
+					},
+				}
+				m := newTestManagerWithCards(bc, cardClient, &mockGamePlayerRepo{}, newFakeProcessedMatchRepo())
+
+				err := m.HandleMatchMade(context.Background(), matchMadeEvent("mch_expand"))
+
+				require.NoError(t, err)
+				calls := bc.snapshotCreatePvPGameCalls()
+				require.Len(t, calls, 1)
+				assert.Equal(t, tc.wantDeck1Cards, calls[0].deck1Cards)
+			})
+		}
+
+		t.Run("両デッキの施策IDがそれぞれの側に載る", func(t *testing.T) {
+			bc := newMockBattleClient()
+			bc.createPvPGameResult = &service.GameCreatedResult{GameID: "g_initiatives"}
+			cardClient := &fakeCardClient{
+				deckCards: map[int64][]apicard.DeckCard{
+					10: {{CardID: "TST-0001", ArtNo: 1, Count: 1}},
+					20: {{CardID: "TST-0002", ArtNo: 1, Count: 1}},
+				},
+				deckInitiatives: map[int64]port.DeckInitiatives{
+					10: {RoutineID: "RTN-TST01", SpecialID: "SPC-TST01"},
+					20: {RoutineID: "RTN-TST02", SpecialID: "SPC-TST02"},
+				},
+			}
+			m := newTestManagerWithCards(bc, cardClient, &mockGamePlayerRepo{}, newFakeProcessedMatchRepo())
+
+			err := m.HandleMatchMade(context.Background(), matchMadeEvent("mch_initiatives"))
+
+			require.NoError(t, err)
+			calls := bc.snapshotCreatePvPGameCalls()
+			require.Len(t, calls, 1)
+			assert.Equal(t, service.DeckInitiatives{RoutineID: "RTN-TST01", SpecialID: "SPC-TST01"}, calls[0].deck1Initiatives)
+			assert.Equal(t, service.DeckInitiatives{RoutineID: "RTN-TST02", SpecialID: "SPC-TST02"}, calls[0].deck2Initiatives)
+		})
 	})
 }
 
@@ -477,6 +580,94 @@ func TestManagerReconnect(t *testing.T) {
 			calls := bc.snapshotProcessActionCalls()
 			assert.Equal(t, 2, calls[0].playerNum, "forfeit must be attributed to the still-disconnected opponent")
 			assert.Equal(t, gamelogic.ActionTypeForfeit, calls[0].actionType)
+		})
+	})
+}
+
+// newTestManagerForBattleLimit は checkAndIncrementBattleLimit だけを検証するための
+// Manager を返す。同メソッドは accountClient しか参照しないため、他の依存は zero value のままでよい。
+func newTestManagerForBattleLimit(accountClient port.AccountClient) *Manager {
+	return NewManager(nil, accountClient, nil, noopMatchmakingClient{}, nil, nil, newFakeInvalidatedGameRepo(), 0, nil, nil, DefaultDisconnectTimeout)
+}
+
+func TestCheckAndIncrementBattleLimit(t *testing.T) {
+	t.Run("バトル回数制限の確認と加算", func(t *testing.T) {
+		t.Run("残回数があるとき、加算が1回だけ行われ制限メッセージは返らない", func(t *testing.T) {
+			fa := apiaccountserverfake.NewServer()
+			defer fa.Close()
+			fa.GetBattleLimitFn = func() (int, any) {
+				return http.StatusOK, apiaccount.BattleLimitResponse{CanBattle: true}
+			}
+			var incrementCalls atomic.Int32
+			fa.IncrementBattleCountFn = func() (int, any) {
+				incrementCalls.Add(1)
+				return http.StatusNoContent, nil
+			}
+			m := newTestManagerForBattleLimit(accountclient.New(fa.URL(), &http.Client{}))
+
+			msg, err := m.checkAndIncrementBattleLimit(context.Background())
+
+			require.NoError(t, err)
+			assert.Equal(t, "", msg)
+			assert.Equal(t, int32(1), incrementCalls.Load())
+		})
+
+		t.Run("上限到達のとき、加算されず制限メッセージを返す", func(t *testing.T) {
+			fa := apiaccountserverfake.NewServer()
+			defer fa.Close()
+			fa.GetBattleLimitFn = func() (int, any) {
+				return http.StatusOK, apiaccount.BattleLimitResponse{CanBattle: false}
+			}
+			var incrementCalls atomic.Int32
+			fa.IncrementBattleCountFn = func() (int, any) {
+				incrementCalls.Add(1)
+				return http.StatusNoContent, nil
+			}
+			m := newTestManagerForBattleLimit(accountclient.New(fa.URL(), &http.Client{}))
+
+			msg, err := m.checkAndIncrementBattleLimit(context.Background())
+
+			require.NoError(t, err)
+			assert.Equal(t, "daily battle limit reached", msg)
+			assert.Equal(t, int32(0), incrementCalls.Load())
+		})
+
+		t.Run("制限情報の取得が500のとき、加算されずエラーになる", func(t *testing.T) {
+			fa := apiaccountserverfake.NewServer()
+			defer fa.Close()
+			fa.GetBattleLimitFn = func() (int, any) {
+				return http.StatusInternalServerError, nil
+			}
+			var incrementCalls atomic.Int32
+			fa.IncrementBattleCountFn = func() (int, any) {
+				incrementCalls.Add(1)
+				return http.StatusNoContent, nil
+			}
+			m := newTestManagerForBattleLimit(accountclient.New(fa.URL(), &http.Client{}))
+
+			_, err := m.checkAndIncrementBattleLimit(context.Background())
+
+			require.Error(t, err)
+			assert.Equal(t, int32(0), incrementCalls.Load())
+		})
+
+		t.Run("加算が500のとき、エラーになる", func(t *testing.T) {
+			fa := apiaccountserverfake.NewServer()
+			defer fa.Close()
+			fa.GetBattleLimitFn = func() (int, any) {
+				return http.StatusOK, apiaccount.BattleLimitResponse{CanBattle: true}
+			}
+			var incrementCalls atomic.Int32
+			fa.IncrementBattleCountFn = func() (int, any) {
+				incrementCalls.Add(1)
+				return http.StatusInternalServerError, nil
+			}
+			m := newTestManagerForBattleLimit(accountclient.New(fa.URL(), &http.Client{}))
+
+			_, err := m.checkAndIncrementBattleLimit(context.Background())
+
+			require.Error(t, err)
+			assert.Equal(t, int32(1), incrementCalls.Load())
 		})
 	})
 }
