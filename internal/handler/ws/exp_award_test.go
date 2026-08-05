@@ -305,7 +305,10 @@ func TestAwardGameExp(t *testing.T) {
 			})
 			// PlayerNum=99 は player1ID/player2ID のどちらにも入らないが AwardGameExp は呼ばれる
 			// (空文字 ID をどう処理するかは account の責務)。
-			assert.Equal(t, int32(1), account.calls.Load())
+			require.EqualValues(t, 1, account.calls.Load())
+			got := account.body()
+			assert.Equal(t, "", got.Player1ID)
+			assert.Equal(t, "", got.Player2ID)
 		})
 
 		t.Run("2人のゲームでプレイヤー1が勝ったとき、付与依頼に両プレイヤーID・勝者1・理由・pvpが載る", func(t *testing.T) {
