@@ -68,16 +68,13 @@ type ConnectionHub struct {
 	// disconnectTimeout は切断したプレイヤーに与える再接続猶予。
 	disconnectTimeout time.Duration
 
-	// clock は切断タイマーが依存する時刻取得とタイマー生成を抽象化する。
-	// 既定は実時刻・実タイマー (systemClock) で、WithHubClock で差し替えられる。
 	clock Clock
 }
 
 // HubOption は ConnectionHub の生成時オプションを表す。
 type HubOption func(*ConnectionHub)
 
-// WithHubClock は ConnectionHub が使う Clock を上書きする。テストが切断タイマーの
-// 発火を制御するために使う。未指定時は実時刻・実タイマーを使う。
+// WithHubClock は ConnectionHub が使う Clock を上書きする。
 func WithHubClock(clock Clock) HubOption {
 	return func(h *ConnectionHub) { h.clock = clock }
 }

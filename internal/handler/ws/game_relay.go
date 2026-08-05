@@ -57,16 +57,13 @@ type GameRelay struct {
 	// （ローカル開発など Redis を使わない環境向け）。
 	timerStore port.TimerStore
 
-	// clock はターンタイマーが依存する時刻取得とタイマー生成を抽象化する。
-	// 既定は実時刻・実タイマー (systemClock) で、WithClock で差し替えられる。
 	clock Clock
 }
 
 // GameRelayOption は GameRelay の生成時オプションを表す。
 type GameRelayOption func(*GameRelay)
 
-// WithClock は GameRelay が使う Clock を上書きする。テストがターンタイマーの
-// 発火を制御するために使う。未指定時は実時刻・実タイマーを使う。
+// WithClock は GameRelay が使う Clock を上書きする。
 func WithClock(clock Clock) GameRelayOption {
 	return func(r *GameRelay) { r.clock = clock }
 }
