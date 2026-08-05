@@ -194,16 +194,30 @@ func newTestPushRouter(t *testing.T, battleClient service.BattleClient) (*gin.En
 	return buildPushRouter(t, battleClient)
 }
 
-// abandonedReports は matchmaking の偽物が受け取った不成立の申告を記録する。
+// abandonedReports は matchmaking の偽物が受け取った不成立の申告を記録し、先頭
+// failNextCalls 回だけ申告を失敗させる。
 type abandonedReports struct {
-	mu       sync.Mutex
-	received []apimatchmaking.MatchAbandonedRequest
+	mu            sync.Mutex
+	received      []apimatchmaking.MatchAbandonedRequest
+	failNextCalls int
 }
 
-func (a *abandonedReports) record(req apimatchmaking.MatchAbandonedRequest) {
+// record は申告を記録し、偽物が返すべき HTTP status を返す。
+func (a *abandonedReports) record(req apimatchmaking.MatchAbandonedRequest) int {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.received = append(a.received, req)
+	if a.failNextCalls > 0 {
+		a.failNextCalls--
+		return http.StatusInternalServerError
+	}
+	return http.StatusNoContent
+}
+
+func (a *abandonedReports) failNext(calls int) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.failNextCalls = calls
 }
 
 func (a *abandonedReports) snapshot() []apimatchmaking.MatchAbandonedRequest {
@@ -221,8 +235,7 @@ func newMatchmakingFakeClient(t *testing.T) (port.MatchmakingClient, *abandonedR
 
 	reports := &abandonedReports{}
 	fake.MatchAbandonedFn = func(req apimatchmaking.MatchAbandonedRequest) (int, any) {
-		reports.record(req)
-		return http.StatusNoContent, nil
+		return reports.record(req), nil
 	}
 	return matchmakingclient.New(fake.URL(), "test-instance", &http.Client{}), reports
 }
@@ -535,6 +548,20 @@ func TestPushMatchMadeAbandoned(t *testing.T) {
 			reports := env.reports.snapshot()
 			require.Len(t, reports, 1)
 			assert.Equal(t, "mch_e2e_abandon_dup", reports[0].MatchID)
+		})
+
+		t.Run("不成立の申告が失敗すると push 応答が 500 になり、同じ成立イベントが再配信されても申告は再試行されない", func(t *testing.T) {
+			bc := &fakeBattleClient{gameID: "01ARZ3NDEKTSV4RRFFQ69G5FC6"}
+			env := newNotifyTestEnv(t, bc, repository.NewPgGamePlayerRepository(sharedPG.Pool), connectedPlayers{player1: true})
+			env.reports.failNext(1)
+			payload := matchMadePayload(t, "mch_e2e_abandon_report_fail")
+
+			require.Equal(t, http.StatusInternalServerError, doMatchMadePush(t, env.router, payload).Code)
+
+			assert.Equal(t, http.StatusOK, doMatchMadePush(t, env.router, payload).Code)
+			reports := env.reports.snapshot()
+			require.Len(t, reports, 1)
+			assert.Equal(t, "mch_e2e_abandon_report_fail", reports[0].MatchID)
 		})
 
 		t.Run("両方のプレイヤーが接続している状態で成立イベントを受けると、成立通知が届き不成立は申告されない", func(t *testing.T) {
