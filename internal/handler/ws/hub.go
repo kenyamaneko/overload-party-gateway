@@ -32,7 +32,7 @@ type shutdownNotifier interface {
 
 type disconnectInfo struct {
 	gameID string
-	timer  *time.Timer
+	timer  Timer
 }
 
 // HubCallbacks は ConnectionHub が接続ライフサイクルイベント時に呼び出すコールバック群です
@@ -67,17 +67,35 @@ type ConnectionHub struct {
 
 	// disconnectTimeout は切断したプレイヤーに与える再接続猶予。
 	disconnectTimeout time.Duration
+
+	// clock は切断タイマーが依存する時刻取得とタイマー生成を抽象化する。
+	// 既定は実時刻・実タイマー (systemClock) で、WithHubClock で差し替えられる。
+	clock Clock
+}
+
+// HubOption は ConnectionHub の生成時オプションを表す。
+type HubOption func(*ConnectionHub)
+
+// WithHubClock は ConnectionHub が使う Clock を上書きする。テストが切断タイマーの
+// 発火を制御するために使う。未指定時は実時刻・実タイマーを使う。
+func WithHubClock(clock Clock) HubOption {
+	return func(h *ConnectionHub) { h.clock = clock }
 }
 
 // NewConnectionHub は ConnectionHub を生成します。timerStore は nil 可（写しを行わない）。
-func NewConnectionHub(cb HubCallbacks, disconnectTimeout time.Duration, timerStore port.TimerStore) *ConnectionHub {
-	return &ConnectionHub{
+func NewConnectionHub(cb HubCallbacks, disconnectTimeout time.Duration, timerStore port.TimerStore, opts ...HubOption) *ConnectionHub {
+	h := &ConnectionHub{
 		connections:       make(map[string]*Connection),
 		disconnects:       make(map[string]*disconnectInfo),
 		cb:                cb,
 		timerStore:        timerStore,
 		disconnectTimeout: disconnectTimeout,
+		clock:             systemClock{},
 	}
+	for _, opt := range opts {
+		opt(h)
+	}
+	return h
 }
 
 // Register は新しい WebSocket 接続を登録します
@@ -111,7 +129,7 @@ func (h *ConnectionHub) Register(conn *Connection) {
 			slog.Error("read mirrored disconnect deadline on reconnect, stale disconnect resolution skipped", "player_id", conn.playerID, "error", err)
 		} else if found {
 			reconnectGameID = dl.GameID
-			wasLate = !time.Now().Before(dl.Deadline)
+			wasLate = !h.clock.Now().Before(dl.Deadline)
 		}
 	}
 
@@ -150,7 +168,7 @@ func (h *ConnectionHub) IsDisconnectDeadlineExpired(playerID string) (expired bo
 	if !found {
 		return false, nil
 	}
-	return !time.Now().Before(dl.Deadline), nil
+	return !h.clock.Now().Before(dl.Deadline), nil
 }
 
 // Unregister は WebSocket 接続を解除し切断タイマーを開始します
@@ -166,8 +184,8 @@ func (h *ConnectionHub) Unregister(conn *Connection) {
 	var deadline time.Time
 	suppressOpponentNotify := h.isShuttingDown
 	if inGame {
-		deadline = time.Now().Add(h.disconnectTimeout)
-		timer := time.AfterFunc(h.disconnectTimeout, func() {
+		deadline = h.clock.Now().Add(h.disconnectTimeout)
+		timer := h.clock.AfterFunc(h.disconnectTimeout, func() {
 			h.mu.Lock()
 			delete(h.disconnects, conn.playerID)
 			h.mu.Unlock()

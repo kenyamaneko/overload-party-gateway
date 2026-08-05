@@ -56,6 +56,19 @@ type GameRelay struct {
 	// timerStore はターン期限を Redis へ写す。未設定 (nil) の場合は写しを行わない
 	// （ローカル開発など Redis を使わない環境向け）。
 	timerStore port.TimerStore
+
+	// clock はターンタイマーが依存する時刻取得とタイマー生成を抽象化する。
+	// 既定は実時刻・実タイマー (systemClock) で、WithClock で差し替えられる。
+	clock Clock
+}
+
+// GameRelayOption は GameRelay の生成時オプションを表す。
+type GameRelayOption func(*GameRelay)
+
+// WithClock は GameRelay が使う Clock を上書きする。テストがターンタイマーの
+// 発火を制御するために使う。未指定時は実時刻・実タイマーを使う。
+func WithClock(clock Clock) GameRelayOption {
+	return func(r *GameRelay) { r.clock = clock }
 }
 
 // NewGameRelay は GameRelay を生成します。
@@ -68,8 +81,9 @@ func NewGameRelay(
 	gamePlayerRepo port.GamePlayerRepo,
 	invalidatedGameRepo port.InvalidatedGameRepo,
 	timerStore port.TimerStore,
+	opts ...GameRelayOption,
 ) *GameRelay {
-	return &GameRelay{
+	r := &GameRelay{
 		hub:                 hub,
 		battleClient:        battleClient,
 		accountClient:       accountClient,
@@ -79,7 +93,12 @@ func NewGameRelay(
 		playerGames:         make(map[string]playerSession),
 		turnTimers:          make(map[string]*turnTimerInfo),
 		timerStore:          timerStore,
+		clock:               systemClock{},
 	}
+	for _, opt := range opts {
+		opt(r)
+	}
+	return r
 }
 
 // GameIDForPlayer はプレイヤーの gameID を返します

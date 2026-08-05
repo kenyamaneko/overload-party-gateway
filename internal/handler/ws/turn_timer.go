@@ -11,7 +11,7 @@ import (
 
 // turnTimerInfo はアクティブなターンタイマーの状態を保持する。
 type turnTimerInfo struct {
-	timer          *time.Timer
+	timer          Timer
 	activePlayerID string
 }
 
@@ -36,9 +36,9 @@ func (r *GameRelay) resetTurnTimer(gameID, activePlayerID string, timeBankSecond
 	}
 
 	duration := time.Duration(timeBankSeconds)*time.Second + turnTimerNetworkBuffer
-	deadline := time.Now().Add(duration)
+	deadline := r.clock.Now().Add(duration)
 
-	timer := time.AfterFunc(duration, func() {
+	timer := r.clock.AfterFunc(duration, func() {
 		r.timerMu.Lock()
 		info, ok := r.turnTimers[gameID]
 		if !ok || info.activePlayerID != activePlayerID {
