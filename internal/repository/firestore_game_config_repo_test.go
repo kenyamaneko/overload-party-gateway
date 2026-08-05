@@ -41,14 +41,14 @@ func TestFirestoreGameConfigRepository(t *testing.T) {
 
 	repo := repository.NewFirestoreGameConfigRepository(client)
 
-	t.Run("game_config の取得", func(t *testing.T) {
-		t.Run("存在するキー exp_win のとき、値 40 を返す", func(t *testing.T) {
+	t.Run("game_configの取得", func(t *testing.T) {
+		t.Run("存在するキーexp_winのとき、値40を返す", func(t *testing.T) {
 			got, err := repo.GetInt64(ctx, "exp_win")
 			require.NoError(t, err)
 			assert.Equal(t, int64(40), got)
 		})
 
-		t.Run("存在しないキーのとき、ErrNotFound になる", func(t *testing.T) {
+		t.Run("存在しないキーのとき、ErrNotFoundになる", func(t *testing.T) {
 			_, err := repo.GetInt64(ctx, "does_not_exist")
 			require.Error(t, err)
 			assert.True(t, errors.Is(err, port.ErrNotFound), "expected ErrNotFound, got: %v", err)

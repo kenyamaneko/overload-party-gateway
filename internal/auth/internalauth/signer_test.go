@@ -27,8 +27,8 @@ func TestSignerIssue(t *testing.T) {
 	key := newTestKey(t)
 	fixedTime := time.Date(2026, 5, 10, 12, 0, 0, 0, time.UTC)
 
-	t.Run("JWT の発行", func(t *testing.T) {
-		t.Run("デフォルトオプションのとき、RS256 で iss/sub/iat/exp/kid が揃った JWT を発行する", func(t *testing.T) {
+	t.Run("JWTの発行", func(t *testing.T) {
+		t.Run("デフォルトオプションのとき、RS256でiss/sub/iat/exp/kidが揃ったJWTを発行する", func(t *testing.T) {
 			signer := NewSigner(StaticPrivateKeyResolver(key, DefaultKeyID), DefaultKeyID, WithClock(func() time.Time { return fixedTime }))
 			token, err := signer.Issue("player-123")
 			require.NoError(t, err)
@@ -48,12 +48,12 @@ func TestSignerIssue(t *testing.T) {
 			resolver PrivateKeyResolver
 		}{
 			{
-				name:     "playerID が空のとき、エラーになる",
+				name:     "playerIDが空のとき、エラーになる",
 				playerID: "",
 				resolver: StaticPrivateKeyResolver(key, DefaultKeyID),
 			},
 			{
-				name:     "resolver がエラーを返すとき、そのエラーが伝搬する",
+				name:     "resolverがエラーを返すとき、そのエラーが伝搬する",
 				playerID: "player-123",
 				resolver: func(KeyID) (*rsa.PrivateKey, error) { return nil, errors.New("boom") },
 			},
@@ -71,7 +71,7 @@ func TestSignerIssue(t *testing.T) {
 
 func TestStaticPrivateKeyResolver(t *testing.T) {
 	t.Run("秘密鍵の解決", func(t *testing.T) {
-		t.Run("未知の kid を渡すとき、エラーになる", func(t *testing.T) {
+		t.Run("未知のkidを渡すとき、エラーになる", func(t *testing.T) {
 			resolver := StaticPrivateKeyResolver(newTestKey(t), DefaultKeyID)
 			_, err := resolver(KeyID("v2"))
 			require.Error(t, err)
@@ -80,8 +80,8 @@ func TestStaticPrivateKeyResolver(t *testing.T) {
 }
 
 func TestParsePrivateKeyPEM(t *testing.T) {
-	t.Run("PEM 秘密鍵の読み取り", func(t *testing.T) {
-		t.Run("正しい PEM のとき、発行した JWT が対応する公開鍵で検証できる", func(t *testing.T) {
+	t.Run("PEM秘密鍵の読み取り", func(t *testing.T) {
+		t.Run("正しいPEMのとき、発行したJWTが対応する公開鍵で検証できる", func(t *testing.T) {
 			key := newTestKey(t)
 			der, err := x509.MarshalPKCS8PrivateKey(key)
 			require.NoError(t, err)
@@ -98,13 +98,13 @@ func TestParsePrivateKeyPEM(t *testing.T) {
 			assert.Equal(t, "player-123", claims.Subject)
 		})
 
-		t.Run("PEM でないとき、エラーになる", func(t *testing.T) {
+		t.Run("PEMでないとき、エラーになる", func(t *testing.T) {
 			_, err := ParsePrivateKeyPEM([]byte("not-a-pem"))
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "PEM")
 		})
 
-		t.Run("RSA 以外の鍵のとき、エラーになる", func(t *testing.T) {
+		t.Run("RSA以外の鍵のとき、エラーになる", func(t *testing.T) {
 			_, priv, err := ed25519.GenerateKey(rand.Reader)
 			require.NoError(t, err)
 			der, err := x509.MarshalPKCS8PrivateKey(priv)

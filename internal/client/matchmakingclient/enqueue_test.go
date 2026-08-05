@@ -14,8 +14,8 @@ import (
 )
 
 func TestClient_SendsGatewayInstanceID(t *testing.T) {
-	t.Run("gateway インスタンス識別子の送信", func(t *testing.T) {
-		t.Run("生成時に渡した識別子が gateway_instance_id として送られる", func(t *testing.T) {
+	t.Run("gatewayインスタンス識別子の送信", func(t *testing.T) {
+		t.Run("生成時に渡した識別子がgateway_instance_idとして送られる", func(t *testing.T) {
 			const wantInstanceID = "test-instance-id"
 			srv, received := newEnqueueRecorder(t)
 			defer srv.Close()
@@ -27,7 +27,7 @@ func TestClient_SendsGatewayInstanceID(t *testing.T) {
 			assert.Equal(t, wantInstanceID, (*received)[0].GatewayInstanceID)
 		})
 
-		t.Run("同じクライアントで続けて登録しても、gateway_instance_id は変わらない", func(t *testing.T) {
+		t.Run("同じクライアントで続けて登録しても、gateway_instance_idは変わらない", func(t *testing.T) {
 			srv, received := newEnqueueRecorder(t)
 			defer srv.Close()
 

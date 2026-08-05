@@ -28,7 +28,7 @@ func validPayload(issuer, email string, emailVerified bool) *idtoken.Payload {
 }
 
 func TestGoogleIDTokenValidator_Validate(t *testing.T) {
-	t.Run("Google ID トークンの検証", func(t *testing.T) {
+	t.Run("Google IDトークンの検証", func(t *testing.T) {
 		t.Run("署名・有効期限の検証に失敗するとき、そのエラーを返す", func(t *testing.T) {
 			wantErr := errors.New("idtoken: token expired: now=100, expires=50")
 			v := &googleIDTokenValidator{validate: func(context.Context, string, string) (*idtoken.Payload, error) {
@@ -41,7 +41,7 @@ func TestGoogleIDTokenValidator_Validate(t *testing.T) {
 			assert.ErrorIs(t, err, wantErr)
 		})
 
-		t.Run("audience の不一致で検証が失敗するとき、そのエラーを返す", func(t *testing.T) {
+		t.Run("audienceの不一致で検証が失敗するとき、そのエラーを返す", func(t *testing.T) {
 			wantErr := errors.New("idtoken: audience provided does not match aud claim in the JWT")
 			v := &googleIDTokenValidator{validate: func(context.Context, string, string) (*idtoken.Payload, error) {
 				return nil, wantErr
@@ -65,7 +65,7 @@ func TestGoogleIDTokenValidator_Validate(t *testing.T) {
 			assert.ErrorIs(t, err, wantErr)
 		})
 
-		t.Run("issuer が Google 以外のとき、エラーを返す", func(t *testing.T) {
+		t.Run("issuerがGoogle以外のとき、エラーを返す", func(t *testing.T) {
 			v := &googleIDTokenValidator{validate: func(context.Context, string, string) (*idtoken.Payload, error) {
 				return validPayload("https://evil.example.com", "sa@test.iam.gserviceaccount.com", true), nil
 			}}
@@ -75,7 +75,7 @@ func TestGoogleIDTokenValidator_Validate(t *testing.T) {
 			assert.Error(t, err)
 		})
 
-		t.Run("email_verified が false のとき、エラーを返す", func(t *testing.T) {
+		t.Run("email_verifiedがfalseのとき、エラーを返す", func(t *testing.T) {
 			v := &googleIDTokenValidator{validate: func(context.Context, string, string) (*idtoken.Payload, error) {
 				return validPayload(googleOIDCIssuer, "sa@test.iam.gserviceaccount.com", false), nil
 			}}
@@ -85,7 +85,7 @@ func TestGoogleIDTokenValidator_Validate(t *testing.T) {
 			assert.Error(t, err)
 		})
 
-		t.Run("email クレームが空のとき、エラーを返す", func(t *testing.T) {
+		t.Run("emailクレームが空のとき、エラーを返す", func(t *testing.T) {
 			v := &googleIDTokenValidator{validate: func(context.Context, string, string) (*idtoken.Payload, error) {
 				return validPayload(googleOIDCIssuer, "", true), nil
 			}}
@@ -95,7 +95,7 @@ func TestGoogleIDTokenValidator_Validate(t *testing.T) {
 			assert.Error(t, err)
 		})
 
-		t.Run("すべての検証に成功するとき、email クレームを返す", func(t *testing.T) {
+		t.Run("すべての検証に成功するとき、emailクレームを返す", func(t *testing.T) {
 			v := &googleIDTokenValidator{validate: func(context.Context, string, string) (*idtoken.Payload, error) {
 				return validPayload(googleOIDCIssuer, "sa@test.iam.gserviceaccount.com", true), nil
 			}}
@@ -106,7 +106,7 @@ func TestGoogleIDTokenValidator_Validate(t *testing.T) {
 			assert.Equal(t, "sa@test.iam.gserviceaccount.com", email)
 		})
 
-		t.Run("audience を指定したとき、その値がそのままトークン検証に使われる", func(t *testing.T) {
+		t.Run("audienceを指定したとき、その値がそのままトークン検証に使われる", func(t *testing.T) {
 			var gotAudience string
 			v := &googleIDTokenValidator{validate: func(_ context.Context, _ string, audience string) (*idtoken.Payload, error) {
 				gotAudience = audience
@@ -143,8 +143,8 @@ func newPushAuthTestRouter(validator PubSubPushTokenValidator) *gin.Engine {
 }
 
 func TestUsePubSubPushAuth(t *testing.T) {
-	t.Run("push リクエストの OIDC 認証", func(t *testing.T) {
-		t.Run("Authorization ヘッダが無いとき、401 を返し下流に到達しない", func(t *testing.T) {
+	t.Run("pushリクエストのOIDC認証", func(t *testing.T) {
+		t.Run("Authorizationヘッダが無いとき、401を返し下流に到達しない", func(t *testing.T) {
 			r := newPushAuthTestRouter(&fakePushTokenValidator{email: testPushServiceAccountEmail})
 
 			w := httptest.NewRecorder()
@@ -154,7 +154,7 @@ func TestUsePubSubPushAuth(t *testing.T) {
 			assert.Contains(t, w.Body.String(), "missing authorization header")
 		})
 
-		t.Run("Authorization ヘッダが Bearer 形式でないとき、401 を返し下流に到達しない", func(t *testing.T) {
+		t.Run("AuthorizationヘッダがBearer形式でないとき、401を返し下流に到達しない", func(t *testing.T) {
 			r := newPushAuthTestRouter(&fakePushTokenValidator{email: testPushServiceAccountEmail})
 			req := httptest.NewRequest(http.MethodPost, "/push", nil)
 			req.Header.Set("Authorization", "token-without-bearer-prefix")
@@ -166,7 +166,7 @@ func TestUsePubSubPushAuth(t *testing.T) {
 			assert.Contains(t, w.Body.String(), "invalid authorization format")
 		})
 
-		t.Run("トークンの検証に失敗するとき、401 を返し下流に到達しない", func(t *testing.T) {
+		t.Run("トークンの検証に失敗するとき、401を返し下流に到達しない", func(t *testing.T) {
 			r := newPushAuthTestRouter(&fakePushTokenValidator{err: errors.New("boom")})
 			req := httptest.NewRequest(http.MethodPost, "/push", nil)
 			req.Header.Set("Authorization", "Bearer invalid-token")
@@ -178,7 +178,7 @@ func TestUsePubSubPushAuth(t *testing.T) {
 			assert.Contains(t, w.Body.String(), "invalid token")
 		})
 
-		t.Run("検証には成功するが期待するサービスアカウントと一致しないとき、401 を返し下流に到達しない", func(t *testing.T) {
+		t.Run("検証には成功するが期待するサービスアカウントと一致しないとき、401を返し下流に到達しない", func(t *testing.T) {
 			r := newPushAuthTestRouter(&fakePushTokenValidator{email: "someone-else@test-project.iam.gserviceaccount.com"})
 			req := httptest.NewRequest(http.MethodPost, "/push", nil)
 			req.Header.Set("Authorization", "Bearer valid-but-wrong-sa")

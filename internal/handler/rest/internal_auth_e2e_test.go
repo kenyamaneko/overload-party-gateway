@@ -19,8 +19,8 @@ import (
 )
 
 func TestInternalAuth_E2E(t *testing.T) {
-	t.Run("内部認証 JWT の end-to-end 伝搬", func(t *testing.T) {
-		t.Run("player_id を設定して下流を呼ぶと、署名済み JWT が X-Internal-Auth として転送される", func(t *testing.T) {
+	t.Run("内部認証JWTのend-to-end伝搬", func(t *testing.T) {
+		t.Run("player_idを設定して下流を呼ぶと、署名済みJWTがX-Internal-Authとして転送される", func(t *testing.T) {
 			const playerID = "player-e2e-123"
 
 			signingKey, err := rsa.GenerateKey(rand.Reader, 2048)

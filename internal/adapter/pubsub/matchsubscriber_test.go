@@ -69,7 +69,7 @@ func TestMatchSubscriber_ProcessMessage(t *testing.T) {
 			assert.Equal(t, "p-1", handler.received[0].Players[0].PlayerID)
 		})
 
-		t.Run("不正な JSON のとき、エラーを返しマッチ成立イベントの処理は実行されない", func(t *testing.T) {
+		t.Run("不正なJSONのとき、エラーを返しマッチ成立イベントの処理は実行されない", func(t *testing.T) {
 			handler := &fakeMatchHandler{}
 			sub, err := NewMatchSubscriber(handler)
 			require.NoError(t, err)
@@ -80,7 +80,7 @@ func TestMatchSubscriber_ProcessMessage(t *testing.T) {
 			assert.Zero(t, handler.count())
 		})
 
-		t.Run("未知の event_type のとき、エラーを返さず責務外としてマッチ成立イベントの処理は実行されない", func(t *testing.T) {
+		t.Run("未知のevent_typeのとき、エラーを返さず責務外としてマッチ成立イベントの処理は実行されない", func(t *testing.T) {
 			handler := &fakeMatchHandler{}
 			sub, err := NewMatchSubscriber(handler)
 			require.NoError(t, err)

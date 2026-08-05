@@ -30,7 +30,7 @@ func getVersionBody(t *testing.T, cfg *config.Config) map[string]any {
 
 func TestStaticHandler_GetVersion(t *testing.T) {
 	t.Run("アプリバージョン情報の取得", func(t *testing.T) {
-		t.Run("最低バージョン・最新バージョン・強制アップデート要否・ストア URL が設定されているとき、その 4 つが返る", func(t *testing.T) {
+		t.Run("最低バージョン・最新バージョン・強制アップデート要否・ストアURLが設定されているとき、その4つが返る", func(t *testing.T) {
 			body := getVersionBody(t, &config.Config{
 				AppMinVersion:    "1.0.0",
 				AppLatestVersion: "1.2.0",
@@ -44,7 +44,7 @@ func TestStaticHandler_GetVersion(t *testing.T) {
 			assert.Equal(t, "https://store.example.com/app", body["storeUrl"])
 		})
 
-		t.Run("ストア URL が未設定のとき、ストア URL は空文字として返り、項目自体は省略されない", func(t *testing.T) {
+		t.Run("ストアURLが未設定のとき、ストアURLは空文字として返り、項目自体は省略されない", func(t *testing.T) {
 			body := getVersionBody(t, &config.Config{
 				AppMinVersion:    "0.1.0",
 				AppLatestVersion: "0.1.0",

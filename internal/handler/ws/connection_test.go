@@ -67,8 +67,8 @@ func readNotifyThenClose(t *testing.T, clientConn *websocket.Conn) (notifyType s
 }
 
 func TestConnectionShutdown(t *testing.T) {
-	t.Run("SIGTERM 時のサーバー更新通知", func(t *testing.T) {
-		t.Run("サーバー更新の通知を送信した後、異常な切断と区別できる close コードと終了理由を添えて接続を閉じる", func(t *testing.T) {
+	t.Run("SIGTERM時のサーバー更新通知", func(t *testing.T) {
+		t.Run("サーバー更新の通知を送信した後、異常な切断と区別できるcloseコードと終了理由を添えて接続を閉じる", func(t *testing.T) {
 			serverConn, clientConn := newTestWSPair(t)
 
 			serverConn.Shutdown(websocket.CloseGoingAway, genws.WSServerMsgServerUpdate)
@@ -79,7 +79,7 @@ func TestConnectionShutdown(t *testing.T) {
 			assert.Equal(t, genws.WSServerMsgServerUpdate, closeErr.Text)
 		})
 
-		t.Run("終了処理を重ねて実行しても、サーバー更新の通知と close フレームは一度ずつしか届かない", func(t *testing.T) {
+		t.Run("終了処理を重ねて実行しても、サーバー更新の通知とcloseフレームは一度ずつしか届かない", func(t *testing.T) {
 			serverConn, clientConn := newTestWSPair(t)
 
 			serverConn.Shutdown(websocket.CloseGoingAway, genws.WSServerMsgServerUpdate)

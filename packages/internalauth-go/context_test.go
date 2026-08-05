@@ -37,19 +37,19 @@ func TestTokenContext(t *testing.T) {
 }
 
 func TestInjectHeader(t *testing.T) {
-	t.Run("X-Internal-Auth header への token 注入", func(t *testing.T) {
+	t.Run("X-Internal-Auth headerへのtoken注入", func(t *testing.T) {
 		cases := []struct {
 			name       string
 			ctx        context.Context
 			wantHeader string
 		}{
 			{
-				name:       "token がある ctx のとき、X-Internal-Auth に token を設定する",
+				name:       "tokenがあるctxのとき、X-Internal-Authにtokenを設定する",
 				ctx:        WithToken(context.Background(), "abc.def.ghi"),
 				wantHeader: "abc.def.ghi",
 			},
 			{
-				name:       "token がない ctx のとき、header を空のままにする",
+				name:       "tokenがないctxのとき、headerを空のままにする",
 				ctx:        context.Background(),
 				wantHeader: "",
 			},

@@ -22,8 +22,8 @@ func newAuthTestEngine(verifier Verifier) (*gin.Engine, *string) {
 }
 
 func TestVerifyInternalAuth(t *testing.T) {
-	t.Run("内部認証 middleware の検証", func(t *testing.T) {
-		t.Run("検証成功のとき、200 で player_id を context に設定する", func(t *testing.T) {
+	t.Run("内部認証middlewareの検証", func(t *testing.T) {
+		t.Run("検証成功のとき、200でplayer_idをcontextに設定する", func(t *testing.T) {
 			verifier := &MockVerifier{VerifyFn: func(string) (string, error) { return "player-123", nil }}
 			engine, observed := newAuthTestEngine(verifier)
 
@@ -37,7 +37,7 @@ func TestVerifyInternalAuth(t *testing.T) {
 			assert.Equal(t, "player-123", *observed)
 		})
 
-		t.Run("検証成功のとき、raw token を gin context と Request.Context に保存する", func(t *testing.T) {
+		t.Run("検証成功のとき、raw tokenをgin contextとRequest.Contextに保存する", func(t *testing.T) {
 			const sentToken = "any.signed.token"
 			verifier := &MockVerifier{VerifyFn: func(string) (string, error) { return "player-123", nil }}
 
@@ -70,12 +70,12 @@ func TestVerifyInternalAuth(t *testing.T) {
 			{
 				// VerifyFn 未設定の MockVerifier は呼ばれると panic するため、header 欠落時に
 				// verifier へ到達しないことも同時に確かめている。
-				name:     "X-Internal-Auth が無いとき、401 になる",
+				name:     "X-Internal-Authが無いとき、401になる",
 				verifier: &MockVerifier{},
 				setupReq: func(*http.Request) {},
 			},
 			{
-				name:     "verifier がエラーを返すとき、401 になる",
+				name:     "verifierがエラーを返すとき、401になる",
 				verifier: &MockVerifier{VerifyFn: func(string) (string, error) { return "", errors.New("invalid token") }},
 				setupReq: func(r *http.Request) { r.Header.Set(HeaderName, "any.signed.token") },
 			},

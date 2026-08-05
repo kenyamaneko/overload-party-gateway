@@ -160,8 +160,8 @@ func setupAwardRelay(t *testing.T, repo port.GamePlayerRepo, account *awardCount
 }
 
 func TestAwardGameExp(t *testing.T) {
-	t.Run("EXP 付与", func(t *testing.T) {
-		t.Run("初回付与のとき、フラグ確定→プレイヤー解決の順で実行し account に付与する", func(t *testing.T) {
+	t.Run("EXP付与", func(t *testing.T) {
+		t.Run("初回付与のとき、フラグ確定→プレイヤー解決の順で実行しaccountに付与する", func(t *testing.T) {
 			repo := &mockGamePlayerRepo{
 				markAwardedReturn: true,
 				lookupEntries: []port.GamePlayerEntry{
@@ -181,7 +181,7 @@ func TestAwardGameExp(t *testing.T) {
 				"MarkExpAwarded MUST be called before LookupGamePlayers (idempotency invariant)")
 		})
 
-		t.Run("対戦相手が 1 件 (NPC) のとき、account に付与する", func(t *testing.T) {
+		t.Run("対戦相手が1件 (NPC)のとき、accountに付与する", func(t *testing.T) {
 			repo := &mockGamePlayerRepo{
 				markAwardedReturn: true,
 				lookupEntries: []port.GamePlayerEntry{
@@ -244,7 +244,7 @@ func TestAwardGameExp(t *testing.T) {
 			assert.Equal(t, int32(0), account.calls.Load())
 		})
 
-		t.Run("account が 500 を返すとき、フラグは立ったまま再試行されない", func(t *testing.T) {
+		t.Run("accountが500を返すとき、フラグは立ったまま再試行されない", func(t *testing.T) {
 			// AwardGameExp の RPC が失敗。フラグは既に立っているので二重付与にはならないが EXP が
 			// 失われる。次回 game_id が来ても MarkExpAwarded が false を返すため自動再試行はされない
 			// (手動オペレーションが必要)。
@@ -270,7 +270,7 @@ func TestAwardGameExp(t *testing.T) {
 			assert.Equal(t, int32(1), account.calls.Load(), "no retry — EXP is permanently lost without manual intervention")
 		})
 
-		t.Run("プレイヤー番号が 1 と 2 のどちらでもない (データ不整合) とき、空のプレイヤー ID で付与依頼する", func(t *testing.T) {
+		t.Run("プレイヤー番号が1と2のどちらでもない (データ不整合)とき、空のプレイヤーIDで付与依頼する", func(t *testing.T) {
 			// 空文字 ID をどう扱うかは account の責務のため、gateway は付与依頼を送るところまでを担保する。
 			repo := &mockGamePlayerRepo{
 				markAwardedReturn: true,
@@ -288,7 +288,7 @@ func TestAwardGameExp(t *testing.T) {
 			assert.Equal(t, "", got.Player2ID)
 		})
 
-		t.Run("2 人のゲームでプレイヤー 1 が勝ったとき、付与依頼に両プレイヤー ID・勝者 1・理由・pvp が載る", func(t *testing.T) {
+		t.Run("2人のゲームでプレイヤー1が勝ったとき、付与依頼に両プレイヤーID・勝者1・理由・pvpが載る", func(t *testing.T) {
 			repo := &mockGamePlayerRepo{
 				markAwardedReturn: true,
 				lookupEntries: []port.GamePlayerEntry{
@@ -309,7 +309,7 @@ func TestAwardGameExp(t *testing.T) {
 			assert.Equal(t, gamedesign.MatchTypePvp, got.MatchType)
 		})
 
-		t.Run("参加者が 1 人だけ (NPC 戦) のとき、付与依頼のマッチ種別が npc になる", func(t *testing.T) {
+		t.Run("参加者が1人だけ (NPC戦)のとき、付与依頼のマッチ種別がnpcになる", func(t *testing.T) {
 			repo := &mockGamePlayerRepo{
 				markAwardedReturn: true,
 				lookupEntries: []port.GamePlayerEntry{

@@ -107,7 +107,7 @@ var validEnv = map[string]string{
 
 func TestFromEnv(t *testing.T) {
 	t.Run("環境変数からのサービス設定の読み込み", func(t *testing.T) {
-		t.Run("必須 env が揃うとき、8 つの下流サービスの宛先・DB 接続文字列・内部認証の署名鍵が設定に入る", func(t *testing.T) {
+		t.Run("必須envが揃うとき、8つの下流サービスの宛先・DB接続文字列・内部認証の署名鍵が設定に入る", func(t *testing.T) {
 			setEnv(t, validEnv)
 
 			cfg, err := FromEnv()
@@ -125,7 +125,7 @@ func TestFromEnv(t *testing.T) {
 			assert.Equal(t, testPrivateKeyPEM, cfg.InternalAuthPrivateKey)
 		})
 
-		t.Run("必須 env だけが揃うとき、待受ポートは 9001・動作環境は dev・マッチメイク待ちは 30 秒・アプリの最低/最新バージョンは 0.1.0・強制アップデートは無効になる", func(t *testing.T) {
+		t.Run("必須envだけが揃うとき、待受ポートは9001・動作環境はdev・マッチメイク待ちは30秒・アプリの最低/最新バージョンは0.1.0・強制アップデートは無効になる", func(t *testing.T) {
 			setEnv(t, validEnv)
 
 			cfg, err := FromEnv()
@@ -139,7 +139,7 @@ func TestFromEnv(t *testing.T) {
 			assert.False(t, cfg.AppForceUpdate)
 		})
 
-		t.Run("Cloud SQL・Firestore・Pub/Sub push・Redis の env を指定するとき、それぞれの値が設定に入る", func(t *testing.T) {
+		t.Run("Cloud SQL・Firestore・Pub/Sub push・Redisのenvを指定するとき、それぞれの値が設定に入る", func(t *testing.T) {
 			setEnv(t, mergeEnv(validEnv, map[string]string{
 				"DATABASE_IAM_AUTH_ENABLED":         "true",
 				"CLOUDSQL_CONNECTION_NAME":          "overload-party-test:asia-northeast1:overload-party-db",
@@ -160,7 +160,7 @@ func TestFromEnv(t *testing.T) {
 			assert.Equal(t, "rediss://default:token@redis.test:6379", cfg.UpstashRedisURL)
 		})
 
-		t.Run("アプリの最低バージョンに 1.0.0・最新バージョンに 1.2.0・ストア URL を指定するとき、その 3 つが設定に入る", func(t *testing.T) {
+		t.Run("アプリの最低バージョンに1.0.0・最新バージョンに1.2.0・ストアURLを指定するとき、その3つが設定に入る", func(t *testing.T) {
 			setEnv(t, mergeEnv(validEnv, map[string]string{
 				"APP_MIN_VERSION":    "1.0.0",
 				"APP_LATEST_VERSION": "1.2.0",
@@ -175,7 +175,7 @@ func TestFromEnv(t *testing.T) {
 			assert.Equal(t, "https://store.test/app", cfg.AppStoreURL)
 		})
 
-		t.Run("PORT に 8080 を指定するとき、待受ポートが 8080 になる", func(t *testing.T) {
+		t.Run("PORTに8080を指定するとき、待受ポートが8080になる", func(t *testing.T) {
 			setEnv(t, mergeEnv(validEnv, map[string]string{"PORT": "8080"}))
 
 			cfg, err := FromEnv()
@@ -184,7 +184,7 @@ func TestFromEnv(t *testing.T) {
 			assert.Equal(t, "8080", cfg.Port)
 		})
 
-		t.Run("ENV に prod を指定するとき、動作環境が prod になる", func(t *testing.T) {
+		t.Run("ENVにprodを指定するとき、動作環境がprodになる", func(t *testing.T) {
 			setEnv(t, mergeEnv(validEnv, map[string]string{"ENV": "prod"}))
 
 			cfg, err := FromEnv()
@@ -193,7 +193,7 @@ func TestFromEnv(t *testing.T) {
 			assert.Equal(t, "prod", cfg.Env)
 		})
 
-		t.Run("MATCHMAKING_TIMEOUT_SEC に 120 を指定するとき、マッチメイク待ちが 120 秒になる", func(t *testing.T) {
+		t.Run("MATCHMAKING_TIMEOUT_SECに120を指定するとき、マッチメイク待ちが120秒になる", func(t *testing.T) {
 			setEnv(t, mergeEnv(validEnv, map[string]string{"MATCHMAKING_TIMEOUT_SEC": "120"}))
 
 			cfg, err := FromEnv()
@@ -202,7 +202,7 @@ func TestFromEnv(t *testing.T) {
 			assert.Equal(t, 120, cfg.MatchmakingTimeoutSec)
 		})
 
-		t.Run("APP_FORCE_UPDATE に true を指定するとき、強制アップデートが有効になる", func(t *testing.T) {
+		t.Run("APP_FORCE_UPDATEにtrueを指定するとき、強制アップデートが有効になる", func(t *testing.T) {
 			setEnv(t, mergeEnv(validEnv, map[string]string{"APP_FORCE_UPDATE": "true"}))
 
 			cfg, err := FromEnv()
@@ -211,7 +211,7 @@ func TestFromEnv(t *testing.T) {
 			assert.True(t, cfg.AppForceUpdate)
 		})
 
-		t.Run("ALLOWED_ORIGINS をカンマ区切りで指定するとき、許可オリジンが分割して入る", func(t *testing.T) {
+		t.Run("ALLOWED_ORIGINSをカンマ区切りで指定するとき、許可オリジンが分割して入る", func(t *testing.T) {
 			setEnv(t, mergeEnv(validEnv, map[string]string{"ALLOWED_ORIGINS": "http://localhost:3000, https://example.com"}))
 
 			cfg, err := FromEnv()
@@ -260,12 +260,12 @@ func TestFromEnv(t *testing.T) {
 			wantErr string
 		}{
 			{
-				name:    "MATCHMAKING_TIMEOUT_SEC が数値でない abc のとき、その変数名を挙げたエラーになる",
+				name:    "MATCHMAKING_TIMEOUT_SECが数値でないabcのとき、その変数名を挙げたエラーになる",
 				envs:    mergeEnv(validEnv, map[string]string{"MATCHMAKING_TIMEOUT_SEC": "abc"}),
 				wantErr: `MATCHMAKING_TIMEOUT_SEC "abc"`,
 			},
 			{
-				name:    `APP_FORCE_UPDATE が "true"/"false" 以外の yes のとき、その変数名を挙げたエラーになる`,
+				name:    `APP_FORCE_UPDATEが "true"/"false" 以外のyesのとき、その変数名を挙げたエラーになる`,
 				envs:    mergeEnv(validEnv, map[string]string{"APP_FORCE_UPDATE": "yes"}),
 				wantErr: "APP_FORCE_UPDATE must be",
 			},
@@ -319,7 +319,7 @@ func TestParseBool(t *testing.T) {
 }
 
 func TestSplitCSV(t *testing.T) {
-	t.Run("CSV 文字列の分割", func(t *testing.T) {
+	t.Run("CSV文字列の分割", func(t *testing.T) {
 		emptyCases := []struct {
 			name  string
 			input string
@@ -338,9 +338,9 @@ func TestSplitCSV(t *testing.T) {
 			input string
 			want  []string
 		}{
-			{name: `"a" のとき、[a] になる`, input: "a", want: []string{"a"}},
-			{name: `"a,b,c" のとき、[a b c] になる`, input: "a,b,c", want: []string{"a", "b", "c"}},
-			{name: `"a, b , c" のとき、空白を trim して [a b c] になる`, input: "a, b , c", want: []string{"a", "b", "c"}},
+			{name: `"a" のとき、[a]になる`, input: "a", want: []string{"a"}},
+			{name: `"a,b,c" のとき、[a b c]になる`, input: "a,b,c", want: []string{"a", "b", "c"}},
+			{name: `"a, b , c" のとき、空白をtrimして [a b c]になる`, input: "a, b , c", want: []string{"a", "b", "c"}},
 		}
 		for _, tc := range splitCases {
 			t.Run(tc.name, func(t *testing.T) {

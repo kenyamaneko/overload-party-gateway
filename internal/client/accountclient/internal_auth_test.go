@@ -26,8 +26,8 @@ func newStatusServer(t *testing.T, status int, body string) *httptest.Server {
 }
 
 func TestClient_InjectsInternalAuthHeader(t *testing.T) {
-	t.Run("X-Internal-Auth header の注入", func(t *testing.T) {
-		t.Run("ctx に格納した token が X-Internal-Auth header として送られる", func(t *testing.T) {
+	t.Run("X-Internal-Auth headerの注入", func(t *testing.T) {
+		t.Run("ctxに格納したtokenがX-Internal-Auth headerとして送られる", func(t *testing.T) {
 			const wantToken = "test.jwt.token"
 			var got string
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -52,13 +52,13 @@ func TestClient_MapsDownstreamStatusToPortSentinel(t *testing.T) {
 		wantErr error
 	}{
 		{
-			name:    "重複登録の 409 は ErrPlayerAlreadyRegistered に写像する",
+			name:    "重複登録の409はErrPlayerAlreadyRegisteredに写像する",
 			status:  http.StatusConflict,
 			call:    func(ctx context.Context, c *Client) error { _, err := c.Register(ctx, "uid-1"); return err },
 			wantErr: port.ErrPlayerAlreadyRegistered,
 		},
 		{
-			name:    "未登録プレイヤーの 404 は ErrAccountNotFound に写像する",
+			name:    "未登録プレイヤーの404はErrAccountNotFoundに写像する",
 			status:  http.StatusNotFound,
 			call:    func(ctx context.Context, c *Client) error { _, err := c.Login(ctx, "uid-1"); return err },
 			wantErr: port.ErrAccountNotFound,
@@ -86,18 +86,18 @@ func TestClient_FindByFirebaseUID_FoldsNotFoundToNil(t *testing.T) {
 		wantPlayer bool
 	}{
 		{
-			name:       "未登録は 404 を (nil, nil) に畳む",
+			name:       "未登録は404を (nil, nil)に畳む",
 			status:     http.StatusNotFound,
 			wantPlayer: false,
 		},
 		{
-			name:       "登録済みは player を返す",
+			name:       "登録済みはplayerを返す",
 			status:     http.StatusOK,
 			wantPlayer: true,
 		},
 	}
 
-	t.Run("Firebase UID によるプレイヤー検索", func(t *testing.T) {
+	t.Run("Firebase UIDによるプレイヤー検索", func(t *testing.T) {
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
 				srv := newStatusServer(t, tc.status, `{}`)

@@ -51,8 +51,8 @@ func decodeBody(t *testing.T, w *httptest.ResponseRecorder) map[string]any {
 }
 
 func TestHandleMatchMade(t *testing.T) {
-	t.Run("push 配信エンドポイント", func(t *testing.T) {
-		t.Run("有効な envelope のとき、200 を返し復号したペイロードを処理へ渡す", func(t *testing.T) {
+	t.Run("push配信エンドポイント", func(t *testing.T) {
+		t.Run("有効なenvelopeのとき、200を返し復号したペイロードを処理へ渡す", func(t *testing.T) {
 			processor := &fakePushProcessor{}
 			r := newPushTestRouter(processor)
 			payload := base64.StdEncoding.EncodeToString([]byte(`{"event_type":"match_made"}`))
@@ -66,7 +66,7 @@ func TestHandleMatchMade(t *testing.T) {
 			assert.Equal(t, `{"event_type":"match_made"}`, string(processor.calls[0]))
 		})
 
-		t.Run("JSON として不正な本文のとき、400 とレスポンスボディに invalid push envelope が返る", func(t *testing.T) {
+		t.Run("JSONとして不正な本文のとき、400とレスポンスボディにinvalid push envelopeが返る", func(t *testing.T) {
 			processor := &fakePushProcessor{}
 			r := newPushTestRouter(processor)
 
@@ -77,7 +77,7 @@ func TestHandleMatchMade(t *testing.T) {
 			assert.Empty(t, processor.calls)
 		})
 
-		t.Run("message.data が欠けている envelope のとき、400 とレスポンスボディに invalid push envelope が返る", func(t *testing.T) {
+		t.Run("message.dataが欠けているenvelopeのとき、400とレスポンスボディにinvalid push envelopeが返る", func(t *testing.T) {
 			processor := &fakePushProcessor{}
 			r := newPushTestRouter(processor)
 
@@ -88,7 +88,7 @@ func TestHandleMatchMade(t *testing.T) {
 			assert.Empty(t, processor.calls)
 		})
 
-		t.Run("message フィールド自体が無い envelope のとき、400 とレスポンスボディに invalid push envelope が返る", func(t *testing.T) {
+		t.Run("messageフィールド自体が無いenvelopeのとき、400とレスポンスボディにinvalid push envelopeが返る", func(t *testing.T) {
 			processor := &fakePushProcessor{}
 			r := newPushTestRouter(processor)
 
@@ -99,7 +99,7 @@ func TestHandleMatchMade(t *testing.T) {
 			assert.Empty(t, processor.calls)
 		})
 
-		t.Run("message.data が空文字のとき、400 とレスポンスボディに invalid push envelope が返る", func(t *testing.T) {
+		t.Run("message.dataが空文字のとき、400とレスポンスボディにinvalid push envelopeが返る", func(t *testing.T) {
 			processor := &fakePushProcessor{}
 			r := newPushTestRouter(processor)
 
@@ -110,7 +110,7 @@ func TestHandleMatchMade(t *testing.T) {
 			assert.Empty(t, processor.calls)
 		})
 
-		t.Run("message フィールドの中身が空のとき、400 とレスポンスボディに invalid push envelope が返る", func(t *testing.T) {
+		t.Run("messageフィールドの中身が空のとき、400とレスポンスボディにinvalid push envelopeが返る", func(t *testing.T) {
 			processor := &fakePushProcessor{}
 			r := newPushTestRouter(processor)
 
@@ -121,7 +121,7 @@ func TestHandleMatchMade(t *testing.T) {
 			assert.Empty(t, processor.calls)
 		})
 
-		t.Run("message.data が base64 として不正なとき、400 とレスポンスボディに invalid base64 data が返る", func(t *testing.T) {
+		t.Run("message.dataがbase64として不正なとき、400とレスポンスボディにinvalid base64 dataが返る", func(t *testing.T) {
 			processor := &fakePushProcessor{}
 			r := newPushTestRouter(processor)
 
@@ -132,7 +132,7 @@ func TestHandleMatchMade(t *testing.T) {
 			assert.Empty(t, processor.calls, "base64 復号に失敗した時点で処理へ渡してはならない")
 		})
 
-		t.Run("処理が失敗するとき、500 とレスポンスボディに failed to process message が返る", func(t *testing.T) {
+		t.Run("処理が失敗するとき、500とレスポンスボディにfailed to process messageが返る", func(t *testing.T) {
 			processor := &fakePushProcessor{err: errors.New("dedup handler failed")}
 			r := newPushTestRouter(processor)
 			payload := base64.StdEncoding.EncodeToString([]byte(`{"event_type":"match_made"}`))

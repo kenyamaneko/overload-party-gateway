@@ -34,8 +34,8 @@ func newErrorSigner() *internalauth.Signer {
 }
 
 func TestIssueInternalAuth(t *testing.T) {
-	t.Run("内部認証 token の発行と注入", func(t *testing.T) {
-		t.Run("player_id があるとき、token を発行し Request.Context に注入する", func(t *testing.T) {
+	t.Run("内部認証tokenの発行と注入", func(t *testing.T) {
+		t.Run("player_idがあるとき、tokenを発行しRequest.Contextに注入する", func(t *testing.T) {
 			engine := gin.New()
 			var observedToken string
 			var observedOK bool
@@ -66,13 +66,13 @@ func TestIssueInternalAuth(t *testing.T) {
 			wantStatus  int
 		}{
 			{
-				name:        "player_id が未設定のとき、401 になり下流に到達しない",
+				name:        "player_idが未設定のとき、401になり下流に到達しない",
 				setupPlayer: func(c *gin.Context) { c.Next() },
 				signer:      newTestSigner(),
 				wantStatus:  http.StatusUnauthorized,
 			},
 			{
-				name: "signer がエラーのとき、500 になり下流に到達しない",
+				name: "signerがエラーのとき、500になり下流に到達しない",
 				setupPlayer: func(c *gin.Context) {
 					c.Set(string(playerIDKey), "player-123")
 					c.Next()

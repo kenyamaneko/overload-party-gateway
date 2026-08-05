@@ -31,7 +31,7 @@ func TestCORS(t *testing.T) {
 		allowMethods = "GET, POST, PUT, DELETE, OPTIONS"
 		allowHeaders = "Authorization, Content-Type"
 	)
-	t.Run("CORS ヘッダの付与", func(t *testing.T) {
+	t.Run("CORSヘッダの付与", func(t *testing.T) {
 		tests := []struct {
 			name           string
 			allowedOrigins []string
@@ -44,14 +44,14 @@ func TestCORS(t *testing.T) {
 			wantMaxAge     string
 		}{
 			{
-				name:           "Origin header が無いとき、CORS ヘッダなしで通過する",
+				name:           "Origin headerが無いとき、CORSヘッダなしで通過する",
 				allowedOrigins: []string{"http://example.com"},
 				method:         http.MethodGet,
 				reqHeaders:     nil,
 				wantCode:       http.StatusOK,
 			},
 			{
-				name:           "許可された Origin のとき、全 CORS ヘッダが付く",
+				name:           "許可されたOriginのとき、全CORSヘッダが付く",
 				allowedOrigins: []string{"http://example.com", "http://other.com"},
 				method:         http.MethodGet,
 				reqHeaders:     map[string]string{"Origin": "http://example.com"},
@@ -62,14 +62,14 @@ func TestCORS(t *testing.T) {
 				wantMaxAge:     corsMaxAge,
 			},
 			{
-				name:           "許可されない Origin のとき、CORS ヘッダなしで通過する",
+				name:           "許可されないOriginのとき、CORSヘッダなしで通過する",
 				allowedOrigins: []string{"http://example.com"},
 				method:         http.MethodGet,
 				reqHeaders:     map[string]string{"Origin": "http://evil.com"},
 				wantCode:       http.StatusOK,
 			},
 			{
-				name:           "許可リストが空のとき、任意の Origin を許可する",
+				name:           "許可リストが空のとき、任意のOriginを許可する",
 				allowedOrigins: nil,
 				method:         http.MethodGet,
 				reqHeaders:     map[string]string{"Origin": "http://anything.com"},
@@ -80,7 +80,7 @@ func TestCORS(t *testing.T) {
 				wantMaxAge:     corsMaxAge,
 			},
 			{
-				name:           "許可された Origin への preflight のとき、204 と CORS ヘッダを返す",
+				name:           "許可されたOriginへのpreflightのとき、204とCORSヘッダを返す",
 				allowedOrigins: []string{"http://example.com"},
 				method:         http.MethodOptions,
 				reqHeaders:     map[string]string{"Origin": "http://example.com"},
@@ -91,7 +91,7 @@ func TestCORS(t *testing.T) {
 				wantMaxAge:     corsMaxAge,
 			},
 			{
-				name:           "許可されない Origin からの preflight のとき、204 で応答せず CORS ヘッダなしで後続処理に渡る",
+				name:           "許可されないOriginからのpreflightのとき、204で応答せずCORSヘッダなしで後続処理に渡る",
 				allowedOrigins: []string{"http://example.com"},
 				method:         http.MethodOptions,
 				reqHeaders:     map[string]string{"Origin": "http://evil.com"},

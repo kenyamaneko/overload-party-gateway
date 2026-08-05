@@ -18,8 +18,8 @@ func TestResetTurnTimer(t *testing.T) {
 			name            string
 			timeBankSeconds int64
 		}{
-			{name: "timeBank が 0 のとき、タイマーを登録しない", timeBankSeconds: 0},
-			{name: "timeBank が -5 のとき、タイマーを登録しない", timeBankSeconds: -5},
+			{name: "timeBankが0のとき、タイマーを登録しない", timeBankSeconds: 0},
+			{name: "timeBankが -5のとき、タイマーを登録しない", timeBankSeconds: -5},
 		}
 		for _, tc := range nonPositiveCases {
 			t.Run(tc.name, func(t *testing.T) {
@@ -35,7 +35,7 @@ func TestResetTurnTimer(t *testing.T) {
 			})
 		}
 
-		t.Run("正の timeBank のとき、アクティブプレイヤー付きで登録される", func(t *testing.T) {
+		t.Run("正のtimeBankのとき、アクティブプレイヤー付きで登録される", func(t *testing.T) {
 			relay, _ := newTestRelay()
 			relay.JoinGame("p1", "g1", 1)
 
@@ -50,7 +50,7 @@ func TestResetTurnTimer(t *testing.T) {
 			relay.cancelTurnTimer("g1")
 		})
 
-		t.Run("別プレイヤー p2 で再登録すると、アクティブプレイヤーが p2 に置き換わる", func(t *testing.T) {
+		t.Run("別プレイヤーp2で再登録すると、アクティブプレイヤーがp2に置き換わる", func(t *testing.T) {
 			relay, _ := newTestRelay()
 			relay.JoinGame("p1", "g1", 1)
 			relay.JoinGame("p2", "g1", 2)
@@ -67,7 +67,7 @@ func TestResetTurnTimer(t *testing.T) {
 			relay.cancelTurnTimer("g1")
 		})
 
-		t.Run("再登録すると、旧プレイヤー p1 はアクティブプレイヤーとして残らない", func(t *testing.T) {
+		t.Run("再登録すると、旧プレイヤーp1はアクティブプレイヤーとして残らない", func(t *testing.T) {
 			// ターン交代済みの旧プレイヤーへの誤 forfeit を防ぐ分岐を契約として確かめる。
 			// 実際の発火を短い timeBank で観測すると不安定なので、旧プレイヤーが
 			// activePlayerID として残っていないことだけを検証する。
@@ -92,7 +92,7 @@ func TestResetTurnTimer(t *testing.T) {
 
 func TestResetTurnTimer_TimerStoreMirroring(t *testing.T) {
 	t.Run("ターン期限の外部保存先への書き込み", func(t *testing.T) {
-		t.Run("正の timeBank のとき、発火時刻を絶対時刻として書き込む", func(t *testing.T) {
+		t.Run("正のtimeBankのとき、発火時刻を絶対時刻として書き込む", func(t *testing.T) {
 			relay, _ := newTestRelay()
 			store := &fakeTimerStore{}
 			relay.timerStore = store
@@ -111,7 +111,7 @@ func TestResetTurnTimer_TimerStoreMirroring(t *testing.T) {
 			relay.cancelTurnTimer("g1")
 		})
 
-		t.Run("timeBank が 0 のとき、書き込まず期限を削除する", func(t *testing.T) {
+		t.Run("timeBankが0のとき、書き込まず期限を削除する", func(t *testing.T) {
 			relay, _ := newTestRelay()
 			store := &fakeTimerStore{}
 			relay.timerStore = store
@@ -205,12 +205,12 @@ func TestIsCanceled(t *testing.T) {
 			err  error
 			want bool
 		}{
-			{name: "context.Canceled のとき、true になる", err: context.Canceled, want: true},
-			{name: "context.DeadlineExceeded のとき、true になる", err: context.DeadlineExceeded, want: true},
+			{name: "context.Canceledのとき、trueになる", err: context.Canceled, want: true},
+			{name: "context.DeadlineExceededのとき、trueになる", err: context.DeadlineExceeded, want: true},
 			// bare string ≠ wrap: 文字列に Canceled を含むだけでは errors.Is に一致しない。
-			{name: "文字列に Canceled を含むだけのエラーのとき、false になる", err: errors.New("wrap: " + context.Canceled.Error()), want: false},
-			{name: "無関係なエラーのとき、false になる", err: errFake, want: false},
-			{name: "nil のとき、false になる", err: nil, want: false},
+			{name: "文字列にCanceledを含むだけのエラーのとき、falseになる", err: errors.New("wrap: " + context.Canceled.Error()), want: false},
+			{name: "無関係なエラーのとき、falseになる", err: errFake, want: false},
+			{name: "nilのとき、falseになる", err: nil, want: false},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {

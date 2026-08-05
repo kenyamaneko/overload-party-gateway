@@ -18,7 +18,7 @@ import (
 
 func TestClient_GetDeckCards(t *testing.T) {
 	t.Run("デッキカードの取得", func(t *testing.T) {
-		t.Run("デッキ ID を指定すると、カード一覧とルーチン/スペシャル施策 ID を返す", func(t *testing.T) {
+		t.Run("デッキIDを指定すると、カード一覧とルーチン/スペシャル施策IDを返す", func(t *testing.T) {
 			const (
 				wantRoutine = "RTN-0007"
 				wantSpecial = "SPC-0042"
@@ -54,12 +54,12 @@ func TestClient_GetDeckCards_PropagatesDownstreamError(t *testing.T) {
 		wantErr error
 	}{
 		{
-			name:    "デッキ不在の 404 は not found を伝播する",
+			name:    "デッキ不在の404はnot foundを伝播する",
 			status:  http.StatusNotFound,
 			wantErr: apicardclient.ErrNotFound,
 		},
 		{
-			name:    "5xx は internal server error を伝播する",
+			name:    "5xxはinternal server errorを伝播する",
 			status:  http.StatusInternalServerError,
 			wantErr: apicardclient.ErrInternalServer,
 		},

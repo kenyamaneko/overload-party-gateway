@@ -231,14 +231,14 @@ func TestRegister_WasLate(t *testing.T) {
 
 func TestIsConnected(t *testing.T) {
 	t.Run("接続状況の判定", func(t *testing.T) {
-		t.Run("Register 済みのプレイヤーは true になる", func(t *testing.T) {
+		t.Run("Register済みのプレイヤーはtrueになる", func(t *testing.T) {
 			hub := newTestHub(nil, false, "")
 			hub.Register(NewConnection(nil, "p1"))
 
 			assert.True(t, hub.IsConnected("p1"))
 		})
 
-		t.Run("Unregister 後は false になる", func(t *testing.T) {
+		t.Run("Unregister後はfalseになる", func(t *testing.T) {
 			hub := newTestHub(nil, false, "")
 			conn := NewConnection(nil, "p1")
 			hub.Register(conn)
@@ -248,7 +248,7 @@ func TestIsConnected(t *testing.T) {
 			assert.False(t, hub.IsConnected("p1"))
 		})
 
-		t.Run("一度も接続していないプレイヤーは false になる", func(t *testing.T) {
+		t.Run("一度も接続していないプレイヤーはfalseになる", func(t *testing.T) {
 			hub := newTestHub(nil, false, "")
 
 			assert.False(t, hub.IsConnected("unknown"))
@@ -258,7 +258,7 @@ func TestIsConnected(t *testing.T) {
 
 func TestIsDisconnectDeadlineExpired(t *testing.T) {
 	t.Run("切断猶予期限の期限切れ判定", func(t *testing.T) {
-		t.Run("インメモリのタイマーがまだ残っているとき、false になる", func(t *testing.T) {
+		t.Run("インメモリのタイマーがまだ残っているとき、falseになる", func(t *testing.T) {
 			hub := newTestHub(nil, true, "game_1")
 			conn := NewConnection(nil, "p1")
 			hub.Register(conn)
@@ -270,7 +270,7 @@ func TestIsDisconnectDeadlineExpired(t *testing.T) {
 			assert.False(t, expired)
 		})
 
-		t.Run("インメモリにも外部保存先にも記録が無いとき、false になる", func(t *testing.T) {
+		t.Run("インメモリにも外部保存先にも記録が無いとき、falseになる", func(t *testing.T) {
 			hub := newTestHub(&fakeTimerStore{}, true, "game_1")
 
 			expired, err := hub.IsDisconnectDeadlineExpired("p1")
@@ -279,7 +279,7 @@ func TestIsDisconnectDeadlineExpired(t *testing.T) {
 			assert.False(t, expired)
 		})
 
-		t.Run("インメモリに記録が無く外部保存先の期限がまだ先のとき、false になる", func(t *testing.T) {
+		t.Run("インメモリに記録が無く外部保存先の期限がまだ先のとき、falseになる", func(t *testing.T) {
 			store := &fakeTimerStore{
 				getDisconnectFound:  true,
 				getDisconnectReturn: portDisconnectDeadline("game_1", time.Now().Add(time.Minute)),
@@ -292,7 +292,7 @@ func TestIsDisconnectDeadlineExpired(t *testing.T) {
 			assert.False(t, expired)
 		})
 
-		t.Run("インメモリに記録が無く外部保存先の期限が過ぎているとき、true になる", func(t *testing.T) {
+		t.Run("インメモリに記録が無く外部保存先の期限が過ぎているとき、trueになる", func(t *testing.T) {
 			store := &fakeTimerStore{
 				getDisconnectFound:  true,
 				getDisconnectReturn: portDisconnectDeadline("game_1", time.Now().Add(-time.Minute)),
@@ -305,7 +305,7 @@ func TestIsDisconnectDeadlineExpired(t *testing.T) {
 			assert.True(t, expired)
 		})
 
-		t.Run("インメモリに記録が無く外部保存先の期限にちょうど達しているとき、true になる", func(t *testing.T) {
+		t.Run("インメモリに記録が無く外部保存先の期限にちょうど達しているとき、trueになる", func(t *testing.T) {
 			now := time.Now()
 			store := &fakeTimerStore{
 				getDisconnectFound:  true,
@@ -319,7 +319,7 @@ func TestIsDisconnectDeadlineExpired(t *testing.T) {
 			assert.True(t, expired, "a deadline equal to the check time counts as expired")
 		})
 
-		t.Run("インメモリに記録が無く外部保存先の期限に達する直前のとき、false になる", func(t *testing.T) {
+		t.Run("インメモリに記録が無く外部保存先の期限に達する直前のとき、falseになる", func(t *testing.T) {
 			store := &fakeTimerStore{
 				getDisconnectFound:  true,
 				getDisconnectReturn: portDisconnectDeadline("game_1", time.Now().Add(50*time.Millisecond)),
@@ -332,7 +332,7 @@ func TestIsDisconnectDeadlineExpired(t *testing.T) {
 			assert.False(t, expired)
 		})
 
-		t.Run("インメモリに記録が無く外部保存先の期限を過ぎた直後のとき、true になる", func(t *testing.T) {
+		t.Run("インメモリに記録が無く外部保存先の期限を過ぎた直後のとき、trueになる", func(t *testing.T) {
 			store := &fakeTimerStore{
 				getDisconnectFound:  true,
 				getDisconnectReturn: portDisconnectDeadline("game_1", time.Now().Add(-50*time.Millisecond)),

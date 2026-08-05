@@ -167,7 +167,7 @@ func newTestRelay() (*GameRelay, *mockBattleClient) {
 }
 
 func TestBattleStateMeta_Parsing(t *testing.T) {
-	t.Run("battle 状態 JSON の最小射影パース", func(t *testing.T) {
+	t.Run("battle状態JSONの最小射影パース", func(t *testing.T) {
 		tests := []struct {
 			name            string
 			raw             string
@@ -176,7 +176,7 @@ func TestBattleStateMeta_Parsing(t *testing.T) {
 			wantTimeBank    int64
 		}{
 			{
-				name: "全フィールドを含む JSON のとき、currentTurn/isMyTurn/timeBank を取り出す",
+				name: "全フィールドを含むJSONのとき、currentTurn/isMyTurn/timeBankを取り出す",
 				raw: `{
 					"currentTurn": 5,
 					"isMyTurn": true,
@@ -192,7 +192,7 @@ func TestBattleStateMeta_Parsing(t *testing.T) {
 				wantTimeBank:    120,
 			},
 			{
-				name: "isMyTurn=false の JSON のとき、そのまま反映する",
+				name: "isMyTurn=falseのJSONのとき、そのまま反映する",
 				raw: `{
 					"currentTurn": 3,
 					"isMyTurn": false,
@@ -203,7 +203,7 @@ func TestBattleStateMeta_Parsing(t *testing.T) {
 				wantTimeBank:    0,
 			},
 			{
-				name:            "空 JSON のとき、ゼロ値になる",
+				name:            "空JSONのとき、ゼロ値になる",
 				raw:             `{}`,
 				wantCurrentTurn: 0,
 				wantIsMyTurn:    false,
@@ -224,8 +224,8 @@ func TestBattleStateMeta_Parsing(t *testing.T) {
 }
 
 func TestRunNpcTurns(t *testing.T) {
-	t.Run("NPC ターンの自動進行", func(t *testing.T) {
-		t.Run("初期結果が nil のとき、NPC ターンを進めず nil を返す", func(t *testing.T) {
+	t.Run("NPCターンの自動進行", func(t *testing.T) {
+		t.Run("初期結果がnilのとき、NPCターンを進めずnilを返す", func(t *testing.T) {
 			relay, bc := newTestRelay()
 			ctx := context.Background()
 
@@ -235,7 +235,7 @@ func TestRunNpcTurns(t *testing.T) {
 			assert.Equal(t, 0, bc.advanceNpcCalls, "should not call AdvanceNpcTurn when initial result is nil")
 		})
 
-		t.Run("初期結果が NpcPending=false のとき、ループせず同じ結果を返す", func(t *testing.T) {
+		t.Run("初期結果がNpcPending=falseのとき、ループせず同じ結果を返す", func(t *testing.T) {
 			relay, bc := newTestRelay()
 			ctx := context.Background()
 			initial := &service.ActionResult{NpcPending: false}
@@ -246,7 +246,7 @@ func TestRunNpcTurns(t *testing.T) {
 			assert.Equal(t, 0, bc.advanceNpcCalls, "should not loop when initial NpcPending=false")
 		})
 
-		t.Run("初期結果が GameOver=true のとき、ループせず同じ結果を返す", func(t *testing.T) {
+		t.Run("初期結果がGameOver=trueのとき、ループせず同じ結果を返す", func(t *testing.T) {
 			relay, bc := newTestRelay()
 			ctx := context.Background()
 			initial := &service.ActionResult{NpcPending: true, GameOver: true}
@@ -257,7 +257,7 @@ func TestRunNpcTurns(t *testing.T) {
 			assert.Equal(t, 0, bc.advanceNpcCalls, "should not loop when initial GameOver=true")
 		})
 
-		t.Run("NpcPending が続くとき、not-pending になるまでループする", func(t *testing.T) {
+		t.Run("NpcPendingが続くとき、not-pendingになるまでループする", func(t *testing.T) {
 			relay, bc := newTestRelay()
 			ctx := context.Background()
 			bc.advanceNpcQueue = []*service.ActionResult{
@@ -274,7 +274,7 @@ func TestRunNpcTurns(t *testing.T) {
 			assert.Equal(t, 2, bc.advanceNpcCalls)
 		})
 
-		t.Run("GameOver になったとき、即座にループを止める", func(t *testing.T) {
+		t.Run("GameOverになったとき、即座にループを止める", func(t *testing.T) {
 			relay, bc := newTestRelay()
 			ctx := context.Background()
 			bc.advanceNpcQueue = []*service.ActionResult{
@@ -290,7 +290,7 @@ func TestRunNpcTurns(t *testing.T) {
 			assert.Equal(t, 1, bc.advanceNpcCalls, "should stop immediately on GameOver")
 		})
 
-		t.Run("NPC ターンの進行がエラーのとき、直前の結果を返して止める", func(t *testing.T) {
+		t.Run("NPCターンの進行がエラーのとき、直前の結果を返して止める", func(t *testing.T) {
 			relay, bc := newTestRelay()
 			ctx := context.Background()
 			bc.advanceNpcErr = errFake
@@ -302,7 +302,7 @@ func TestRunNpcTurns(t *testing.T) {
 			assert.Equal(t, 1, bc.advanceNpcCalls)
 		})
 
-		t.Run("ループ上限に達したとき、maxNpcTurnIterations 回で止める", func(t *testing.T) {
+		t.Run("ループ上限に達したとき、maxNpcTurnIterations回で止める", func(t *testing.T) {
 			relay, bc := newTestRelay()
 			ctx := context.Background()
 
@@ -326,7 +326,7 @@ func TestRunNpcTurns(t *testing.T) {
 
 func TestJoinGame(t *testing.T) {
 	t.Run("ゲームへの参加", func(t *testing.T) {
-		t.Run("参加すると、playerGames と gameMembers に登録される", func(t *testing.T) {
+		t.Run("参加すると、playerGamesとgameMembersに登録される", func(t *testing.T) {
 			relay, _ := newTestRelay()
 
 			relay.JoinGame("p1", "game_1", 1)
@@ -341,7 +341,7 @@ func TestJoinGame(t *testing.T) {
 			assert.Contains(t, members, "p1")
 		})
 
-		t.Run("2 人が同じゲームに参加すると、両者が members に入る", func(t *testing.T) {
+		t.Run("2人が同じゲームに参加すると、両者がmembersに入る", func(t *testing.T) {
 			relay, _ := newTestRelay()
 
 			relay.JoinGame("p1", "game_1", 1)
@@ -355,7 +355,7 @@ func TestJoinGame(t *testing.T) {
 			assert.Contains(t, members, "p2")
 		})
 
-		t.Run("同じプレイヤーが重複参加しても、members に二重登録されない", func(t *testing.T) {
+		t.Run("同じプレイヤーが重複参加しても、membersに二重登録されない", func(t *testing.T) {
 			relay, _ := newTestRelay()
 
 			relay.JoinGame("p1", "game_1", 1)
@@ -367,7 +367,7 @@ func TestJoinGame(t *testing.T) {
 			assert.Len(t, members, 1, "duplicate join should not add player twice")
 		})
 
-		t.Run("別ゲームに参加し直すと、前のゲームの members から外れる", func(t *testing.T) {
+		t.Run("別ゲームに参加し直すと、前のゲームのmembersから外れる", func(t *testing.T) {
 			relay, _ := newTestRelay()
 
 			relay.JoinGame("p1", "game_1", 1)
@@ -411,7 +411,7 @@ func TestLeaveGame(t *testing.T) {
 			assert.Contains(t, members, "p2")
 		})
 
-		t.Run("最後のプレイヤーが退出すると、gameMembers が破棄される", func(t *testing.T) {
+		t.Run("最後のプレイヤーが退出すると、gameMembersが破棄される", func(t *testing.T) {
 			relay, _ := newTestRelay()
 
 			relay.JoinGame("p1", "game_1", 1)
@@ -496,7 +496,7 @@ func TestResolvePlayerNum(t *testing.T) {
 }
 
 func TestGameIDForPlayer(t *testing.T) {
-	t.Run("プレイヤーのゲーム ID 解決", func(t *testing.T) {
+	t.Run("プレイヤーのゲームID解決", func(t *testing.T) {
 		t.Run("参加前は無く、参加後に取得でき、退出後に再び無くなる", func(t *testing.T) {
 			relay, _ := newTestRelay()
 
@@ -517,7 +517,7 @@ func TestGameIDForPlayer(t *testing.T) {
 
 func TestLeaveAllPlayers(t *testing.T) {
 	t.Run("全プレイヤーの一括退出", func(t *testing.T) {
-		t.Run("呼ぶと、全プレイヤーが外れ gameMembers も破棄される", func(t *testing.T) {
+		t.Run("呼ぶと、全プレイヤーが外れgameMembersも破棄される", func(t *testing.T) {
 			relay, _ := newTestRelay()
 
 			relay.JoinGame("p1", "game_1", 1)
