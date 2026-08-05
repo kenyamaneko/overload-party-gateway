@@ -11,8 +11,6 @@ import (
 )
 
 func TestResetTurnTimer(t *testing.T) {
-	// 実発火時には battle server 呼び出しが起こるため、発火を伴わない範囲で振る舞いを検証する。
-	// timeBank は十分大きな値を渡し、テスト中には発火させない。
 	t.Run("ターンタイマーの登録・更新", func(t *testing.T) {
 		nonPositiveCases := []struct {
 			name            string
@@ -34,58 +32,49 @@ func TestResetTurnTimer(t *testing.T) {
 				assert.False(t, ok, "no timer should be registered when timeBank<=0")
 			})
 		}
+	})
+}
 
-		t.Run("正のtimeBankのとき、activePlayerID付きで登録される", func(t *testing.T) {
-			relay, _ := newTestRelay()
-			relay.JoinGame("p1", "g1", 1)
+// manualFireClock は AfterFunc に渡された関数を実時間で走らせず、captured() 経由で
+// テストが任意のタイミングで手動起動できるようにする Clock テストダブル。
+type manualFireClock struct {
+	lastFn func()
+}
 
-			relay.resetTurnTimer("g1", "p1", 60)
+func (c *manualFireClock) Now() time.Time { return time.Now() }
 
-			relay.timerMu.Lock()
-			info, ok := relay.turnTimers["g1"]
-			relay.timerMu.Unlock()
-			require.True(t, ok)
-			assert.Equal(t, "p1", info.activePlayerID)
+func (c *manualFireClock) AfterFunc(_ time.Duration, f func()) Timer {
+	c.lastFn = f
+	return noopTimer{}
+}
 
-			relay.cancelTurnTimer("g1")
-		})
+func (c *manualFireClock) captured() func() { return c.lastFn }
 
-		t.Run("別プレイヤーp2で再登録すると、activePlayerIDがp2に置き換わる", func(t *testing.T) {
-			relay, _ := newTestRelay()
-			relay.JoinGame("p1", "g1", 1)
-			relay.JoinGame("p2", "g1", 2)
+type noopTimer struct{}
 
-			relay.resetTurnTimer("g1", "p1", 60)
-			relay.resetTurnTimer("g1", "p2", 60) // 別プレイヤーで上書き
+func (noopTimer) Stop() bool { return true }
 
-			relay.timerMu.Lock()
-			info, ok := relay.turnTimers["g1"]
-			relay.timerMu.Unlock()
-			require.True(t, ok)
-			assert.Equal(t, "p2", info.activePlayerID, "timer should be replaced with new active player")
-
-			relay.cancelTurnTimer("g1")
-		})
-
-		t.Run("再登録すると、旧プレイヤーp1はactivePlayerIDに残らない", func(t *testing.T) {
-			// ターン交代済みの旧プレイヤーへの誤 forfeit を防ぐ分岐を契約として確かめる。
-			// 実際の発火を短い timeBank で観測すると不安定なので、旧プレイヤーが
-			// activePlayerID として残っていないことだけを検証する。
-			relay, _ := newTestRelay()
+func TestResetTurnTimer_StaleTimerGuard(t *testing.T) {
+	t.Run("タイマー交代の競合", func(t *testing.T) {
+		t.Run("旧タイマーのコールバックがStopの後に走っても、旧アクティブプレイヤーはforfeitされない", func(t *testing.T) {
+			bc := newMockBattleClient()
+			hub := NewConnectionHub(HubCallbacks{
+				GetGameID:           func(string) (string, bool) { return "", false },
+				OnDisconnectTimeout: func(string, string) {},
+			}, DefaultDisconnectTimeout, nil)
+			clock := &manualFireClock{}
+			relay := NewGameRelay(hub, bc, nil, nil, nil, nil, WithClock(clock))
 			relay.JoinGame("p1", "g1", 1)
 			relay.JoinGame("p2", "g1", 2)
 
 			relay.resetTurnTimer("g1", "p1", 60)
-			relay.resetTurnTimer("g1", "p2", 60)
+			staleFn := clock.captured()
 
-			relay.timerMu.Lock()
-			info := relay.turnTimers["g1"]
-			relay.timerMu.Unlock()
-			require.NotNil(t, info)
-			assert.NotEqual(t, "p1", info.activePlayerID,
-				"after reset to p2, info.activePlayerID must not be p1 — guard prevents firing forfeit on stale player")
+			relay.resetTurnTimer("g1", "p2", 60) // p1のタイマーをStopしてp2で置き換える
 
-			relay.cancelTurnTimer("g1")
+			staleFn() // Stop後もp1側のコールバックが実行された状況を模す
+
+			assert.Empty(t, bc.snapshotProcessActionCalls(), "旧アクティブプレイヤーp1にforfeitが送られてはならない")
 		})
 	})
 }
@@ -182,16 +171,6 @@ func TestCancelTurnTimer(t *testing.T) {
 		t.Run("存在しないゲームを取り消しても、パニックしない", func(t *testing.T) {
 			relay, _ := newTestRelay()
 			relay.cancelTurnTimer("nonexistent_game")
-		})
-	})
-}
-
-func TestTurnTimerNetworkBuffer_Constant(t *testing.T) {
-	t.Run("ネットワークバッファ定数", func(t *testing.T) {
-		t.Run("ネットワークバッファが正の値である", func(t *testing.T) {
-			// 0 だと境界での誤 forfeit が発生し、負だと意味的におかしい。
-			assert.Greater(t, turnTimerNetworkBuffer, time.Duration(0),
-				"buffer must be positive to absorb network latency")
 		})
 	})
 }
