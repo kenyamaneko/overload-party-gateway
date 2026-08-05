@@ -355,7 +355,34 @@ func (m *Manager) HandleMatchMade(ctx context.Context, event apimatchmaking.Matc
 		return nil
 	}
 
-	m.Relay.NotifyMatchFound(gameID, event.Players[0].PlayerID, event.Players[1].PlayerID)
+	return m.notifyMatchFound(ctx, event, gameID)
+}
+
+// notifyMatchFound は両プレイヤーへ成立を通知し、届かなかったプレイヤーが居る場合はマッチを不成立として申告する。
+//
+// ペアは成立の時点でキューから取り出されているため、どちらにも届かなかった場合も申告する。
+// 申告より先に接続が残る側へ失敗を通知するのは、申告が失敗しても待機中のプレイヤーが再試行できるようにするため。
+func (m *Manager) notifyMatchFound(ctx context.Context, event apimatchmaking.MatchMadeEvent, gameID string) error {
+	p1, p2 := event.Players[0].PlayerID, event.Players[1].PlayerID
+	deliveredToP1 := m.Relay.NotifyMatchFoundTo(gameID, p1)
+	deliveredToP2 := m.Relay.NotifyMatchFoundTo(gameID, p2)
+	if deliveredToP1 && deliveredToP2 {
+		return nil
+	}
+
+	slog.Warn("match_made: match found notification undelivered, reporting abandoned",
+		"match_id", event.MatchID, "game_id", gameID,
+		"delivered_to_player1", deliveredToP1, "delivered_to_player2", deliveredToP2)
+
+	if deliveredToP1 {
+		m.Relay.NotifyMatchmakingFailed(p1)
+	}
+	if deliveredToP2 {
+		m.Relay.NotifyMatchmakingFailed(p2)
+	}
+	if err := m.matchmakingClient.ReportMatchAbandoned(ctx, event.MatchID, []string{p1, p2}); err != nil {
+		return fmt.Errorf("match_made: report abandoned %s: %w", event.MatchID, err)
+	}
 	return nil
 }
 

@@ -116,10 +116,11 @@ gateway プロセスが入れ替わると、前のプロセスが待機してい
 3. battleClient で PvP ゲームを作成し、作成した gameID を `gateway.processed_matches` に記録する
 4. `gateway.game_players` に両プレイヤーの行を挿入（EXP 付与冪等キー + playerNum 索引用途、「EXP 付与トリガと冪等性」）
 5. `gateway.processed_matches` で成立通知の送信権を取得する。既に送信済みなら以降を行わず **200** を返す
-6. 両プレイヤーの WS 接続があれば `match_found` を push
-7. 手順 2-3 (claim 後、battle 呼び出しまで) で失敗した場合は claim をロールバックして **500** を返す（Pub/Sub がリトライ）。手順 3 の gameID 記録以降の失敗では claim を解放せず、**500** を返すのみとする（battle 側に既にゲームが存在するため、解放すると再送時に二重作成になる）
+6. 両プレイヤーへ 1 人ずつ `match_found` を push する
+7. 手順 6 で届かなかったプレイヤーが居た場合、接続が残る側へ `matchmaking_error (retryable: true)` を push したうえで、matchmaking サービスへマッチの不成立を申告する。どちらにも届かなかった場合も、ペアは成立の時点でキューから取り出されているため申告する。申告に失敗した場合は **500** を返す
+8. 手順 2-3 (claim 後、battle 呼び出しまで) で失敗した場合は claim をロールバックして **500** を返す（Pub/Sub がリトライ）。手順 3 の gameID 記録以降の失敗では claim を解放せず、**500** を返すのみとする（battle 側に既にゲームが存在するため、解放すると再送時に二重作成になる）
 
-**配信保証**: at-least-once（exactly-once 配信はサポートされない）。同一メッセージがプロセス再起動をまたいで再送されても、手順 1 の `gateway.processed_matches` による永続 dedup により battle のゲーム作成は matchId あたり 1 回に保たれ、手順 5 の送信権により `match_found` も matchId あたり 1 回に保たれる。
+**配信保証**: at-least-once（exactly-once 配信はサポートされない）。同一メッセージがプロセス再起動をまたいで再送されても、手順 1 の `gateway.processed_matches` による永続 dedup により battle のゲーム作成は matchId あたり 1 回に保たれ、手順 5 の送信権により `match_found` も matchId あたり 1 回に保たれる。手順 5 の送信権は手順 7 の申告にもかかるため、申告が失敗した回の再配信は手順 5 で止まる。申告は matchId あたり 1 回だけ試みるものとして扱う。
 
 ---
 

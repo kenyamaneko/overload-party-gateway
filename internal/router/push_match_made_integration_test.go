@@ -179,9 +179,11 @@ func buildPushEngine(
 }
 
 // buildPushRouter は push 受け口だけの router と実 DB のリポジトリを返す。
-func buildPushRouter(battleClient service.BattleClient) (*gin.Engine, *repository.PgGamePlayerRepository) {
+func buildPushRouter(t *testing.T, battleClient service.BattleClient) (*gin.Engine, *repository.PgGamePlayerRepository) {
+	t.Helper()
 	gamePlayerRepo := repository.NewPgGamePlayerRepository(sharedPG.Pool)
-	r, _ := buildPushEngine(battleClient, gamePlayerRepo, nil, nil)
+	matchmakingClient, _ := newMatchmakingFakeClient(t)
+	r, _ := buildPushEngine(battleClient, gamePlayerRepo, nil, matchmakingClient)
 	return r, gamePlayerRepo
 }
 
@@ -189,7 +191,53 @@ func buildPushRouter(battleClient service.BattleClient) (*gin.Engine, *repositor
 func newTestPushRouter(t *testing.T, battleClient service.BattleClient) (*gin.Engine, *repository.PgGamePlayerRepository) {
 	t.Helper()
 	sharedPG.Truncate(t)
-	return buildPushRouter(battleClient)
+	return buildPushRouter(t, battleClient)
+}
+
+// abandonedReports は matchmaking の偽物が受け取った不成立の申告を記録し、先頭
+// failNextCalls 回だけ申告を失敗させる。
+type abandonedReports struct {
+	mu            sync.Mutex
+	received      []apimatchmaking.MatchAbandonedRequest
+	failNextCalls int
+}
+
+// record は申告を記録し、偽物が返すべき HTTP status を返す。
+func (a *abandonedReports) record(req apimatchmaking.MatchAbandonedRequest) int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.received = append(a.received, req)
+	if a.failNextCalls > 0 {
+		a.failNextCalls--
+		return http.StatusInternalServerError
+	}
+	return http.StatusNoContent
+}
+
+func (a *abandonedReports) failNext(calls int) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.failNextCalls = calls
+}
+
+func (a *abandonedReports) snapshot() []apimatchmaking.MatchAbandonedRequest {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return append([]apimatchmaking.MatchAbandonedRequest(nil), a.received...)
+}
+
+// newMatchmakingFakeClient は matchmaking の偽物へ向けたクライアントと、その偽物が
+// 受け取った不成立の申告の記録を返す。
+func newMatchmakingFakeClient(t *testing.T) (port.MatchmakingClient, *abandonedReports) {
+	t.Helper()
+	fake := apimatchmakingserverfake.NewServer()
+	t.Cleanup(fake.Close)
+
+	reports := &abandonedReports{}
+	fake.MatchAbandonedFn = func(req apimatchmaking.MatchAbandonedRequest) (int, any) {
+		return reports.record(req), nil
+	}
+	return matchmakingclient.New(fake.URL(), "test-instance", &http.Client{}), reports
 }
 
 // doMatchMadePush は指定 payload を Pub/Sub push envelope に包んで push 受け口へ POST する。
@@ -214,27 +262,33 @@ func findPlayerByFirebaseUID(firebaseUID string) (int, any) {
 	}
 }
 
-// notifyTestEnv は push 受け口と、成立通知の宛先となる 2 人の WS 接続を保持する。
+// notifyTestEnv は push 受け口と、成立通知の宛先となるプレイヤーの WS 接続を保持する。
+// 接続を持たせなかったプレイヤーの WS 接続は nil になる。
 type notifyTestEnv struct {
-	router *gin.Engine
-	p1Conn *websocket.Conn
-	p2Conn *websocket.Conn
+	router  *gin.Engine
+	p1Conn  *websocket.Conn
+	p2Conn  *websocket.Conn
+	reports *abandonedReports
+}
+
+// connectedPlayers は成立通知の宛先のうち、どちらに WS 接続を持たせるかを表す。
+type connectedPlayers struct {
+	player1 bool
+	player2 bool
 }
 
 // newNotifyTestEnv は DB を空にしたうえで push 受け口と WS 接続の入口を同じ Manager に
-// 載せ、両プレイヤーが接続済みの環境を返す。
-func newNotifyTestEnv(t *testing.T, battleClient service.BattleClient, gamePlayerRepo port.GamePlayerRepo) *notifyTestEnv {
+// 載せ、connected で指定したプレイヤーだけが接続済みの環境を返す。
+func newNotifyTestEnv(t *testing.T, battleClient service.BattleClient, gamePlayerRepo port.GamePlayerRepo, connected connectedPlayers) *notifyTestEnv {
 	t.Helper()
 	sharedPG.Truncate(t)
 
 	accountFake := apiaccountserverfake.NewServer()
 	t.Cleanup(accountFake.Close)
 	accountFake.FindByFirebaseUIDFn = findPlayerByFirebaseUID
-	matchmakingFake := apimatchmakingserverfake.NewServer()
-	t.Cleanup(matchmakingFake.Close)
+	matchmakingClient, reports := newMatchmakingFakeClient(t)
 
 	accountClient := accountclient.New(accountFake.URL(), &http.Client{})
-	matchmakingClient := matchmakingclient.New(matchmakingFake.URL(), "test-instance", &http.Client{})
 
 	r, wsManager := buildPushEngine(battleClient, gamePlayerRepo, accountClient, matchmakingClient)
 	r.GET(wsPath, ws.NewHandler(wsManager, nil, accountClient, nil).HandleUpgrade)
@@ -242,11 +296,14 @@ func newNotifyTestEnv(t *testing.T, battleClient service.BattleClient, gamePlaye
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
 
-	return &notifyTestEnv{
-		router: r,
-		p1Conn: dialPlayer(t, srv, testPlayer1UID),
-		p2Conn: dialPlayer(t, srv, testPlayer2UID),
+	env := &notifyTestEnv{router: r, reports: reports}
+	if connected.player1 {
+		env.p1Conn = dialPlayer(t, srv, testPlayer1UID)
 	}
+	if connected.player2 {
+		env.p2Conn = dialPlayer(t, srv, testPlayer2UID)
+	}
+	return env
 }
 
 // dialPlayer は uid のプレイヤーとして WS 接続を確立する。
@@ -273,6 +330,21 @@ func readMatchFoundGameID(t *testing.T, conn *websocket.Conn) string {
 	var body ws.MatchFoundMessage
 	require.NoError(t, json.Unmarshal(msg.Data, &body))
 	return body.GameID
+}
+
+// readErrorMessage はエラー通知を 1 件受信し、その中身を返す。
+func readErrorMessage(t *testing.T, conn *websocket.Conn) ws.ErrorMessage {
+	t.Helper()
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(matchFoundWait)))
+	_, raw, err := conn.ReadMessage()
+	require.NoError(t, err)
+
+	var msg ws.WSMessage
+	require.NoError(t, json.Unmarshal(raw, &msg))
+	require.Equal(t, genws.WSServerMsgError, msg.Type)
+	var body ws.ErrorMessage
+	require.NoError(t, json.Unmarshal(msg.Data, &body))
+	return body
 }
 
 // requireNoNotification は noMatchFoundWait の間 WS に何も届かないことを確かめる。
@@ -343,7 +415,7 @@ func TestPushMatchMadeE2E(t *testing.T) {
 			// r1 とプロセス内状態を一切共有しない別の router / Manager / MatchSubscriber を
 			// 同じ DB に対して新規に組み立て、プロセス再起動後の再送を再現する。
 			bc2 := &fakeBattleClient{gameID: "should-not-be-used"}
-			r2, gamePlayerRepo2 := buildPushRouter(bc2)
+			r2, gamePlayerRepo2 := buildPushRouter(t, bc2)
 
 			w2 := doMatchMadePush(t, r2, payload)
 
@@ -377,7 +449,7 @@ func TestPushMatchMadeNotification(t *testing.T) {
 	t.Run("push 受け口経由の成立通知", func(t *testing.T) {
 		t.Run("同じ成立イベントが二度届いても、成立通知は各プレイヤーに1回だけ送られる", func(t *testing.T) {
 			bc := &fakeBattleClient{gameID: "01ARZ3NDEKTSV4RRFFQ69G5FB1"}
-			env := newNotifyTestEnv(t, bc, repository.NewPgGamePlayerRepository(sharedPG.Pool))
+			env := newNotifyTestEnv(t, bc, repository.NewPgGamePlayerRepository(sharedPG.Pool), connectedPlayers{player1: true, player2: true})
 			payload := matchMadePayload(t, "mch_e2e_notify_dup")
 
 			require.Equal(t, http.StatusOK, doMatchMadePush(t, env.router, payload).Code)
@@ -395,7 +467,7 @@ func TestPushMatchMadeNotification(t *testing.T) {
 				PgGamePlayerRepository: repository.NewPgGamePlayerRepository(sharedPG.Pool),
 				failNextCalls:          1,
 			}
-			env := newNotifyTestEnv(t, bc, repo)
+			env := newNotifyTestEnv(t, bc, repo, connectedPlayers{player1: true, player2: true})
 			payload := matchMadePayload(t, "mch_e2e_notify_fail")
 
 			w := doMatchMadePush(t, env.router, payload)
@@ -411,7 +483,7 @@ func TestPushMatchMadeNotification(t *testing.T) {
 				PgGamePlayerRepository: repository.NewPgGamePlayerRepository(sharedPG.Pool),
 				failNextCalls:          1,
 			}
-			env := newNotifyTestEnv(t, bc, repo)
+			env := newNotifyTestEnv(t, bc, repo, connectedPlayers{player1: true, player2: true})
 			payload := matchMadePayload(t, "mch_e2e_notify_retry")
 			require.Equal(t, http.StatusInternalServerError, doMatchMadePush(t, env.router, payload).Code)
 
@@ -419,6 +491,89 @@ func TestPushMatchMadeNotification(t *testing.T) {
 
 			assert.Equal(t, "01ARZ3NDEKTSV4RRFFQ69G5FB3", readMatchFoundGameID(t, env.p1Conn))
 			assert.Equal(t, "01ARZ3NDEKTSV4RRFFQ69G5FB3", readMatchFoundGameID(t, env.p2Conn))
+		})
+	})
+}
+
+func TestPushMatchMadeAbandoned(t *testing.T) {
+	t.Run("push 受け口経由のマッチ不成立の申告", func(t *testing.T) {
+		t.Run("片方のプレイヤーだけが接続している状態で成立イベントを受けると、接続している側にマッチング失敗が届く", func(t *testing.T) {
+			bc := &fakeBattleClient{gameID: "01ARZ3NDEKTSV4RRFFQ69G5FC1"}
+			env := newNotifyTestEnv(t, bc, repository.NewPgGamePlayerRepository(sharedPG.Pool), connectedPlayers{player1: true})
+			payload := matchMadePayload(t, "mch_e2e_abandon_notify")
+
+			require.Equal(t, http.StatusOK, doMatchMadePush(t, env.router, payload).Code)
+
+			require.Equal(t, "01ARZ3NDEKTSV4RRFFQ69G5FC1", readMatchFoundGameID(t, env.p1Conn))
+			failure := readErrorMessage(t, env.p1Conn)
+			assert.Equal(t, "matchmaking_error", failure.ErrorCode)
+			assert.True(t, failure.Retryable)
+		})
+
+		t.Run("片方のプレイヤーだけが接続している状態で成立イベントを受けると、matchmaking へ両プレイヤーの不成立が申告される", func(t *testing.T) {
+			bc := &fakeBattleClient{gameID: "01ARZ3NDEKTSV4RRFFQ69G5FC2"}
+			env := newNotifyTestEnv(t, bc, repository.NewPgGamePlayerRepository(sharedPG.Pool), connectedPlayers{player1: true})
+			payload := matchMadePayload(t, "mch_e2e_abandon_report")
+
+			require.Equal(t, http.StatusOK, doMatchMadePush(t, env.router, payload).Code)
+
+			reports := env.reports.snapshot()
+			require.Len(t, reports, 1)
+			assert.Equal(t, "mch_e2e_abandon_report", reports[0].MatchID)
+			assert.Equal(t, []string{testPlayer1ID, testPlayer2ID}, reports[0].PlayerIDs)
+			assert.Equal(t, "player_not_connected", string(reports[0].Reason))
+		})
+
+		t.Run("どちらのプレイヤーも接続していない状態で成立イベントを受けると、matchmaking へ両プレイヤーの不成立が申告される", func(t *testing.T) {
+			bc := &fakeBattleClient{gameID: "01ARZ3NDEKTSV4RRFFQ69G5FC3"}
+			env := newNotifyTestEnv(t, bc, repository.NewPgGamePlayerRepository(sharedPG.Pool), connectedPlayers{})
+			payload := matchMadePayload(t, "mch_e2e_abandon_nobody")
+
+			require.Equal(t, http.StatusOK, doMatchMadePush(t, env.router, payload).Code)
+
+			reports := env.reports.snapshot()
+			require.Len(t, reports, 1)
+			assert.Equal(t, "mch_e2e_abandon_nobody", reports[0].MatchID)
+			assert.Equal(t, []string{testPlayer1ID, testPlayer2ID}, reports[0].PlayerIDs)
+		})
+
+		t.Run("同じ成立イベントが二度届いても、不成立の申告は1回だけ行われる", func(t *testing.T) {
+			bc := &fakeBattleClient{gameID: "01ARZ3NDEKTSV4RRFFQ69G5FC4"}
+			env := newNotifyTestEnv(t, bc, repository.NewPgGamePlayerRepository(sharedPG.Pool), connectedPlayers{player1: true})
+			payload := matchMadePayload(t, "mch_e2e_abandon_dup")
+
+			require.Equal(t, http.StatusOK, doMatchMadePush(t, env.router, payload).Code)
+			require.Equal(t, http.StatusOK, doMatchMadePush(t, env.router, payload).Code)
+
+			reports := env.reports.snapshot()
+			require.Len(t, reports, 1)
+			assert.Equal(t, "mch_e2e_abandon_dup", reports[0].MatchID)
+		})
+
+		t.Run("不成立の申告が失敗すると push 応答が 500 になり、同じ成立イベントが再配信されても申告は再試行されない", func(t *testing.T) {
+			bc := &fakeBattleClient{gameID: "01ARZ3NDEKTSV4RRFFQ69G5FC6"}
+			env := newNotifyTestEnv(t, bc, repository.NewPgGamePlayerRepository(sharedPG.Pool), connectedPlayers{player1: true})
+			env.reports.failNext(1)
+			payload := matchMadePayload(t, "mch_e2e_abandon_report_fail")
+
+			require.Equal(t, http.StatusInternalServerError, doMatchMadePush(t, env.router, payload).Code)
+
+			assert.Equal(t, http.StatusOK, doMatchMadePush(t, env.router, payload).Code)
+			reports := env.reports.snapshot()
+			require.Len(t, reports, 1)
+			assert.Equal(t, "mch_e2e_abandon_report_fail", reports[0].MatchID)
+		})
+
+		t.Run("両方のプレイヤーが接続している状態で成立イベントを受けると、成立通知が届き不成立は申告されない", func(t *testing.T) {
+			bc := &fakeBattleClient{gameID: "01ARZ3NDEKTSV4RRFFQ69G5FC5"}
+			env := newNotifyTestEnv(t, bc, repository.NewPgGamePlayerRepository(sharedPG.Pool), connectedPlayers{player1: true, player2: true})
+			payload := matchMadePayload(t, "mch_e2e_abandon_none")
+
+			require.Equal(t, http.StatusOK, doMatchMadePush(t, env.router, payload).Code)
+
+			assert.Equal(t, "01ARZ3NDEKTSV4RRFFQ69G5FC5", readMatchFoundGameID(t, env.p1Conn))
+			assert.Equal(t, "01ARZ3NDEKTSV4RRFFQ69G5FC5", readMatchFoundGameID(t, env.p2Conn))
+			assert.Empty(t, env.reports.snapshot())
 		})
 	})
 }
