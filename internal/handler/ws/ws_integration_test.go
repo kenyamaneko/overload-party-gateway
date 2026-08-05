@@ -99,6 +99,18 @@ func (r *statefulGamePlayerRepo) MarkExpAwarded(_ context.Context, gameID string
 	return true, nil
 }
 
+func (r *statefulGamePlayerRepo) CountPlayersByGame(_ context.Context, gameIDs []string) (map[string]int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	counts := make(map[string]int, len(gameIDs))
+	for _, gameID := range gameIDs {
+		if n := len(r.entries[gameID]); n > 0 {
+			counts[gameID] = n
+		}
+	}
+	return counts, nil
+}
+
 var _ port.GamePlayerRepo = (*statefulGamePlayerRepo)(nil)
 
 // wsTestOptions は newWSTestServer が組み立てる Manager/Handler の可変設定。
@@ -163,7 +175,7 @@ func newWSTestServer(t *testing.T, configure func(*wsTestOptions)) *wsTestServer
 
 	manager := NewManager(
 		battleClient, accountClient, cardClient, matchmakingClient,
-		gamePlayerRepo, nil, opts.matchmakingTimeout, internalSigner, nil,
+		gamePlayerRepo, nil, newFakeInvalidatedGameRepo(), opts.matchmakingTimeout, internalSigner, nil,
 		opts.disconnectTimeout,
 	)
 	handler := NewHandler(manager, nil, accountClient, opts.allowedOrigins)

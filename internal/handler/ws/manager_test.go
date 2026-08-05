@@ -151,7 +151,7 @@ func newTestManagerForMatchMade(bc *mockBattleClient, gamePlayerRepo port.GamePl
 // newTestManagerWithCards はデッキ解決の内容までを検証するテスト向けに、card クライアントを
 // 差し替えられる Manager を返す。
 func newTestManagerWithCards(bc *mockBattleClient, cardClient port.CardClient, gamePlayerRepo port.GamePlayerRepo, dedupRepo port.ProcessedMatchRepo) *Manager {
-	return NewManager(bc, nil, cardClient, noopMatchmakingClient{}, gamePlayerRepo, dedupRepo, 0, nil, nil, DefaultDisconnectTimeout)
+	return NewManager(bc, nil, cardClient, noopMatchmakingClient{}, gamePlayerRepo, dedupRepo, newFakeInvalidatedGameRepo(), 0, nil, nil, DefaultDisconnectTimeout)
 }
 
 func matchMadeEvent(matchID string) apimatchmaking.MatchMadeEvent {
@@ -458,7 +458,7 @@ func TestManagerReconnect(t *testing.T) {
 			// 応答を書き換える。
 			store := &fakeTimerStore{getDisconnectFound: false}
 
-			m := NewManager(bc, nil, nil, noopMatchmakingClient{}, repo, nil, 0, nil, store, DefaultDisconnectTimeout)
+			m := NewManager(bc, nil, nil, noopMatchmakingClient{}, repo, nil, newFakeInvalidatedGameRepo(), 0, nil, store, DefaultDisconnectTimeout)
 			m.Relay.JoinGame("p1", "g1", 1)
 			m.Relay.JoinGame("p2", "g1", 2)
 

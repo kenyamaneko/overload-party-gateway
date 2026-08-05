@@ -101,6 +101,16 @@ SIGTERM 受信時、**HTTP / WS 新規受付停止 → 既存 WS への close �
 
 Cloud Run は処理中のインスタンスにも終了を始めることがあり、ドレインの完了は保証されない。対戦ごとの計時が終了とともに失われないよう、期限は Redis に写しを置く（[ADR-059](https://github.com/kenyamaneko/overload-party-common/blob/main/docs/adr/059-gateway-timer-state-in-memory-with-redis-backup.md)）。
 
+### 停止で無効になった対戦
+
+停止によって切れた対戦はノーゲームとする（[BDR-003](https://github.com/kenyamaneko/overload-party-common/blob/main/docs/bdr/003-shutdown-no-game.md)）。この後始末は停止時と起動時に分かれる。
+
+停止時に行うのは `gateway.invalidated_games` への記録だけで、1 文の INSERT で済ませる。強制終了までの猶予が短く、対戦ごとに battle と account を呼ぶ形では取りこぼすため。battle 上での決着は次の起動でまとめて行い、決着が成功した対戦だけを決着済みとして記録する。battle は決着済みの対戦への強制決着を拒むため、成功を確かめてから記録することで、途中で落ちた対戦だけが次の起動でやり直される。
+
+記録がある対戦は入室を断り、切断猶予の評価（[BDR-002](https://github.com/kenyamaneko/overload-party-common/blob/main/docs/bdr/002-disconnect-resolution.md)）の対象からも外す。プレイヤー自身の切断で切れた対戦は記録の対象にならないため、この 2 つの経路は混ざらない。
+
+対象は人間 2 人の対戦に限る。対戦相手が居ない対戦には切断猶予の評価が働かず、停止をまたいでもそのまま再開できるため。
+
 ### 環境変数
 
 gateway の env は [internal/config/config.go](../internal/config/config.go) が SSoT。運用上の注意点のみ:

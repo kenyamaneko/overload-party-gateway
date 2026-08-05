@@ -45,6 +45,10 @@ type mockGamePlayerRepo struct {
 	// insertErr を返す (0 = 全呼出に対して返す)。部分成功後のリトライを再現するため。
 	insertErr             error
 	insertErrForPlayerNum int
+
+	// playerCounts は CountPlayersByGame の応答。gameID をキーに人間プレイヤー数を返す。
+	playerCounts    map[string]int
+	playerCountsErr error
 }
 
 // insertGamePlayerCall は mockGamePlayerRepo.InsertGamePlayer への 1 回の呼出を記録する。
@@ -89,6 +93,21 @@ func (m *mockGamePlayerRepo) MarkExpAwarded(_ context.Context, _ string) (bool, 
 	m.markAwardedCalls++
 	m.callOrder = append(m.callOrder, "mark")
 	return m.markAwardedReturn, m.markAwardedErr
+}
+
+func (m *mockGamePlayerRepo) CountPlayersByGame(_ context.Context, gameIDs []string) (map[string]int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.playerCountsErr != nil {
+		return nil, m.playerCountsErr
+	}
+	counts := make(map[string]int, len(gameIDs))
+	for _, gameID := range gameIDs {
+		if n, ok := m.playerCounts[gameID]; ok {
+			counts[gameID] = n
+		}
+	}
+	return counts, nil
 }
 
 var _ port.GamePlayerRepo = (*mockGamePlayerRepo)(nil)

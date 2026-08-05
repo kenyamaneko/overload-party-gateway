@@ -53,6 +53,7 @@ func NewManager(
 	matchmakingClient port.MatchmakingClient,
 	gamePlayerRepo port.GamePlayerRepo,
 	processedMatchRepo port.ProcessedMatchRepo,
+	invalidatedGameRepo port.InvalidatedGameRepo,
 	matchmakingTimeout time.Duration,
 	internalSigner *internalauth.Signer,
 	timerStore port.TimerStore,
@@ -79,7 +80,7 @@ func NewManager(
 		OnGameReconnect:     func(playerID, gameID string, wasLate bool) { m.Relay.HandleReconnect(playerID, gameID, wasLate) },
 	}, disconnectTimeout, timerStore)
 
-	relay := NewGameRelay(hub, battleClient, accountClient, gamePlayerRepo, timerStore)
+	relay := NewGameRelay(hub, battleClient, accountClient, gamePlayerRepo, invalidatedGameRepo, timerStore)
 
 	m.Hub = hub
 	m.Relay = relay
@@ -87,9 +88,18 @@ func NewManager(
 	return m
 }
 
-// Shutdown は全 WS 接続へ終了を通知してから閉じます。SIGTERM 受信時に呼ばれます。
+// Shutdown は進行中の対戦を無効として記録し、全 WS 接続へ終了を通知してから閉じます。
+// SIGTERM 受信時に ShutdownTimeout を期限とする ctx で呼ばれます。
+//
+// 記録を先に行うのは、終了通知が猶予を使い切っても記録だけは残るようにするため。
 func (m *Manager) Shutdown(ctx context.Context) {
+	m.Relay.InvalidateActiveGames(ctx)
 	m.Hub.Shutdown(ctx)
+}
+
+// RecoverInvalidatedGames は前回の停止で無効になった対戦を決着させます。起動時に呼ばれます。
+func (m *Manager) RecoverInvalidatedGames(ctx context.Context) {
+	m.Relay.RecoverInvalidatedGames(ctx)
 }
 
 // buildAuthedContext は ctx に内部認証 JWT を注入した派生 context を返す。

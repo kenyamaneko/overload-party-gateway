@@ -40,10 +40,11 @@ const downstreamCallTimeout = 10 * time.Second
 
 // GameRelay はゲームメンバーシップを管理し、プレイヤーと battle server 間のアクション/状態を中継します。
 type GameRelay struct {
-	hub            *ConnectionHub
-	battleClient   service.BattleClient
-	accountClient  port.AccountClient
-	gamePlayerRepo port.GamePlayerRepo
+	hub                 *ConnectionHub
+	battleClient        service.BattleClient
+	accountClient       port.AccountClient
+	gamePlayerRepo      port.GamePlayerRepo
+	invalidatedGameRepo port.InvalidatedGameRepo
 
 	mu          sync.RWMutex
 	gameMembers map[string][]string      // gameID → []playerID
@@ -58,23 +59,26 @@ type GameRelay struct {
 }
 
 // NewGameRelay は GameRelay を生成します。
-// accountClient / gamePlayerRepo / timerStore は nil 可（mock モード / テスト用 / 写し無し）。
+// accountClient / gamePlayerRepo / invalidatedGameRepo / timerStore は nil 可
+// （mock モード / テスト用 / 写し無し）。
 func NewGameRelay(
 	hub *ConnectionHub,
 	battleClient service.BattleClient,
 	accountClient port.AccountClient,
 	gamePlayerRepo port.GamePlayerRepo,
+	invalidatedGameRepo port.InvalidatedGameRepo,
 	timerStore port.TimerStore,
 ) *GameRelay {
 	return &GameRelay{
-		hub:            hub,
-		battleClient:   battleClient,
-		accountClient:  accountClient,
-		gamePlayerRepo: gamePlayerRepo,
-		gameMembers:    make(map[string][]string),
-		playerGames:    make(map[string]playerSession),
-		turnTimers:     make(map[string]*turnTimerInfo),
-		timerStore:     timerStore,
+		hub:                 hub,
+		battleClient:        battleClient,
+		accountClient:       accountClient,
+		gamePlayerRepo:      gamePlayerRepo,
+		invalidatedGameRepo: invalidatedGameRepo,
+		gameMembers:         make(map[string][]string),
+		playerGames:         make(map[string]playerSession),
+		turnTimers:          make(map[string]*turnTimerInfo),
+		timerStore:          timerStore,
 	}
 }
 
@@ -111,13 +115,22 @@ func (r *GameRelay) HandleReconnect(playerID, gameID string, wasLate bool) {
 // resolveStaleDisconnect は全員切断のまま決着していなかった対戦を、戻ってきた
 // プレイヤーを起点に評価します。対戦相手が接続中、または対戦相手の猶予が
 // まだ残っている場合は何もしません (対戦相手不在の対戦継続、または通常の
-// 復帰として扱う)。
+// 復帰として扱う)。停止によって無効になった対戦は評価しません。
 func (r *GameRelay) resolveStaleDisconnect(gameID, returningPlayerID string, returningWasLate bool) {
 	if r.gamePlayerRepo == nil {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), downstreamCallTimeout)
 	defer cancel()
+
+	invalidated, err := r.isGameInvalidated(ctx, gameID)
+	if err != nil {
+		slog.Error("resolve stale disconnect: check invalidated game failed, leaving unresolved", "game_id", gameID, "player_id", returningPlayerID, "error", err)
+		return
+	}
+	if invalidated {
+		return
+	}
 
 	entries, err := r.gamePlayerRepo.LookupGamePlayers(ctx, gameID)
 	if err != nil {
@@ -500,6 +513,21 @@ func (r *GameRelay) HandleGameEnter(conn *Connection, data json.RawMessage) {
 
 	ctx, cancel := context.WithTimeout(conn.Context(), downstreamCallTimeout)
 	defer cancel()
+
+	invalidated, err := r.isGameInvalidated(ctx, req.GameID)
+	if err != nil {
+		if isCanceled(err) {
+			return
+		}
+		slog.Error("game enter: check invalidated game failed", "player_id", conn.playerID, "game_id", req.GameID, "error", err)
+		sendError(conn, "game_error", "failed to check whether the game is still valid", true)
+		return
+	}
+	if invalidated {
+		sendError(conn, gameInvalidatedErrorCode, "the game was invalidated by a server restart", false)
+		return
+	}
+
 	playerNum, err := r.gamePlayerRepo.LookupPlayerNum(ctx, req.GameID, conn.playerID)
 	if err != nil {
 		if isCanceled(err) {
