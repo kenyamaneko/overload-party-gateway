@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -377,13 +378,13 @@ func TestHandleMatchMade(t *testing.T) {
 			})
 		}
 
-		t.Run("同じカードを2枚積んだデッキのとき、作成依頼には1枚ずつ展開して載る", func(t *testing.T) {
+		t.Run("両者のデッキが違うとき、それぞれの作成依頼のカード一覧が入れ替わらず届く", func(t *testing.T) {
 			bc := newMockBattleClient()
 			bc.createPvPGameResult = &service.GameCreatedResult{GameID: "g_decks"}
 			cardClient := &fakeCardClient{
 				deckCards: map[int64][]apicard.DeckCard{
-					10: {{CardID: "TST-0001", ArtNo: 1, Count: 1}},
-					20: {{CardID: "TST-0002", ArtNo: 3, Count: 2}},
+					10: legalDeck("TST-P1"),
+					20: legalDeck("TST-P2"),
 				},
 			}
 			m := newTestManagerWithCards(bc, cardClient, &mockGamePlayerRepo{}, newFakeProcessedMatchRepo())
@@ -393,11 +394,8 @@ func TestHandleMatchMade(t *testing.T) {
 			require.NoError(t, err)
 			calls := bc.snapshotCreatePvPGameCalls()
 			require.Len(t, calls, 1)
-			assert.Equal(t, []service.BattleDeckCard{{CardID: "TST-0001", ArtNo: 1}}, calls[0].deck1Cards)
-			assert.Equal(t, []service.BattleDeckCard{
-				{CardID: "TST-0002", ArtNo: 3},
-				{CardID: "TST-0002", ArtNo: 3},
-			}, calls[0].deck2Cards)
+			assert.True(t, allCardIDsHavePrefix(calls[0].deck1Cards, "TST-P1"), "p1のデッキ内容がdeck1側に届く")
+			assert.True(t, allCardIDsHavePrefix(calls[0].deck2Cards, "TST-P2"), "p2のデッキ内容がdeck2側に届く")
 		})
 
 		t.Run("参加者の名前とレベルが食い違うとき、作成依頼のサマリにそれぞれの値が別々に載る", func(t *testing.T) {
@@ -457,8 +455,8 @@ func TestHandleMatchMade(t *testing.T) {
 			bc.createPvPGameResult = &service.GameCreatedResult{GameID: "g_expand"}
 			cardClient := &fakeCardClient{
 				deckCards: map[int64][]apicard.DeckCard{
-					10: legalDeck(),
-					20: legalDeck(),
+					10: legalDeck("TST-P1"),
+					20: legalDeck("TST-P2"),
 				},
 			}
 			m := newTestManagerWithCards(bc, cardClient, &mockGamePlayerRepo{}, newFakeProcessedMatchRepo())
@@ -469,12 +467,12 @@ func TestHandleMatchMade(t *testing.T) {
 			calls := bc.snapshotCreatePvPGameCalls()
 			require.Len(t, calls, 1)
 			assert.Len(t, calls[0].deck1Cards, gamedesign.DeckSize)
-			assert.Equal(t, gamedesign.RestrictionCopyCount(gamedesign.RestrictionUnlimited), countCardID(calls[0].deck1Cards, "TST-0001"))
+			assert.Equal(t, gamedesign.RestrictionCopyCount(gamedesign.RestrictionUnlimited), countCardID(calls[0].deck1Cards, "TST-P1-0001"))
 		})
 	})
 }
 
-func legalDeck() []apicard.DeckCard {
+func legalDeck(cardIDPrefix string) []apicard.DeckCard {
 	maxCopies := gamedesign.RestrictionCopyCount(gamedesign.RestrictionUnlimited)
 	remaining := gamedesign.DeckSize
 	var deck []apicard.DeckCard
@@ -483,7 +481,7 @@ func legalDeck() []apicard.DeckCard {
 		if count > remaining {
 			count = remaining
 		}
-		deck = append(deck, apicard.DeckCard{CardID: fmt.Sprintf("TST-%04d", i), ArtNo: 1, Count: count})
+		deck = append(deck, apicard.DeckCard{CardID: fmt.Sprintf("%s-%04d", cardIDPrefix, i), ArtNo: 1, Count: count})
 		remaining -= count
 	}
 	return deck
@@ -497,6 +495,15 @@ func countCardID(cards []service.BattleDeckCard, cardID string) int {
 		}
 	}
 	return n
+}
+
+func allCardIDsHavePrefix(cards []service.BattleDeckCard, prefix string) bool {
+	for _, c := range cards {
+		if !strings.HasPrefix(c.CardID, prefix) {
+			return false
+		}
+	}
+	return true
 }
 
 // noopMatchmakingClient は port.MatchmakingClient のテスト用実装。matchmaking への
