@@ -51,7 +51,7 @@ func (r *PgGamePlayerRepository) LookupPlayerNum(ctx context.Context, gameID str
 // LookupGamePlayers はゲームの全プレイヤーエントリを取得します
 func (r *PgGamePlayerRepository) LookupGamePlayers(ctx context.Context, gameID string) ([]port.GamePlayerEntry, error) {
 	rows, err := connFrom(ctx, r.pool).Query(ctx,
-		`SELECT player_num, player_id FROM gateway.game_players WHERE game_id = $1 ORDER BY player_num`,
+		`SELECT player_num, player_id, created_at FROM gateway.game_players WHERE game_id = $1 ORDER BY player_num`,
 		gameID,
 	)
 	if err != nil {
@@ -62,7 +62,7 @@ func (r *PgGamePlayerRepository) LookupGamePlayers(ctx context.Context, gameID s
 	var entries []port.GamePlayerEntry
 	for rows.Next() {
 		var e port.GamePlayerEntry
-		if err := rows.Scan(&e.PlayerNum, &e.PlayerID); err != nil {
+		if err := rows.Scan(&e.PlayerNum, &e.PlayerID, &e.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan game player: %w", err)
 		}
 		entries = append(entries, e)

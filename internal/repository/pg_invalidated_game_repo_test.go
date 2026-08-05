@@ -78,6 +78,48 @@ func TestPgInvalidatedGameRepository(t *testing.T) {
 			assert.Empty(t, unfinished)
 		})
 
+		t.Run("決着済みにした対戦は、返却待ちとして読み出せる", func(t *testing.T) {
+			sharedPG.Truncate(t)
+			repo := repository.NewPgInvalidatedGameRepository(sharedPG.Pool)
+			ctx := context.Background()
+			require.NoError(t, repo.MarkInvalidated(ctx, []string{"g1", "g2"}))
+			require.NoError(t, repo.MarkFinished(ctx, "g1"))
+
+			pending, err := repo.ListRevertPending(ctx)
+
+			require.NoError(t, err)
+			assert.Equal(t, []string{"g1"}, pending)
+		})
+
+		t.Run("返却済みにした対戦は、返却待ちとして読み出されない", func(t *testing.T) {
+			sharedPG.Truncate(t)
+			repo := repository.NewPgInvalidatedGameRepository(sharedPG.Pool)
+			ctx := context.Background()
+			require.NoError(t, repo.MarkInvalidated(ctx, []string{"g1"}))
+			require.NoError(t, repo.MarkFinished(ctx, "g1"))
+			require.NoError(t, repo.MarkReverted(ctx, "g1"))
+
+			pending, err := repo.ListRevertPending(ctx)
+
+			require.NoError(t, err)
+			assert.Empty(t, pending)
+		})
+
+		t.Run("返却済みにした対戦を重ねて記録しても、返却待ちに戻らない", func(t *testing.T) {
+			sharedPG.Truncate(t)
+			repo := repository.NewPgInvalidatedGameRepository(sharedPG.Pool)
+			ctx := context.Background()
+			require.NoError(t, repo.MarkInvalidated(ctx, []string{"g1"}))
+			require.NoError(t, repo.MarkFinished(ctx, "g1"))
+			require.NoError(t, repo.MarkReverted(ctx, "g1"))
+			require.NoError(t, repo.MarkInvalidated(ctx, []string{"g1"}))
+
+			pending, err := repo.ListRevertPending(ctx)
+
+			require.NoError(t, err)
+			assert.Empty(t, pending)
+		})
+
 		t.Run("記録した対戦は、無効として扱われる", func(t *testing.T) {
 			sharedPG.Truncate(t)
 			repo := repository.NewPgInvalidatedGameRepository(sharedPG.Pool)

@@ -97,7 +97,7 @@ func (m *Manager) Shutdown(ctx context.Context) {
 	m.Hub.Shutdown(ctx)
 }
 
-// RecoverInvalidatedGames は前回の停止で無効になった対戦を決着させます。起動時に呼ばれます。
+// RecoverInvalidatedGames は前回の停止で無効になった対戦を決着させ、消費バトル回数を戻します。起動時に呼ばれます。
 func (m *Manager) RecoverInvalidatedGames(ctx context.Context) {
 	m.Relay.RecoverInvalidatedGames(ctx)
 }

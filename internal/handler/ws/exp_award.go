@@ -48,15 +48,7 @@ func (r *GameRelay) awardGameExp(gameID string, winnerNum int64, reason string) 
 		return
 	}
 
-	var player1ID, player2ID string
-	for _, e := range entries {
-		switch e.PlayerNum {
-		case 1:
-			player1ID = e.PlayerID
-		case 2:
-			player2ID = e.PlayerID
-		}
-	}
+	player1ID, player2ID := playerIDsBySlot(entries)
 
 	matchType := gamedesign.MatchTypePvp
 	if len(entries) == 1 {

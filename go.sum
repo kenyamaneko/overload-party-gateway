@@ -201,6 +201,8 @@ github.com/json-iterator/go v1.1.12/go.mod h1:e30LSqwooZae/UwlEbR2852Gd8hjQvJoHm
 github.com/juju/gnuflag v0.0.0-20171113085948-2ce1bb71843d/go.mod h1:2PavIy+JPciBPrBUjwbNvtwB6RQlve+hkpll6QSNmOE=
 github.com/kenyamaneko/overload-party-account/packages/api-account v0.2.0 h1:giUtWvlETCCytWcIE1IK+xYiPuJ7/5niHbipwZ25PLg=
 github.com/kenyamaneko/overload-party-account/packages/api-account v0.2.0/go.mod h1:Q4gp7reYrriSOUqO9nD4Oa/3zNlS2bHgAj48x0TiLYc=
+github.com/kenyamaneko/overload-party-account/packages/api-account v0.3.0 h1:A8bXgZODzzm5jACXzNeXiIuItFR9OGOlrsFRqLyOgbg=
+github.com/kenyamaneko/overload-party-account/packages/api-account v0.3.0/go.mod h1:Q4gp7reYrriSOUqO9nD4Oa/3zNlS2bHgAj48x0TiLYc=
 github.com/kenyamaneko/overload-party-battle/packages/api-battle-rpc-go v0.2.4 h1:Gmh8nmN0LqEkrsGBXvloiHH5dq+/MItO+6sZ7WNXJqY=
 github.com/kenyamaneko/overload-party-battle/packages/api-battle-rpc-go v0.2.4/go.mod h1:VaArzviJG3ViPI4LTwIywMYgn77eMLgHA4RZUThE5L8=
 github.com/kenyamaneko/overload-party-battle/packages/game-logic-constants-go v0.2.1 h1:9P5eOXkGDeYEvxKEMDEYWTT8DtmPxnoTcVbmKHkf+lo=

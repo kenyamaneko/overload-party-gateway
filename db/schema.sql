@@ -13,7 +13,7 @@
 --     app-level integrity で担保する (ADR-014)。
 --   - gateway.game_players には updated_at カラムが無いためトリガー関数は不要。
 --   - gateway.invalidated_games は停止で無効になった対戦を記録する。停止時は記録だけを
---     行い、battle 上での決着は次の起動で行う。
+--     行い、battle 上での決着と消費バトル回数の返却は次の起動で行う。
 
 -- =============================================================================
 -- Schemas
@@ -30,6 +30,7 @@ CREATE TABLE gateway.game_players (
   player_num    SMALLINT NOT NULL,               -- 人間が座っているスロット番号 (1 or 2)
   player_id     UUID NOT NULL,                   -- account.players(id) を参照 (app-level FK)
   exp_awarded   BOOLEAN NOT NULL DEFAULT FALSE,  -- 経験値付与済みフラグ（二重付与防止）
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(), -- 行を作成した時刻。バトル回数を消費した時刻として account への返却に渡す
   PRIMARY KEY (game_id, player_num)
 );
 
@@ -55,9 +56,14 @@ CREATE TABLE gateway.invalidated_games (
   game_id         VARCHAR(26) NOT NULL,          -- battle.games(game_id) を参照 (app-level FK)
   invalidated_at  TIMESTAMPTZ NOT NULL DEFAULT now(), -- 停止時に無効として記録した時刻
   finished_at     TIMESTAMPTZ,                   -- battle 上で決着させた時刻。未決着は NULL
+  reverted_at     TIMESTAMPTZ,                   -- 消費バトル回数を両プレイヤーに戻した時刻。未返却は NULL
   PRIMARY KEY (game_id)
 );
 
 -- 記録は決着後も残り続けるため、起動時の走査が未決着の行だけを見るように部分索引を張る。
 CREATE INDEX idx_gateway_invalidated_games_unfinished
   ON gateway.invalidated_games(invalidated_at) WHERE finished_at IS NULL;
+
+-- 同じ理由で、返却待ちの走査が未返却の行だけを見るように部分索引を張る。
+CREATE INDEX idx_gateway_invalidated_games_unreverted
+  ON gateway.invalidated_games(invalidated_at) WHERE reverted_at IS NULL;

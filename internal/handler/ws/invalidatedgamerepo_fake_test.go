@@ -16,15 +16,19 @@ type fakeInvalidatedGameRepo struct {
 	order []string
 	// finished は対戦 ID から battle 上で決着済みかへの対応。
 	finished map[string]bool
+	// reverted は対戦 ID から消費バトル回数を戻し済みかへの対応。
+	reverted map[string]bool
 
-	markInvalidatedErr error
-	listUnfinishedErr  error
-	markFinishedErr    error
-	isInvalidatedErr   error
+	markInvalidatedErr   error
+	listUnfinishedErr    error
+	markFinishedErr      error
+	listRevertPendingErr error
+	markRevertedErr      error
+	isInvalidatedErr     error
 }
 
 func newFakeInvalidatedGameRepo() *fakeInvalidatedGameRepo {
-	return &fakeInvalidatedGameRepo{finished: make(map[string]bool)}
+	return &fakeInvalidatedGameRepo{finished: make(map[string]bool), reverted: make(map[string]bool)}
 }
 
 func (f *fakeInvalidatedGameRepo) MarkInvalidated(_ context.Context, gameIDs []string) error {
@@ -65,6 +69,31 @@ func (f *fakeInvalidatedGameRepo) MarkFinished(_ context.Context, gameID string)
 		return f.markFinishedErr
 	}
 	f.finished[gameID] = true
+	return nil
+}
+
+func (f *fakeInvalidatedGameRepo) ListRevertPending(_ context.Context) ([]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.listRevertPendingErr != nil {
+		return nil, f.listRevertPendingErr
+	}
+	var pending []string
+	for _, gameID := range f.order {
+		if f.finished[gameID] && !f.reverted[gameID] {
+			pending = append(pending, gameID)
+		}
+	}
+	return pending, nil
+}
+
+func (f *fakeInvalidatedGameRepo) MarkReverted(_ context.Context, gameID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.markRevertedErr != nil {
+		return f.markRevertedErr
+	}
+	f.reverted[gameID] = true
 	return nil
 }
 

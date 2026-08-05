@@ -11,7 +11,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/jackc/pgx/v5 v5.10.0
-	github.com/kenyamaneko/overload-party-account/packages/api-account v0.2.0
+	github.com/kenyamaneko/overload-party-account/packages/api-account v0.3.0
 	github.com/kenyamaneko/overload-party-battle/packages/api-battle-rpc-go v0.2.4
 	github.com/kenyamaneko/overload-party-battle/packages/game-logic-constants-go v0.2.1
 	github.com/kenyamaneko/overload-party-card/packages/api-card v0.3.0
