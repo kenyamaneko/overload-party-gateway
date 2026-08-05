@@ -124,14 +124,15 @@ func (r *GameRelay) handleTurnTimeout(gameID, playerID string) {
 		return
 	}
 
-	pNum := r.resolvePlayerNum(playerID)
-	if pNum == 0 {
-		return
-	}
 	// タイマー発火は WS コネクション context に紐づかない（接続が生きていても発火する）。
 	// Background ベースで独立した短いタイムアウトを使う。
 	ctx2, cancel2 := context.WithTimeout(context.Background(), downstreamCallTimeout)
 	defer cancel2()
+	pNum, err := r.resolvePlayerNum(ctx2, gameID, playerID)
+	if err != nil {
+		slog.Error("turn timeout: resolve player_num failed, game left unresolved", "game_id", gameID, "player_id", playerID, "error", err)
+		return
+	}
 	result, err := r.battleClient.ProcessAction(ctx2, gameID, pNum, gamelogic.ActionTypeForfeit, buildForfeitReason(gamelogic.WinReasonTurnTimeout))
 	if err != nil {
 		slog.Error("turn timeout forfeit failed", "game_id", gameID, "player_id", playerID, "error", err)

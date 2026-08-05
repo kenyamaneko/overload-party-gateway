@@ -3,6 +3,8 @@ package ws
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -283,8 +285,9 @@ func (r *GameRelay) SendGameStateToPlayers(gameID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), downstreamCallTimeout)
 	defer cancel()
 	for _, pid := range players {
-		pNum := r.resolvePlayerNum(pid)
-		if pNum == 0 {
+		pNum, err := r.resolvePlayerNum(ctx, gameID, pid)
+		if err != nil {
+			slog.Error("resolve player_num for game state failed", "player_id", pid, "game_id", gameID, "error", err)
 			continue
 		}
 		state, err := r.battleClient.GetGameStateForPlayer(ctx, gameID, pNum)
@@ -325,8 +328,9 @@ func (r *GameRelay) SendTurnControlsToPlayers(gameID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), downstreamCallTimeout)
 	defer cancel()
 	for _, pid := range players {
-		pNum := r.resolvePlayerNum(pid)
-		if pNum == 0 {
+		pNum, err := r.resolvePlayerNum(ctx, gameID, pid)
+		if err != nil {
+			slog.Error("resolve player_num for turn controls failed", "player_id", pid, "game_id", gameID, "error", err)
 			continue
 		}
 		raw, err := r.battleClient.GetTurnControlsForPlayer(ctx, gameID, pNum)
@@ -360,7 +364,12 @@ func (r *GameRelay) sendActionPerformed(ctx context.Context, gameID, actingPlaye
 	players := r.gameMembers[gameID]
 	r.mu.RUnlock()
 
-	actingPlayerNum := r.resolvePlayerNum(actingPlayerID)
+	actingPlayerNum, err := r.resolvePlayerNum(ctx, gameID, actingPlayerID)
+	if err != nil {
+		// 行動したプレイヤーのスロット番号でイベントの宛先を決めるため、引けない場合は配信しない。
+		slog.Error("resolve acting player_num for action_performed failed", "player_id", actingPlayerID, "game_id", gameID, "error", err)
+		return
+	}
 	for _, event := range result.Events {
 		switch {
 		case event.EventType == gamelogic.EventTypeTurnStart:
@@ -440,8 +449,9 @@ func (r *GameRelay) runNpcTurns(ctx context.Context, gameID, playerID string, cu
 // 状態は battle server からの変換なしのパススルー。
 func (r *GameRelay) sendActionToPlayers(ctx context.Context, gameID string, pids []string, evt service.ActionEvent) {
 	for _, pid := range pids {
-		pNum := r.resolvePlayerNum(pid)
-		if pNum == 0 {
+		pNum, err := r.resolvePlayerNum(ctx, gameID, pid)
+		if err != nil {
+			slog.Error("resolve player_num for action_performed failed", "player_id", pid, "game_id", gameID, "error", err)
 			continue
 		}
 		state, err := r.battleClient.GetGameStateForPlayer(ctx, gameID, pNum)
@@ -553,9 +563,9 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 	ctx, cancel := context.WithTimeout(conn.Context(), downstreamCallTimeout)
 	defer cancel()
 
-	pNum := r.resolvePlayerNum(conn.playerID)
-	if pNum == 0 {
-		slog.Error("cannot resolve player_num", "player_id", conn.playerID, "game_id", gameID)
+	pNum, err := r.resolvePlayerNum(ctx, gameID, conn.playerID)
+	if err != nil {
+		slog.Error("resolve player_num for battle_start failed", "player_id", conn.playerID, "game_id", gameID, "error", err)
 		sendError(conn, "game_error", "player not in game", false)
 		return
 	}
@@ -653,8 +663,9 @@ func (r *GameRelay) HandleGameAction(ctx context.Context, conn *Connection, data
 		return
 	}
 
-	pNum := r.resolvePlayerNum(conn.playerID)
-	if pNum == 0 {
+	pNum, err := r.resolvePlayerNum(ctx, action.GameID, conn.playerID)
+	if err != nil {
+		slog.Error("resolve player_num for game action failed", "player_id", conn.playerID, "game_id", action.GameID, "error", err)
 		sendError(conn, "game_error", "player not found in game", false)
 		return
 	}
@@ -703,13 +714,14 @@ func (r *GameRelay) leaveAllPlayers(gameID string) {
 }
 
 // HandleUseStamp は use_stamp メッセージを処理します
-func (r *GameRelay) HandleUseStamp(conn *Connection, data json.RawMessage) {
+func (r *GameRelay) HandleUseStamp(ctx context.Context, conn *Connection, data json.RawMessage) {
 	var req UseStampMessage
 	if err := json.Unmarshal(data, &req); err != nil {
 		return
 	}
-	pNum := r.resolvePlayerNum(conn.playerID)
-	if pNum == 0 {
+	pNum, err := r.resolvePlayerNum(ctx, req.GameID, conn.playerID)
+	if err != nil {
+		slog.Error("resolve player_num for stamp failed", "player_id", conn.playerID, "game_id", req.GameID, "error", err)
 		return
 	}
 	r.BroadcastToGame(req.GameID, &WSMessage{
@@ -743,13 +755,14 @@ func (r *GameRelay) HandleDisconnectTimeout(playerID, gameID string) {
 
 	r.cancelTurnTimer(gameID)
 
-	pNum := r.resolvePlayerNum(playerID)
-	if pNum == 0 {
-		return
-	}
 	// 切断タイムアウトは WS コネクション喪失後に発火するので Background ベースで実行する。
 	ctx2, cancel2 := context.WithTimeout(context.Background(), downstreamCallTimeout)
 	defer cancel2()
+	pNum, err := r.resolvePlayerNum(ctx2, gameID, playerID)
+	if err != nil {
+		slog.Error("disconnect timeout: resolve player_num failed, game left unresolved", "game_id", gameID, "player_id", playerID, "error", err)
+		return
+	}
 	result, err := r.battleClient.ProcessAction(ctx2, gameID, pNum, gamelogic.ActionTypeForfeit, buildForfeitReason(gamelogic.WinReasonDisconnect))
 	if err != nil {
 		// 切断 forfeit は対戦相手にも影響する（ゲーム終了せず宙ぶらりんになる）。
@@ -779,16 +792,36 @@ func (r *GameRelay) NotifyMatchmakingFailed(playerID string) {
 	sendErrorToPlayer(r.hub, playerID, "matchmaking_error", "opponent was not connected", true)
 }
 
-// resolvePlayerNum はインメモリセッションからキャッシュ済み playerNum を返す。
-// プレイヤーがゲームに参加していない場合は 0 を返す。
-func (r *GameRelay) resolvePlayerNum(playerID string) int {
+// errGamePlayerRepoUnavailable はスロット番号の引き当て先が構成されていないことを表す。
+var errGamePlayerRepoUnavailable = errors.New("game player repository is not configured")
+
+// errPlayerNotInGame はプレイヤーがそのゲームのスロットを持たないことを表す。
+var errPlayerNotInGame = errors.New("player has no slot in the game")
+
+// resolvePlayerNum はプレイヤーのゲーム内スロット番号を返す。
+//
+// 配信のたびに DB を引かずに済ませるため、game_enter 時に game_players から写した
+// インメモリの参加情報が同じゲームのものであれば、それをそのまま使う。
+func (r *GameRelay) resolvePlayerNum(ctx context.Context, gameID, playerID string) (int, error) {
 	r.mu.RLock()
 	sess, ok := r.playerGames[playerID]
 	r.mu.RUnlock()
-	if !ok {
-		return 0
+	if ok && sess.gameID == gameID {
+		return sess.playerNum, nil
 	}
-	return sess.playerNum
+
+	if r.gamePlayerRepo == nil {
+		return 0, errGamePlayerRepoUnavailable
+	}
+	entries, err := r.gamePlayerRepo.LookupGamePlayers(ctx, gameID)
+	if err != nil {
+		return 0, fmt.Errorf("lookup game players: %w", err)
+	}
+	playerNum := playerNumOf(entries, playerID)
+	if playerNum == 0 {
+		return 0, errPlayerNotInGame
+	}
+	return playerNum, nil
 }
 
 // lookupMatchType は game_players の行数からマッチタイプを導出する。

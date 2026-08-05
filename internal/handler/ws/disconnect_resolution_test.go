@@ -1,9 +1,14 @@
 package ws
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -14,7 +19,86 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
+	genws "github.com/kenyamaneko/overload-party-gateway/packages/ws-constants"
 )
+
+// syncBuffer は別 goroutine からのログ書き込みと読み出しを直列化する記録先。
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+// logRecord は捕捉したログ 1 件のうち検証に使うフィールド。
+type logRecord struct {
+	Level    string `json:"level"`
+	GameID   string `json:"game_id"`
+	PlayerID string `json:"player_id"`
+	Error    string `json:"error"`
+}
+
+// captureLogs は既定のログ出力先をテスト内の記録先に差し替え、捕捉したログを読み出す関数を返す。
+func captureLogs(t *testing.T) func() []logRecord {
+	t.Helper()
+	buf := &syncBuffer{}
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	return func() []logRecord {
+		var records []logRecord
+		for _, line := range strings.Split(buf.String(), "\n") {
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+			var rec logRecord
+			require.NoError(t, json.Unmarshal([]byte(line), &rec))
+			records = append(records, rec)
+		}
+		return records
+	}
+}
+
+// findErrorLogs は gameID と playerID を伴うエラーログだけを抜き出す。
+func findErrorLogs(records []logRecord, gameID, playerID string) []logRecord {
+	var found []logRecord
+	for _, rec := range records {
+		if rec.Level == "ERROR" && rec.GameID == gameID && rec.PlayerID == playerID {
+			found = append(found, rec)
+		}
+	}
+	return found
+}
+
+// findSentMessage は接続の送信バッファから wantType のメッセージを取り出す。
+func findSentMessage(t *testing.T, conn *Connection, wantType string) WSMessage {
+	t.Helper()
+	for {
+		select {
+		case data := <-conn.send:
+			var msg WSMessage
+			require.NoError(t, json.Unmarshal(data, &msg))
+			if msg.Type == wantType {
+				return msg
+			}
+		default:
+			require.FailNowf(t, "expected message was not sent",
+				"no %q message was sent to %s", wantType, conn.playerID)
+			return WSMessage{}
+		}
+	}
+}
 
 // newDisconnectResolutionRelay は切断・再接続時の決着ロジックを検証するための GameRelay を返す。
 // 実際の ConnectionHub を使うことで hub.IsConnected / hub.IsDisconnectDeadlineExpired が
@@ -160,6 +244,31 @@ func TestHandleDisconnectTimeout(t *testing.T) {
 
 			assert.Empty(t, bc.processActionCalls)
 		})
+
+		t.Run("入室していないプレイヤーの猶予が切れたとき、ゲームの参加者情報のスロット番号で forfeit を実行する", func(t *testing.T) {
+			relay, bc, hub := newDisconnectResolutionRelay(entries, nil)
+			hub.Register(NewConnection(nil, "p1"))
+			bc.processActionResult = &service.ActionResult{}
+
+			relay.HandleDisconnectTimeout("p2", "g1")
+
+			require.Len(t, bc.processActionCalls, 1)
+			assert.Equal(t, "g1", bc.processActionCalls[0].gameID)
+			assert.Equal(t, 2, bc.processActionCalls[0].playerNum)
+			assert.Equal(t, gamelogic.ActionTypeForfeit, bc.processActionCalls[0].actionType)
+		})
+
+		t.Run("ゲームの参加者として登録されていないプレイヤーの猶予が切れたとき、forfeit を実行せずエラーログに残す", func(t *testing.T) {
+			readLogs := captureLogs(t)
+			relay, bc, _ := newDisconnectResolutionRelay(nil, nil)
+
+			relay.HandleDisconnectTimeout("p9", "g1")
+
+			assert.Empty(t, bc.processActionCalls)
+			logged := findErrorLogs(readLogs(), "g1", "p9")
+			require.Len(t, logged, 1)
+			assert.Equal(t, "player has no slot in the game", logged[0].Error)
+		})
 	})
 }
 
@@ -215,6 +324,35 @@ func TestResolveStaleDisconnect(t *testing.T) {
 			require.Len(t, bc.processActionCalls, 1)
 			assert.Equal(t, 2, bc.processActionCalls[0].playerNum, "forfeit must be attributed to the still-disconnected opponent")
 			assert.Equal(t, gamelogic.ActionTypeForfeit, bc.processActionCalls[0].actionType)
+		})
+
+		t.Run("対戦相手が入室しておらず猶予も切れているとき、復帰した側の勝ちで game_over が届く", func(t *testing.T) {
+			store := &fakeTimerStore{
+				getDisconnectFound:  true,
+				getDisconnectReturn: portDisconnectDeadline("g1", time.Now().Add(-time.Minute)),
+			}
+			relay, bc, hub := newDisconnectResolutionRelay(entries, store)
+			returning := NewConnection(nil, "p1")
+			hub.Register(returning)
+			relay.JoinGame("p1", "g1", 1)
+			bc.processActionResult = &service.ActionResult{
+				GameOver:         true,
+				WinningPlayerNum: 1,
+				WinReason:        gamelogic.WinReasonDisconnect,
+			}
+
+			relay.resolveStaleDisconnect("g1", "p1", false)
+
+			calls := bc.snapshotProcessActionCalls()
+			require.Len(t, calls, 1)
+			assert.Equal(t, 2, calls[0].playerNum, "forfeit must be attributed to the still-disconnected opponent")
+			assert.Equal(t, gamelogic.ActionTypeForfeit, calls[0].actionType)
+
+			gameOver := findSentMessage(t, returning, genws.WSServerMsgGameOver)
+			var over GameOverMessage
+			require.NoError(t, json.Unmarshal(gameOver.Data, &over))
+			assert.EqualValues(t, 1, over.WinningPlayerNum)
+			assert.Equal(t, gamelogic.WinReasonDisconnect, over.WinReason)
 		})
 
 		t.Run("両者とも猶予が切れているとき、両者強制決着で対戦を終え勝者なしで EXP 付与を依頼する", func(t *testing.T) {

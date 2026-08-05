@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
 
@@ -366,16 +367,6 @@ func TestJoinGame(t *testing.T) {
 			assert.Len(t, members, 1, "duplicate join should not add player twice")
 		})
 
-		t.Run("参加時に playerNum がキャッシュされ、resolvePlayerNum で引ける", func(t *testing.T) {
-			relay, _ := newTestRelay()
-
-			relay.JoinGame("p1", "game_1", 1)
-			relay.JoinGame("p2", "game_1", 2)
-
-			assert.Equal(t, 1, relay.resolvePlayerNum("p1"))
-			assert.Equal(t, 2, relay.resolvePlayerNum("p2"))
-		})
-
 		t.Run("別ゲームに参加し直すと、前のゲームの members から外れる", func(t *testing.T) {
 			relay, _ := newTestRelay()
 
@@ -447,10 +438,68 @@ func TestLeaveGame(t *testing.T) {
 }
 
 func TestResolvePlayerNum(t *testing.T) {
+	entries := []port.GamePlayerEntry{
+		{PlayerNum: 1, PlayerID: "p1"},
+		{PlayerNum: 2, PlayerID: "p2"},
+	}
+
 	t.Run("プレイヤー番号の解決", func(t *testing.T) {
-		t.Run("ゲームに居ないプレイヤーのとき、0 を返す", func(t *testing.T) {
+		t.Run("入室済みのプレイヤーのとき、入室時のスロット番号を返す", func(t *testing.T) {
+			relay, _, _ := newDisconnectResolutionRelay(nil, nil)
+			relay.gamePlayerRepo = &mockGamePlayerRepo{lookupErr: errors.New("db down")}
+			relay.JoinGame("p2", "g1", 2)
+
+			pNum, err := relay.resolvePlayerNum(context.Background(), "g1", "p2")
+
+			require.NoError(t, err)
+			assert.Equal(t, 2, pNum)
+		})
+
+		t.Run("入室していないプレイヤーのとき、ゲームの参加者情報からスロット番号を返す", func(t *testing.T) {
+			relay, _, _ := newDisconnectResolutionRelay(entries, nil)
+
+			pNum, err := relay.resolvePlayerNum(context.Background(), "g1", "p2")
+
+			require.NoError(t, err)
+			assert.Equal(t, 2, pNum)
+		})
+
+		t.Run("別のゲームに入室しているプレイヤーのとき、指定したゲームでのスロット番号を返す", func(t *testing.T) {
+			relay, _, _ := newDisconnectResolutionRelay(entries, nil)
+			relay.JoinGame("p2", "g0", 1)
+
+			pNum, err := relay.resolvePlayerNum(context.Background(), "g1", "p2")
+
+			require.NoError(t, err)
+			assert.Equal(t, 2, pNum)
+		})
+
+		t.Run("ゲームの参加者として登録されていないとき、スロットが無いことを示すエラーを返す", func(t *testing.T) {
+			relay, _, _ := newDisconnectResolutionRelay(entries, nil)
+
+			pNum, err := relay.resolvePlayerNum(context.Background(), "g1", "p9")
+
+			assert.EqualError(t, err, "player has no slot in the game")
+			assert.Equal(t, 0, pNum)
+		})
+
+		t.Run("ゲームの参加者情報の取得に失敗するとき、その原因を含むエラーを返す", func(t *testing.T) {
+			relay, _, _ := newDisconnectResolutionRelay(nil, nil)
+			relay.gamePlayerRepo = &mockGamePlayerRepo{lookupErr: errors.New("db down")}
+
+			pNum, err := relay.resolvePlayerNum(context.Background(), "g1", "p2")
+
+			assert.ErrorContains(t, err, "db down")
+			assert.Equal(t, 0, pNum)
+		})
+
+		t.Run("ゲームの参加者情報の取得元が無いとき、その旨のエラーを返す", func(t *testing.T) {
 			relay, _ := newTestRelay()
-			assert.Equal(t, 0, relay.resolvePlayerNum("unknown"))
+
+			pNum, err := relay.resolvePlayerNum(context.Background(), "g1", "p2")
+
+			assert.EqualError(t, err, "game player repository is not configured")
+			assert.Equal(t, 0, pNum)
 		})
 	})
 }
