@@ -47,7 +47,7 @@ func TestSignerIssue(t *testing.T) {
 				},
 			},
 			{
-				name: "TTL を指定したとき、exp-iat が指定した値になる",
+				name: "TTL を指定したとき、その時間で失効する JWT になる",
 				opts: []Option{WithClock(func() time.Time { return fixedTime }), WithTTL(2 * time.Minute)},
 				assertTok: func(t *testing.T, _ *jwt.Token, claims *jwt.RegisteredClaims) {
 					t.Helper()
@@ -55,7 +55,7 @@ func TestSignerIssue(t *testing.T) {
 				},
 			},
 			{
-				name: "issuer を指定したとき、iss が上書きされる",
+				name: "issuer を指定したとき、JWT の発行者もその値になる",
 				opts: []Option{WithClock(func() time.Time { return fixedTime }), WithIssuer("other-issuer")},
 				assertTok: func(t *testing.T, _ *jwt.Token, claims *jwt.RegisteredClaims) {
 					t.Helper()

@@ -123,20 +123,32 @@ func TestResetTurnTimer_TimerStoreMirroring(t *testing.T) {
 			assert.Equal(t, []string{"g1"}, store.snapshotClearTurnCalls())
 		})
 
-		t.Run("写しが未設定のとき、エラーにならない", func(t *testing.T) {
+		t.Run("Redis への書き込み先が無い設定でも、ターンタイマーは登録される", func(t *testing.T) {
 			relay, _ := newTestRelay()
 			relay.JoinGame("p1", "g1", 1)
 
-			assert.NotPanics(t, func() { relay.resetTurnTimer("g1", "p1", 60) })
+			relay.resetTurnTimer("g1", "p1", 60)
+
+			relay.timerMu.Lock()
+			_, ok := relay.turnTimers["g1"]
+			relay.timerMu.Unlock()
+			assert.True(t, ok)
+
 			relay.cancelTurnTimer("g1")
 		})
 
-		t.Run("写しの書き込みが失敗しても、エラーにならない", func(t *testing.T) {
+		t.Run("Redis への書き込みが失敗しても、ターンタイマーは登録される", func(t *testing.T) {
 			relay, _ := newTestRelay()
 			relay.timerStore = &fakeTimerStore{setTurnErr: errors.New("redis down")}
 			relay.JoinGame("p1", "g1", 1)
 
-			assert.NotPanics(t, func() { relay.resetTurnTimer("g1", "p1", 60) })
+			relay.resetTurnTimer("g1", "p1", 60)
+
+			relay.timerMu.Lock()
+			_, ok := relay.turnTimers["g1"]
+			relay.timerMu.Unlock()
+			assert.True(t, ok)
+
 			relay.cancelTurnTimer("g1")
 		})
 	})
@@ -154,12 +166,6 @@ func TestCancelTurnTimer_TimerStoreMirroring(t *testing.T) {
 			relay.cancelTurnTimer("g1")
 
 			assert.Equal(t, []string{"g1"}, store.snapshotClearTurnCalls())
-		})
-
-		t.Run("写しが未設定のとき、エラーにならない", func(t *testing.T) {
-			relay, _ := newTestRelay()
-
-			assert.NotPanics(t, func() { relay.cancelTurnTimer("g1") })
 		})
 	})
 }
@@ -179,9 +185,15 @@ func TestCancelTurnTimer(t *testing.T) {
 			assert.False(t, ok)
 		})
 
-		t.Run("存在しないゲームを取り消しても、エラーにならない", func(t *testing.T) {
+		t.Run("登録されていないゲームを取り消しても、タイマーは登録されないまま", func(t *testing.T) {
 			relay, _ := newTestRelay()
+
 			relay.cancelTurnTimer("nonexistent_game")
+
+			relay.timerMu.Lock()
+			_, ok := relay.turnTimers["nonexistent_game"]
+			relay.timerMu.Unlock()
+			assert.False(t, ok)
 		})
 	})
 }

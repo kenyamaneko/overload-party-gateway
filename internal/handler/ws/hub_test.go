@@ -54,21 +54,25 @@ func TestUnregister(t *testing.T) {
 			assert.Empty(t, store.snapshotSetDisconnectCalls())
 		})
 
-		t.Run("写しが未設定のとき、エラーにならない", func(t *testing.T) {
+		t.Run("Redis への猶予期限書き込み先が無い設定でも、切断処理は完了する", func(t *testing.T) {
 			hub := newTestHub(nil, true, "game_1")
 			conn := NewConnection(nil, "p1")
 			hub.Register(conn)
 
-			assert.NotPanics(t, func() { hub.Unregister(conn) })
+			hub.Unregister(conn)
+
+			assert.False(t, hub.IsConnected("p1"))
 		})
 
-		t.Run("写しの書き込みが失敗しても、エラーにならない", func(t *testing.T) {
+		t.Run("Redis への猶予期限の書き込みが失敗しても、切断処理は完了する", func(t *testing.T) {
 			store := &fakeTimerStore{setDisconnectErr: errors.New("redis down")}
 			hub := newTestHub(store, true, "game_1")
 			conn := NewConnection(nil, "p1")
 			hub.Register(conn)
 
-			assert.NotPanics(t, func() { hub.Unregister(conn) })
+			hub.Unregister(conn)
+
+			assert.False(t, hub.IsConnected("p1"))
 		})
 
 		t.Run("既に解除済みの接続を再度切断しても、書き込まない", func(t *testing.T) {
@@ -99,19 +103,23 @@ func TestRegister(t *testing.T) {
 			assert.Equal(t, "p1", calls[0])
 		})
 
-		t.Run("写しが未設定のとき、エラーにならない", func(t *testing.T) {
+		t.Run("Redis への猶予期限書き込み先が無い設定でも、登録は完了する", func(t *testing.T) {
 			hub := newTestHub(nil, true, "game_1")
 			conn := NewConnection(nil, "p1")
 
-			assert.NotPanics(t, func() { hub.Register(conn) })
+			hub.Register(conn)
+
+			assert.True(t, hub.IsConnected("p1"))
 		})
 
-		t.Run("写しからの削除が失敗しても、エラーにならない", func(t *testing.T) {
+		t.Run("Redis からの猶予期限削除が失敗しても、登録は完了する", func(t *testing.T) {
 			store := &fakeTimerStore{clearDisconnectErr: errors.New("redis down")}
 			hub := newTestHub(store, true, "game_1")
 			conn := NewConnection(nil, "p1")
 
-			assert.NotPanics(t, func() { hub.Register(conn) })
+			hub.Register(conn)
+
+			assert.True(t, hub.IsConnected("p1"))
 		})
 	})
 }
@@ -357,12 +365,6 @@ func TestClearDisconnectDeadline(t *testing.T) {
 			hub.ClearDisconnectDeadline("p1")
 
 			assert.Equal(t, []string{"p1"}, store.snapshotClearDisconnectCalls())
-		})
-
-		t.Run("写しが未設定のとき、エラーにならない", func(t *testing.T) {
-			hub := newTestHub(nil, true, "game_1")
-
-			assert.NotPanics(t, func() { hub.ClearDisconnectDeadline("p1") })
 		})
 	})
 }

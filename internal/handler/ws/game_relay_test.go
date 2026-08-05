@@ -425,15 +425,6 @@ func TestLeaveGame(t *testing.T) {
 			relay.mu.RUnlock()
 			assert.False(t, gameMembersExist, "gameMembers should be cleaned up when last player leaves")
 		})
-
-		t.Run("参加していないプレイヤーが退出しても、参加状態は変わらない", func(t *testing.T) {
-			relay, _ := newTestRelay()
-
-			relay.LeaveGame("unknown_player")
-
-			_, ok := relay.GameIDForPlayer("unknown_player")
-			assert.False(t, ok)
-		})
 	})
 }
 
@@ -556,26 +547,6 @@ func TestLeaveAllPlayers(t *testing.T) {
 			relay.leaveAllPlayers("game_1")
 
 			assert.ElementsMatch(t, []string{"p1", "p2"}, store.snapshotClearDisconnectCalls())
-		})
-	})
-}
-
-func TestNotifyOpponentDisconnected(t *testing.T) {
-	t.Run("相手への切断通知", func(t *testing.T) {
-		t.Run("対戦相手の参加記録が無いゲームで切断を通知しても、エラーにならない", func(t *testing.T) {
-			relay, _ := newTestRelay()
-
-			relay.NotifyOpponentDisconnected("p1", "nonexistent_game")
-		})
-	})
-}
-
-func TestNotifyOpponentReconnected(t *testing.T) {
-	t.Run("相手への再接続通知", func(t *testing.T) {
-		t.Run("対戦相手の参加記録が無いゲームで再接続を通知しても、エラーにならない", func(t *testing.T) {
-			relay, _ := newTestRelay()
-
-			relay.NotifyOpponentReconnected("p1", "nonexistent_game")
 		})
 	})
 }

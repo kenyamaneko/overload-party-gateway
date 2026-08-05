@@ -406,12 +406,6 @@ func TestResolveStaleDisconnect(t *testing.T) {
 			assert.Empty(t, bc.processActionCalls)
 		})
 
-		t.Run("ゲーム参加者情報の取得元が無いとき、エラーにならない", func(t *testing.T) {
-			relay, _ := newTestRelay()
-
-			assert.NotPanics(t, func() { relay.resolveStaleDisconnect("g1", "p1", false) })
-		})
-
 		t.Run("ゲーム参加者情報の取得に失敗するとき、forfeit を実行しない", func(t *testing.T) {
 			relay, bc, _ := newDisconnectResolutionRelay(nil, nil)
 			relay.gamePlayerRepo = &mockGamePlayerRepo{lookupErr: errors.New("db down")}

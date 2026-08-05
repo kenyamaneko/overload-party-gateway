@@ -9,15 +9,15 @@ import (
 )
 
 func TestTokenContext(t *testing.T) {
-	t.Run("context への token 格納と取り出し", func(t *testing.T) {
+	t.Run("コンテキストへのトークン格納と取り出し", func(t *testing.T) {
 		cases := []struct {
 			name      string
 			token     string
 			wantToken string
 			wantOK    bool
 		}{
-			{name: "空でない token を格納したとき、同じ値が取り出せる", token: "abc.def.ghi", wantToken: "abc.def.ghi", wantOK: true},
-			{name: "空の token を格納したとき、欠落として報告される", token: "", wantToken: "", wantOK: false},
+			{name: "空でないトークンを格納したとき、同じ値が取り出せる", token: "abc.def.ghi", wantToken: "abc.def.ghi", wantOK: true},
+			{name: "空のトークンを格納したとき、欠落として報告される", token: "", wantToken: "", wantOK: false},
 		}
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
@@ -28,7 +28,7 @@ func TestTokenContext(t *testing.T) {
 			})
 		}
 
-		t.Run("token を格納していない ctx のとき、欠落として報告される", func(t *testing.T) {
+		t.Run("トークンを格納していないコンテキストから取得すると、欠落として報告される", func(t *testing.T) {
 			got, ok := TokenFrom(context.Background())
 			assert.Empty(t, got)
 			assert.False(t, ok)

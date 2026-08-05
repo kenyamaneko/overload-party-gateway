@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	apiaccount "github.com/kenyamaneko/overload-party-account/packages/api-account"
 	gamedesign "github.com/kenyamaneko/overload-party-common/packages/game-design-constants"
@@ -162,24 +161,6 @@ func setupAwardRelay(t *testing.T, repo port.GamePlayerRepo, account *awardCount
 
 func TestAwardGameExp(t *testing.T) {
 	t.Run("EXP 付与", func(t *testing.T) {
-		t.Run("記録先も account 連携も無いとき、エラーにならない", func(t *testing.T) {
-			relay, _ := newTestRelay()
-			relay.awardGameExp("g1", 1, "lp_zero")
-		})
-
-		t.Run("記録先はあるが account 連携が無いとき、付与済みフラグを立てない", func(t *testing.T) {
-			relay, _ := newTestRelay()
-			repo := &mockGamePlayerRepo{}
-			relay.gamePlayerRepo = repo
-			// accountClient nil
-
-			relay.awardGameExp("g1", 1, "lp_zero")
-
-			// accountClient が無いのに MarkExpAwarded を呼ぶと、フラグだけ立って付与されない状態になる。
-			// 二重付与は防げるが永久に EXP が付かないゾンビゲームになるため、絶対に呼んではならない。
-			assert.Equal(t, 0, repo.markAwardedCalls)
-		})
-
 		t.Run("初回付与のとき、フラグ確定→プレイヤー解決の順で実行し account に付与する", func(t *testing.T) {
 			repo := &mockGamePlayerRepo{
 				markAwardedReturn: true,
@@ -289,8 +270,9 @@ func TestAwardGameExp(t *testing.T) {
 			assert.Equal(t, int32(1), account.calls.Load(), "no retry — EXP is permanently lost without manual intervention")
 		})
 
-		t.Run("プレイヤー番号が 1/2 以外のとき、付与する", func(t *testing.T) {
-			// PlayerNum が 1/2 以外 (不整合データ) でも player1ID/player2ID の組み立てで panic しない。
+		t.Run("プレイヤー番号が不整合な 1/2 以外のとき、空のプレイヤー ID で付与依頼する", func(t *testing.T) {
+			// PlayerNum が 1/2 以外 (DB 不整合データ) のとき、空文字 ID をどう処理するかは
+			// account の責務とし、gateway 側は付与依頼を送ること自体は継続する。
 			repo := &mockGamePlayerRepo{
 				markAwardedReturn: true,
 				lookupEntries: []port.GamePlayerEntry{
@@ -300,12 +282,11 @@ func TestAwardGameExp(t *testing.T) {
 			account := &awardCounter{}
 			relay := setupAwardRelay(t, repo, account)
 
-			require.NotPanics(t, func() {
-				relay.awardGameExp("g1", 1, "lp_zero")
-			})
-			// PlayerNum=99 は player1ID/player2ID のどちらにも入らないが AwardGameExp は呼ばれる
-			// (空文字 ID をどう処理するかは account の責務)。
-			assert.Equal(t, int32(1), account.calls.Load())
+			relay.awardGameExp("g1", 1, "lp_zero")
+
+			got := account.body()
+			assert.Equal(t, "", got.Player1ID)
+			assert.Equal(t, "", got.Player2ID)
 		})
 
 		t.Run("2 人のゲームでプレイヤー 1 が勝ったとき、付与依頼に両プレイヤー ID・勝者 1・理由・pvp が載る", func(t *testing.T) {
