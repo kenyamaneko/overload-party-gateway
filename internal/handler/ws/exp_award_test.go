@@ -162,7 +162,7 @@ func setupAwardRelay(t *testing.T, repo port.GamePlayerRepo, account *awardCount
 
 func TestAwardGameExp(t *testing.T) {
 	t.Run("EXP 付与", func(t *testing.T) {
-		t.Run("記録先も account 連携も無いとき、パニックせず戻る", func(t *testing.T) {
+		t.Run("記録先も account 連携も無いとき、エラーにならない", func(t *testing.T) {
 			relay, _ := newTestRelay()
 			relay.awardGameExp("g1", 1, "lp_zero")
 		})
@@ -289,7 +289,7 @@ func TestAwardGameExp(t *testing.T) {
 			assert.Equal(t, int32(1), account.calls.Load(), "no retry — EXP is permanently lost without manual intervention")
 		})
 
-		t.Run("プレイヤー番号が 1/2 以外のとき、パニックせず付与する", func(t *testing.T) {
+		t.Run("プレイヤー番号が 1/2 以外のとき、付与する", func(t *testing.T) {
 			// PlayerNum が 1/2 以外 (不整合データ) でも player1ID/player2ID の組み立てで panic しない。
 			repo := &mockGamePlayerRepo{
 				markAwardedReturn: true,

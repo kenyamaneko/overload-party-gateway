@@ -28,7 +28,7 @@ func TestTokenContext(t *testing.T) {
 			})
 		}
 
-		t.Run("WithToken を呼んでいない ctx のとき、欠落として報告される", func(t *testing.T) {
+		t.Run("token を格納していない ctx のとき、欠落として報告される", func(t *testing.T) {
 			got, ok := TokenFrom(context.Background())
 			assert.Empty(t, got)
 			assert.False(t, ok)

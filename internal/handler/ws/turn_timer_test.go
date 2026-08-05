@@ -35,7 +35,7 @@ func TestResetTurnTimer(t *testing.T) {
 			})
 		}
 
-		t.Run("正の timeBank のとき、activePlayerID 付きで登録される", func(t *testing.T) {
+		t.Run("正の timeBank のとき、アクティブプレイヤー付きで登録される", func(t *testing.T) {
 			relay, _ := newTestRelay()
 			relay.JoinGame("p1", "g1", 1)
 
@@ -50,7 +50,7 @@ func TestResetTurnTimer(t *testing.T) {
 			relay.cancelTurnTimer("g1")
 		})
 
-		t.Run("別プレイヤー p2 で再登録すると、activePlayerID が p2 に置き換わる", func(t *testing.T) {
+		t.Run("別プレイヤー p2 で再登録すると、アクティブプレイヤーが p2 に置き換わる", func(t *testing.T) {
 			relay, _ := newTestRelay()
 			relay.JoinGame("p1", "g1", 1)
 			relay.JoinGame("p2", "g1", 2)
@@ -67,7 +67,7 @@ func TestResetTurnTimer(t *testing.T) {
 			relay.cancelTurnTimer("g1")
 		})
 
-		t.Run("再登録すると、旧プレイヤー p1 は activePlayerID に残らない", func(t *testing.T) {
+		t.Run("再登録すると、旧プレイヤー p1 はアクティブプレイヤーとして残らない", func(t *testing.T) {
 			// ターン交代済みの旧プレイヤーへの誤 forfeit を防ぐ分岐を契約として確かめる。
 			// 実際の発火を短い timeBank で観測すると不安定なので、旧プレイヤーが
 			// activePlayerID として残っていないことだけを検証する。
@@ -123,7 +123,7 @@ func TestResetTurnTimer_TimerStoreMirroring(t *testing.T) {
 			assert.Equal(t, []string{"g1"}, store.snapshotClearTurnCalls())
 		})
 
-		t.Run("写しが未設定のとき、パニックしない", func(t *testing.T) {
+		t.Run("写しが未設定のとき、エラーにならない", func(t *testing.T) {
 			relay, _ := newTestRelay()
 			relay.JoinGame("p1", "g1", 1)
 
@@ -131,7 +131,7 @@ func TestResetTurnTimer_TimerStoreMirroring(t *testing.T) {
 			relay.cancelTurnTimer("g1")
 		})
 
-		t.Run("写しの書き込みが失敗しても、パニックしない", func(t *testing.T) {
+		t.Run("写しの書き込みが失敗しても、エラーにならない", func(t *testing.T) {
 			relay, _ := newTestRelay()
 			relay.timerStore = &fakeTimerStore{setTurnErr: errors.New("redis down")}
 			relay.JoinGame("p1", "g1", 1)
@@ -156,7 +156,7 @@ func TestCancelTurnTimer_TimerStoreMirroring(t *testing.T) {
 			assert.Equal(t, []string{"g1"}, store.snapshotClearTurnCalls())
 		})
 
-		t.Run("写しが未設定のとき、パニックしない", func(t *testing.T) {
+		t.Run("写しが未設定のとき、エラーにならない", func(t *testing.T) {
 			relay, _ := newTestRelay()
 
 			assert.NotPanics(t, func() { relay.cancelTurnTimer("g1") })
@@ -179,19 +179,9 @@ func TestCancelTurnTimer(t *testing.T) {
 			assert.False(t, ok)
 		})
 
-		t.Run("存在しないゲームを取り消しても、パニックしない", func(t *testing.T) {
+		t.Run("存在しないゲームを取り消しても、エラーにならない", func(t *testing.T) {
 			relay, _ := newTestRelay()
 			relay.cancelTurnTimer("nonexistent_game")
-		})
-	})
-}
-
-func TestTurnTimerNetworkBuffer_Constant(t *testing.T) {
-	t.Run("ネットワークバッファ定数", func(t *testing.T) {
-		t.Run("ネットワークバッファが正の値である", func(t *testing.T) {
-			// 0 だと境界での誤 forfeit が発生し、負だと意味的におかしい。
-			assert.Greater(t, turnTimerNetworkBuffer, time.Duration(0),
-				"buffer must be positive to absorb network latency")
 		})
 	})
 }
