@@ -26,7 +26,7 @@ func newTestHub(timerStore *fakeTimerStore, inGame bool, gameID string) *Connect
 }
 
 func TestUnregister(t *testing.T) {
-	t.Run("切断時の写しの書き込み", func(t *testing.T) {
+	t.Run("切断時の外部保存先への書き込み", func(t *testing.T) {
 		t.Run("ゲームに参加中のプレイヤーが切断すると、猶予期限が書き込まれる", func(t *testing.T) {
 			store := &fakeTimerStore{}
 			hub := newTestHub(store, true, "game_1")
@@ -54,7 +54,7 @@ func TestUnregister(t *testing.T) {
 			assert.Empty(t, store.snapshotSetDisconnectCalls())
 		})
 
-		t.Run("Redis への猶予期限書き込み先が無い設定でも、切断処理は完了する", func(t *testing.T) {
+		t.Run("猶予期限を外部保存する設定が無くても、そのプレイヤーは切断済みとして扱われる", func(t *testing.T) {
 			hub := newTestHub(nil, true, "game_1")
 			conn := NewConnection(nil, "p1")
 			hub.Register(conn)
@@ -64,7 +64,7 @@ func TestUnregister(t *testing.T) {
 			assert.False(t, hub.IsConnected("p1"))
 		})
 
-		t.Run("Redis への猶予期限の書き込みが失敗しても、切断処理は完了する", func(t *testing.T) {
+		t.Run("猶予期限の外部保存に失敗しても、そのプレイヤーは切断済みとして扱われる", func(t *testing.T) {
 			store := &fakeTimerStore{setDisconnectErr: errors.New("redis down")}
 			hub := newTestHub(store, true, "game_1")
 			conn := NewConnection(nil, "p1")
@@ -90,7 +90,7 @@ func TestUnregister(t *testing.T) {
 }
 
 func TestRegister(t *testing.T) {
-	t.Run("再接続時の写しの削除", func(t *testing.T) {
+	t.Run("再接続時の外部保存先からの削除", func(t *testing.T) {
 		t.Run("登録すると、そのプレイヤーの猶予期限が削除される", func(t *testing.T) {
 			store := &fakeTimerStore{}
 			hub := newTestHub(store, true, "game_1")
@@ -103,7 +103,7 @@ func TestRegister(t *testing.T) {
 			assert.Equal(t, "p1", calls[0])
 		})
 
-		t.Run("Redis への猶予期限書き込み先が無い設定でも、登録は完了する", func(t *testing.T) {
+		t.Run("猶予期限を外部保存する設定が無くても、そのプレイヤーは接続中として扱われる", func(t *testing.T) {
 			hub := newTestHub(nil, true, "game_1")
 			conn := NewConnection(nil, "p1")
 
@@ -112,7 +112,7 @@ func TestRegister(t *testing.T) {
 			assert.True(t, hub.IsConnected("p1"))
 		})
 
-		t.Run("Redis からの猶予期限削除が失敗しても、登録は完了する", func(t *testing.T) {
+		t.Run("外部保存からの猶予期限削除に失敗しても、そのプレイヤーは接続中として扱われる", func(t *testing.T) {
 			store := &fakeTimerStore{clearDisconnectErr: errors.New("redis down")}
 			hub := newTestHub(store, true, "game_1")
 			conn := NewConnection(nil, "p1")
@@ -153,7 +153,7 @@ func TestRegister_WasLate(t *testing.T) {
 			assert.False(t, calls[0].wasLate)
 		})
 
-		t.Run("インメモリに記録が無く写しの期限がまだ先のとき、猶予切れではないと判定される", func(t *testing.T) {
+		t.Run("インメモリに記録が無く外部保存先の期限がまだ先のとき、猶予切れではないと判定される", func(t *testing.T) {
 			var calls []reconnectCall
 			store := &fakeTimerStore{
 				getDisconnectFound:  true,
@@ -174,7 +174,7 @@ func TestRegister_WasLate(t *testing.T) {
 			assert.False(t, calls[0].wasLate)
 		})
 
-		t.Run("インメモリに記録が無く写しの期限が過ぎているとき、猶予切れとして判定される", func(t *testing.T) {
+		t.Run("インメモリに記録が無く外部保存先の期限が過ぎているとき、猶予切れとして判定される", func(t *testing.T) {
 			var calls []reconnectCall
 			store := &fakeTimerStore{
 				getDisconnectFound:  true,
@@ -195,7 +195,7 @@ func TestRegister_WasLate(t *testing.T) {
 			assert.True(t, calls[0].wasLate)
 		})
 
-		t.Run("インメモリにも写しにも記録が無いとき、復帰処理を実行しない", func(t *testing.T) {
+		t.Run("インメモリにも外部保存先にも記録が無いとき、復帰処理を実行しない", func(t *testing.T) {
 			var calls []reconnectCall
 			store := &fakeTimerStore{}
 			hub := NewConnectionHub(HubCallbacks{
@@ -211,7 +211,7 @@ func TestRegister_WasLate(t *testing.T) {
 			assert.Empty(t, calls)
 		})
 
-		t.Run("インメモリに記録が無く写しの読み出しが失敗するとき、復帰処理を実行しない", func(t *testing.T) {
+		t.Run("インメモリに記録が無く外部保存先の読み出しが失敗するとき、復帰処理を実行しない", func(t *testing.T) {
 			var calls []reconnectCall
 			store := &fakeTimerStore{getDisconnectErr: errors.New("redis down")}
 			hub := NewConnectionHub(HubCallbacks{
@@ -270,7 +270,7 @@ func TestIsDisconnectDeadlineExpired(t *testing.T) {
 			assert.False(t, expired)
 		})
 
-		t.Run("インメモリにも写しにも記録が無いとき、false になる", func(t *testing.T) {
+		t.Run("インメモリにも外部保存先にも記録が無いとき、false になる", func(t *testing.T) {
 			hub := newTestHub(&fakeTimerStore{}, true, "game_1")
 
 			expired, err := hub.IsDisconnectDeadlineExpired("p1")
@@ -279,7 +279,7 @@ func TestIsDisconnectDeadlineExpired(t *testing.T) {
 			assert.False(t, expired)
 		})
 
-		t.Run("インメモリに記録が無く写しの期限がまだ先のとき、false になる", func(t *testing.T) {
+		t.Run("インメモリに記録が無く外部保存先の期限がまだ先のとき、false になる", func(t *testing.T) {
 			store := &fakeTimerStore{
 				getDisconnectFound:  true,
 				getDisconnectReturn: portDisconnectDeadline("game_1", time.Now().Add(time.Minute)),
@@ -292,7 +292,7 @@ func TestIsDisconnectDeadlineExpired(t *testing.T) {
 			assert.False(t, expired)
 		})
 
-		t.Run("インメモリに記録が無く写しの期限が過ぎているとき、true になる", func(t *testing.T) {
+		t.Run("インメモリに記録が無く外部保存先の期限が過ぎているとき、true になる", func(t *testing.T) {
 			store := &fakeTimerStore{
 				getDisconnectFound:  true,
 				getDisconnectReturn: portDisconnectDeadline("game_1", time.Now().Add(-time.Minute)),
@@ -305,7 +305,7 @@ func TestIsDisconnectDeadlineExpired(t *testing.T) {
 			assert.True(t, expired)
 		})
 
-		t.Run("インメモリに記録が無く写しの期限にちょうど達しているとき、true になる", func(t *testing.T) {
+		t.Run("インメモリに記録が無く外部保存先の期限にちょうど達しているとき、true になる", func(t *testing.T) {
 			now := time.Now()
 			store := &fakeTimerStore{
 				getDisconnectFound:  true,
@@ -319,7 +319,7 @@ func TestIsDisconnectDeadlineExpired(t *testing.T) {
 			assert.True(t, expired, "a deadline equal to the check time counts as expired")
 		})
 
-		t.Run("インメモリに記録が無く写しの期限に達する直前のとき、false になる", func(t *testing.T) {
+		t.Run("インメモリに記録が無く外部保存先の期限に達する直前のとき、false になる", func(t *testing.T) {
 			store := &fakeTimerStore{
 				getDisconnectFound:  true,
 				getDisconnectReturn: portDisconnectDeadline("game_1", time.Now().Add(50*time.Millisecond)),
@@ -332,7 +332,7 @@ func TestIsDisconnectDeadlineExpired(t *testing.T) {
 			assert.False(t, expired)
 		})
 
-		t.Run("インメモリに記録が無く写しの期限を過ぎた直後のとき、true になる", func(t *testing.T) {
+		t.Run("インメモリに記録が無く外部保存先の期限を過ぎた直後のとき、true になる", func(t *testing.T) {
 			store := &fakeTimerStore{
 				getDisconnectFound:  true,
 				getDisconnectReturn: portDisconnectDeadline("game_1", time.Now().Add(-50*time.Millisecond)),
@@ -345,7 +345,7 @@ func TestIsDisconnectDeadlineExpired(t *testing.T) {
 			assert.True(t, expired)
 		})
 
-		t.Run("インメモリに記録が無く写しの読み出しに失敗するとき、エラーを返す", func(t *testing.T) {
+		t.Run("インメモリに記録が無く外部保存先の読み出しに失敗するとき、エラーを返す", func(t *testing.T) {
 			store := &fakeTimerStore{getDisconnectErr: errors.New("redis down")}
 			hub := newTestHub(store, true, "game_1")
 

@@ -270,9 +270,8 @@ func TestAwardGameExp(t *testing.T) {
 			assert.Equal(t, int32(1), account.calls.Load(), "no retry — EXP is permanently lost without manual intervention")
 		})
 
-		t.Run("プレイヤー番号が不整合な 1/2 以外のとき、空のプレイヤー ID で付与依頼する", func(t *testing.T) {
-			// PlayerNum が 1/2 以外 (DB 不整合データ) のとき、空文字 ID をどう処理するかは
-			// account の責務とし、gateway 側は付与依頼を送ること自体は継続する。
+		t.Run("プレイヤー番号が 1 と 2 のどちらでもない (データ不整合) とき、空のプレイヤー ID で付与依頼する", func(t *testing.T) {
+			// 空文字 ID をどう扱うかは account の責務のため、gateway は付与依頼を送るところまでを担保する。
 			repo := &mockGamePlayerRepo{
 				markAwardedReturn: true,
 				lookupEntries: []port.GamePlayerEntry{
