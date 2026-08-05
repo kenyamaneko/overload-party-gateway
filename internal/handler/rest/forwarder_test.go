@@ -71,7 +71,7 @@ func TestNewForwarder(t *testing.T) {
 			wantClientBody string
 		}{
 			{
-				name:          "GET のとき、body なしで透過し X-Internal-Auth を注入する",
+				name:          "GETのとき、bodyなしで透過しX-Internal-Authを注入する",
 				token:         "test-token-abc",
 				method:        http.MethodGet,
 				reqPath:       "/api/v1/account/me",
@@ -89,7 +89,7 @@ func TestNewForwarder(t *testing.T) {
 				wantClientBody: `{"player_id":"p1"}`,
 			},
 			{
-				name:          "POST のとき、body と query を保持して透過する",
+				name:          "POSTのとき、bodyとqueryを保持して透過する",
 				token:         "token-2",
 				method:        http.MethodPost,
 				reqPath:       "/api/v1/shop/purchase?platform=ios",
@@ -107,7 +107,7 @@ func TestNewForwarder(t *testing.T) {
 				wantClientBody: `{"ok":true}`,
 			},
 			{
-				name:          "PUT のとき、透過する",
+				name:          "PUTのとき、透過する",
 				token:         "token-put",
 				method:        http.MethodPut,
 				reqPath:       "/api/v1/cards/decks/1",
@@ -125,7 +125,7 @@ func TestNewForwarder(t *testing.T) {
 				wantClientBody: `{"deck_id":1}`,
 			},
 			{
-				name:          "DELETE のとき、透過する",
+				name:          "DELETEのとき、透過する",
 				token:         "token-del",
 				method:        http.MethodDelete,
 				reqPath:       "/api/v1/cards/decks/1",
@@ -143,7 +143,7 @@ func TestNewForwarder(t *testing.T) {
 				wantClientBody: "",
 			},
 			{
-				name:          "downstream が 404 のとき、そのまま透過する",
+				name:          "downstreamが404のとき、そのまま透過する",
 				token:         "token-3",
 				method:        http.MethodGet,
 				reqPath:       "/api/v1/cards/decks/999",
@@ -161,7 +161,7 @@ func TestNewForwarder(t *testing.T) {
 				wantClientBody: `{"error":"deck not found"}`,
 			},
 			{
-				name:          "downstream が 500 のとき、そのまま透過する",
+				name:          "downstreamが500のとき、そのまま透過する",
 				token:         "token-5xx",
 				method:        http.MethodGet,
 				reqPath:       "/api/v1/news/articles",
@@ -179,7 +179,7 @@ func TestNewForwarder(t *testing.T) {
 				wantClientBody: `{"error":"db down"}`,
 			},
 			{
-				name:          "token が無いとき、X-Internal-Auth を空にして透過する",
+				name:          "tokenが無いとき、X-Internal-Authを空にして透過する",
 				token:         "",
 				method:        http.MethodGet,
 				reqPath:       "/api/v1/news/articles",
@@ -230,15 +230,15 @@ func TestNewForwarder(t *testing.T) {
 		}
 	})
 
-	t.Run("targetURL の検証", func(t *testing.T) {
-		t.Run("不正な targetURL のとき、エラーになる", func(t *testing.T) {
+	t.Run("targetURLの検証", func(t *testing.T) {
+		t.Run("不正なtargetURLのとき、エラーになる", func(t *testing.T) {
 			_, err := rest.NewForwarder("://not-a-url")
 			require.Error(t, err)
 		})
 	})
 
 	t.Run("ヘッダの透過", func(t *testing.T) {
-		t.Run("リクエストの Content-Type がバックエンドに届き、レスポンスの Content-Type がクライアントに返る", func(t *testing.T) {
+		t.Run("リクエストのContent-Typeがバックエンドに届き、レスポンスのContent-Typeがクライアントに返る", func(t *testing.T) {
 			var gotContentType string
 			backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				gotContentType = r.Header.Get("Content-Type")

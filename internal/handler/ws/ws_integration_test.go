@@ -409,8 +409,8 @@ func (s *wsTestServer) enterGame(t *testing.T, uid, gameID string) *websocket.Co
 }
 
 func TestWSConnectionAuth(t *testing.T) {
-	t.Run("WS 接続の認証", func(t *testing.T) {
-		t.Run("登録済みプレイヤーのトークンで接続すると、接続が確立し ping に pong が返る", func(t *testing.T) {
+	t.Run("WS接続の認証", func(t *testing.T) {
+		t.Run("登録済みプレイヤーのトークンで接続すると、接続が確立しpingにpongが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-ok", "player-ok")
 
@@ -421,19 +421,19 @@ func TestWSConnectionAuth(t *testing.T) {
 			assert.Equal(t, genws.WSServerMsgPong, msg.Type)
 		})
 
-		t.Run("トークンなしで接続すると、401 で拒否される", func(t *testing.T) {
+		t.Run("トークンなしで接続すると、401で拒否される", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 
 			srv.dialExpectRejected(t, "", nil, http.StatusUnauthorized)
 		})
 
-		t.Run("dev-token 形式でないトークンで接続すると、401 で拒否される", func(t *testing.T) {
+		t.Run("dev-token形式でないトークンで接続すると、401で拒否される", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 
 			srv.dialExpectRejected(t, "token=not-a-dev-token", nil, http.StatusUnauthorized)
 		})
 
-		t.Run("未登録ユーザーのトークンで接続すると、401 で拒否される", func(t *testing.T) {
+		t.Run("未登録ユーザーのトークンで接続すると、401で拒否される", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			// uid-unregistered は account fake に seed しない。
 
@@ -454,7 +454,7 @@ func TestWSConnectionAuth(t *testing.T) {
 
 func TestWSMessageRouting(t *testing.T) {
 	t.Run("メッセージルーティング", func(t *testing.T) {
-		t.Run("未知のメッセージ種別を送っても、接続は維持され続く ping に pong が返る", func(t *testing.T) {
+		t.Run("未知のメッセージ種別を送っても、接続は維持され続くpingにpongが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-unknown-msg", "player-unknown-msg")
 			conn := srv.dial(t, "uid-unknown-msg")
@@ -466,7 +466,7 @@ func TestWSMessageRouting(t *testing.T) {
 			assert.Equal(t, genws.WSServerMsgPong, msg.Type)
 		})
 
-		t.Run("JSON でないフレームを送ると、invalid_message のエラーが返り接続は維持される", func(t *testing.T) {
+		t.Run("JSONでないフレームを送ると、invalid_messageのエラーが返り接続は維持される", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-bad-frame", "player-bad-frame")
 			conn := srv.dial(t, "uid-bad-frame")
@@ -486,7 +486,7 @@ func TestWSMessageRouting(t *testing.T) {
 
 func TestWSMatchmakingStart(t *testing.T) {
 	t.Run("マッチング開始", func(t *testing.T) {
-		t.Run("オンボーディング完了済みでデッキ検証を通過すると、matchmaking_started が返り待ち行列へ登録される", func(t *testing.T) {
+		t.Run("オンボーディング完了済みでデッキ検証を通過すると、matchmaking_startedが返り待ち行列へ登録される", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-mm-ok", "player-mm-ok")
 			setOnboardedAccount(srv.account, "TST-PLAYER", 7)
@@ -509,7 +509,7 @@ func TestWSMatchmakingStart(t *testing.T) {
 			assert.Equal(t, int64(7), calls[0].Level)
 		})
 
-		t.Run("data がオブジェクトでない matchmaking_start を送ると、invalid_data のエラーが返る", func(t *testing.T) {
+		t.Run("dataがオブジェクトでないmatchmaking_startを送ると、invalid_dataのエラーが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-mm-bad-data", "player-mm-bad-data")
 			conn := srv.dial(t, "uid-mm-bad-data")
@@ -524,7 +524,7 @@ func TestWSMatchmakingStart(t *testing.T) {
 			assert.Equal(t, "invalid_data", errBody.ErrorCode)
 		})
 
-		t.Run("オンボーディング未完了のとき、再試行不可の matchmaking_error が返る", func(t *testing.T) {
+		t.Run("オンボーディング未完了のとき、再試行不可のmatchmaking_errorが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-mm-onboarding", "player-mm-onboarding")
 			// GetPlayerFn は未設定のまま (既定応答は onboarding_status 空 = 未完了)。
@@ -541,7 +541,7 @@ func TestWSMatchmakingStart(t *testing.T) {
 			assert.False(t, errBody.Retryable)
 		})
 
-		t.Run("当日のバトル回数上限に達しているとき、再試行不可の matchmaking_error が返る", func(t *testing.T) {
+		t.Run("当日のバトル回数上限に達しているとき、再試行不可のmatchmaking_errorが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-mm-limit", "player-mm-limit")
 			name := "TST-PLAYER"
@@ -564,7 +564,7 @@ func TestWSMatchmakingStart(t *testing.T) {
 			assert.False(t, errBody.Retryable)
 		})
 
-		t.Run("デッキ検証に失敗したとき、再試行不可の matchmaking_error が返る", func(t *testing.T) {
+		t.Run("デッキ検証に失敗したとき、再試行不可のmatchmaking_errorが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-mm-deck", "player-mm-deck")
 			setOnboardedAccount(srv.account, "TST-PLAYER", 1)
@@ -584,7 +584,7 @@ func TestWSMatchmakingStart(t *testing.T) {
 			assert.False(t, errBody.Retryable)
 		})
 
-		t.Run("待ち行列への登録が受付停止 (503) のとき、再試行可の matchmaking_error が返る", func(t *testing.T) {
+		t.Run("待ち行列への登録が受付停止 (503)のとき、再試行可のmatchmaking_errorが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-mm-503", "player-mm-503")
 			setOnboardedAccount(srv.account, "TST-PLAYER", 1)
@@ -605,7 +605,7 @@ func TestWSMatchmakingStart(t *testing.T) {
 			assert.True(t, errBody.Retryable)
 		})
 
-		t.Run("待ち行列への登録が異常応答 (500) のとき、再試行不可の matchmaking_error が返る", func(t *testing.T) {
+		t.Run("待ち行列への登録が異常応答 (500)のとき、再試行不可のmatchmaking_errorが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-mm-500", "player-mm-500")
 			setOnboardedAccount(srv.account, "TST-PLAYER", 1)
@@ -626,7 +626,7 @@ func TestWSMatchmakingStart(t *testing.T) {
 			assert.False(t, errBody.Retryable)
 		})
 
-		t.Run("マッチが成立しないまま設定した待機時間を超えると、再試行可の matchmaking_error が届く", func(t *testing.T) {
+		t.Run("マッチが成立しないまま設定した待機時間を超えると、再試行可のmatchmaking_errorが届く", func(t *testing.T) {
 			srv := newWSTestServer(t, func(o *wsTestOptions) {
 				o.matchmakingTimeout = 100 * time.Millisecond
 			})
@@ -656,7 +656,7 @@ func TestWSMatchmakingStart(t *testing.T) {
 
 func TestWSMatchmakingCancel(t *testing.T) {
 	t.Run("マッチングキャンセル", func(t *testing.T) {
-		t.Run("マッチング待ちをキャンセルすると、matchmaking_cancelled が返り待ち行列から除去される", func(t *testing.T) {
+		t.Run("マッチング待ちをキャンセルすると、matchmaking_cancelledが返り待ち行列から除去される", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-cancel-ok", "player-cancel-ok")
 			rec := &cancelRecorder{}
@@ -670,7 +670,7 @@ func TestWSMatchmakingCancel(t *testing.T) {
 			assert.EqualValues(t, 1, rec.calls.Load())
 		})
 
-		t.Run("キャンセルが下流エラーのとき、matchmaking_error が返る", func(t *testing.T) {
+		t.Run("キャンセルが下流エラーのとき、matchmaking_errorが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-cancel-err", "player-cancel-err")
 			srv.matchmaking.CancelFn = func() (int, any) { return http.StatusInternalServerError, "boom" }
@@ -687,7 +687,7 @@ func TestWSMatchmakingCancel(t *testing.T) {
 
 func TestWSGameEnterAndDisconnectGrace(t *testing.T) {
 	t.Run("ゲーム入室と切断猶予", func(t *testing.T) {
-		t.Run("ゲームの参加者が入室すると、game_entered に続いて対戦開始イベントと盤面状態が届く", func(t *testing.T) {
+		t.Run("ゲームの参加者が入室すると、game_enteredに続いて対戦開始イベントと盤面状態が届く", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			const gameID = "TST-GAME-ENTER-OK"
 			srv.setupPvPGame(gameID, "uid-enter-p1", "p-enter-1", "uid-enter-p2", "p-enter-2")
@@ -711,7 +711,7 @@ func TestWSGameEnterAndDisconnectGrace(t *testing.T) {
 			assert.Equal(t, genws.WSServerMsgTurnControls, turnControls.Type)
 		})
 
-		t.Run("ゲームに登録されていないプレイヤーが入室しようとすると、game_error が返る", func(t *testing.T) {
+		t.Run("ゲームに登録されていないプレイヤーが入室しようとすると、game_errorが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-enter-unregistered", "player-enter-unregistered")
 			// gamePlayerRepo に対応する行を投入しない。
@@ -727,7 +727,7 @@ func TestWSGameEnterAndDisconnectGrace(t *testing.T) {
 			assert.Equal(t, "game_error", errBody.ErrorCode)
 		})
 
-		t.Run("対戦中に相手が切断すると、opponent_disconnected が届く", func(t *testing.T) {
+		t.Run("対戦中に相手が切断すると、opponent_disconnectedが届く", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			const gameID = "TST-GAME-DISCONNECT"
 			srv.setupPvPGame(gameID, "uid-dc-p1", "p-dc-1", "uid-dc-p2", "p-dc-2")
@@ -740,7 +740,7 @@ func TestWSGameEnterAndDisconnectGrace(t *testing.T) {
 			assert.Equal(t, genws.WSServerMsgOpponentDisconnected, msg.Type)
 		})
 
-		t.Run("切断した相手が猶予内に再接続すると、opponent_reconnected が届く", func(t *testing.T) {
+		t.Run("切断した相手が猶予内に再接続すると、opponent_reconnectedが届く", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			const gameID = "TST-GAME-RECONNECT"
 			srv.setupPvPGame(gameID, "uid-rc-p1", "p-rc-1", "uid-rc-p2", "p-rc-2")
@@ -755,7 +755,7 @@ func TestWSGameEnterAndDisconnectGrace(t *testing.T) {
 			assert.Equal(t, genws.WSServerMsgOpponentReconnected, msg.Type)
 		})
 
-		t.Run("相手が切断したまま猶予を超えると、切断負けの game_over が届く", func(t *testing.T) {
+		t.Run("相手が切断したまま猶予を超えると、切断負けのgame_overが届く", func(t *testing.T) {
 			srv := newWSTestServer(t, func(o *wsTestOptions) {
 				o.disconnectTimeout = 150 * time.Millisecond
 			})

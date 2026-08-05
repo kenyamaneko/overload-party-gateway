@@ -14,8 +14,8 @@ import (
 )
 
 func TestClient_InjectsInternalAuthHeader(t *testing.T) {
-	t.Run("X-Internal-Auth header の注入", func(t *testing.T) {
-		t.Run("ctx に格納した token が X-Internal-Auth header として送られる", func(t *testing.T) {
+	t.Run("X-Internal-Auth headerの注入", func(t *testing.T) {
+		t.Run("ctxに格納したtokenがX-Internal-Auth headerとして送られる", func(t *testing.T) {
 			const wantToken = "test.jwt.token"
 			var got string
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -41,22 +41,22 @@ func TestClient_ValidateDeckForBattle_MapsStatus(t *testing.T) {
 		wantErr error
 	}{
 		{
-			name:    "検証成功の 200 は nil を返す",
+			name:    "検証成功の200はnilを返す",
 			status:  http.StatusOK,
 			wantErr: nil,
 		},
 		{
-			name:    "デッキ不正の 400 は ErrDeckInvalid に写像する",
+			name:    "デッキ不正の400はErrDeckInvalidに写像する",
 			status:  http.StatusBadRequest,
 			wantErr: apicardclient.ErrDeckInvalid,
 		},
 		{
-			name:    "デッキ不在の 404 は not found を伝播する",
+			name:    "デッキ不在の404はnot foundを伝播する",
 			status:  http.StatusNotFound,
 			wantErr: apicardclient.ErrNotFound,
 		},
 		{
-			name:    "5xx は internal server error を伝播する",
+			name:    "5xxはinternal server errorを伝播する",
 			status:  http.StatusInternalServerError,
 			wantErr: apicardclient.ErrInternalServer,
 		},

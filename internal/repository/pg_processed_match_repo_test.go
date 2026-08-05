@@ -21,8 +21,8 @@ func TestMain(m *testing.M) {
 }
 
 func TestPgProcessedMatchRepository(t *testing.T) {
-	t.Run("matchId の永続 dedup", func(t *testing.T) {
-		t.Run("未処理の matchId のとき、処理を開始できる", func(t *testing.T) {
+	t.Run("matchIdの永続dedup", func(t *testing.T) {
+		t.Run("未処理のmatchIdのとき、処理を開始できる", func(t *testing.T) {
 			sharedPG.Truncate(t)
 			repo := repository.NewPgProcessedMatchRepository(sharedPG.Pool)
 			ctx := context.Background()
@@ -33,7 +33,7 @@ func TestPgProcessedMatchRepository(t *testing.T) {
 			assert.True(t, started)
 		})
 
-		t.Run("既に処理を開始済みの matchId のとき、重ねて処理を開始できない", func(t *testing.T) {
+		t.Run("既に処理を開始済みのmatchIdのとき、重ねて処理を開始できない", func(t *testing.T) {
 			sharedPG.Truncate(t)
 			repo := repository.NewPgProcessedMatchRepository(sharedPG.Pool)
 			ctx := context.Background()
@@ -46,7 +46,7 @@ func TestPgProcessedMatchRepository(t *testing.T) {
 			assert.False(t, started)
 		})
 
-		t.Run("処理の開始を取り消した matchId のとき、再び処理を開始できる", func(t *testing.T) {
+		t.Run("処理の開始を取り消したmatchIdのとき、再び処理を開始できる", func(t *testing.T) {
 			sharedPG.Truncate(t)
 			repo := repository.NewPgProcessedMatchRepository(sharedPG.Pool)
 			ctx := context.Background()
@@ -60,7 +60,7 @@ func TestPgProcessedMatchRepository(t *testing.T) {
 			assert.True(t, started)
 		})
 
-		t.Run("ゲーム作成がまだ記録されていない matchId のとき、記録は見つからない", func(t *testing.T) {
+		t.Run("ゲーム作成がまだ記録されていないmatchIdのとき、記録は見つからない", func(t *testing.T) {
 			sharedPG.Truncate(t)
 			repo := repository.NewPgProcessedMatchRepository(sharedPG.Pool)
 			ctx := context.Background()
@@ -73,7 +73,7 @@ func TestPgProcessedMatchRepository(t *testing.T) {
 			assert.False(t, found)
 		})
 
-		t.Run("ゲーム作成を記録した matchId のとき、記録した内容がそのまま読み出せる", func(t *testing.T) {
+		t.Run("ゲーム作成を記録したmatchIdのとき、記録した内容がそのまま読み出せる", func(t *testing.T) {
 			sharedPG.Truncate(t)
 			repo := repository.NewPgProcessedMatchRepository(sharedPG.Pool)
 			ctx := context.Background()
@@ -88,7 +88,7 @@ func TestPgProcessedMatchRepository(t *testing.T) {
 			assert.Equal(t, "g1", gameID)
 		})
 
-		t.Run("処理を開始したことが無い matchId のとき、記録は見つからない", func(t *testing.T) {
+		t.Run("処理を開始したことが無いmatchIdのとき、記録は見つからない", func(t *testing.T) {
 			sharedPG.Truncate(t)
 			repo := repository.NewPgProcessedMatchRepository(sharedPG.Pool)
 			ctx := context.Background()
@@ -99,7 +99,7 @@ func TestPgProcessedMatchRepository(t *testing.T) {
 			assert.False(t, found)
 		})
 
-		t.Run("まだ通知していない matchId のとき、成立通知の送信権を取得できる", func(t *testing.T) {
+		t.Run("まだ通知していないmatchIdのとき、成立通知の送信権を取得できる", func(t *testing.T) {
 			sharedPG.Truncate(t)
 			repo := repository.NewPgProcessedMatchRepository(sharedPG.Pool)
 			ctx := context.Background()
@@ -112,7 +112,7 @@ func TestPgProcessedMatchRepository(t *testing.T) {
 			assert.True(t, marked)
 		})
 
-		t.Run("既に通知した matchId のとき、成立通知の送信権を取得できない", func(t *testing.T) {
+		t.Run("既に通知したmatchIdのとき、成立通知の送信権を取得できない", func(t *testing.T) {
 			sharedPG.Truncate(t)
 			repo := repository.NewPgProcessedMatchRepository(sharedPG.Pool)
 			ctx := context.Background()
@@ -127,7 +127,7 @@ func TestPgProcessedMatchRepository(t *testing.T) {
 			assert.False(t, marked)
 		})
 
-		t.Run("処理を開始したことが無い matchId のとき、成立通知の送信権を取得できない", func(t *testing.T) {
+		t.Run("処理を開始したことが無いmatchIdのとき、成立通知の送信権を取得できない", func(t *testing.T) {
 			sharedPG.Truncate(t)
 			repo := repository.NewPgProcessedMatchRepository(sharedPG.Pool)
 			ctx := context.Background()

@@ -32,7 +32,7 @@ func withFirebaseUID(uid string) gin.HandlerFunc {
 
 func TestAuthHandler_Register(t *testing.T) {
 	t.Run("プレイヤー登録", func(t *testing.T) {
-		t.Run("登録成功のとき、201 と name 未設定のプレイヤーを返す", func(t *testing.T) {
+		t.Run("登録成功のとき、201とname未設定のプレイヤーを返す", func(t *testing.T) {
 			fa := apiaccountserverfake.NewServer()
 			defer fa.Close()
 			fa.RegisterFn = func(req apiaccount.RegisterRequest) (int, any) {
@@ -59,7 +59,7 @@ func TestAuthHandler_Register(t *testing.T) {
 			assert.NotContains(t, w.Body.String(), `"name":`)
 		})
 
-		t.Run("firebase_uid が無いとき、401 になる", func(t *testing.T) {
+		t.Run("firebase_uidが無いとき、401になる", func(t *testing.T) {
 			fa := apiaccountserverfake.NewServer()
 			defer fa.Close()
 			h := NewAuthHandler(accountclient.New(fa.URL(), &http.Client{}))
@@ -74,7 +74,7 @@ func TestAuthHandler_Register(t *testing.T) {
 			assert.Equal(t, http.StatusUnauthorized, w.Code)
 		})
 
-		t.Run("account が 409 を返すとき、409 になる", func(t *testing.T) {
+		t.Run("accountが409を返すとき、409になる", func(t *testing.T) {
 			fa := apiaccountserverfake.NewServer()
 			defer fa.Close()
 			fa.RegisterFn = func(_ apiaccount.RegisterRequest) (int, any) {
@@ -93,7 +93,7 @@ func TestAuthHandler_Register(t *testing.T) {
 			assert.Equal(t, http.StatusConflict, w.Code)
 		})
 
-		t.Run("account が 500 を返すとき、500 になる", func(t *testing.T) {
+		t.Run("accountが500を返すとき、500になる", func(t *testing.T) {
 			fa := apiaccountserverfake.NewServer()
 			defer fa.Close()
 			fa.RegisterFn = func(_ apiaccount.RegisterRequest) (int, any) {
@@ -116,7 +116,7 @@ func TestAuthHandler_Register(t *testing.T) {
 
 func TestAuthHandler_Login(t *testing.T) {
 	t.Run("プレイヤーログイン", func(t *testing.T) {
-		t.Run("ログイン成功のとき、200 とプレイヤーを返す", func(t *testing.T) {
+		t.Run("ログイン成功のとき、200とプレイヤーを返す", func(t *testing.T) {
 			fa := apiaccountserverfake.NewServer()
 			defer fa.Close()
 			fa.LoginFn = func(req apiaccount.LoginRequest) (int, any) {
@@ -141,7 +141,7 @@ func TestAuthHandler_Login(t *testing.T) {
 			assert.Contains(t, w.Body.String(), `"player_id":"p-x"`)
 		})
 
-		t.Run("未登録のとき、404 になる", func(t *testing.T) {
+		t.Run("未登録のとき、404になる", func(t *testing.T) {
 			fa := apiaccountserverfake.NewServer()
 			defer fa.Close()
 			fa.LoginFn = func(_ apiaccount.LoginRequest) (int, any) {
@@ -160,7 +160,7 @@ func TestAuthHandler_Login(t *testing.T) {
 			assert.Equal(t, http.StatusNotFound, w.Code)
 		})
 
-		t.Run("firebase_uid が無いとき、401 になる", func(t *testing.T) {
+		t.Run("firebase_uidが無いとき、401になる", func(t *testing.T) {
 			fa := apiaccountserverfake.NewServer()
 			defer fa.Close()
 			h := NewAuthHandler(accountclient.New(fa.URL(), &http.Client{}))
@@ -175,7 +175,7 @@ func TestAuthHandler_Login(t *testing.T) {
 			assert.Equal(t, http.StatusUnauthorized, w.Code)
 		})
 
-		t.Run("account が 500 を返すとき、500 になる", func(t *testing.T) {
+		t.Run("accountが500を返すとき、500になる", func(t *testing.T) {
 			fa := apiaccountserverfake.NewServer()
 			defer fa.Close()
 			fa.LoginFn = func(_ apiaccount.LoginRequest) (int, any) {

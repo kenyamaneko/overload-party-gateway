@@ -118,7 +118,7 @@ func npcEntries() []port.GamePlayerEntry {
 
 func TestInvalidateActiveGames(t *testing.T) {
 	t.Run("停止時の対戦の無効化", func(t *testing.T) {
-		t.Run("人間 2 人の対戦が進行中のとき、その対戦が無効として記録される", func(t *testing.T) {
+		t.Run("人間2人の対戦が進行中のとき、その対戦が無効として記録される", func(t *testing.T) {
 			f := newInvalidationFixture(t, pvpEntries(), map[string]int{"g1": 2})
 			f.relay.JoinGame("p1", "g1", 1)
 			f.relay.JoinGame("p2", "g1", 2)
@@ -128,7 +128,7 @@ func TestInvalidateActiveGames(t *testing.T) {
 			assert.Equal(t, []string{"g1"}, f.invalidatedGames.snapshotInvalidated())
 		})
 
-		t.Run("人間 1 人の対戦だけが進行中のとき、無効として記録される対戦は無い", func(t *testing.T) {
+		t.Run("人間1人の対戦だけが進行中のとき、無効として記録される対戦は無い", func(t *testing.T) {
 			f := newInvalidationFixture(t, npcEntries(), map[string]int{"g1": 1})
 			f.relay.JoinGame("p1", "g1", 1)
 
@@ -205,7 +205,7 @@ func TestManagerShutdown(t *testing.T) {
 
 func TestRecoverInvalidatedGames(t *testing.T) {
 	t.Run("無効になった対戦の起動時の後始末", func(t *testing.T) {
-		t.Run("決着していない記録があるとき、その対戦の両者強制決着が battle に要求される", func(t *testing.T) {
+		t.Run("決着していない記録があるとき、その対戦の両者強制決着がbattleに要求される", func(t *testing.T) {
 			f := newInvalidationFixture(t, pvpEntries(), map[string]int{"g1": 2})
 			require.NoError(t, f.invalidatedGames.MarkInvalidated(context.Background(), []string{"g1"}))
 			f.battle.processActionResult = &service.ActionResult{}
@@ -268,7 +268,7 @@ func TestRecoverInvalidatedGames(t *testing.T) {
 			assert.Len(t, f.battle.snapshotProcessActionCalls(), 2)
 		})
 
-		t.Run("記録の一覧の取得に失敗するとき、battle へ何も要求しない", func(t *testing.T) {
+		t.Run("記録の一覧の取得に失敗するとき、battleへ何も要求しない", func(t *testing.T) {
 			f := newInvalidationFixture(t, pvpEntries(), map[string]int{"g1": 2})
 			f.invalidatedGames.listUnfinishedErr = errors.New("db down")
 
@@ -301,7 +301,7 @@ func TestRevertBattleCountOfInvalidatedGames(t *testing.T) {
 			assert.Equal(t, gamePlayersCreatedAtMillis, received[0].ConsumedAtMillis)
 		})
 
-		t.Run("スロット 1 の行が後から作られたとき、早い方の作成時刻が消費時刻として渡る", func(t *testing.T) {
+		t.Run("スロット1の行が後から作られたとき、早い方の作成時刻が消費時刻として渡る", func(t *testing.T) {
 			entries := []port.GamePlayerEntry{
 				{PlayerNum: 1, PlayerID: "p1", CreatedAt: gamePlayersCreatedAt.Add(7 * time.Second)},
 				{PlayerNum: 2, PlayerID: "p2", CreatedAt: gamePlayersCreatedAt},
@@ -391,7 +391,7 @@ func TestRevertBattleCountOfInvalidatedGames(t *testing.T) {
 			assert.Empty(t, f.account.snapshotReceived())
 		})
 
-		t.Run("人間 1 人の対戦が停止に巻き込まれたとき、回数が戻されない", func(t *testing.T) {
+		t.Run("人間1人の対戦が停止に巻き込まれたとき、回数が戻されない", func(t *testing.T) {
 			f := newInvalidationFixture(t, npcEntries(), map[string]int{"g1": 1})
 			f.relay.JoinGame("p1", "g1", 1)
 			f.battle.processActionResult = &service.ActionResult{}
@@ -402,7 +402,7 @@ func TestRevertBattleCountOfInvalidatedGames(t *testing.T) {
 			assert.Empty(t, f.account.snapshotReceived())
 		})
 
-		t.Run("人間 1 人の対戦の記録が残っているとき、回数が戻されない", func(t *testing.T) {
+		t.Run("人間1人の対戦の記録が残っているとき、回数が戻されない", func(t *testing.T) {
 			f := newInvalidationFixture(t, npcEntries(), map[string]int{"g1": 1})
 			markInvalidated(t, f, "g1")
 

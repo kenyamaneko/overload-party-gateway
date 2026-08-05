@@ -65,8 +65,8 @@ func TestVerifier_Verify(t *testing.T) {
 	key := newTestKey(t)
 	v := NewVerifier(StaticPublicKeyResolver(&key.PublicKey, DefaultKeyID))
 
-	t.Run("JWT の検証", func(t *testing.T) {
-		t.Run("有効な JWT のとき、sub を player_id として返す", func(t *testing.T) {
+	t.Run("JWTの検証", func(t *testing.T) {
+		t.Run("有効なJWTのとき、subをplayer_idとして返す", func(t *testing.T) {
 			token := signWithKid(t, key, string(DefaultKeyID), validClaims(time.Now()))
 
 			got, err := v.Verify(token)
@@ -74,7 +74,7 @@ func TestVerifier_Verify(t *testing.T) {
 			assert.Equal(t, testPlayerID, got)
 		})
 
-		t.Run("期限切れ JWT のとき、ErrTokenExpired になる", func(t *testing.T) {
+		t.Run("期限切れJWTのとき、ErrTokenExpiredになる", func(t *testing.T) {
 			now := time.Now()
 			expiredToken := signWithKid(t, key, string(DefaultKeyID), jwt.RegisteredClaims{
 				Subject:   testPlayerID,
@@ -114,23 +114,23 @@ func TestVerifier_Verify(t *testing.T) {
 				token: signWithKid(t, newTestKey(t), string(DefaultKeyID), validClaims(now)),
 			},
 			{
-				name:  "空の token のとき、拒否される",
+				name:  "空のtokenのとき、拒否される",
 				token: "",
 			},
 			{
-				name:  "JWT として parse できない token のとき、拒否される",
+				name:  "JWTとしてparseできないtokenのとき、拒否される",
 				token: "not-a-jwt",
 			},
 			{
-				name:  "kid header が無いとき、拒否される",
+				name:  "kid headerが無いとき、拒否される",
 				token: signWithoutKid(t, key, validClaims(now)),
 			},
 			{
-				name:  "未知の kid のとき、拒否される",
+				name:  "未知のkidのとき、拒否される",
 				token: signWithKid(t, key, "v999", validClaims(now)),
 			},
 			{
-				name: "想定外の iss のとき、拒否される",
+				name: "想定外のissのとき、拒否される",
 				token: signWithKid(t, key, string(DefaultKeyID), jwt.RegisteredClaims{
 					Subject:   testPlayerID,
 					Issuer:    "evil-issuer",
@@ -139,15 +139,15 @@ func TestVerifier_Verify(t *testing.T) {
 				}),
 			},
 			{
-				name:  "alg=none のとき、拒否される",
+				name:  "alg=noneのとき、拒否される",
 				token: noneAlgToken,
 			},
 			{
-				name:  "公開鍵を鍵にした HS256 で署名されているとき、拒否される",
+				name:  "公開鍵を鍵にしたHS256で署名されているとき、拒否される",
 				token: hmacToken,
 			},
 			{
-				name: "sub が空のとき、拒否される",
+				name: "subが空のとき、拒否される",
 				token: signWithKid(t, key, string(DefaultKeyID), jwt.RegisteredClaims{
 					Subject:   "",
 					Issuer:    ExpectedIssuer,
@@ -170,7 +170,7 @@ func TestStaticPublicKeyResolver(t *testing.T) {
 	key := newTestKey(t)
 
 	t.Run("公開鍵の解決", func(t *testing.T) {
-		t.Run("登録済みの kid のとき、公開鍵を返す", func(t *testing.T) {
+		t.Run("登録済みのkidのとき、公開鍵を返す", func(t *testing.T) {
 			resolver := StaticPublicKeyResolver(&key.PublicKey, DefaultKeyID)
 
 			got, err := resolver(DefaultKeyID)
@@ -178,7 +178,7 @@ func TestStaticPublicKeyResolver(t *testing.T) {
 			assert.Equal(t, &key.PublicKey, got)
 		})
 
-		t.Run("未知の kid のとき、エラーになる", func(t *testing.T) {
+		t.Run("未知のkidのとき、エラーになる", func(t *testing.T) {
 			resolver := StaticPublicKeyResolver(&key.PublicKey, DefaultKeyID)
 			_, err := resolver(KeyID("v999"))
 			require.Error(t, err)
@@ -187,8 +187,8 @@ func TestStaticPublicKeyResolver(t *testing.T) {
 }
 
 func TestParsePublicKeyPEM(t *testing.T) {
-	t.Run("PEM 公開鍵の読み取り", func(t *testing.T) {
-		t.Run("正しい PEM のとき、署名の検証に使える鍵が得られる", func(t *testing.T) {
+	t.Run("PEM公開鍵の読み取り", func(t *testing.T) {
+		t.Run("正しいPEMのとき、署名の検証に使える鍵が得られる", func(t *testing.T) {
 			key := newTestKey(t)
 			der, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
 			require.NoError(t, err)
@@ -203,13 +203,13 @@ func TestParsePublicKeyPEM(t *testing.T) {
 			assert.Equal(t, testPlayerID, got)
 		})
 
-		t.Run("PEM でないとき、エラーになる", func(t *testing.T) {
+		t.Run("PEMでないとき、エラーになる", func(t *testing.T) {
 			_, err := ParsePublicKeyPEM([]byte("not-a-pem"))
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "PEM")
 		})
 
-		t.Run("RSA 以外の鍵のとき、エラーになる", func(t *testing.T) {
+		t.Run("RSA以外の鍵のとき、エラーになる", func(t *testing.T) {
 			der, err := x509.MarshalPKIXPublicKey(newTestEd25519PublicKey(t))
 			require.NoError(t, err)
 			encoded := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: der})

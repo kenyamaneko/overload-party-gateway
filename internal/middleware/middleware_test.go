@@ -99,8 +99,8 @@ func newSequencedAccountFake(t *testing.T, findStatuses []int, registerStatus in
 }
 
 func TestUseDevAuth(t *testing.T) {
-	t.Run("開発用 Bearer 認証", func(t *testing.T) {
-		t.Run("有効な dev-token-user1 のとき、200 で uid を解決する", func(t *testing.T) {
+	t.Run("開発用Bearer認証", func(t *testing.T) {
+		t.Run("有効なdev-token-user1のとき、200でuidを解決する", func(t *testing.T) {
 			r := gin.New()
 			r.Use(UseDevAuth())
 			r.GET("/test", func(c *gin.Context) {
@@ -117,7 +117,7 @@ func TestUseDevAuth(t *testing.T) {
 			assert.Equal(t, `{"uid":"user1"}`, w.Body.String())
 		})
 
-		t.Run("Authorization header が無いとき、401 になる", func(t *testing.T) {
+		t.Run("Authorization headerが無いとき、401になる", func(t *testing.T) {
 			r := gin.New()
 			r.Use(UseDevAuth())
 			r.GET("/test", func(c *gin.Context) {
@@ -136,8 +136,8 @@ func TestUseDevAuth(t *testing.T) {
 			name       string
 			authHeader string
 		}{
-			{name: "Bearer 接頭辞が無いとき、401 になる", authHeader: "dev-token-user1"},
-			{name: "dev-token 形式でない token のとき、401 になる", authHeader: "Bearer some-other-token"},
+			{name: "Bearer接頭辞が無いとき、401になる", authHeader: "dev-token-user1"},
+			{name: "dev-token形式でないtokenのとき、401になる", authHeader: "Bearer some-other-token"},
 		}
 		for _, tc := range invalidHeaderCases {
 			t.Run(tc.name, func(t *testing.T) {
@@ -161,7 +161,7 @@ func TestUseDevAuth(t *testing.T) {
 
 func TestUseDevAuthWithPlayerResolve(t *testing.T) {
 	t.Run("開発用認証とプレイヤー解決", func(t *testing.T) {
-		t.Run("未登録ユーザーのとき、自動作成し onCreated が呼ばれる", func(t *testing.T) {
+		t.Run("未登録ユーザーのとき、自動作成しonCreatedが呼ばれる", func(t *testing.T) {
 			fa := newStatefulAccountFake()
 			defer fa.close()
 
@@ -188,7 +188,7 @@ func TestUseDevAuthWithPlayerResolve(t *testing.T) {
 			assert.Contains(t, w.Body.String(), "generated-newuser")
 		})
 
-		t.Run("既存ユーザーのとき、既存 player_id を解決する", func(t *testing.T) {
+		t.Run("既存ユーザーのとき、既存player_idを解決する", func(t *testing.T) {
 			fa := newStatefulAccountFake()
 			defer fa.close()
 			fa.seed("existinguser", "existing-id")
@@ -217,35 +217,35 @@ func TestUseDevAuthWithPlayerResolve(t *testing.T) {
 			wantStatus     int
 		}{
 			{
-				name:       "Authorization header が無いとき、401 になる",
+				name:       "Authorization headerが無いとき、401になる",
 				authHeader: "",
 				wantStatus: http.StatusUnauthorized,
 			},
 			{
-				name:       "Bearer 接頭辞が無いとき、401 になる",
+				name:       "Bearer接頭辞が無いとき、401になる",
 				authHeader: "dev-token-user1",
 				wantStatus: http.StatusUnauthorized,
 			},
 			{
-				name:       "dev-token 形式でない token のとき、401 になる",
+				name:       "dev-token形式でないtokenのとき、401になる",
 				authHeader: "Bearer other-token",
 				wantStatus: http.StatusUnauthorized,
 			},
 			{
-				name:         "プレイヤー検索が 500 のとき、500 になる",
+				name:         "プレイヤー検索が500のとき、500になる",
 				authHeader:   "Bearer dev-token-u500",
 				findStatuses: []int{http.StatusInternalServerError},
 				wantStatus:   http.StatusInternalServerError,
 			},
 			{
-				name:           "未登録で登録が 500 のとき、500 になる",
+				name:           "未登録で登録が500のとき、500になる",
 				authHeader:     "Bearer dev-token-u-registerfail",
 				findStatuses:   []int{http.StatusNotFound},
 				registerStatus: http.StatusInternalServerError,
 				wantStatus:     http.StatusInternalServerError,
 			},
 			{
-				name:           "登録が競合したのに再検索でも見つからないとき、500 になる",
+				name:           "登録が競合したのに再検索でも見つからないとき、500になる",
 				authHeader:     "Bearer dev-token-u-conflictmiss",
 				findStatuses:   []int{http.StatusNotFound, http.StatusNotFound},
 				registerStatus: http.StatusConflict,
@@ -271,7 +271,7 @@ func TestUseDevAuthWithPlayerResolve(t *testing.T) {
 			})
 		}
 
-		t.Run("登録が競合 (409) し再検索で見つかるとき、既存のプレイヤー ID で通る", func(t *testing.T) {
+		t.Run("登録が競合 (409)し再検索で見つかるとき、既存のプレイヤーIDで通る", func(t *testing.T) {
 			fa := newSequencedAccountFake(t, []int{http.StatusNotFound, http.StatusOK}, http.StatusConflict)
 
 			r := gin.New()
@@ -301,8 +301,8 @@ func (s *stubTokenVerifier) VerifyIDToken(ctx context.Context, idToken string) (
 }
 
 func TestUseFirebaseAuth(t *testing.T) {
-	t.Run("Firebase ID トークン認証", func(t *testing.T) {
-		t.Run("検証に通るトークンのとき、200で UID を解決する", func(t *testing.T) {
+	t.Run("Firebase IDトークン認証", func(t *testing.T) {
+		t.Run("検証に通るトークンのとき、200でUIDを解決する", func(t *testing.T) {
 			verifier := &stubTokenVerifier{VerifyIDTokenFn: func(context.Context, string) (string, error) {
 				return "firebase-uid-1", nil
 			}}
@@ -339,7 +339,7 @@ func TestUseFirebaseAuth(t *testing.T) {
 			require.Equal(t, http.StatusUnauthorized, w.Code)
 		})
 
-		t.Run("Authorization header が無いとき、401になる", func(t *testing.T) {
+		t.Run("Authorization headerが無いとき、401になる", func(t *testing.T) {
 			verifier := &stubTokenVerifier{VerifyIDTokenFn: func(context.Context, string) (string, error) {
 				return "firebase-uid-1", nil
 			}}
@@ -356,7 +356,7 @@ func TestUseFirebaseAuth(t *testing.T) {
 			require.Equal(t, http.StatusUnauthorized, w.Code)
 		})
 
-		t.Run("Bearer 形式でないヘッダのとき、401になる", func(t *testing.T) {
+		t.Run("Bearer形式でないヘッダのとき、401になる", func(t *testing.T) {
 			verifier := &stubTokenVerifier{VerifyIDTokenFn: func(context.Context, string) (string, error) {
 				return "firebase-uid-1", nil
 			}}
@@ -374,7 +374,7 @@ func TestUseFirebaseAuth(t *testing.T) {
 			require.Equal(t, http.StatusUnauthorized, w.Code)
 		})
 
-		t.Run("Bearer の後が空のとき、401になる", func(t *testing.T) {
+		t.Run("Bearerの後が空のとき、401になる", func(t *testing.T) {
 			verifier := &stubTokenVerifier{VerifyIDTokenFn: func(_ context.Context, idToken string) (string, error) {
 				if idToken == "" {
 					return "", errors.New("empty id token")
@@ -398,8 +398,8 @@ func TestUseFirebaseAuth(t *testing.T) {
 }
 
 func TestUseFirebaseAuthWithPlayerResolve(t *testing.T) {
-	t.Run("Firebase 認証とプレイヤー解決のチェイン", func(t *testing.T) {
-		t.Run("検証に通るトークンのとき、本人のプレイヤー ID が解決される", func(t *testing.T) {
+	t.Run("Firebase認証とプレイヤー解決のチェイン", func(t *testing.T) {
+		t.Run("検証に通るトークンのとき、本人のプレイヤーIDが解決される", func(t *testing.T) {
 			fa := newStatefulAccountFake()
 			defer fa.close()
 			fa.seed("firebase-uid-1", "player-1")
@@ -451,8 +451,8 @@ func TestUseFirebaseAuthWithPlayerResolve(t *testing.T) {
 }
 
 func TestResolvePlayer(t *testing.T) {
-	t.Run("firebase_uid からのプレイヤー解決", func(t *testing.T) {
-		t.Run("firebase_uid が既存プレイヤーのとき、player_id を解決する", func(t *testing.T) {
+	t.Run("firebase_uidからのプレイヤー解決", func(t *testing.T) {
+		t.Run("firebase_uidが既存プレイヤーのとき、player_idを解決する", func(t *testing.T) {
 			fa := newStatefulAccountFake()
 			defer fa.close()
 			fa.seed("uid1", "p1")
@@ -476,7 +476,7 @@ func TestResolvePlayer(t *testing.T) {
 			assert.Equal(t, `{"player_id":"p1"}`, w.Body.String())
 		})
 
-		t.Run("firebase_uid が無いとき、401 になる", func(t *testing.T) {
+		t.Run("firebase_uidが無いとき、401になる", func(t *testing.T) {
 			fa := newStatefulAccountFake()
 			defer fa.close()
 
@@ -493,7 +493,7 @@ func TestResolvePlayer(t *testing.T) {
 			assert.Equal(t, http.StatusUnauthorized, w.Code)
 		})
 
-		t.Run("firebase_uid が未登録のとき、401 になる", func(t *testing.T) {
+		t.Run("firebase_uidが未登録のとき、401になる", func(t *testing.T) {
 			fa := newStatefulAccountFake()
 			defer fa.close()
 
@@ -514,7 +514,7 @@ func TestResolvePlayer(t *testing.T) {
 			assert.Equal(t, http.StatusUnauthorized, w.Code)
 		})
 
-		t.Run("プレイヤー検索が 500 のとき、500 になる", func(t *testing.T) {
+		t.Run("プレイヤー検索が500のとき、500になる", func(t *testing.T) {
 			fa := apiaccountserverfake.NewServer()
 			t.Cleanup(fa.Close)
 			fa.FindByFirebaseUIDFn = func(_ string) (int, any) {
@@ -541,8 +541,8 @@ func TestResolvePlayer(t *testing.T) {
 }
 
 func TestContextGetters(t *testing.T) {
-	t.Run("context 値の取得", func(t *testing.T) {
-		t.Run("firebase_uid が未設定のとき、空文字を返す", func(t *testing.T) {
+	t.Run("context値の取得", func(t *testing.T) {
+		t.Run("firebase_uidが未設定のとき、空文字を返す", func(t *testing.T) {
 			r := gin.New()
 			r.GET("/test", func(c *gin.Context) {
 				c.JSON(http.StatusOK, gin.H{"uid": GetFirebaseUID(c)})
@@ -555,7 +555,7 @@ func TestContextGetters(t *testing.T) {
 			assert.Equal(t, `{"uid":""}`, w.Body.String())
 		})
 
-		t.Run("player_id が未設定のとき、空文字を返す", func(t *testing.T) {
+		t.Run("player_idが未設定のとき、空文字を返す", func(t *testing.T) {
 			r := gin.New()
 			r.GET("/test", func(c *gin.Context) {
 				c.JSON(http.StatusOK, gin.H{"pid": GetPlayerID(c)})

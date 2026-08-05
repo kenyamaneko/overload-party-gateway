@@ -42,10 +42,10 @@ func TestUseRequestLogger(t *testing.T) {
 			status int
 			want   string
 		}{
-			{name: "応答が 200 のとき、水準は INFO になる", status: http.StatusOK, want: "INFO"},
-			{name: "応答が 400 のとき、水準は WARN になる", status: http.StatusBadRequest, want: "WARN"},
-			{name: "応答が 499 のとき、水準は WARN になる", status: 499, want: "WARN"},
-			{name: "応答が 500 のとき、水準は ERROR になる", status: http.StatusInternalServerError, want: "ERROR"},
+			{name: "応答が200のとき、水準はINFOになる", status: http.StatusOK, want: "INFO"},
+			{name: "応答が400のとき、水準はWARNになる", status: http.StatusBadRequest, want: "WARN"},
+			{name: "応答が499のとき、水準はWARNになる", status: 499, want: "WARN"},
+			{name: "応答が500のとき、水準はERRORになる", status: http.StatusInternalServerError, want: "ERROR"},
 		}
 
 		for _, tt := range tests {

@@ -25,8 +25,8 @@ func newStatusServer(t *testing.T, status int) *httptest.Server {
 }
 
 func TestClient_InjectsInternalAuthHeader(t *testing.T) {
-	t.Run("X-Internal-Auth header の注入", func(t *testing.T) {
-		t.Run("ctx に格納した token が X-Internal-Auth header として送られる", func(t *testing.T) {
+	t.Run("X-Internal-Auth headerの注入", func(t *testing.T) {
+		t.Run("ctxに格納したtokenがX-Internal-Auth headerとして送られる", func(t *testing.T) {
 			const wantToken = "test.jwt.token"
 			var got string
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -50,12 +50,12 @@ func TestClient_Enqueue_MapsStatusToSentinel(t *testing.T) {
 		wantErr error
 	}{
 		{
-			name:    "受付停止の 503 は ErrMatchmakingUnavailable に写像する",
+			name:    "受付停止の503はErrMatchmakingUnavailableに写像する",
 			status:  http.StatusServiceUnavailable,
 			wantErr: port.ErrMatchmakingUnavailable,
 		},
 		{
-			name:    "その他の 5xx は SDK sentinel を透過する",
+			name:    "その他の5xxはSDK sentinelを透過する",
 			status:  http.StatusInternalServerError,
 			wantErr: apimatchmakingclient.ErrInternalServer,
 		},
@@ -82,17 +82,17 @@ func TestClient_Cancel_FoldsAndMapsStatus(t *testing.T) {
 		wantErr error
 	}{
 		{
-			name:    "取消成功の 200 は nil を返す",
+			name:    "取消成功の200はnilを返す",
 			status:  http.StatusOK,
 			wantErr: nil,
 		},
 		{
-			name:    "キュー未登録の 404 は nil に畳む",
+			name:    "キュー未登録の404はnilに畳む",
 			status:  http.StatusNotFound,
 			wantErr: nil,
 		},
 		{
-			name:    "受付停止の 503 は ErrMatchmakingUnavailable に写像する",
+			name:    "受付停止の503はErrMatchmakingUnavailableに写像する",
 			status:  http.StatusServiceUnavailable,
 			wantErr: port.ErrMatchmakingUnavailable,
 		},
