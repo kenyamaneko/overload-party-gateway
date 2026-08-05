@@ -301,7 +301,7 @@ func runServices(
 	g.Go(func() error {
 		<-gCtx.Done()
 		slog.Info("notifying WS connections of shutdown")
-		wsCtx, cancel := context.WithTimeout(context.Background(), ws.ShutdownNotifyTimeout)
+		wsCtx, cancel := context.WithTimeout(context.Background(), ws.ShutdownTimeout)
 		defer cancel()
 		wsRuntime.Shutdown(wsCtx)
 		return nil

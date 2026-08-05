@@ -12,8 +12,11 @@ import (
 const pvpHumanSlots = 2
 
 // invalidationMarkTimeout は停止時に無効化の記録を書き込む上限時間。
-// 強制終了までの猶予を WS の終了通知と分け合うため、短く区切る。
 const invalidationMarkTimeout = 2 * time.Second
+
+// ShutdownTimeout は SIGTERM 受信時に Manager.Shutdown 全体へ与える上限。
+// 記録の書き込みが遅れても WS への終了通知の猶予が削られないよう、両者の合計とする。
+const ShutdownTimeout = invalidationMarkTimeout + ShutdownNotifyTimeout
 
 // forfeitBothPlayerNum は両者強制決着を要求するときに渡すスロット番号。
 // 両者強制決着は勝者をスロット番号から決めないため、どの番号でも結果は変わらない。
@@ -108,8 +111,8 @@ func (r *GameRelay) RecoverInvalidatedGames(ctx context.Context) {
 // 決着が成功した対戦だけを決着済みとして記録するのは、battle が決着済みの対戦への
 // 強制決着を拒むため。失敗した対戦は記録が残り、次の起動で改めて処理される。
 func (r *GameRelay) finishInvalidatedGame(ctx context.Context, gameID string) {
-	// 両者強制決着の理由は battle が決めるため、gateway からは何も渡さない。
-	if _, err := r.battleClient.ProcessAction(ctx, gameID, forfeitBothPlayerNum, gamelogic.ActionTypeForfeitBoth, nil); err != nil {
+	// battle の契約が data を必須としているため、battle が読まない理由も既存の呼び出しと同じ形で渡す。
+	if _, err := r.battleClient.ProcessAction(ctx, gameID, forfeitBothPlayerNum, gamelogic.ActionTypeForfeitBoth, buildForfeitReason(gamelogic.WinReasonDisconnect)); err != nil {
 		slog.Error("invalidated game recovery: forfeit failed, retried on next startup", "game_id", gameID, "error", err)
 		return
 	}

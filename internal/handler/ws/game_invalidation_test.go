@@ -114,6 +114,32 @@ func TestInvalidateActiveGames(t *testing.T) {
 	})
 }
 
+func TestManagerShutdown(t *testing.T) {
+	t.Run("停止時の一連の処理", func(t *testing.T) {
+		t.Run("進行中の対戦があるとき、その対戦が無効として記録され、接続はサーバー更新を理由に閉じられる", func(t *testing.T) {
+			battle := newMockBattleClient()
+			gamePlayers := &mockGamePlayerRepo{lookupEntries: pvpEntries(), playerCounts: map[string]int{"g1": 2}}
+			invalidatedGames := newFakeInvalidatedGameRepo()
+			m := NewManager(battle, nil, nil, noopMatchmakingClient{}, gamePlayers, nil, invalidatedGames, 0, nil, nil, DefaultDisconnectTimeout)
+			conn := NewConnection(nil, "p1")
+			m.Hub.Register(conn)
+			m.Relay.JoinGame("p1", "g1", 1)
+			m.Relay.JoinGame("p2", "g1", 2)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			defer cancel()
+			m.Shutdown(ctx)
+
+			assert.Equal(t, []string{"g1"}, invalidatedGames.snapshotInvalidated())
+			conn.mu.Lock()
+			isClosed, reason := conn.isClosed, conn.closeReason
+			conn.mu.Unlock()
+			assert.True(t, isClosed)
+			assert.Equal(t, genws.WSServerMsgServerUpdate, reason)
+		})
+	})
+}
+
 func TestRecoverInvalidatedGames(t *testing.T) {
 	t.Run("無効になった対戦の起動時の後始末", func(t *testing.T) {
 		t.Run("決着していない記録があるとき、その対戦の両者強制決着が battle に要求される", func(t *testing.T) {

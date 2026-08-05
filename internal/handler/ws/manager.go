@@ -89,7 +89,7 @@ func NewManager(
 }
 
 // Shutdown は進行中の対戦を無効として記録し、全 WS 接続へ終了を通知してから閉じます。
-// SIGTERM 受信時に呼ばれます。
+// SIGTERM 受信時に ShutdownTimeout を期限とする ctx で呼ばれます。
 //
 // 記録を先に行うのは、終了通知が猶予を使い切っても記録だけは残るようにするため。
 func (m *Manager) Shutdown(ctx context.Context) {

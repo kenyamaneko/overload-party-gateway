@@ -196,7 +196,7 @@ func main() {
 	<-srvCtx.Done()
 	slog.Info("shutting down")
 
-	wsShutdownCtx, wsCancel := context.WithTimeout(context.Background(), ws.ShutdownNotifyTimeout)
+	wsShutdownCtx, wsCancel := context.WithTimeout(context.Background(), ws.ShutdownTimeout)
 	wsManager.Shutdown(wsShutdownCtx)
 	wsCancel()
 
