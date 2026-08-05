@@ -2,6 +2,8 @@ package ws
 
 import (
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -9,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	gamelogic "github.com/kenyamaneko/overload-party-battle/packages/game-logic-constants-go"
+	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
 )
@@ -75,6 +78,30 @@ func TestOpponentPlayerID(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				assert.Equal(t, tt.want, opponentPlayerID(tt.entries, tt.selfID))
+			})
+		}
+	})
+}
+
+func TestPlayerNumOf(t *testing.T) {
+	entries := []port.GamePlayerEntry{
+		{PlayerNum: 1, PlayerID: "p1"},
+		{PlayerNum: 2, PlayerID: "p2"},
+	}
+
+	t.Run("プレイヤー番号の解決", func(t *testing.T) {
+		tests := []struct {
+			name     string
+			playerID string
+			want     int
+		}{
+			{name: "1P として参加しているとき、1 を返す", playerID: "p1", want: 1},
+			{name: "2P として参加しているとき、2 を返す", playerID: "p2", want: 2},
+			{name: "参加していないとき、0 を返す", playerID: "p3", want: 0},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				assert.Equal(t, tt.want, playerNumOf(entries, tt.playerID))
 			})
 		}
 	})
@@ -190,16 +217,47 @@ func TestResolveStaleDisconnect(t *testing.T) {
 			assert.Equal(t, gamelogic.ActionTypeForfeit, bc.processActionCalls[0].actionType)
 		})
 
-		t.Run("両者とも猶予が切れているとき、forfeit を実行せず未決着のまま残す", func(t *testing.T) {
+		t.Run("両者とも猶予が切れているとき、両者強制決着で対戦を終え勝者なしで EXP 付与を依頼する", func(t *testing.T) {
+			store := &fakeTimerStore{
+				getDisconnectFound:  true,
+				getDisconnectReturn: portDisconnectDeadline("g1", time.Now().Add(-time.Minute)),
+			}
+			relay, bc, hub := newDisconnectResolutionRelay(entries, store)
+			relay.gamePlayerRepo = &mockGamePlayerRepo{lookupEntries: entries, markAwardedReturn: true}
+			account := &awardCounter{}
+			srv := httptest.NewServer(account.handler())
+			t.Cleanup(srv.Close)
+			relay.accountClient = accountclient.New(srv.URL, &http.Client{})
+			relay.JoinGame("p1", "g1", 1)
+			relay.JoinGame("p2", "g1", 2)
+			hub.Register(NewConnection(nil, "p1")) // 復帰した本人は接続済み
+			bc.processActionResult = &service.ActionResult{GameOver: true, WinningPlayerNum: 0, WinReason: "disconnect"}
+
+			relay.resolveStaleDisconnect("g1", "p1", true)
+
+			require.Len(t, bc.processActionCalls, 1)
+			assert.Equal(t, gamelogic.ActionTypeForfeitBoth, bc.processActionCalls[0].actionType)
+			assert.Equal(t, int32(1), account.calls.Load())
+			assert.Equal(t, int64(0), account.body().WinnerNum)
+		})
+
+		t.Run("両者とも猶予が切れているが両者強制決着の要求が失敗するとき、EXP を付与しない", func(t *testing.T) {
 			store := &fakeTimerStore{
 				getDisconnectFound:  true,
 				getDisconnectReturn: portDisconnectDeadline("g1", time.Now().Add(-time.Minute)),
 			}
 			relay, bc, _ := newDisconnectResolutionRelay(entries, store)
+			relay.gamePlayerRepo = &mockGamePlayerRepo{lookupEntries: entries, markAwardedReturn: true}
+			account := &awardCounter{}
+			srv := httptest.NewServer(account.handler())
+			t.Cleanup(srv.Close)
+			relay.accountClient = accountclient.New(srv.URL, &http.Client{})
+			bc.processActionErr = errFake
 
 			relay.resolveStaleDisconnect("g1", "p1", true)
 
-			assert.Empty(t, bc.processActionCalls, "must not declare either side a winner when both grace periods expired")
+			require.Len(t, bc.processActionCalls, 1)
+			assert.Equal(t, int32(0), account.calls.Load(), "must not award exp for a game that was left unresolved")
 		})
 
 		t.Run("NPC 戦 (対戦相手が居ない) のとき、何もしない", func(t *testing.T) {
