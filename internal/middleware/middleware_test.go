@@ -452,7 +452,7 @@ func TestUseFirebaseAuthWithPlayerResolve(t *testing.T) {
 
 func TestResolvePlayer(t *testing.T) {
 	t.Run("firebase_uid からのプレイヤー解決", func(t *testing.T) {
-		t.Run("firebase_uid が既存プレイヤーのとき、player_id を解決する", func(t *testing.T) {
+		t.Run("firebase_uid が既存プレイヤーのとき、200 で player_id を解決する", func(t *testing.T) {
 			fa := newStatefulAccountFake()
 			defer fa.close()
 			fa.seed("uid1", "p1")
