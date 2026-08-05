@@ -142,8 +142,8 @@ func (f *fakeProcessedMatchRepo) snapshotReleaseCalls() []string {
 var _ port.ProcessedMatchRepo = (*fakeProcessedMatchRepo)(nil)
 
 // newTestManagerForMatchMade は HandleMatchMade の永続 dedup を検証するための
-// Manager を返す。WS 経路 (accountClient / matchmakingClient / internalSigner) は
-// HandleMatchMade から参照されないため nil のままにする。
+// Manager を返す。WS 経路 (accountClient / internalSigner) は HandleMatchMade から
+// 参照されないため nil のままにする。
 func newTestManagerForMatchMade(bc *mockBattleClient, gamePlayerRepo port.GamePlayerRepo, dedupRepo port.ProcessedMatchRepo) *Manager {
 	return newTestManagerWithCards(bc, &fakeCardClient{}, gamePlayerRepo, dedupRepo)
 }
@@ -151,7 +151,7 @@ func newTestManagerForMatchMade(bc *mockBattleClient, gamePlayerRepo port.GamePl
 // newTestManagerWithCards はデッキ解決の内容までを検証するテスト向けに、card クライアントを
 // 差し替えられる Manager を返す。
 func newTestManagerWithCards(bc *mockBattleClient, cardClient port.CardClient, gamePlayerRepo port.GamePlayerRepo, dedupRepo port.ProcessedMatchRepo) *Manager {
-	return NewManager(bc, nil, cardClient, nil, gamePlayerRepo, dedupRepo, 0, nil, nil, DefaultDisconnectTimeout)
+	return NewManager(bc, nil, cardClient, noopMatchmakingClient{}, gamePlayerRepo, dedupRepo, 0, nil, nil, DefaultDisconnectTimeout)
 }
 
 func matchMadeEvent(matchID string) apimatchmaking.MatchMadeEvent {
@@ -432,12 +432,15 @@ func TestHandleMatchMade(t *testing.T) {
 	})
 }
 
-// noopMatchmakingClient は port.MatchmakingClient のテスト用実装。Hub.Unregister が
-// 常に呼ぶ OnMatchmakingLeave の配線先を満たすためだけに使う。
+// noopMatchmakingClient は port.MatchmakingClient のテスト用実装。matchmaking への
+// 呼び出し内容を検証しない経路の配線先として使う。
 type noopMatchmakingClient struct{}
 
 func (noopMatchmakingClient) Enqueue(_ context.Context, _ int64, _ string, _ int64) error { return nil }
 func (noopMatchmakingClient) Cancel(_ context.Context) error                              { return nil }
+func (noopMatchmakingClient) ReportMatchAbandoned(_ context.Context, _ string, _ []string) error {
+	return nil
+}
 
 var _ port.MatchmakingClient = noopMatchmakingClient{}
 

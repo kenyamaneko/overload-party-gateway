@@ -18,7 +18,7 @@ require (
 	github.com/kenyamaneko/overload-party-common/packages/game-design-constants v0.1.0
 	github.com/kenyamaneko/overload-party-gateway/packages/api-gateway v0.0.0-00010101000000-000000000000
 	github.com/kenyamaneko/overload-party-gateway/packages/ws-constants v0.0.0-00010101000000-000000000000
-	github.com/kenyamaneko/overload-party-matchmaking/packages/api-matchmaking v0.2.0
+	github.com/kenyamaneko/overload-party-matchmaking/packages/api-matchmaking v0.3.0
 	github.com/redis/go-redis/v9 v9.14.0
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.42.0

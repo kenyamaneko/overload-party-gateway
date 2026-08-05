@@ -59,6 +59,15 @@ func (c *Client) Cancel(ctx context.Context) error {
 	return toPortErr(err)
 }
 
+// ReportMatchAbandoned は成立したマッチを、配信先が接続していなかったため不成立として申告する。
+func (c *Client) ReportMatchAbandoned(ctx context.Context, matchID string, playerIDs []string) error {
+	return toPortErr(c.api.ReportMatchAbandoned(ctx, apimatchmaking.MatchAbandonedRequest{
+		MatchID:   matchID,
+		PlayerIDs: playerIDs,
+		Reason:    apimatchmaking.MatchAbandonedRequestReasonPlayerNotConnected,
+	}))
+}
+
 // toPortErr は SDK の sentinel を port の sentinel に変換する。
 func toPortErr(err error) error {
 	if errors.Is(err, apimatchmakingclient.ErrServiceUnavailable) {

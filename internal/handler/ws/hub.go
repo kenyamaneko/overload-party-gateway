@@ -241,12 +241,19 @@ func (h *ConnectionHub) ClearDisconnectDeadline(playerID string) {
 
 // SendToPlayer は指定プレイヤーにメッセージを送信します
 func (h *ConnectionHub) SendToPlayer(playerID string, msg *WSMessage) {
+	h.SendToPlayerIfConnected(playerID, msg)
+}
+
+// SendToPlayerIfConnected は指定プレイヤーが接続していればメッセージを送信し、送信できたかを返します。
+func (h *ConnectionHub) SendToPlayerIfConnected(playerID string, msg *WSMessage) bool {
 	h.mu.RLock()
 	conn, ok := h.connections[playerID]
 	h.mu.RUnlock()
-	if ok {
-		conn.SendMessage(msg)
+	if !ok {
+		return false
 	}
+	conn.SendMessage(msg)
+	return true
 }
 
 // SendRawToPlayer はマーシャル済みバイト列をプレイヤーに送信します

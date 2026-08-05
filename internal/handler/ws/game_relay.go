@@ -764,16 +764,19 @@ func (r *GameRelay) HandleDisconnectTimeout(playerID, gameID string) {
 	}
 }
 
-// NotifyMatchFound は両プレイヤーに match_found を送信します
-func (r *GameRelay) NotifyMatchFound(gameID, player1ID, player2ID string) {
-	msg := &WSMessage{
+// NotifyMatchFoundTo は 1 人のプレイヤーに match_found を送信し、送信できたかを返します
+func (r *GameRelay) NotifyMatchFoundTo(gameID, playerID string) bool {
+	return r.hub.SendToPlayerIfConnected(playerID, &WSMessage{
 		Type: genws.WSServerMsgMatchFound,
 		Data: mustMarshal(MatchFoundMessage{
 			GameID: gameID,
 		}),
-	}
-	r.hub.SendToPlayer(player1ID, msg)
-	r.hub.SendToPlayer(player2ID, msg)
+	})
+}
+
+// NotifyMatchmakingFailed はマッチが不成立になったことをプレイヤーに送信します
+func (r *GameRelay) NotifyMatchmakingFailed(playerID string) {
+	sendErrorToPlayer(r.hub, playerID, "matchmaking_error", "opponent was not connected", true)
 }
 
 // resolvePlayerNum はインメモリセッションからキャッシュ済み playerNum を返す。
