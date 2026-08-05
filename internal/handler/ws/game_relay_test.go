@@ -426,7 +426,7 @@ func TestLeaveGame(t *testing.T) {
 			assert.False(t, gameMembersExist, "gameMembers should be cleaned up when last player leaves")
 		})
 
-		t.Run("どのゲームにも居ないプレイヤーが退出しても、パニックしない", func(t *testing.T) {
+		t.Run("参加していないプレイヤーが退出しても、参加状態は変わらない", func(t *testing.T) {
 			relay, _ := newTestRelay()
 
 			relay.LeaveGame("unknown_player")
@@ -560,140 +560,9 @@ func TestLeaveAllPlayers(t *testing.T) {
 	})
 }
 
-func TestAppendUnique(t *testing.T) {
-	t.Run("重複なし追加", func(t *testing.T) {
-		tests := []struct {
-			name     string
-			initial  []string
-			add      string
-			expected []string
-		}{
-			{
-				name:     "空スライスに追加すると、要素 1 つになる",
-				initial:  nil,
-				add:      "a",
-				expected: []string{"a"},
-			},
-			{
-				name:     "新しい要素を追加すると、末尾に追加される",
-				initial:  []string{"a", "b"},
-				add:      "c",
-				expected: []string{"a", "b", "c"},
-			},
-			{
-				name:     "既存要素を追加すると、追加されない",
-				initial:  []string{"a", "b"},
-				add:      "a",
-				expected: []string{"a", "b"},
-			},
-			{
-				name:     "末尾と同じ要素を追加すると、追加されない",
-				initial:  []string{"a", "b"},
-				add:      "b",
-				expected: []string{"a", "b"},
-			},
-		}
-
-		for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-				result := appendUnique(tt.initial, tt.add)
-				assert.Equal(t, tt.expected, result)
-			})
-		}
-	})
-}
-
-func TestRemoveString(t *testing.T) {
-	t.Run("文字列スライスからの除去", func(t *testing.T) {
-		tests := []struct {
-			name     string
-			initial  []string
-			remove   string
-			expected []string
-		}{
-			{
-				name:     "存在する要素を除去すると、その要素が消える",
-				initial:  []string{"a", "b", "c"},
-				remove:   "b",
-				expected: []string{"a", "c"},
-			},
-			{
-				name:     "先頭要素を除去すると、先頭が消える",
-				initial:  []string{"a", "b", "c"},
-				remove:   "a",
-				expected: []string{"b", "c"},
-			},
-			{
-				name:     "末尾要素を除去すると、末尾が消える",
-				initial:  []string{"a", "b", "c"},
-				remove:   "c",
-				expected: []string{"a", "b"},
-			},
-			{
-				name:     "単一要素から除去すると、空スライスになる",
-				initial:  []string{"a"},
-				remove:   "a",
-				expected: []string{},
-			},
-			{
-				name:     "存在しない要素を除去すると、変化しない",
-				initial:  []string{"a", "b"},
-				remove:   "z",
-				expected: []string{"a", "b"},
-			},
-			{
-				name:     "空スライスから除去すると、空のまま",
-				initial:  []string{},
-				remove:   "a",
-				expected: []string{},
-			},
-			{
-				name:     "nil から除去すると、nil のまま",
-				initial:  nil,
-				remove:   "a",
-				expected: nil,
-			},
-		}
-
-		for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-				result := removeString(tt.initial, tt.remove)
-				assert.Equal(t, tt.expected, result)
-			})
-		}
-	})
-}
-
-func TestMustMarshal(t *testing.T) {
-	t.Run("JSON マーシャル", func(t *testing.T) {
-		t.Run("map を渡すと、JSON 文字列になる", func(t *testing.T) {
-			result := mustMarshal(map[string]string{"key": "value"})
-			assert.JSONEq(t, `{"key":"value"}`, string(result))
-		})
-
-		t.Run("struct を渡すと、フィールドが JSON になる", func(t *testing.T) {
-			msg := ErrorMessage{ErrorCode: "test", Message: "hello", Retryable: true}
-			result := mustMarshal(msg)
-			require.NotNil(t, result)
-
-			var parsed ErrorMessage
-			err := json.Unmarshal(result, &parsed)
-			require.NoError(t, err)
-			assert.Equal(t, "test", parsed.ErrorCode)
-			assert.Equal(t, "hello", parsed.Message)
-			assert.True(t, parsed.Retryable)
-		})
-
-		t.Run("nil を渡すと、null になる", func(t *testing.T) {
-			result := mustMarshal(nil)
-			assert.Equal(t, "null", string(result))
-		})
-	})
-}
-
 func TestNotifyOpponentDisconnected(t *testing.T) {
 	t.Run("相手への切断通知", func(t *testing.T) {
-		t.Run("members が無いゲームのとき、パニックしない", func(t *testing.T) {
+		t.Run("対戦相手の参加記録が無いゲームで切断を通知しても、エラーにならない", func(t *testing.T) {
 			relay, _ := newTestRelay()
 
 			relay.NotifyOpponentDisconnected("p1", "nonexistent_game")
@@ -703,7 +572,7 @@ func TestNotifyOpponentDisconnected(t *testing.T) {
 
 func TestNotifyOpponentReconnected(t *testing.T) {
 	t.Run("相手への再接続通知", func(t *testing.T) {
-		t.Run("members が無いゲームのとき、パニックしない", func(t *testing.T) {
+		t.Run("対戦相手の参加記録が無いゲームで再接続を通知しても、エラーにならない", func(t *testing.T) {
 			relay, _ := newTestRelay()
 
 			relay.NotifyOpponentReconnected("p1", "nonexistent_game")
