@@ -75,17 +75,17 @@ func TestRegisterForwardRoutes(t *testing.T) {
 			path        string
 			wantBackend *hitRecorder
 		}{
-			{name: "/api/v1/account/me のとき、account に転送される", path: "/api/v1/account/me", wantBackend: account},
-			{name: "/api/v1/cards/cards のとき、card に転送される", path: "/api/v1/cards/cards", wantBackend: card},
-			{name: "/api/v1/cards/decks/1 のとき、card に転送される", path: "/api/v1/cards/decks/1", wantBackend: card},
-			{name: "/api/v1/shop/products のとき、shop に転送される", path: "/api/v1/shop/products", wantBackend: shop},
-			{name: "/api/v1/scenarios/episodes のとき、scenario に転送される", path: "/api/v1/scenarios/episodes", wantBackend: scenario},
-			{name: "/api/v1/scenarios/onboarding/script のとき、scenario に転送される", path: "/api/v1/scenarios/onboarding/script", wantBackend: scenario},
-			{name: "/api/v1/news/articles のとき、news に転送される", path: "/api/v1/news/articles", wantBackend: news},
-			{name: "/api/v1/support/announcements のとき、support に転送される", path: "/api/v1/support/announcements", wantBackend: support},
-			{name: "/api/v1/games/g1/log のとき、battle に転送される", path: "/api/v1/games/g1/log", wantBackend: battle},
-			{name: "/api/v1/games/g1/log/text のとき、battle に転送される", path: "/api/v1/games/g1/log/text", wantBackend: battle},
-			{name: "/api/v1/npc/models のとき、battle に転送される", path: "/api/v1/npc/models", wantBackend: battle},
+			{name: "/api/v1/account/meのとき、accountに転送される", path: "/api/v1/account/me", wantBackend: account},
+			{name: "/api/v1/cards/cardsのとき、cardに転送される", path: "/api/v1/cards/cards", wantBackend: card},
+			{name: "/api/v1/cards/decks/1のとき、cardに転送される", path: "/api/v1/cards/decks/1", wantBackend: card},
+			{name: "/api/v1/shop/productsのとき、shopに転送される", path: "/api/v1/shop/products", wantBackend: shop},
+			{name: "/api/v1/scenarios/episodesのとき、scenarioに転送される", path: "/api/v1/scenarios/episodes", wantBackend: scenario},
+			{name: "/api/v1/scenarios/onboarding/scriptのとき、scenarioに転送される", path: "/api/v1/scenarios/onboarding/script", wantBackend: scenario},
+			{name: "/api/v1/news/articlesのとき、newsに転送される", path: "/api/v1/news/articles", wantBackend: news},
+			{name: "/api/v1/support/announcementsのとき、supportに転送される", path: "/api/v1/support/announcements", wantBackend: support},
+			{name: "/api/v1/games/g1/logのとき、battleに転送される", path: "/api/v1/games/g1/log", wantBackend: battle},
+			{name: "/api/v1/games/g1/log/textのとき、battleに転送される", path: "/api/v1/games/g1/log/text", wantBackend: battle},
+			{name: "/api/v1/npc/modelsのとき、battleに転送される", path: "/api/v1/npc/models", wantBackend: battle},
 		}
 
 		// ReverseProxy 内部で CloseNotify を呼ぶため、gateway 側も httptest.NewServer で
@@ -108,8 +108,8 @@ func TestRegisterForwardRoutes(t *testing.T) {
 		}
 	})
 
-	t.Run("config の検証", func(t *testing.T) {
-		t.Run("不正な targetURL を含むとき、エラーになる", func(t *testing.T) {
+	t.Run("configの検証", func(t *testing.T) {
+		t.Run("不正なtargetURLを含むとき、エラーになる", func(t *testing.T) {
 			cfg := &config.Config{
 				AccountServiceURL:  "http://valid.example",
 				CardServiceURL:     "http://valid.example",

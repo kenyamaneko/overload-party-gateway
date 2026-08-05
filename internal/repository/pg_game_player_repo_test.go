@@ -20,7 +20,7 @@ const (
 
 func TestPgGamePlayerRepository(t *testing.T) {
 	t.Run("対戦ごとの人間プレイヤー数の集計", func(t *testing.T) {
-		t.Run("人間 2 人の対戦のとき、2 を返す", func(t *testing.T) {
+		t.Run("人間2人の対戦のとき、2を返す", func(t *testing.T) {
 			sharedPG.Truncate(t)
 			repo := repository.NewPgGamePlayerRepository(sharedPG.Pool)
 			ctx := context.Background()
@@ -33,7 +33,7 @@ func TestPgGamePlayerRepository(t *testing.T) {
 			assert.Equal(t, map[string]int{"g1": 2}, counts)
 		})
 
-		t.Run("人間 1 人の対戦のとき、1 を返す", func(t *testing.T) {
+		t.Run("人間1人の対戦のとき、1を返す", func(t *testing.T) {
 			sharedPG.Truncate(t)
 			repo := repository.NewPgGamePlayerRepository(sharedPG.Pool)
 			ctx := context.Background()

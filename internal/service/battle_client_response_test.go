@@ -23,7 +23,7 @@ func newBattleServer(t *testing.T, status int, body string) *httptest.Server {
 
 func TestBattleClient_ProcessAction(t *testing.T) {
 	t.Run("アクションデータの変換と送信", func(t *testing.T) {
-		t.Run("不正な JSON データのとき、battle に送信せずエラーになる", func(t *testing.T) {
+		t.Run("不正なJSONデータのとき、battleに送信せずエラーになる", func(t *testing.T) {
 			wasPosted := false
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				wasPosted = true
@@ -44,12 +44,12 @@ func TestBattleClient_ProcessAction(t *testing.T) {
 			wantData interface{}
 		}{
 			{
-				name:     "data が nil のとき、data フィールドなしで送られる",
+				name:     "dataがnilのとき、dataフィールドなしで送られる",
 				data:     nil,
 				wantData: nil,
 			},
 			{
-				name:     "オブジェクトのとき、map として送られる",
+				name:     "オブジェクトのとき、mapとして送られる",
 				data:     json.RawMessage(`{"target":"TST-0001"}`),
 				wantData: map[string]interface{}{"target": "TST-0001"},
 			},
@@ -86,13 +86,13 @@ func TestBattleClient_GetGameStateForPlayer(t *testing.T) {
 			wantErr error
 		}{
 			{
-				name:    "404 のとき、状態欠落として errMissingGameState を返す",
+				name:    "404のとき、状態欠落としてerrMissingGameStateを返す",
 				status:  http.StatusNotFound,
 				body:    `{"error":"game not found"}`,
 				wantErr: errMissingGameState,
 			},
 			{
-				name:    "200 のとき、body を raw として返す",
+				name:    "200のとき、bodyをrawとして返す",
 				status:  http.StatusOK,
 				body:    `{"phase":"main"}`,
 				wantRaw: json.RawMessage(`{"phase":"main"}`),
@@ -117,13 +117,13 @@ func TestBattleClient_GetGameStateForPlayer(t *testing.T) {
 			wantMsg string
 		}{
 			{
-				name:    "400 の構造化エラーのとき、message をエラー文に含める",
+				name:    "400の構造化エラーのとき、messageをエラー文に含める",
 				status:  http.StatusBadRequest,
 				body:    `{"error":"invalid player"}`,
 				wantMsg: "invalid player",
 			},
 			{
-				name:    "500 の非 JSON エラーのとき、ステータスコードと body 文字列を含める",
+				name:    "500の非JSONエラーのとき、ステータスコードとbody文字列を含める",
 				status:  http.StatusInternalServerError,
 				body:    "boom",
 				wantMsg: "battle server returned 500: boom",
@@ -144,7 +144,7 @@ func TestBattleClient_GetGameStateForPlayer(t *testing.T) {
 }
 
 func TestBattleClient_GetTurnControlsForPlayer(t *testing.T) {
-	t.Run("turn controls の不在判定", func(t *testing.T) {
+	t.Run("turn controlsの不在判定", func(t *testing.T) {
 		cases := []struct {
 			name    string
 			status  int
@@ -152,25 +152,25 @@ func TestBattleClient_GetTurnControlsForPlayer(t *testing.T) {
 			wantRaw json.RawMessage
 		}{
 			{
-				name:    "null body のとき、不在として nil を返す",
+				name:    "null bodyのとき、不在としてnilを返す",
 				status:  http.StatusOK,
 				body:    "null",
 				wantRaw: nil,
 			},
 			{
-				name:    "空 body のとき、不在として nil を返す",
+				name:    "空bodyのとき、不在としてnilを返す",
 				status:  http.StatusOK,
 				body:    "",
 				wantRaw: nil,
 			},
 			{
-				name:    "404 のとき、不在として nil を返す",
+				name:    "404のとき、不在としてnilを返す",
 				status:  http.StatusNotFound,
 				body:    "",
 				wantRaw: nil,
 			},
 			{
-				name:    "controls が存在するとき、raw を返す",
+				name:    "controlsが存在するとき、rawを返す",
 				status:  http.StatusOK,
 				body:    `{"controls":["end_turn"]}`,
 				wantRaw: json.RawMessage(`{"controls":["end_turn"]}`),
@@ -191,7 +191,7 @@ func TestBattleClient_GetTurnControlsForPlayer(t *testing.T) {
 }
 
 func TestBattleClient_PostErrorResponse(t *testing.T) {
-	t.Run("送信系の非 200 応答のエラー変換", func(t *testing.T) {
+	t.Run("送信系の非200応答のエラー変換", func(t *testing.T) {
 		cases := []struct {
 			name    string
 			status  int
@@ -200,7 +200,7 @@ func TestBattleClient_PostErrorResponse(t *testing.T) {
 			call    func(context.Context, BattleClient) error
 		}{
 			{
-				name:    "アクション送信が 400 の構造化エラーを受けたとき、message をエラー文に含める",
+				name:    "アクション送信が400の構造化エラーを受けたとき、messageをエラー文に含める",
 				status:  http.StatusBadRequest,
 				body:    `{"error":"invalid action"}`,
 				wantMsg: "invalid action",
@@ -210,7 +210,7 @@ func TestBattleClient_PostErrorResponse(t *testing.T) {
 				},
 			},
 			{
-				name:    "NPC 対戦の作成が 500 の非 JSON エラーを受けたとき、ステータスコードと body 文字列を含める",
+				name:    "NPC対戦の作成が500の非JSONエラーを受けたとき、ステータスコードとbody文字列を含める",
 				status:  http.StatusInternalServerError,
 				body:    "boom",
 				wantMsg: "battle server returned 500: boom",
@@ -220,7 +220,7 @@ func TestBattleClient_PostErrorResponse(t *testing.T) {
 				},
 			},
 			{
-				name:    "PvP 対戦の作成が 400 の構造化エラーを受けたとき、message をエラー文に含める",
+				name:    "PvP対戦の作成が400の構造化エラーを受けたとき、messageをエラー文に含める",
 				status:  http.StatusBadRequest,
 				body:    `{"error":"deck mismatch"}`,
 				wantMsg: "deck mismatch",

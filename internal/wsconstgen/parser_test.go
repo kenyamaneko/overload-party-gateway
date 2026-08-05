@@ -7,7 +7,7 @@ import (
 )
 
 func TestParseMessageTypes(t *testing.T) {
-	t.Run("WS メッセージ種別の抽出", func(t *testing.T) {
+	t.Run("WSメッセージ種別の抽出", func(t *testing.T) {
 		t.Run("サーバー向けとクライアント向けの定数があるとき、宣言順のまま送信方向ごとに分かれる", func(t *testing.T) {
 			src := []byte(`package ws
 
@@ -87,7 +87,7 @@ const (
 				wantMessage: "constant WSServerMsgBravo has no value of its own",
 			},
 			{
-				name: "サーバー向けの定数が 1 つも無いとき、サーバー向けが空である旨のエラーになる",
+				name: "サーバー向けの定数が1つも無いとき、サーバー向けが空である旨のエラーになる",
 				src: `package ws
 
 const (
@@ -97,7 +97,7 @@ const (
 				wantMessage: "no constant with the WSServerMsg prefix",
 			},
 			{
-				name: "クライアント向けの定数が 1 つも無いとき、クライアント向けが空である旨のエラーになる",
+				name: "クライアント向けの定数が1つも無いとき、クライアント向けが空である旨のエラーになる",
 				src: `package ws
 
 const (
@@ -107,7 +107,7 @@ const (
 				wantMessage: "no constant with the WSClientMsg prefix",
 			},
 			{
-				name:        "Go ソースとして解釈できないとき、解析に失敗した旨のエラーになる",
+				name:        "Goソースとして解釈できないとき、解析に失敗した旨のエラーになる",
 				src:         "this is not go source",
 				wantMessage: "parse source",
 			},

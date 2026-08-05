@@ -14,7 +14,7 @@ import (
 )
 
 func TestAsyncAPIChannelDrift(t *testing.T) {
-	t.Run("asyncapi.yaml の channel address と ws-constants の整合", func(t *testing.T) {
+	t.Run("asyncapi.yamlのchannel addressとws-constantsの整合", func(t *testing.T) {
 		// SSoT は asyncapi.yaml。channel が増減したら対応する定数を ws-constants に追加 / 削除しないと落ちる。
 		// payload-less な "型のみ" のメッセージ (game_state / pong など battle 由来 raw JSON だけを
 		// envelope に積むタイプ) は asyncapi.yaml に現れないため検証対象外とし、ws-constants 側でのみ持つ。

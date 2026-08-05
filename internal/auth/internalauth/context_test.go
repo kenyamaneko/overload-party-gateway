@@ -9,15 +9,15 @@ import (
 )
 
 func TestTokenContext(t *testing.T) {
-	t.Run("context への token 格納と取り出し", func(t *testing.T) {
+	t.Run("contextへのtoken格納と取り出し", func(t *testing.T) {
 		cases := []struct {
 			name      string
 			token     string
 			wantToken string
 			wantOK    bool
 		}{
-			{name: "空でない token を格納したとき、同じ値が取り出せる", token: "abc.def.ghi", wantToken: "abc.def.ghi", wantOK: true},
-			{name: "空の token を格納したとき、欠落として報告される", token: "", wantToken: "", wantOK: false},
+			{name: "空でないtokenを格納したとき、同じ値が取り出せる", token: "abc.def.ghi", wantToken: "abc.def.ghi", wantOK: true},
+			{name: "空のtokenを格納したとき、欠落として報告される", token: "", wantToken: "", wantOK: false},
 		}
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
@@ -28,7 +28,7 @@ func TestTokenContext(t *testing.T) {
 			})
 		}
 
-		t.Run("WithToken を呼んでいない ctx のとき、欠落として報告される", func(t *testing.T) {
+		t.Run("WithTokenを呼んでいないctxのとき、欠落として報告される", func(t *testing.T) {
 			got, ok := TokenFrom(context.Background())
 			assert.Empty(t, got)
 			assert.False(t, ok)
@@ -37,19 +37,19 @@ func TestTokenContext(t *testing.T) {
 }
 
 func TestInjectHeader(t *testing.T) {
-	t.Run("X-Internal-Auth header への token 注入", func(t *testing.T) {
+	t.Run("X-Internal-Auth headerへのtoken注入", func(t *testing.T) {
 		cases := []struct {
 			name       string
 			ctx        context.Context
 			wantHeader string
 		}{
 			{
-				name:       "token がある ctx のとき、X-Internal-Auth に token を設定する",
+				name:       "tokenがあるctxのとき、X-Internal-Authにtokenを設定する",
 				ctx:        WithToken(context.Background(), "abc.def.ghi"),
 				wantHeader: "abc.def.ghi",
 			},
 			{
-				name:       "token がない ctx のとき、header を空のままにする",
+				name:       "tokenがないctxのとき、headerを空のままにする",
 				ctx:        context.Background(),
 				wantHeader: "",
 			},

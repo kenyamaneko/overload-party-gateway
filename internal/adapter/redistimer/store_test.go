@@ -59,7 +59,7 @@ func newFreshStore(t *testing.T) (*Store, *redis.Client) {
 
 func TestDisconnectDeadline(t *testing.T) {
 	t.Run("切断猶予期限の読み書き", func(t *testing.T) {
-		t.Run("書き込んだ期限を別のインスタンスから読み出すと、同じゲーム ID と期限が返る", func(t *testing.T) {
+		t.Run("書き込んだ期限を別のインスタンスから読み出すと、同じゲームIDと期限が返る", func(t *testing.T) {
 			writer := newTestStore(t)
 			ctx := context.Background()
 			deadline := time.Now().Add(2 * time.Minute).Truncate(time.Millisecond)
@@ -114,7 +114,7 @@ func TestDisconnectDeadline(t *testing.T) {
 
 func TestTurnDeadline(t *testing.T) {
 	t.Run("ターン期限の読み書き", func(t *testing.T) {
-		t.Run("書き込んだ期限を別のインスタンスから読み出すと、同じターンプレイヤー ID と期限が返る", func(t *testing.T) {
+		t.Run("書き込んだ期限を別のインスタンスから読み出すと、同じターンプレイヤーIDと期限が返る", func(t *testing.T) {
 			writer := newTestStore(t)
 			ctx := context.Background()
 			deadline := time.Now().Add(30 * time.Second).Truncate(time.Millisecond)
@@ -150,7 +150,7 @@ func TestTurnDeadline(t *testing.T) {
 			assert.False(t, found)
 		})
 
-		t.Run("手番交代で再度書き込むと、ターンプレイヤー ID が置き換わる", func(t *testing.T) {
+		t.Run("手番交代で再度書き込むと、ターンプレイヤーIDが置き換わる", func(t *testing.T) {
 			store := newTestStore(t)
 			ctx := context.Background()
 			require.NoError(t, store.SetTurnDeadline(ctx, "game_1", "p1", time.Now().Add(time.Minute)))

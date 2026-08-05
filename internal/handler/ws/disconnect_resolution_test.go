@@ -119,7 +119,7 @@ func newDisconnectResolutionRelay(entries []port.GamePlayerEntry, timerStore *fa
 }
 
 func TestOpponentPlayerID(t *testing.T) {
-	t.Run("対戦相手のプレイヤー ID 解決", func(t *testing.T) {
+	t.Run("対戦相手のプレイヤーID解決", func(t *testing.T) {
 		tests := []struct {
 			name    string
 			entries []port.GamePlayerEntry
@@ -127,7 +127,7 @@ func TestOpponentPlayerID(t *testing.T) {
 			want    string
 		}{
 			{
-				name: "2 人制で自分が 1P のとき、2P のプレイヤー ID を返す",
+				name: "2人制で自分が1Pのとき、2PのプレイヤーIDを返す",
 				entries: []port.GamePlayerEntry{
 					{PlayerNum: 1, PlayerID: "p1"},
 					{PlayerNum: 2, PlayerID: "p2"},
@@ -136,7 +136,7 @@ func TestOpponentPlayerID(t *testing.T) {
 				want:   "p2",
 			},
 			{
-				name: "2 人制で自分が 2P のとき、1P のプレイヤー ID を返す",
+				name: "2人制で自分が2Pのとき、1PのプレイヤーIDを返す",
 				entries: []port.GamePlayerEntry{
 					{PlayerNum: 1, PlayerID: "p1"},
 					{PlayerNum: 2, PlayerID: "p2"},
@@ -145,7 +145,7 @@ func TestOpponentPlayerID(t *testing.T) {
 				want:   "p1",
 			},
 			{
-				name: "エントリが 1 件 (NPC 戦) のとき、空文字を返す",
+				name: "エントリが1件 (NPC戦)のとき、空文字を返す",
 				entries: []port.GamePlayerEntry{
 					{PlayerNum: 1, PlayerID: "p1"},
 				},
@@ -153,7 +153,7 @@ func TestOpponentPlayerID(t *testing.T) {
 				want:   "",
 			},
 			{
-				name:    "エントリが 0 件のとき、空文字を返す",
+				name:    "エントリが0件のとき、空文字を返す",
 				entries: nil,
 				selfID:  "p1",
 				want:    "",
@@ -179,9 +179,9 @@ func TestPlayerNumOf(t *testing.T) {
 			playerID string
 			want     int
 		}{
-			{name: "1P として参加しているとき、1 を返す", playerID: "p1", want: 1},
-			{name: "2P として参加しているとき、2 を返す", playerID: "p2", want: 2},
-			{name: "参加していないとき、0 を返す", playerID: "p3", want: 0},
+			{name: "1Pとして参加しているとき、1を返す", playerID: "p1", want: 1},
+			{name: "2Pとして参加しているとき、2を返す", playerID: "p2", want: 2},
+			{name: "参加していないとき、0を返す", playerID: "p3", want: 0},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
@@ -198,7 +198,7 @@ func TestHandleDisconnectTimeout(t *testing.T) {
 	}
 
 	t.Run("切断猶予切れの決着判定", func(t *testing.T) {
-		t.Run("対戦相手が接続中のとき、forfeit を実行する", func(t *testing.T) {
+		t.Run("対戦相手が接続中のとき、forfeitを実行する", func(t *testing.T) {
 			relay, bc, hub := newDisconnectResolutionRelay(entries, nil)
 			relay.JoinGame("p1", "g1", 1)
 			hub.Register(NewConnection(nil, "p2"))
@@ -212,7 +212,7 @@ func TestHandleDisconnectTimeout(t *testing.T) {
 			assert.Equal(t, gamelogic.ActionTypeForfeit, bc.processActionCalls[0].actionType)
 		})
 
-		t.Run("対戦相手も切断中のとき、切断タイムアウトでもターンタイマー期限切れでも forfeit を実行しない", func(t *testing.T) {
+		t.Run("対戦相手も切断中のとき、切断タイムアウトでもターンタイマー期限切れでもforfeitを実行しない", func(t *testing.T) {
 			relay, bc, _ := newDisconnectResolutionRelay(entries, nil)
 			relay.JoinGame("p1", "g1", 1)
 			relay.resetTurnTimer("g1", "p1", 1) // timeBankSeconds=1 (+turnTimerNetworkBuffer) で数秒後に自然発火する
@@ -225,7 +225,7 @@ func TestHandleDisconnectTimeout(t *testing.T) {
 				"must not forfeit while the opponent is also disconnected, even after the turn timer later fires")
 		})
 
-		t.Run("NPC 戦 (対戦相手が居ない) のとき、forfeit を実行する", func(t *testing.T) {
+		t.Run("NPC戦 (対戦相手が居ない)のとき、forfeitを実行する", func(t *testing.T) {
 			relay, bc, _ := newDisconnectResolutionRelay([]port.GamePlayerEntry{{PlayerNum: 1, PlayerID: "p1"}}, nil)
 			relay.JoinGame("p1", "g1", 1)
 			bc.processActionResult = &service.ActionResult{}
@@ -235,7 +235,7 @@ func TestHandleDisconnectTimeout(t *testing.T) {
 			require.Len(t, bc.processActionCalls, 1)
 		})
 
-		t.Run("ゲーム参加者情報の取得に失敗するとき、forfeit を実行しない", func(t *testing.T) {
+		t.Run("ゲーム参加者情報の取得に失敗するとき、forfeitを実行しない", func(t *testing.T) {
 			relay, bc, _ := newDisconnectResolutionRelay(nil, nil)
 			relay.gamePlayerRepo = &mockGamePlayerRepo{lookupErr: errors.New("db down")}
 			relay.JoinGame("p1", "g1", 1)
@@ -245,7 +245,7 @@ func TestHandleDisconnectTimeout(t *testing.T) {
 			assert.Empty(t, bc.processActionCalls)
 		})
 
-		t.Run("入室していないプレイヤーの猶予が切れたとき、ゲームの参加者情報のスロット番号で forfeit を実行する", func(t *testing.T) {
+		t.Run("入室していないプレイヤーの猶予が切れたとき、ゲームの参加者情報のスロット番号でforfeitを実行する", func(t *testing.T) {
 			relay, bc, hub := newDisconnectResolutionRelay(entries, nil)
 			hub.Register(NewConnection(nil, "p1"))
 			bc.processActionResult = &service.ActionResult{}
@@ -258,7 +258,7 @@ func TestHandleDisconnectTimeout(t *testing.T) {
 			assert.Equal(t, gamelogic.ActionTypeForfeit, bc.processActionCalls[0].actionType)
 		})
 
-		t.Run("ゲームの参加者として登録されていないプレイヤーの猶予が切れたとき、forfeit を実行せずエラーログに残す", func(t *testing.T) {
+		t.Run("ゲームの参加者として登録されていないプレイヤーの猶予が切れたとき、forfeitを実行せずエラーログに残す", func(t *testing.T) {
 			readLogs := captureLogs(t)
 			relay, bc, _ := newDisconnectResolutionRelay(nil, nil)
 
@@ -300,7 +300,7 @@ func TestResolveStaleDisconnect(t *testing.T) {
 			assert.Empty(t, bc.processActionCalls)
 		})
 
-		t.Run("対戦相手の切断猶予の写しの読み出しに失敗するとき、forfeit を実行しない", func(t *testing.T) {
+		t.Run("対戦相手の切断猶予の写しの読み出しに失敗するとき、forfeitを実行しない", func(t *testing.T) {
 			store := &fakeTimerStore{getDisconnectErr: errors.New("redis down")}
 			relay, bc, _ := newDisconnectResolutionRelay(entries, store)
 
@@ -309,7 +309,7 @@ func TestResolveStaleDisconnect(t *testing.T) {
 			assert.Empty(t, bc.processActionCalls, "must not declare a winner when the opponent's deadline cannot be determined")
 		})
 
-		t.Run("対戦相手の猶予が切れており復帰した本人は猶予内だったとき、対戦相手の forfeit を実行する", func(t *testing.T) {
+		t.Run("対戦相手の猶予が切れており復帰した本人は猶予内だったとき、対戦相手のforfeitを実行する", func(t *testing.T) {
 			store := &fakeTimerStore{
 				getDisconnectFound:  true,
 				getDisconnectReturn: portDisconnectDeadline("g1", time.Now().Add(-time.Minute)),
@@ -326,7 +326,7 @@ func TestResolveStaleDisconnect(t *testing.T) {
 			assert.Equal(t, gamelogic.ActionTypeForfeit, bc.processActionCalls[0].actionType)
 		})
 
-		t.Run("対戦相手が入室しておらず猶予も切れているとき、復帰した側の勝ちで game_over が届く", func(t *testing.T) {
+		t.Run("対戦相手が入室しておらず猶予も切れているとき、復帰した側の勝ちでgame_overが届く", func(t *testing.T) {
 			store := &fakeTimerStore{
 				getDisconnectFound:  true,
 				getDisconnectReturn: portDisconnectDeadline("g1", time.Now().Add(-time.Minute)),
@@ -355,7 +355,7 @@ func TestResolveStaleDisconnect(t *testing.T) {
 			assert.Equal(t, gamelogic.WinReasonDisconnect, over.WinReason)
 		})
 
-		t.Run("両者とも猶予が切れているとき、両者強制決着で対戦を終え勝者なしで EXP 付与を依頼する", func(t *testing.T) {
+		t.Run("両者とも猶予が切れているとき、両者強制決着で対戦を終え勝者なしでEXP付与を依頼する", func(t *testing.T) {
 			store := &fakeTimerStore{
 				getDisconnectFound:  true,
 				getDisconnectReturn: portDisconnectDeadline("g1", time.Now().Add(-time.Minute)),
@@ -379,7 +379,7 @@ func TestResolveStaleDisconnect(t *testing.T) {
 			assert.Equal(t, int64(0), account.body().WinnerNum)
 		})
 
-		t.Run("両者とも猶予が切れているが両者強制決着の要求が失敗するとき、EXP を付与しない", func(t *testing.T) {
+		t.Run("両者とも猶予が切れているが両者強制決着の要求が失敗するとき、EXPを付与しない", func(t *testing.T) {
 			store := &fakeTimerStore{
 				getDisconnectFound:  true,
 				getDisconnectReturn: portDisconnectDeadline("g1", time.Now().Add(-time.Minute)),
@@ -398,7 +398,7 @@ func TestResolveStaleDisconnect(t *testing.T) {
 			assert.Equal(t, int32(0), account.calls.Load(), "must not award exp for a game that was left unresolved")
 		})
 
-		t.Run("NPC 戦 (対戦相手が居ない) のとき、何もしない", func(t *testing.T) {
+		t.Run("NPC戦 (対戦相手が居ない)のとき、何もしない", func(t *testing.T) {
 			relay, bc, _ := newDisconnectResolutionRelay([]port.GamePlayerEntry{{PlayerNum: 1, PlayerID: "p1"}}, nil)
 
 			relay.resolveStaleDisconnect("g1", "p1", false)
@@ -412,7 +412,7 @@ func TestResolveStaleDisconnect(t *testing.T) {
 			assert.NotPanics(t, func() { relay.resolveStaleDisconnect("g1", "p1", false) })
 		})
 
-		t.Run("ゲーム参加者情報の取得に失敗するとき、forfeit を実行しない", func(t *testing.T) {
+		t.Run("ゲーム参加者情報の取得に失敗するとき、forfeitを実行しない", func(t *testing.T) {
 			relay, bc, _ := newDisconnectResolutionRelay(nil, nil)
 			relay.gamePlayerRepo = &mockGamePlayerRepo{lookupErr: errors.New("db down")}
 
@@ -425,7 +425,7 @@ func TestResolveStaleDisconnect(t *testing.T) {
 
 func TestHandleReconnect(t *testing.T) {
 	t.Run("復帰処理", func(t *testing.T) {
-		t.Run("対戦相手の切断猶予が切れているとき、復帰処理により対戦相手の forfeit が実行される", func(t *testing.T) {
+		t.Run("対戦相手の切断猶予が切れているとき、復帰処理により対戦相手のforfeitが実行される", func(t *testing.T) {
 			entries := []port.GamePlayerEntry{
 				{PlayerNum: 1, PlayerID: "p1"},
 				{PlayerNum: 2, PlayerID: "p2"},
