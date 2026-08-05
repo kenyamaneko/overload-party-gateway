@@ -19,9 +19,9 @@ type MatchmakingStartMessage struct {
 
 // GameActionMessage は プレイヤーが実行したアクションをサーバーへ送信する。
 type GameActionMessage struct {
-	GameID     string                 `json:"game_id"`
-	ActionType string                 `json:"action_type"`
-	Data       json.RawMessage       `json:"data"`
+	GameID     string          `json:"game_id"`
+	ActionType string          `json:"action_type"`
+	Data       json.RawMessage `json:"data"`
 }
 
 // UseStampMessage は 対戦中のスタンプ送信。
@@ -64,10 +64,10 @@ type ActionRejectedMessage struct {
 
 // ActionPerformedMessage は アクション実行とその後の (情報秘匿適用済み) ゲーム状態通知。
 type ActionPerformedMessage struct {
-	Sequence   int64                  `json:"sequence"`
-	ActionType string                 `json:"action_type"`
-	ActionData json.RawMessage       `json:"action_data"`
-	State      json.RawMessage       `json:"state"`
+	Sequence   int64           `json:"sequence"`
+	ActionType string          `json:"action_type"`
+	ActionData json.RawMessage `json:"action_data"`
+	State      json.RawMessage `json:"state"`
 }
 
 // StampUsedMessage は 対戦相手 (または自分) のスタンプ送信通知。
@@ -93,4 +93,3 @@ type OpponentReconnectedMessage struct {
 // ServerUpdateMessage は サーバー更新による接続終了の通知 (空ペイロード)。
 type ServerUpdateMessage struct {
 }
-
