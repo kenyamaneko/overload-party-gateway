@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -315,6 +317,16 @@ func decodeError(t *testing.T, msg WSMessage) ErrorMessage {
 	var errBody ErrorMessage
 	require.NoError(t, json.Unmarshal(msg.Data, &errBody))
 	return errBody
+}
+
+// assertNoMessageWithin は within の間、何もメッセージが届かないことを確認する。
+func assertNoMessageWithin(t *testing.T, conn *websocket.Conn, within time.Duration) {
+	t.Helper()
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(within)))
+	_, _, err := conn.ReadMessage()
+	require.Error(t, err)
+	var netErr net.Error
+	require.True(t, errors.As(err, &netErr) && netErr.Timeout(), "want a read timeout (no message), got: %v", err)
 }
 
 // fakeGameState は battle の GetGameStateFn に返す最小限の ClientGameState を組み立てる。

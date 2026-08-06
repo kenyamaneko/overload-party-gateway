@@ -6,12 +6,15 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 	"github.com/kenyamaneko/overload-party-gateway/internal/service"
+	genws "github.com/kenyamaneko/overload-party-gateway/packages/ws-constants"
 )
 
 var errFake = errors.New("fake battle error")
@@ -267,94 +270,102 @@ func TestRunNpcTurns(t *testing.T) {
 	})
 }
 
+// sendUseStamp は use_stamp を送信する。
+func sendUseStamp(t *testing.T, conn *websocket.Conn, gameID string, stampNo int64) {
+	t.Helper()
+	require.NoError(t, conn.WriteJSON(WSMessage{
+		Type: genws.WSClientMsgUseStamp,
+		Data: mustMarshal(UseStampMessage{GameID: gameID, StampNo: stampNo}),
+	}))
+}
+
+// readStampUsed は stamp_used を受信してデコードする。
+func readStampUsed(t *testing.T, conn *websocket.Conn) StampUsedMessage {
+	t.Helper()
+	msg := readUntilType(t, conn, genws.WSServerMsgStampUsed)
+	var stamp StampUsedMessage
+	require.NoError(t, json.Unmarshal(msg.Data, &stamp))
+	return stamp
+}
+
 func TestJoinGame(t *testing.T) {
-	t.Run("ゲームへの参加", func(t *testing.T) {
-		t.Run("参加すると、playerGamesとgameMembersに登録される", func(t *testing.T) {
-			relay, _ := newTestRelay()
+	t.Run("ゲームへの参加とブロードキャストの到達範囲", func(t *testing.T) {
+		t.Run("同じ対戦に入室した両プレイヤーへ、use_stampが両者ともに届く", func(t *testing.T) {
+			cases := []struct {
+				name          string
+				senderIsP1    bool
+				wantPlayerNum int64
+			}{
+				{name: "プレイヤー1が送るとき", senderIsP1: true, wantPlayerNum: 1},
+				{name: "プレイヤー2が送るとき", senderIsP1: false, wantPlayerNum: 2},
+			}
+			for _, tc := range cases {
+				t.Run(tc.name, func(t *testing.T) {
+					srv := newWSTestServer(t, nil)
+					const gameID = "TST-GAME-JOIN-BOTH"
+					srv.setupPvPGame(gameID, "uid-jb-p1", "p-jb-1", "uid-jb-p2", "p-jb-2")
+					p1Conn := srv.enterGame(t, "uid-jb-p1", gameID)
+					p2Conn := srv.enterGame(t, "uid-jb-p2", gameID)
 
-			relay.JoinGame("p1", "game_1", 1)
+					sender := p1Conn
+					if !tc.senderIsP1 {
+						sender = p2Conn
+					}
+					sendUseStamp(t, sender, gameID, 3)
 
-			gid, ok := relay.GameIDForPlayer("p1")
-			assert.True(t, ok)
-			assert.Equal(t, "game_1", gid)
+					p1Stamp := readStampUsed(t, p1Conn)
+					assert.EqualValues(t, tc.wantPlayerNum, p1Stamp.PlayerNum)
+					assert.EqualValues(t, 3, p1Stamp.StampNo)
 
-			relay.mu.RLock()
-			members := relay.gameMembers["game_1"]
-			relay.mu.RUnlock()
-			assert.Contains(t, members, "p1")
+					p2Stamp := readStampUsed(t, p2Conn)
+					assert.EqualValues(t, tc.wantPlayerNum, p2Stamp.PlayerNum)
+					assert.EqualValues(t, 3, p2Stamp.StampNo)
+				})
+			}
 		})
 
-		t.Run("2人が同じゲームに参加すると、両者がmembersに入る", func(t *testing.T) {
-			relay, _ := newTestRelay()
+		t.Run("同じプレイヤーが同じ対戦へ重ねて参加しても、use_stampは1回しか届かない", func(t *testing.T) {
+			srv := newWSTestServer(t, nil)
+			const gameID = "TST-GAME-JOIN-DUP"
+			srv.setupPvPGame(gameID, "uid-jd-p1", "p-jd-1", "uid-jd-p2", "p-jd-2")
+			p1Conn := srv.enterGame(t, "uid-jd-p1", gameID)
+			_ = srv.enterGame(t, "uid-jd-p2", gameID)
 
-			relay.JoinGame("p1", "game_1", 1)
-			relay.JoinGame("p2", "game_1", 2)
+			srv.manager.Relay.JoinGame("p-jd-1", gameID, 1)
 
-			relay.mu.RLock()
-			members := relay.gameMembers["game_1"]
-			relay.mu.RUnlock()
-			assert.Len(t, members, 2)
-			assert.Contains(t, members, "p1")
-			assert.Contains(t, members, "p2")
-		})
+			sendUseStamp(t, p1Conn, gameID, 5)
+			readStampUsed(t, p1Conn)
 
-		t.Run("同じプレイヤーが重複参加しても、membersに二重登録されない", func(t *testing.T) {
-			relay, _ := newTestRelay()
-
-			relay.JoinGame("p1", "game_1", 1)
-			relay.JoinGame("p1", "game_1", 1)
-
-			relay.mu.RLock()
-			members := relay.gameMembers["game_1"]
-			relay.mu.RUnlock()
-			assert.Len(t, members, 1, "duplicate join should not add player twice")
-		})
-
-		t.Run("別ゲームに参加し直すと、前のゲームのmembersから外れる", func(t *testing.T) {
-			relay, _ := newTestRelay()
-
-			relay.JoinGame("p1", "game_1", 1)
-			relay.JoinGame("p1", "game_2", 1)
-
-			gid, ok := relay.GameIDForPlayer("p1")
-			assert.True(t, ok)
-			assert.Equal(t, "game_2", gid)
-
-			relay.mu.RLock()
-			members2 := relay.gameMembers["game_2"]
-			members1 := relay.gameMembers["game_1"]
-			relay.mu.RUnlock()
-			assert.Contains(t, members2, "p1")
-			assert.NotContains(t, members1, "p1")
+			assertNoMessageWithin(t, p1Conn, 200*time.Millisecond)
 		})
 	})
 }
 
 func TestLeaveGame(t *testing.T) {
 	t.Run("ゲームからの退出", func(t *testing.T) {
-		t.Run("退出すると、そのプレイヤーだけがゲームから外れる", func(t *testing.T) {
-			relay, _ := newTestRelay()
+		t.Run("退出すると、退出したプレイヤーには届かなくなるが、残ったプレイヤーには届く", func(t *testing.T) {
+			srv := newWSTestServer(t, nil)
+			const gameID = "TST-GAME-LEAVE-SOLO"
+			srv.setupPvPGame(gameID, "uid-ls-p1", "p-ls-1", "uid-ls-p2", "p-ls-2")
+			p1Conn := srv.enterGame(t, "uid-ls-p1", gameID)
+			p2Conn := srv.enterGame(t, "uid-ls-p2", gameID)
+			// p2 の入室が gameID 全員に game_state/turn_controls を再配信するため、先に読み切る。
+			readUntilType(t, p1Conn, genws.WSServerMsgGameState)
+			readUntilType(t, p1Conn, genws.WSServerMsgTurnControls)
 
-			relay.JoinGame("p1", "game_1", 1)
-			relay.JoinGame("p2", "game_1", 2)
+			srv.manager.Relay.LeaveGame("p-ls-1")
 
-			relay.LeaveGame("p1")
-
-			_, ok := relay.GameIDForPlayer("p1")
+			_, ok := srv.manager.Relay.GameIDForPlayer("p-ls-1")
 			assert.False(t, ok)
 
-			gid, ok := relay.GameIDForPlayer("p2")
-			assert.True(t, ok)
-			assert.Equal(t, "game_1", gid)
+			sendUseStamp(t, p2Conn, gameID, 9)
+			p2Stamp := readStampUsed(t, p2Conn)
+			assert.EqualValues(t, 9, p2Stamp.StampNo)
 
-			relay.mu.RLock()
-			members := relay.gameMembers["game_1"]
-			relay.mu.RUnlock()
-			assert.Len(t, members, 1)
-			assert.Contains(t, members, "p2")
+			assertNoMessageWithin(t, p1Conn, 200*time.Millisecond)
 		})
 
-		t.Run("最後のプレイヤーが退出すると、gameMembersが破棄される", func(t *testing.T) {
+		t.Run("全プレイヤーが退出すると、メモリ上の対戦の参加者一覧ごと削除される", func(t *testing.T) {
 			relay, _ := newTestRelay()
 
 			relay.JoinGame("p1", "game_1", 1)
@@ -364,18 +375,20 @@ func TestLeaveGame(t *testing.T) {
 			relay.LeaveGame("p2")
 
 			relay.mu.RLock()
-			_, gameMembersExist := relay.gameMembers["game_1"]
+			_, exists := relay.gameMembers["game_1"]
 			relay.mu.RUnlock()
-			assert.False(t, gameMembersExist, "gameMembers should be cleaned up when last player leaves")
+			assert.False(t, exists)
 		})
 
-		t.Run("どのゲームにも居ないプレイヤーが退出しても、パニックしない", func(t *testing.T) {
+		t.Run("どのゲームにも居ないプレイヤーが退出しても、他のプレイヤーの参加状態は変わらない", func(t *testing.T) {
 			relay, _ := newTestRelay()
+			relay.JoinGame("p1", "game_1", 1)
 
 			relay.LeaveGame("unknown_player")
 
-			_, ok := relay.GameIDForPlayer("unknown_player")
-			assert.False(t, ok)
+			gid, ok := relay.GameIDForPlayer("p1")
+			assert.True(t, ok)
+			assert.Equal(t, "game_1", gid)
 		})
 	})
 }
@@ -469,7 +482,7 @@ func TestGameIDForPlayer(t *testing.T) {
 
 func TestLeaveAllPlayers(t *testing.T) {
 	t.Run("全プレイヤーの一括退出", func(t *testing.T) {
-		t.Run("呼ぶと、全プレイヤーが外れgameMembersも破棄される", func(t *testing.T) {
+		t.Run("呼ぶと、全プレイヤーが外れメモリ上の対戦の参加者一覧ごと削除される", func(t *testing.T) {
 			relay, _ := newTestRelay()
 
 			relay.JoinGame("p1", "game_1", 1)
@@ -483,9 +496,9 @@ func TestLeaveAllPlayers(t *testing.T) {
 			assert.False(t, ok2)
 
 			relay.mu.RLock()
-			_, membersExist := relay.gameMembers["game_1"]
+			_, exists := relay.gameMembers["game_1"]
 			relay.mu.RUnlock()
-			assert.False(t, membersExist, "gameMembers should be cleaned up")
+			assert.False(t, exists)
 		})
 
 		t.Run("呼ぶと、退出した全プレイヤーの切断猶予期限の写しが削除される", func(t *testing.T) {
