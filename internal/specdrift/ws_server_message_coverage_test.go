@@ -21,55 +21,53 @@ var serverMessageTypeCoverageExceptions = map[string]string{
 }
 
 func TestWSServerMessageTypeCoverage(t *testing.T) {
-	t.Run("サーバー送出メッセージ種別の網羅観測", func(t *testing.T) {
-		consts := serverMessageTypeConstants(t)
-		identifiers := make([]string, len(consts))
-		for i, c := range consts {
-			identifiers[i] = c.identifier
+	consts := serverMessageTypeConstants(t)
+	identifiers := make([]string, len(consts))
+	for i, c := range consts {
+		identifiers[i] = c.identifier
+	}
+	observed := serverMessageTypesObservedInTestFiles(t, identifiers)
+
+	t.Run("サーバー送出メッセージ種別ごとに、テストで観測されているか例外リストに理由付きで登録されている", func(t *testing.T) {
+		for _, c := range consts {
+			t.Run(c.value, func(t *testing.T) {
+				_, isObserved := observed[c.identifier]
+				_, isExcepted := serverMessageTypeCoverageExceptions[c.value]
+				assert.Truef(t, isObserved || isExcepted,
+					"サーバー送出メッセージ種別 %q (%s) がどのテストにも観測されておらず、例外リストにも無い",
+					c.value, c.identifier)
+			})
 		}
-		tested := serverMessageTypesObservedInTestFiles(t, identifiers)
+	})
 
-		t.Run("定数が受信フレームとして観測されているか、理由付きで例外リストに存在する", func(t *testing.T) {
-			for _, c := range consts {
-				t.Run(c.value+" がテストで観測されているか例外リストに存在する", func(t *testing.T) {
-					_, isTested := tested[c.identifier]
-					_, isExcepted := serverMessageTypeCoverageExceptions[c.value]
-					assert.Truef(t, isTested || isExcepted,
-						"サーバー送出メッセージ種別 %q (%s) がどのテストにも観測されておらず、例外リストにも無い",
-						c.value, c.identifier)
-				})
-			}
-		})
+	t.Run("例外リストに登録された値は、現存する定数を指している", func(t *testing.T) {
+		valueSet := make(map[string]struct{}, len(consts))
+		for _, c := range consts {
+			valueSet[c.value] = struct{}{}
+		}
+		for v := range serverMessageTypeCoverageExceptions {
+			t.Run(v, func(t *testing.T) {
+				_, ok := valueSet[v]
+				assert.Truef(t, ok, "例外リストの値 %q に対応する WSServerMsg 定数が存在しない", v)
+			})
+		}
+	})
 
-		t.Run("例外リストの値が現存する定数と対応する", func(t *testing.T) {
-			valueSet := make(map[string]struct{}, len(consts))
-			for _, c := range consts {
-				valueSet[c.value] = struct{}{}
-			}
-			for v := range serverMessageTypeCoverageExceptions {
-				t.Run(v+" に対応する定数が現存する", func(t *testing.T) {
-					_, ok := valueSet[v]
-					assert.Truef(t, ok, "例外リストの値 %q に対応する WSServerMsg 定数が存在しない", v)
-				})
-			}
-		})
-
-		t.Run("例外リストの値が実際にはテストされていない", func(t *testing.T) {
-			identifierOf := make(map[string]string, len(consts))
-			for _, c := range consts {
-				identifierOf[c.value] = c.identifier
-			}
-			for v, reason := range serverMessageTypeCoverageExceptions {
-				t.Run(v+" は実際にテストされていない", func(t *testing.T) {
-					identifier, ok := identifierOf[v]
-					require.True(t, ok)
-					_, isTested := tested[identifier]
-					assert.Falsef(t, isTested,
-						"例外リストの値 %q (%s) は既にテストで観測されているので例外リストから削除する (登録理由: %s)",
-						v, identifier, reason)
-				})
-			}
-		})
+	t.Run("例外リストに登録された値は、実際にはテストで観測されていない", func(t *testing.T) {
+		identifierOf := make(map[string]string, len(consts))
+		for _, c := range consts {
+			identifierOf[c.value] = c.identifier
+		}
+		for v, reason := range serverMessageTypeCoverageExceptions {
+			t.Run(v, func(t *testing.T) {
+				identifier, ok := identifierOf[v]
+				require.True(t, ok)
+				_, isObserved := observed[identifier]
+				assert.Falsef(t, isObserved,
+					"例外リストの値 %q (%s) は既にテストで観測されているので例外リストから削除する (登録理由: %s)",
+					v, identifier, reason)
+			})
+		}
 	})
 }
 

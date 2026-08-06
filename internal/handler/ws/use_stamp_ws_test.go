@@ -2,6 +2,7 @@ package ws
 
 import (
 	"encoding/json"
+	"net"
 	"testing"
 	"time"
 
@@ -12,15 +13,17 @@ import (
 	genws "github.com/kenyamaneko/overload-party-gateway/packages/ws-constants"
 )
 
-// readUntilType は無関係なフレームを読み飛ばすため、フレームが送られていないことの確認には使えない。
-func readNextMessage(t *testing.T, conn *websocket.Conn) WSMessage {
+const noStampFrameWait = 200 * time.Millisecond
+
+// requireNoMessage は noStampFrameWait の間 WS に何も届かないことを確かめる。
+func requireNoMessage(t *testing.T, conn *websocket.Conn) {
 	t.Helper()
-	require.NoError(t, conn.SetReadDeadline(time.Now().Add(wsReadWait)))
-	_, data, err := conn.ReadMessage()
-	require.NoError(t, err)
-	var msg WSMessage
-	require.NoError(t, json.Unmarshal(data, &msg))
-	return msg
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(noStampFrameWait)))
+	_, raw, err := conn.ReadMessage()
+	require.Error(t, err, "unexpected ws message: %s", raw)
+	var netErr net.Error
+	require.ErrorAs(t, err, &netErr)
+	assert.True(t, netErr.Timeout(), "ws read must end by the read deadline, got %v", err)
 }
 
 func TestWSUseStamp(t *testing.T) {
@@ -56,13 +59,11 @@ func TestWSUseStamp(t *testing.T) {
 				Type: genws.WSClientMsgUseStamp,
 				Data: mustMarshal(UseStampMessage{GameID: "TST-GAME-NO-SUCH-STAMP", StampNo: 1}),
 			}))
-			require.NoError(t, conn.WriteJSON(WSMessage{Type: genws.WSClientMsgPing}))
 
-			msg := readNextMessage(t, conn)
-			assert.Equal(t, genws.WSServerMsgPong, msg.Type)
+			requireNoMessage(t, conn)
 		})
 
-		t.Run("dataが不正なuse_stampを送っても、フレームは送られない", func(t *testing.T) {
+		t.Run("dataが文字列のuse_stampを送っても、フレームは送られない", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-stamp-bad-data", "player-stamp-bad-data")
 			conn := srv.dial(t, "uid-stamp-bad-data")
@@ -71,10 +72,8 @@ func TestWSUseStamp(t *testing.T) {
 				Type: genws.WSClientMsgUseStamp,
 				Data: json.RawMessage(`"not-an-object"`),
 			}))
-			require.NoError(t, conn.WriteJSON(WSMessage{Type: genws.WSClientMsgPing}))
 
-			msg := readNextMessage(t, conn)
-			assert.Equal(t, genws.WSServerMsgPong, msg.Type)
+			requireNoMessage(t, conn)
 		})
 	})
 }
