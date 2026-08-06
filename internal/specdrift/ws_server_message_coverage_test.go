@@ -131,7 +131,10 @@ func serverMessageTypeConstants(t *testing.T) []serverMessageTypeConstant {
 //
 // action_performed のように、種別が呼び出し側の引数でなくヘルパー名自体
 // (readUntilActionPerformed) に埋め込まれている場合もあるため、readUntil 接頭辞の
-// 呼び出しは関数名の残り部分を識別子の末尾と突き合わせても判定する。
+// 呼び出しは関数名の残り部分を識別子の末尾と突き合わせても判定する。この末尾一致は
+// ヘルパーが実際に type を assert している保証までは持たない (呼び出し名からの推定)。
+// 現状 readUntil 接頭辞のヘルパーは readUntilType/readUntilActionPerformed の 2 つのみで
+// 曖昧な一致は無いが、新しい readUntilXxx を追加する際は本コメントの前提を見直すこと。
 func serverMessageTypesObservedInTestFiles(t *testing.T, knownIdentifiers []string) map[string]struct{} {
 	t.Helper()
 	observed := make(map[string]struct{})
@@ -153,20 +156,20 @@ func serverMessageTypesObservedInTestFiles(t *testing.T, knownIdentifiers []stri
 			if !ok {
 				return true
 			}
-			calleeName := calleeName(call.Fun)
-			if calleeName == "" || !isObservationCallName(calleeName) {
+			name := calleeName(call.Fun)
+			if name == "" || !isObservationCallName(name) {
 				return true
 			}
 			for _, arg := range call.Args {
 				ast.Inspect(arg, func(m ast.Node) bool {
-					if name := identifierName(m); strings.HasPrefix(name, "WSServerMsg") {
-						observed[name] = struct{}{}
+					if argName := identifierName(m); strings.HasPrefix(argName, "WSServerMsg") {
+						observed[argName] = struct{}{}
 					}
 					return true
 				})
 			}
-			if strings.HasPrefix(calleeName, "readUntil") {
-				suffix := strings.TrimPrefix(calleeName, "readUntil")
+			if strings.HasPrefix(name, "readUntil") {
+				suffix := strings.TrimPrefix(name, "readUntil")
 				for _, ident := range knownIdentifiers {
 					if suffix != "" && strings.HasSuffix(ident, suffix) {
 						observed[ident] = struct{}{}
