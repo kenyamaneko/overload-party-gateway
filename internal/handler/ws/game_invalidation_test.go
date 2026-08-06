@@ -51,7 +51,7 @@ func newInvalidationFixture(t *testing.T, entries []port.GamePlayerEntry, player
 	invalidatedGames := newFakeInvalidatedGameRepo()
 	account := startFakeAccountRevert(t)
 	return &invalidationFixture{
-		relay:            NewGameRelay(hub, battle, accountclient.New(account.url, &http.Client{}), gamePlayers, invalidatedGames, timers),
+		relay:            NewGameRelay(hub, battle, accountclient.New(account.url, &http.Client{}), gamePlayers, invalidatedGames),
 		hub:              hub,
 		battle:           battle,
 		gamePlayers:      gamePlayers,

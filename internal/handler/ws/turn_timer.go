@@ -31,12 +31,10 @@ func (r *GameRelay) resetTurnTimer(gameID, activePlayerID string, timeBankSecond
 
 	if timeBankSeconds <= 0 {
 		r.timerMu.Unlock()
-		r.mirrorClearTurnDeadline(gameID)
 		return
 	}
 
 	duration := time.Duration(timeBankSeconds)*time.Second + turnTimerNetworkBuffer
-	deadline := r.clock.Now().Add(duration)
 
 	timer := r.clock.AfterFunc(duration, func() {
 		r.timerMu.Lock()
@@ -49,7 +47,6 @@ func (r *GameRelay) resetTurnTimer(gameID, activePlayerID string, timeBankSecond
 		delete(r.turnTimers, gameID)
 		r.timerMu.Unlock()
 
-		r.mirrorClearTurnDeadline(gameID)
 		slog.Info("turn timer expired", "game_id", gameID, "player_id", activePlayerID)
 		r.handleTurnTimeout(gameID, activePlayerID)
 	})
@@ -59,9 +56,6 @@ func (r *GameRelay) resetTurnTimer(gameID, activePlayerID string, timeBankSecond
 		activePlayerID: activePlayerID,
 	}
 	r.timerMu.Unlock()
-
-	// 発火時刻そのものを絶対時刻として書く。復元側が再度バッファを足さずに済むようにする。
-	r.mirrorSetTurnDeadline(gameID, activePlayerID, deadline)
 }
 
 // cancelTurnTimer はゲームのターンタイマーを停止し削除する。
@@ -72,34 +66,6 @@ func (r *GameRelay) cancelTurnTimer(gameID string) {
 		delete(r.turnTimers, gameID)
 	}
 	r.timerMu.Unlock()
-
-	r.mirrorClearTurnDeadline(gameID)
-}
-
-// mirrorSetTurnDeadline はターン期限を TimerStore へ書き込む。
-// 失敗しても対戦は継続するため、警告ログのみで済ませる。
-func (r *GameRelay) mirrorSetTurnDeadline(gameID, activePlayerID string, deadline time.Time) {
-	if r.timerStore == nil {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), timerMirrorTimeout)
-	defer cancel()
-	if err := r.timerStore.SetTurnDeadline(ctx, gameID, activePlayerID, deadline); err != nil {
-		slog.Warn("mirror turn deadline failed", "game_id", gameID, "error", err)
-	}
-}
-
-// mirrorClearTurnDeadline はターン期限の写しを TimerStore から削除する。
-// 失敗しても対戦は継続するため、警告ログのみで済ませる。
-func (r *GameRelay) mirrorClearTurnDeadline(gameID string) {
-	if r.timerStore == nil {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), timerMirrorTimeout)
-	defer cancel()
-	if err := r.timerStore.ClearTurnDeadline(ctx, gameID); err != nil {
-		slog.Warn("clear mirrored turn deadline failed", "game_id", gameID, "error", err)
-	}
 }
 
 // handleTurnTimeout はターンタイマー期限切れ時に forfeit アクションを送信する。

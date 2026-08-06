@@ -45,7 +45,7 @@ type Manager struct {
 }
 
 // NewManager は WebSocket Manager を生成します。timerStore は nil 可
-// （切断猶予・ターン期限の Redis への写しを行わない環境向け）。
+// （切断猶予期限の Redis への写しを行わない環境向け）。
 func NewManager(
 	battleClient service.BattleClient,
 	accountClient port.AccountClient,
@@ -80,7 +80,7 @@ func NewManager(
 		OnGameReconnect:     func(playerID, gameID string, wasLate bool) { m.Relay.HandleReconnect(playerID, gameID, wasLate) },
 	}, disconnectTimeout, timerStore)
 
-	relay := NewGameRelay(hub, battleClient, accountClient, gamePlayerRepo, invalidatedGameRepo, timerStore)
+	relay := NewGameRelay(hub, battleClient, accountClient, gamePlayerRepo, invalidatedGameRepo)
 
 	m.Hub = hub
 	m.Relay = relay
