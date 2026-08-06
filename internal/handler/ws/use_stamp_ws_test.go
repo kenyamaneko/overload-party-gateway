@@ -12,9 +12,7 @@ import (
 	genws "github.com/kenyamaneko/overload-party-gateway/packages/ws-constants"
 )
 
-// readNextMessage は次に届く 1 フレームだけを読む。readUntilType と異なり無関係な
-// メッセージを読み飛ばさないため、続けて送る ping の直前にフレームが送られていない
-// ことを厳密に確認できる。
+// readNextMessage は次に届く 1 フレームだけを読む (readUntilType と異なり読み飛ばさない)。
 func readNextMessage(t *testing.T, conn *websocket.Conn) WSMessage {
 	t.Helper()
 	require.NoError(t, conn.SetReadDeadline(time.Now().Add(wsReadWait)))
@@ -34,8 +32,7 @@ func TestWSUseStamp(t *testing.T) {
 			p1Conn := srv.enterGame(t, "uid-stamp-p1", gameID)
 			p2Conn := srv.enterGame(t, "uid-stamp-p2", gameID)
 
-			// スロット 2 のプレイヤーに送らせ、配信される PlayerNum が常に 1 になるわけではない
-			// こと (resolvePlayerNum が正しく引けていること) を確認する。
+			// スロット 2 で送らせ、PlayerNum が常に 1 になるわけではないことを確認する。
 			require.NoError(t, p2Conn.WriteJSON(WSMessage{
 				Type: genws.WSClientMsgUseStamp,
 				Data: mustMarshal(UseStampMessage{GameID: gameID, StampNo: 3}),

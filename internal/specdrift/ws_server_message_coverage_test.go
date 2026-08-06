@@ -15,9 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// serverMessageTypeCoverageExceptions は現時点でテストのどこからも観測されていない
-// WSServerMsg* 定数の例外リスト。値は serverMessageTypeConstants が返す契約値
-// (snake_case) を使う。対応が終わった種別はこのリストからも削除すること。
+// serverMessageTypeCoverageExceptions はテストで未観測の WSServerMsg* 定数の例外リスト。対応が終わった種別はこのリストからも削除すること。
 var serverMessageTypeCoverageExceptions = map[string]string{
 	"game_state_restore": "Go 側に送信箇所が無く未使用 (issue #179)",
 	"npc_battle_created": "npc_battle_start dispatch の実観測テストは issue #85 の別ブランチで追加予定、未マージ。マージ後はこの行を削除して再実行し green を確認すること",
@@ -76,15 +74,13 @@ func TestWSServerMessageTypeCoverage(t *testing.T) {
 	})
 }
 
-// serverMessageTypeConstant は packages/ws-constants で宣言された 1 個の
-// WSServerMsg* 定数を識別子と契約値のペアで表す。
+// serverMessageTypeConstant は WSServerMsg* 定数 1 個の識別子と契約値のペア。
 type serverMessageTypeConstant struct {
 	identifier string
 	value      string
 }
 
-// serverMessageTypeConstants は packages/ws-constants の Go ソースを AST 解析し、
-// 宣言されている全 WSServerMsg* 定数を識別子と契約値のペアで返す。
+// serverMessageTypeConstants は ws-constants の Go ソースを AST 解析し、全 WSServerMsg* 定数を返す。
 func serverMessageTypeConstants(t *testing.T) []serverMessageTypeConstant {
 	t.Helper()
 	srcPath := filepath.Join(repoRoot(t), "packages", "ws-constants", "constants.go")
@@ -120,21 +116,10 @@ func serverMessageTypeConstants(t *testing.T) []serverMessageTypeConstant {
 	return consts
 }
 
-// serverMessageTypesObservedInTestFiles は internal/ 配下の全 *_test.go を AST 解析し、
-// knownIdentifiers のうち「受信フレームの type を検証する」呼び出しの中で実際に
-// 使われているものの集合を返す。識別子がソース中に文字列として現れているだけの
-// 箇所 (コメント・例外リストの値など) は対象にしない。
-//
-// 「観測」とみなす呼び出しは 2 パターン:
-//   - assert.Equal / require.Equal 等 (関数名に Equal を含む) の引数に識別子が現れる
-//   - readUntilType のような readUntil 接頭辞のヘルパーの引数に識別子が現れる
-//
-// action_performed のように、種別が呼び出し側の引数でなくヘルパー名自体
-// (readUntilActionPerformed) に埋め込まれている場合もあるため、readUntil 接頭辞の
-// 呼び出しは関数名の残り部分を識別子の末尾と突き合わせても判定する。この末尾一致は
-// ヘルパーが実際に type を assert している保証までは持たない (呼び出し名からの推定)。
-// 現状 readUntil 接頭辞のヘルパーは readUntilType/readUntilActionPerformed の 2 つのみで
-// 曖昧な一致は無いが、新しい readUntilXxx を追加する際は本コメントの前提を見直すこと。
+// serverMessageTypesObservedInTestFiles は *_test.go を AST 解析し、knownIdentifiers のうち
+// assert.Equal 系 / readUntil* 系呼び出しで実際に使われているものを返す (コメント等の文字列一致は対象外)。
+// readUntilActionPerformed のように種別がヘルパー名自体に埋め込まれる場合は関数名の末尾一致でも判定するが、
+// これはヘルパー名からの推定であり type を実際に assert している保証は無い。
 func serverMessageTypesObservedInTestFiles(t *testing.T, knownIdentifiers []string) map[string]struct{} {
 	t.Helper()
 	observed := make(map[string]struct{})
