@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	apiaccount "github.com/kenyamaneko/overload-party-account/packages/api-account"
 	apibattle "github.com/kenyamaneko/overload-party-battle/packages/api-battle-rpc-go"
 	gamelogic "github.com/kenyamaneko/overload-party-battle/packages/game-logic-constants-go"
 	apicard "github.com/kenyamaneko/overload-party-card/packages/api-card"
@@ -31,11 +32,9 @@ type npcAdvanceResponse struct {
 	body   any
 }
 
-// advanceNpcTurnScript は battle.AdvanceNpcTurnFn への呼出ごとに entries を順番に返す。
-// entries[0] は game_enter に伴う advanceNpcIfNeeded の呼出で消費されるため、
-// runNpcTurns 自身のループを検証する entries はそれ以降に並べる。
-// entries を使い切った呼出は panic せず t.Errorf でテスト失敗にする
-// (500 として返すと npc_turn_error として観測され、テスト側の設定ミスと本番の異常系が区別できなくなるため)。
+// advanceNpcTurnScript は AdvanceNpcTurnFn の呼出ごとに entries を順番に返す。
+// entries[0] は game_enter 時の advanceNpcIfNeeded 呼出で消費される。
+// 呼出超過は t.Errorf で失敗させる (本番の異常系と設定ミスを区別するため)。
 type advanceNpcTurnScript struct {
 	t       *testing.T
 	entries []npcAdvanceResponse
@@ -89,6 +88,68 @@ func (r *createNpcGameRecorder) snapshotRequest() apibattle.NpcBattleRequest {
 
 func TestWSNpcBattleStart(t *testing.T) {
 	t.Run("NPC対戦開始", func(t *testing.T) {
+		t.Run("オンボーディング未完了のとき、再試行不可のnpc_battle_errorが返る", func(t *testing.T) {
+			srv := newWSTestServer(t, nil)
+			srv.seedAccount("uid-npc-onboarding", "player-npc-onboarding")
+			// GetPlayerFn は未設定のまま (既定応答は onboarding_status 空 = 未完了)。
+			conn := srv.dial(t, "uid-npc-onboarding")
+
+			require.NoError(t, conn.WriteJSON(WSMessage{
+				Type: genws.WSClientMsgNpcBattleStart,
+				Data: mustMarshal(NPCBattleStartMessage{DeckID: 1, NpcModel: "TST-NPC-A"}),
+			}))
+
+			errMsg := readUntilType(t, conn, genws.WSServerMsgError)
+			errBody := decodeError(t, errMsg)
+			assert.Equal(t, "npc_battle_error", errBody.ErrorCode)
+			assert.False(t, errBody.Retryable)
+			assert.Equal(t, "onboarding not completed", errBody.Message)
+		})
+
+		t.Run("当日のバトル回数上限に達しているとき、再試行不可のnpc_battle_errorが返る", func(t *testing.T) {
+			srv := newWSTestServer(t, nil)
+			srv.seedAccount("uid-npc-limit", "player-npc-limit")
+			name := "TST-PLAYER"
+			srv.account.GetPlayerFn = func() (int, any) {
+				return http.StatusOK, apiaccount.PlayerResponse{
+					PlayerID: "self", OnboardingStatus: apiaccount.OnboardingStatusCompleted, Name: &name,
+				}
+			}
+			// GetBattleLimitFn は未設定のまま (既定応答は CanBattle=false = 上限到達扱い)。
+			conn := srv.dial(t, "uid-npc-limit")
+
+			require.NoError(t, conn.WriteJSON(WSMessage{
+				Type: genws.WSClientMsgNpcBattleStart,
+				Data: mustMarshal(NPCBattleStartMessage{DeckID: 1, NpcModel: "TST-NPC-A"}),
+			}))
+
+			errMsg := readUntilType(t, conn, genws.WSServerMsgError)
+			errBody := decodeError(t, errMsg)
+			assert.Equal(t, "npc_battle_error", errBody.ErrorCode)
+			assert.False(t, errBody.Retryable)
+			assert.Equal(t, "daily battle limit reached", errBody.Message)
+		})
+
+		t.Run("デッキ検証に失敗すると、再試行不可のnpc_battle_errorが返る", func(t *testing.T) {
+			srv := newWSTestServer(t, nil)
+			srv.seedAccount("uid-npc-deck-invalid", "player-npc-deck-invalid")
+			setOnboardedAccount(srv.account, "TST-PLAYER", 1)
+			srv.card.ValidateDeckForBattleFn = func(string) (int, any) {
+				return http.StatusBadRequest, "deck invalid"
+			}
+			conn := srv.dial(t, "uid-npc-deck-invalid")
+
+			require.NoError(t, conn.WriteJSON(WSMessage{
+				Type: genws.WSClientMsgNpcBattleStart,
+				Data: mustMarshal(NPCBattleStartMessage{DeckID: 1, NpcModel: "TST-NPC-A"}),
+			}))
+
+			errMsg := readUntilType(t, conn, genws.WSServerMsgError)
+			errBody := decodeError(t, errMsg)
+			assert.Equal(t, "npc_battle_error", errBody.ErrorCode)
+			assert.False(t, errBody.Retryable)
+		})
+
 		t.Run("デッキの解決に失敗すると、再試行可のnpc_battle_errorが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-npc-deck-fail", "player-npc-deck-fail")
@@ -188,6 +249,7 @@ func TestWSNpcBattleStart(t *testing.T) {
 			srv.seedAccount("uid-npc-ok", "player-npc-ok")
 			setOnboardedAccount(srv.account, "TST-PLAYER", 1)
 			srv.card.GetDeckFn = validNpcDeckFn
+			srv.card.ValidateDeckForBattleFn = func(string) (int, any) { return http.StatusOK, nil }
 			srv.battle.ListNpcModelsFn = func() (int, any) {
 				return http.StatusOK, apibattle.NpcModelsResponse{
 					Models: []apibattle.NpcModelEntry{{Model: "TST-NPC-A", DisplayName: "Test NPC A"}},
@@ -217,7 +279,7 @@ func TestWSNpcBattleStart(t *testing.T) {
 
 func TestWSNpcTurnRelay(t *testing.T) {
 	t.Run("NPCターンの中継", func(t *testing.T) {
-		t.Run("NPCターンが複数回連続するとき、行動のたびにaction_performedフレームが順に届く", func(t *testing.T) {
+		t.Run("NPCのターン内で複数回行動するとき、行動のたびにaction_performedフレームが順に届く", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			const gameID = "TST-GAME-NPC-RELAY-OK"
 			srv.setupNpcGame(gameID, "uid-npc-relay-ok", "p-npc-relay-ok")

@@ -192,7 +192,7 @@ func TestBattleClient_GetTurnControlsForPlayer(t *testing.T) {
 
 func TestBattleClient_ListNpcModels(t *testing.T) {
 	t.Run("NPCモデル一覧取得のステータス処理", func(t *testing.T) {
-		t.Run("404のとき、NPCモデル一覧の欠落エラーを返す", func(t *testing.T) {
+		t.Run("200のみ規定されたエンドポイントで404が返ったとき、NPCモデル一覧の欠落エラーを返す", func(t *testing.T) {
 			srv := newBattleServer(t, http.StatusNotFound, `{"error":"not configured"}`)
 			c := NewBattleClient(srv.URL, &http.Client{})
 

@@ -914,9 +914,8 @@ func buildForfeitReason(reason string) json.RawMessage {
 }
 
 // removeString は slice から s を取り除いた新しいスライスを返す。
-// 呼び出し元は r.mu の Lock 中に使うが、sendToOpponent 等は RLock 中に取得した
-// 同じ backing array を RUnlock 後も参照し続けるため、元の backing array を
-// 書き換えない（in-place mutation はデータ競合になる）。
+// 元の slice の backing array は書き換えない
+// (書き換えると、同じ配列を参照する別のスライスの中身も変わってしまうため)。
 func removeString(slice []string, s string) []string {
 	for i, v := range slice {
 		if v == s {

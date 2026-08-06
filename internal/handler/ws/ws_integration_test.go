@@ -389,12 +389,10 @@ func (s *wsTestServer) setupPvPGame(gameID, p1UID, p1PlayerID, p2UID, p2PlayerID
 	}
 }
 
-// setupNpcGame は NPC 対戦 (登録スロット 1 件のみ) の game_players 行と account の登録情報を
-// 仕込み、battle の GetGameStateFn / GetTurnControlsFn / AdvanceNpcTurnFn に安定した応答を
-// 設定する。AdvanceNpcTurnFn は NpcPending=false の no-op を返すため、game_enter に伴う
-// advanceNpcIfNeeded の呼出は runNpcTurns へループせず 1 回で終わる (呼び出し元が
-// runNpcTurns 自体の挙動を検証する際に、入室時の自動進行を無害化するため)。
-// WS 接続そのものは行わない (呼び出し元が enterGame で行う)。
+// setupNpcGame は NPC 対戦 (登録スロット 1 件のみ) の game_players 行・account 登録情報・
+// battle の既定応答を仕込む。AdvanceNpcTurnFn は既定で NpcPending=false を返し、
+// 入室時の自動進行が runNpcTurns 自体の検証結果に混ざらないようにする。
+// WS 接続は行わない (呼び出し元が enterGame で行う)。
 func (s *wsTestServer) setupNpcGame(gameID, p1UID, p1PlayerID string) {
 	s.seedAccount(p1UID, p1PlayerID)
 	ctx := context.Background()
