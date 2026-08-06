@@ -3,7 +3,6 @@ package ws
 import (
 	"encoding/json"
 	"net/http"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -15,25 +14,6 @@ import (
 
 	genws "github.com/kenyamaneko/overload-party-gateway/packages/ws-constants"
 )
-
-// processActionRecorder は battle server ProcessAction への呼出を記録する。
-type processActionRecorder struct {
-	mu    sync.Mutex
-	calls []apibattle.GameActionRequest
-}
-
-func (r *processActionRecorder) fn(_ string, req apibattle.GameActionRequest) (int, any) {
-	r.mu.Lock()
-	r.calls = append(r.calls, req)
-	r.mu.Unlock()
-	return http.StatusOK, apibattle.ActionResult{}
-}
-
-func (r *processActionRecorder) snapshotCalls() []apibattle.GameActionRequest {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return append([]apibattle.GameActionRequest(nil), r.calls...)
-}
 
 func TestWSTurnTimeout(t *testing.T) {
 	t.Run("ターンタイムアウト", func(t *testing.T) {
