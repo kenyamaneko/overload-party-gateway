@@ -16,7 +16,6 @@ import (
 	genws "github.com/kenyamaneko/overload-party-gateway/packages/ws-constants"
 )
 
-// processActionRecorder は ProcessActionFn への呼出を記録する。
 type processActionRecorder struct {
 	mu    sync.Mutex
 	calls []apibattle.GameActionRequest
@@ -49,7 +48,7 @@ func TestWSGameAction(t *testing.T) {
 			srv.setupPvPGame(gameID, "uid-action-p1", "p-action-1", "uid-action-p2", "p-action-2")
 			rec := &processActionRecorder{}
 			srv.battle.ProcessActionFn = rec.fn
-			// スロット 2 で行動させ、PlayerNum が常に 1 になるわけではないことを確認する。
+			// PlayerNum が常に 1 になり偽陽性になるのを避けるため、スロット 2 で行動させる。
 			conn := srv.enterGame(t, "uid-action-p2", gameID)
 
 			require.NoError(t, conn.WriteJSON(WSMessage{
