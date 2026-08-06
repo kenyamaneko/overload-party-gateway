@@ -22,7 +22,7 @@ jobs:
     name: Publish test viewpoint catalog
     needs: test
     if: needs.test.outputs.code-changed == 'true'
-    runs-on: ubicloud-standard-2
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read

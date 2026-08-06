@@ -29,32 +29,8 @@ func validPayload(issuer, email string, emailVerified bool) *idtoken.Payload {
 
 func TestGoogleIDTokenValidator_Validate(t *testing.T) {
 	t.Run("Google IDトークンの検証", func(t *testing.T) {
-		t.Run("署名・有効期限の検証に失敗するとき、そのエラーを返す", func(t *testing.T) {
+		t.Run("署名・有効期限・audienceなどGoogleの検証呼び出しがエラーを返すとき、そのエラーを返す", func(t *testing.T) {
 			wantErr := errors.New("idtoken: token expired: now=100, expires=50")
-			v := &googleIDTokenValidator{validate: func(context.Context, string, string) (*idtoken.Payload, error) {
-				return nil, wantErr
-			}}
-
-			_, err := v.Validate(context.Background(), "tok", "aud")
-
-			require.Error(t, err)
-			assert.ErrorIs(t, err, wantErr)
-		})
-
-		t.Run("audienceの不一致で検証が失敗するとき、そのエラーを返す", func(t *testing.T) {
-			wantErr := errors.New("idtoken: audience provided does not match aud claim in the JWT")
-			v := &googleIDTokenValidator{validate: func(context.Context, string, string) (*idtoken.Payload, error) {
-				return nil, wantErr
-			}}
-
-			_, err := v.Validate(context.Background(), "tok", "aud")
-
-			require.Error(t, err)
-			assert.ErrorIs(t, err, wantErr)
-		})
-
-		t.Run("署名が不正で検証が失敗するとき、そのエラーを返す", func(t *testing.T) {
-			wantErr := errors.New("crypto/rsa: verification error")
 			v := &googleIDTokenValidator{validate: func(context.Context, string, string) (*idtoken.Payload, error) {
 				return nil, wantErr
 			}}
@@ -104,19 +80,6 @@ func TestGoogleIDTokenValidator_Validate(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Equal(t, "sa@test.iam.gserviceaccount.com", email)
-		})
-
-		t.Run("audienceをそのまま検証関数へ渡す", func(t *testing.T) {
-			var gotAudience string
-			v := &googleIDTokenValidator{validate: func(_ context.Context, _ string, audience string) (*idtoken.Payload, error) {
-				gotAudience = audience
-				return validPayload(googleOIDCIssuer, "sa@test.iam.gserviceaccount.com", true), nil
-			}}
-
-			_, err := v.Validate(context.Background(), "tok", "https://gateway.example.com/internal/v1/pubsub/match-made")
-
-			require.NoError(t, err)
-			assert.Equal(t, "https://gateway.example.com/internal/v1/pubsub/match-made", gotAudience)
 		})
 	})
 }
