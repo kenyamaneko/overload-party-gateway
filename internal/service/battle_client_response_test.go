@@ -250,7 +250,7 @@ func TestBattleClient_PostErrorResponse(t *testing.T) {
 				},
 			},
 			{
-				name:    "PvP対戦の作成がerrorフィールドが空の応答を受けたとき、ステータスコードとbodyの内容を含める",
+				name:    "PvP対戦の作成がerrorフィールドが空の応答を受けたとき、ステータスコードとbody文字列を含める",
 				status:  http.StatusBadGateway,
 				body:    `{"error":""}`,
 				wantMsg: `battle server returned 502: {"error":""}`,
