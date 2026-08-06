@@ -690,4 +690,3 @@ func TestMustMarshal(t *testing.T) {
 		})
 	})
 }
-
