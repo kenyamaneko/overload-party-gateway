@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 	"github.com/kenyamaneko/overload-party-gateway/internal/repository"
 )
 
@@ -38,7 +38,7 @@ func TestPgGamePlayerRepository(t *testing.T) {
 	})
 
 	t.Run("プレイヤーIDからのスロット番号の照会", func(t *testing.T) {
-		t.Run("対戦に登録済みのプレイヤーのとき、スロット番号を返す", func(t *testing.T) {
+		t.Run("game_idとplayer_idに一致する行があるとき、player_numを返す", func(t *testing.T) {
 			sharedPG.Truncate(t)
 			repo := repository.NewPgGamePlayerRepository(sharedPG.Pool)
 			ctx := context.Background()
@@ -50,14 +50,14 @@ func TestPgGamePlayerRepository(t *testing.T) {
 			assert.Equal(t, 2, num)
 		})
 
-		t.Run("対戦に登録が無いプレイヤーのとき、見つからないエラーを返す", func(t *testing.T) {
+		t.Run("game_idとplayer_idに一致する行が無いとき、port.ErrNotFoundを返す", func(t *testing.T) {
 			sharedPG.Truncate(t)
 			repo := repository.NewPgGamePlayerRepository(sharedPG.Pool)
 			ctx := context.Background()
 
 			_, err := repo.LookupPlayerNum(ctx, "g1", testPlayer1ID)
 
-			assert.ErrorIs(t, err, pgx.ErrNoRows)
+			assert.ErrorIs(t, err, port.ErrNotFound)
 		})
 	})
 
@@ -174,7 +174,7 @@ func TestPgGamePlayerRepository(t *testing.T) {
 	})
 
 	t.Run("経験値付与済みフラグの冪等な設定", func(t *testing.T) {
-		t.Run("初回の呼び出しのとき、フラグを設定してtrueを返す", func(t *testing.T) {
+		t.Run("game_idに一致しplayer_num=1の行でexp_awardedがfalseのとき、trueに更新してtrueを返す", func(t *testing.T) {
 			sharedPG.Truncate(t)
 			repo := repository.NewPgGamePlayerRepository(sharedPG.Pool)
 			ctx := context.Background()
@@ -186,7 +186,7 @@ func TestPgGamePlayerRepository(t *testing.T) {
 			assert.True(t, awarded)
 		})
 
-		t.Run("既にフラグが設定済みのとき、2回目の呼び出しはfalseを返す", func(t *testing.T) {
+		t.Run("game_idに一致しplayer_num=1の行でexp_awardedが既にtrueのとき、更新されずfalseを返す", func(t *testing.T) {
 			sharedPG.Truncate(t)
 			repo := repository.NewPgGamePlayerRepository(sharedPG.Pool)
 			ctx := context.Background()
