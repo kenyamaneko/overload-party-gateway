@@ -300,13 +300,17 @@ func TestResolveStaleDisconnect(t *testing.T) {
 			assert.Empty(t, bc.processActionCalls)
 		})
 
-		t.Run("対戦相手の切断猶予期限のバックアップの読み出しに失敗するとき、forfeitを実行しない", func(t *testing.T) {
+		t.Run("対戦相手の切断猶予期限のバックアップの読み出しに失敗するとき、エラーログを残しつつforfeitを実行しない", func(t *testing.T) {
+			readLogs := captureLogs(t)
 			store := &fakeTimerStore{getDisconnectErr: errors.New("redis down")}
 			relay, bc, _ := newDisconnectResolutionRelay(entries, store)
 
 			relay.resolveStaleDisconnect("g1", "p1", false)
 
 			assert.Empty(t, bc.processActionCalls, "opponent's true disconnect state is unknown, so the game must stay unresolved rather than risk an incorrect forfeit")
+			errorLogs := findErrorLogs(readLogs(), "g1", "")
+			require.Len(t, errorLogs, 1)
+			assert.Equal(t, "redis down", errorLogs[0].Error)
 		})
 
 		t.Run("対戦相手の猶予が切れており復帰した本人は猶予内だったとき、対戦相手のforfeitを実行する", func(t *testing.T) {

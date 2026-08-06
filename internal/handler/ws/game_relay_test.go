@@ -289,8 +289,8 @@ func readStampUsed(t *testing.T, conn *websocket.Conn) StampUsedMessage {
 }
 
 func TestJoinGame(t *testing.T) {
-	t.Run("スタンプ使用時のブロードキャストの到達範囲", func(t *testing.T) {
-		t.Run("同じ対戦に入室した両プレイヤーへ、use_stampが両者ともに届く", func(t *testing.T) {
+	t.Run("スタンプ使用時の到達範囲", func(t *testing.T) {
+		t.Run("use_stampが両プレイヤーに届く", func(t *testing.T) {
 			cases := []struct {
 				name          string
 				senderIsP1    bool
