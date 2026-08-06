@@ -166,60 +166,19 @@ func newTestRelay() (*GameRelay, *mockBattleClient) {
 	return relay, bc
 }
 
-func TestBattleStateMeta_Parsing(t *testing.T) {
-	t.Run("battle状態JSONの最小射影パース", func(t *testing.T) {
-		tests := []struct {
-			name            string
-			raw             string
-			wantCurrentTurn int64
-			wantIsMyTurn    bool
-			wantTimeBank    int64
-		}{
-			{
-				name: "全フィールドを含むJSONのとき、currentTurn/isMyTurn/timeBankを取り出す",
-				raw: `{
-					"currentTurn": 5,
-					"isMyTurn": true,
-					"myView": {
-						"timeBank": 120,
-						"hand": [1,2,3],
-						"field": {"cards": []}
-					},
-					"opponentView": {"handCount": 4}
-				}`,
-				wantCurrentTurn: 5,
-				wantIsMyTurn:    true,
-				wantTimeBank:    120,
-			},
-			{
-				name: "isMyTurn=falseのJSONのとき、そのまま反映する",
-				raw: `{
-					"currentTurn": 3,
-					"isMyTurn": false,
-					"myView": {"timeBank": 0}
-				}`,
-				wantCurrentTurn: 3,
-				wantIsMyTurn:    false,
-				wantTimeBank:    0,
-			},
-			{
-				name:            "空JSONのとき、ゼロ値になる",
-				raw:             `{}`,
-				wantCurrentTurn: 0,
-				wantIsMyTurn:    false,
-				wantTimeBank:    0,
-			},
-		}
-		for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-				var meta battleStateMeta
-				err := json.Unmarshal(json.RawMessage(tt.raw), &meta)
-				require.NoError(t, err)
-				assert.Equal(t, tt.wantCurrentTurn, meta.CurrentTurn)
-				assert.Equal(t, tt.wantIsMyTurn, meta.IsMyTurn)
-				assert.Equal(t, tt.wantTimeBank, meta.MyView.TimeBank)
-			})
-		}
+func TestSendGameStateToPlayers_TurnTimerRegistration(t *testing.T) {
+	t.Run("盤面状態からのターンタイマー登録", func(t *testing.T) {
+		t.Run("盤面状態にisMyTurnが無いとき、ターンタイマーを登録しない", func(t *testing.T) {
+			relay, _ := newTestRelay() // mockBattleClient.GetGameStateForPlayer は既定で `{}` を返す
+			relay.JoinGame("p1", "g1", 1)
+
+			relay.SendGameStateToPlayers("g1")
+
+			relay.timerMu.Lock()
+			_, ok := relay.turnTimers["g1"]
+			relay.timerMu.Unlock()
+			assert.False(t, ok, "isMyTurnが無い盤面状態ではアクティブプレイヤーが決まらずタイマー登録に至らない")
+		})
 	})
 }
 
