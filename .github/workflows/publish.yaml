@@ -34,7 +34,7 @@ permissions:
 
 jobs:
   detect-changes:
-    runs-on: ubicloud-standard-2
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       ws_constants_go: ${{ steps.filter.outputs.ws_constants_go }}
@@ -55,7 +55,7 @@ jobs:
 
   tag-go-modules:
     needs: detect-changes
-    runs-on: ubicloud-standard-2
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     if: |
       needs.detect-changes.outputs.ws_constants_go == 'true' ||
@@ -125,7 +125,7 @@ jobs:
 
   publish-npm:
     needs: detect-changes
-    runs-on: ubicloud-standard-2
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     if: |
       needs.detect-changes.outputs.ws_constants_npm == 'true' ||
