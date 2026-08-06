@@ -99,10 +99,16 @@ func (c *battleClient) CreatePvPGame(ctx context.Context, deck1Cards, deck2Cards
 	return &result, nil
 }
 
+var errMissingNpcModels = errors.New("battle returned no npc models")
+
+// ListNpcModels は NPC モデル一覧を返す。欠落時は errMissingNpcModels を返す。
 func (c *battleClient) ListNpcModels(ctx context.Context) ([]NpcModelEntry, error) {
 	raw, err := c.getRaw(ctx, "/api/v1/npc/models")
 	if err != nil {
 		return nil, err
+	}
+	if len(raw) == 0 {
+		return nil, errMissingNpcModels
 	}
 	var resp apibattle.NpcModelsResponse
 	if err := json.Unmarshal(raw, &resp); err != nil {

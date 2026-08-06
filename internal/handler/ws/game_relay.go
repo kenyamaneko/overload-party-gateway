@@ -914,10 +914,16 @@ func buildForfeitReason(reason string) json.RawMessage {
 	return mustMarshal(map[string]string{"reason": reason})
 }
 
+// removeString は slice から s を取り除いた新しいスライスを返す。
+// 元の slice の backing array は書き換えない
+// (書き換えると、同じ配列を参照する別のスライスの中身も変わってしまうため)。
 func removeString(slice []string, s string) []string {
 	for i, v := range slice {
 		if v == s {
-			return append(slice[:i], slice[i+1:]...)
+			result := make([]string, 0, len(slice)-1)
+			result = append(result, slice[:i]...)
+			result = append(result, slice[i+1:]...)
+			return result
 		}
 	}
 	return slice

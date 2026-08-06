@@ -389,6 +389,24 @@ func (s *wsTestServer) setupPvPGame(gameID, p1UID, p1PlayerID, p2UID, p2PlayerID
 	}
 }
 
+// setupNpcGame は NPC 対戦 (登録スロット 1 件のみ) の game_players 行・account 登録情報・
+// battle の既定応答 (AdvanceNpcTurnFn は NpcPending=false) を仕込む。
+func (s *wsTestServer) setupNpcGame(gameID, p1UID, p1PlayerID string) {
+	s.seedAccount(p1UID, p1PlayerID)
+	ctx := context.Background()
+	_ = s.gamePlayerRepo.InsertGamePlayer(ctx, gameID, 1, p1PlayerID)
+
+	s.battle.GetGameStateFn = func(gID string, _ int) (int, any) {
+		return http.StatusOK, fakeGameState(gID, "TST-P1", "TST-NPC")
+	}
+	s.battle.GetTurnControlsFn = func(string, int) (int, any) {
+		return http.StatusOK, apibattle.TurnControlsMessage{}
+	}
+	s.battle.AdvanceNpcTurnFn = func(string) (int, any) {
+		return http.StatusOK, apibattle.ActionResult{NpcPending: false}
+	}
+}
+
 // enterGame は game_enter を送信し、入室バーストを読み切った状態の接続を返す。
 func (s *wsTestServer) enterGame(t *testing.T, uid, gameID string) *websocket.Conn {
 	t.Helper()

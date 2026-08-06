@@ -550,3 +550,143 @@ func TestLeaveAllPlayers(t *testing.T) {
 		})
 	})
 }
+
+func TestAppendUnique(t *testing.T) {
+	t.Run("重複なし追加", func(t *testing.T) {
+		tests := []struct {
+			name     string
+			initial  []string
+			add      string
+			expected []string
+		}{
+			{
+				name:     "空スライスに追加すると、要素1つになる",
+				initial:  nil,
+				add:      "a",
+				expected: []string{"a"},
+			},
+			{
+				name:     "新しい要素を追加すると、末尾に追加される",
+				initial:  []string{"a", "b"},
+				add:      "c",
+				expected: []string{"a", "b", "c"},
+			},
+			{
+				name:     "既存要素を追加すると、追加されない",
+				initial:  []string{"a", "b"},
+				add:      "a",
+				expected: []string{"a", "b"},
+			},
+			{
+				name:     "末尾と同じ要素を追加すると、追加されない",
+				initial:  []string{"a", "b"},
+				add:      "b",
+				expected: []string{"a", "b"},
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				result := appendUnique(tt.initial, tt.add)
+				assert.Equal(t, tt.expected, result)
+			})
+		}
+	})
+}
+
+func TestRemoveString(t *testing.T) {
+	t.Run("文字列スライスからの除去", func(t *testing.T) {
+		tests := []struct {
+			name     string
+			initial  []string
+			remove   string
+			expected []string
+		}{
+			{
+				name:     "存在する要素を除去すると、その要素が消える",
+				initial:  []string{"a", "b", "c"},
+				remove:   "b",
+				expected: []string{"a", "c"},
+			},
+			{
+				name:     "先頭要素を除去すると、先頭が消える",
+				initial:  []string{"a", "b", "c"},
+				remove:   "a",
+				expected: []string{"b", "c"},
+			},
+			{
+				name:     "末尾要素を除去すると、末尾が消える",
+				initial:  []string{"a", "b", "c"},
+				remove:   "c",
+				expected: []string{"a", "b"},
+			},
+			{
+				name:     "単一要素から除去すると、空スライスになる",
+				initial:  []string{"a"},
+				remove:   "a",
+				expected: []string{},
+			},
+			{
+				name:     "存在しない要素を除去すると、変化しない",
+				initial:  []string{"a", "b"},
+				remove:   "z",
+				expected: []string{"a", "b"},
+			},
+			{
+				name:     "空スライスから除去すると、空のまま",
+				initial:  []string{},
+				remove:   "a",
+				expected: []string{},
+			},
+			{
+				name:     "nilから除去すると、nilのまま",
+				initial:  nil,
+				remove:   "a",
+				expected: nil,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				result := removeString(tt.initial, tt.remove)
+				assert.Equal(t, tt.expected, result)
+			})
+		}
+
+		t.Run("同じスライスを別の変数からも参照しているとき、除去してももう一方の中身は変わらない", func(t *testing.T) {
+			original := []string{"a", "b", "c"}
+			aliased := original
+
+			removeString(original, "b")
+
+			assert.Equal(t, []string{"a", "b", "c"}, aliased)
+		})
+	})
+}
+
+func TestMustMarshal(t *testing.T) {
+	t.Run("JSONマーシャル", func(t *testing.T) {
+		t.Run("mapを渡すと、JSON文字列になる", func(t *testing.T) {
+			result := mustMarshal(map[string]string{"key": "value"})
+			assert.JSONEq(t, `{"key":"value"}`, string(result))
+		})
+
+		t.Run("structを渡すと、フィールドがJSONになる", func(t *testing.T) {
+			msg := ErrorMessage{ErrorCode: "test", Message: "hello", Retryable: true}
+			result := mustMarshal(msg)
+			require.NotNil(t, result)
+
+			var parsed ErrorMessage
+			err := json.Unmarshal(result, &parsed)
+			require.NoError(t, err)
+			assert.Equal(t, "test", parsed.ErrorCode)
+			assert.Equal(t, "hello", parsed.Message)
+			assert.True(t, parsed.Retryable)
+		})
+
+		t.Run("nilを渡すと、nullになる", func(t *testing.T) {
+			result := mustMarshal(nil)
+			assert.Equal(t, "null", string(result))
+		})
+	})
+}
