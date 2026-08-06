@@ -368,6 +368,7 @@ func TestUseFirebaseAuth(t *testing.T) {
 			r.ServeHTTP(w, req)
 
 			require.Equal(t, http.StatusUnauthorized, w.Code)
+			assert.Equal(t, `{"error":"invalid token"}`, w.Body.String())
 		})
 
 		t.Run("Authorization headerが無いとき、401になる", func(t *testing.T) {
@@ -385,6 +386,7 @@ func TestUseFirebaseAuth(t *testing.T) {
 			r.ServeHTTP(w, req)
 
 			require.Equal(t, http.StatusUnauthorized, w.Code)
+			assert.Equal(t, `{"error":"missing authorization header"}`, w.Body.String())
 		})
 
 		t.Run("Bearer形式でないヘッダのとき、401になる", func(t *testing.T) {
@@ -403,6 +405,7 @@ func TestUseFirebaseAuth(t *testing.T) {
 			r.ServeHTTP(w, req)
 
 			require.Equal(t, http.StatusUnauthorized, w.Code)
+			assert.Equal(t, `{"error":"invalid authorization format"}`, w.Body.String())
 		})
 
 		t.Run("Bearerの後が空のとき、401になる", func(t *testing.T) {
@@ -424,6 +427,7 @@ func TestUseFirebaseAuth(t *testing.T) {
 			r.ServeHTTP(w, req)
 
 			require.Equal(t, http.StatusUnauthorized, w.Code)
+			assert.Equal(t, `{"error":"invalid token"}`, w.Body.String())
 		})
 	})
 }
@@ -522,6 +526,7 @@ func TestResolvePlayer(t *testing.T) {
 			r.ServeHTTP(w, req)
 
 			assert.Equal(t, http.StatusUnauthorized, w.Code)
+			assert.Equal(t, `{"error":"missing firebase uid"}`, w.Body.String())
 		})
 
 		t.Run("firebase_uidが未登録のとき、401になる", func(t *testing.T) {
@@ -543,6 +548,7 @@ func TestResolvePlayer(t *testing.T) {
 			r.ServeHTTP(w, req)
 
 			assert.Equal(t, http.StatusUnauthorized, w.Code)
+			assert.Equal(t, `{"error":"player not registered"}`, w.Body.String())
 		})
 
 		t.Run("プレイヤー検索が500のとき、500になる", func(t *testing.T) {
@@ -567,6 +573,7 @@ func TestResolvePlayer(t *testing.T) {
 			r.ServeHTTP(w, req)
 
 			assert.Equal(t, http.StatusInternalServerError, w.Code)
+			assert.Equal(t, `{"error":"failed to resolve player"}`, w.Body.String())
 		})
 	})
 }
