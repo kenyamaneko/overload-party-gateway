@@ -18,7 +18,7 @@ import (
 	genws "github.com/kenyamaneko/overload-party-gateway/packages/ws-constants"
 )
 
-// validNpcDeckFn は resolveDeckCards を通過させるための card.GetDeckFn の既定応答。
+// validNpcDeckFn は card.GetDeckFn の正常応答（有効なデッキ）。
 func validNpcDeckFn(string) (int, any) {
 	return http.StatusOK, apicard.DeckDetailResponse{
 		Deck:  apicard.Deck{RoutineID: "RTN-TST01", SpecialID: "SPC-TST01"},
@@ -33,8 +33,6 @@ type npcAdvanceResponse struct {
 }
 
 // advanceNpcTurnScript は AdvanceNpcTurnFn の呼出ごとに entries を順番に返す。
-// entries[0] は game_enter 時の advanceNpcIfNeeded 呼出で消費される。
-// 呼出超過は t.Errorf で失敗させる (本番の異常系と設定ミスを区別するため)。
 type advanceNpcTurnScript struct {
 	t       *testing.T
 	entries []npcAdvanceResponse
@@ -91,7 +89,11 @@ func TestWSNpcBattleStart(t *testing.T) {
 		t.Run("オンボーディング未完了のとき、再試行不可のnpc_battle_errorが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-npc-onboarding", "player-npc-onboarding")
-			// GetPlayerFn は未設定のまま (既定応答は onboarding_status 空 = 未完了)。
+			srv.account.GetPlayerFn = func() (int, any) {
+				return http.StatusOK, apiaccount.PlayerResponse{
+					PlayerID: "self", OnboardingStatus: apiaccount.OnboardingStatusNameSet,
+				}
+			}
 			conn := srv.dial(t, "uid-npc-onboarding")
 
 			require.NoError(t, conn.WriteJSON(WSMessage{
@@ -115,7 +117,9 @@ func TestWSNpcBattleStart(t *testing.T) {
 					PlayerID: "self", OnboardingStatus: apiaccount.OnboardingStatusCompleted, Name: &name,
 				}
 			}
-			// GetBattleLimitFn は未設定のまま (既定応答は CanBattle=false = 上限到達扱い)。
+			srv.account.GetBattleLimitFn = func() (int, any) {
+				return http.StatusOK, apiaccount.BattleLimitResponse{CanBattle: false}
+			}
 			conn := srv.dial(t, "uid-npc-limit")
 
 			require.NoError(t, conn.WriteJSON(WSMessage{
@@ -279,7 +283,7 @@ func TestWSNpcBattleStart(t *testing.T) {
 
 func TestWSNpcTurnRelay(t *testing.T) {
 	t.Run("NPCターンの中継", func(t *testing.T) {
-		t.Run("NPCのターン内で複数回行動するとき、行動のたびにaction_performedフレームが順に届く", func(t *testing.T) {
+		t.Run("NPCがターン内に複数回行動するとき、行動のたびにaction_performedフレームが順に届く", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			const gameID = "TST-GAME-NPC-RELAY-OK"
 			srv.setupNpcGame(gameID, "uid-npc-relay-ok", "p-npc-relay-ok")
