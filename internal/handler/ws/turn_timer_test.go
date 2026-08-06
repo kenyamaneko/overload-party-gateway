@@ -56,7 +56,7 @@ func (noopTimer) Stop() bool { return true }
 
 func TestResetTurnTimer_StaleTimerGuard(t *testing.T) {
 	t.Run("タイマー交代の競合", func(t *testing.T) {
-		t.Run("ターン交代の直後に交代前のタイマーが発火しても、交代前のアクティブプレイヤーはフォーフェイトされない", func(t *testing.T) {
+		t.Run("ターン交代の直後に交代前のタイマーが発火しても、交代前のアクティブプレイヤーは強制終了されない", func(t *testing.T) {
 			bc := newMockBattleClient()
 			hub := NewConnectionHub(HubCallbacks{
 				GetGameID:           func(string) (string, bool) { return "", false },

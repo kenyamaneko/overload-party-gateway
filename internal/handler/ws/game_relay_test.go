@@ -289,7 +289,7 @@ func readStampUsed(t *testing.T, conn *websocket.Conn) StampUsedMessage {
 }
 
 func TestJoinGame(t *testing.T) {
-	t.Run("ゲームへの参加とブロードキャストの到達範囲", func(t *testing.T) {
+	t.Run("スタンプ使用時のブロードキャストの到達範囲", func(t *testing.T) {
 		t.Run("同じ対戦に入室した両プレイヤーへ、use_stampが両者ともに届く", func(t *testing.T) {
 			cases := []struct {
 				name          string

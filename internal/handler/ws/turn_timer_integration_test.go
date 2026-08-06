@@ -37,7 +37,7 @@ func (r *processActionRecorder) snapshotCalls() []apibattle.GameActionRequest {
 
 func TestWSTurnTimeout(t *testing.T) {
 	t.Run("ターンタイムアウト", func(t *testing.T) {
-		t.Run("プレイヤー1がタイムバンクの期限までにアクションを送らないとき、期限後にプレイヤー2の勝利を示すgame_overが両者に届く", func(t *testing.T) {
+		t.Run("プレイヤー1がタイムバンクとネットワーク猶予を両方過ぎてもアクションを送らないとき、プレイヤー2の勝利を示すgame_overが両者に届く", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			const gameID = "TST-GAME-TURN-TIMEOUT"
 			srv.setupPvPGame(gameID, "uid-tt-p1", "p-tt-1", "uid-tt-p2", "p-tt-2")
@@ -80,7 +80,7 @@ func TestWSTurnTimeout(t *testing.T) {
 			assert.EqualValues(t, 1, calls[0].PlayerNum)
 		})
 
-		t.Run("タイムバンクの期限を過ぎた直後のバッファ猶予内にアクションが届くと、フォーフェイトにならず本来のアクションとして処理される", func(t *testing.T) {
+		t.Run("タイムバンクの期限を過ぎた直後のネットワーク猶予内にアクションが届くと、強制終了にならず本来のアクションとして処理される", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			const gameID = "TST-GAME-TURN-BUFFER"
 			srv.setupPvPGame(gameID, "uid-tb-p1", "p-tb-1", "uid-tb-p2", "p-tb-2")
@@ -126,7 +126,7 @@ func TestWSTurnTimeout(t *testing.T) {
 			assert.Equal(t, "end_turn", calls[0].ActionType)
 		})
 
-		t.Run("ターンが交代した後は、交代前のアクティブプレイヤーの期限を過ぎてもフォーフェイトされない", func(t *testing.T) {
+		t.Run("ターンが交代した後は、交代前のアクティブプレイヤーがタイムバンクとネットワーク猶予を両方過ぎても強制終了されない", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			const gameID = "TST-GAME-TURN-SWITCH"
 			srv.setupPvPGame(gameID, "uid-ts-p1", "p-ts-1", "uid-ts-p2", "p-ts-2")

@@ -306,7 +306,7 @@ func TestResolveStaleDisconnect(t *testing.T) {
 
 			relay.resolveStaleDisconnect("g1", "p1", false)
 
-			assert.Empty(t, bc.processActionCalls, "must not declare a winner when the opponent's deadline cannot be determined")
+			assert.Empty(t, bc.processActionCalls, "opponent's true disconnect state is unknown, so the game must stay unresolved rather than risk an incorrect forfeit")
 		})
 
 		t.Run("対戦相手の猶予が切れており復帰した本人は猶予内だったとき、対戦相手のforfeitを実行する", func(t *testing.T) {

@@ -54,21 +54,25 @@ func TestUnregister(t *testing.T) {
 			assert.Empty(t, store.snapshotSetDisconnectCalls())
 		})
 
-		t.Run("バックアップが未設定のとき、パニックしない", func(t *testing.T) {
+		t.Run("バックアップを設定していない状態で参加中のプレイヤーが切断すると、接続中でなくなる", func(t *testing.T) {
 			hub := newTestHub(nil, true, "game_1")
 			conn := NewConnection(nil, "p1")
 			hub.Register(conn)
 
-			assert.NotPanics(t, func() { hub.Unregister(conn) })
+			hub.Unregister(conn)
+
+			assert.False(t, hub.IsConnected("p1"))
 		})
 
-		t.Run("バックアップの書き込みが失敗しても、パニックしない", func(t *testing.T) {
+		t.Run("バックアップへの書き込みに失敗しても、参加中のプレイヤーが切断すると接続中でなくなる", func(t *testing.T) {
 			store := &fakeTimerStore{setDisconnectErr: errors.New("redis down")}
 			hub := newTestHub(store, true, "game_1")
 			conn := NewConnection(nil, "p1")
 			hub.Register(conn)
 
-			assert.NotPanics(t, func() { hub.Unregister(conn) })
+			hub.Unregister(conn)
+
+			assert.False(t, hub.IsConnected("p1"))
 		})
 
 		t.Run("既に解除済みの接続を再度切断しても、書き込まない", func(t *testing.T) {
@@ -187,7 +191,7 @@ func TestRegister_WasLate(t *testing.T) {
 			assert.True(t, calls[0].wasLate)
 		})
 
-		t.Run("インメモリにもバックアップにも記録が無いとき、復帰処理を実行しない", func(t *testing.T) {
+		t.Run("インメモリにもバックアップにも記録が無いとき、新規接続として扱われ再接続時の処理は呼ばれない", func(t *testing.T) {
 			var calls []reconnectCall
 			store := &fakeTimerStore{}
 			hub := NewConnectionHub(HubCallbacks{
@@ -201,6 +205,7 @@ func TestRegister_WasLate(t *testing.T) {
 			hub.Register(NewConnection(nil, "p1"))
 
 			assert.Empty(t, calls)
+			assert.True(t, hub.IsConnected("p1"), "registration itself must still succeed as a fresh connection")
 		})
 
 		t.Run("インメモリに記録が無くバックアップの読み出しが失敗するとき、復帰処理を実行しない", func(t *testing.T) {
@@ -268,7 +273,7 @@ func TestIsDisconnectDeadlineExpired(t *testing.T) {
 			expired, err := hub.IsDisconnectDeadlineExpired("p1")
 
 			require.NoError(t, err)
-			assert.False(t, expired)
+			assert.False(t, expired, "no record anywhere means we cannot confirm expiry, so it must not be treated as expired")
 		})
 
 		t.Run("インメモリに記録が無くバックアップの期限がまだ先のとき、falseになる", func(t *testing.T) {
