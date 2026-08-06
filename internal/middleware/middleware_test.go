@@ -247,8 +247,6 @@ func TestUseDevAuthWithPlayerResolve(t *testing.T) {
 			})
 		}
 
-		// resolveErrorCases は resolveOrCreateDevPlayer 内の 4 つのエラー分岐 (500系) を
-		// 網羅する。wantBodyContains で各分岐が異なる原因のメッセージを返すことを区別する。
 		resolveErrorCases := []struct {
 			name             string
 			authHeader       string
