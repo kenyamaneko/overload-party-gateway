@@ -119,10 +119,6 @@ var _ service.BattleClient = (*fakeBattleClient)(nil)
 // 検証対象ではないため、常に空デッキを返す。
 type fakeCardClient struct{}
 
-func (f *fakeCardClient) ListAllCards(context.Context) ([]*apicard.CardDefinition, error) {
-	return nil, nil
-}
-
 func (f *fakeCardClient) GetDeckCards(context.Context, int64) ([]apicard.DeckCard, port.DeckInitiatives, error) {
 	return nil, port.DeckInitiatives{}, nil
 }

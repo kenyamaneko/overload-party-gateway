@@ -2,10 +2,12 @@ package cardclient
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	apicard "github.com/kenyamaneko/overload-party-card/packages/api-card"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -20,13 +22,13 @@ func TestClient_InjectsInternalAuthHeader(t *testing.T) {
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				got = r.Header.Get(internalauth.HeaderName)
 				w.Header().Set("Content-Type", "application/json")
-				_, _ = w.Write([]byte(`[]`))
+				_ = json.NewEncoder(w).Encode(apicard.DeckDetailResponse{})
 			}))
 			defer srv.Close()
 
 			c := New(srv.URL, &http.Client{})
 			ctx := internalauth.WithToken(context.Background(), wantToken)
-			_, err := c.ListAllCards(ctx)
+			_, _, err := c.GetDeckCards(ctx, 1)
 			require.NoError(t, err)
 			assert.Equal(t, wantToken, got)
 		})

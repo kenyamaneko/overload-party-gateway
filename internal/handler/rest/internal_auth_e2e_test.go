@@ -3,6 +3,7 @@ package rest
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v4"
+	apicard "github.com/kenyamaneko/overload-party-card/packages/api-card"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -30,7 +32,7 @@ func TestInternalAuth_E2E(t *testing.T) {
 			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				got = r.Header.Get(internalauth.HeaderName)
 				w.Header().Set("Content-Type", "application/json")
-				_, _ = w.Write([]byte(`[]`))
+				_ = json.NewEncoder(w).Encode(apicard.DeckDetailResponse{})
 			}))
 			defer upstream.Close()
 
@@ -47,7 +49,7 @@ func TestInternalAuth_E2E(t *testing.T) {
 			})
 			r.Use(middleware.IssueInternalAuth(signer))
 			r.GET("/cards", func(c *gin.Context) {
-				if _, err := cc.ListAllCards(c.Request.Context()); err != nil {
+				if _, _, err := cc.GetDeckCards(c.Request.Context(), 1); err != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 					return
 				}
