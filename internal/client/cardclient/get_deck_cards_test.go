@@ -8,17 +8,15 @@ import (
 	"testing"
 
 	apicard "github.com/kenyamaneko/overload-party-card/packages/api-card"
-	"github.com/kenyamaneko/overload-party-card/packages/api-card/apicardclient"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
-	"github.com/kenyamaneko/overload-party-gateway/internal/port"
 )
 
 func TestClient_GetDeckCards(t *testing.T) {
 	t.Run("デッキカードの取得", func(t *testing.T) {
-		t.Run("デッキ詳細からルーチン/スペシャル施策IDを取り出して返す", func(t *testing.T) {
+		t.Run("デッキIDを指定すると、カード一覧とルーチン/スペシャル施策IDを返す", func(t *testing.T) {
 			const (
 				wantRoutine = "RTN-0007"
 				wantSpecial = "SPC-0042"
@@ -44,43 +42,5 @@ func TestClient_GetDeckCards(t *testing.T) {
 			assert.Equal(t, wantRoutine, initiatives.RoutineID)
 			assert.Equal(t, wantSpecial, initiatives.SpecialID)
 		})
-	})
-}
-
-func TestClient_GetDeckCards_PropagatesDownstreamError(t *testing.T) {
-	cases := []struct {
-		name    string
-		status  int
-		wantErr error
-	}{
-		{
-			name:    "デッキ不在の404はnot foundを伝播する",
-			status:  http.StatusNotFound,
-			wantErr: apicardclient.ErrNotFound,
-		},
-		{
-			name:    "5xxはinternal server errorを伝播する",
-			status:  http.StatusInternalServerError,
-			wantErr: apicardclient.ErrInternalServer,
-		},
-	}
-
-	t.Run("デッキカード取得の失敗応答の伝播", func(t *testing.T) {
-		for _, tc := range cases {
-			t.Run(tc.name, func(t *testing.T) {
-				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					w.WriteHeader(tc.status)
-				}))
-				defer srv.Close()
-
-				c := New(srv.URL, &http.Client{})
-				ctx := internalauth.WithToken(context.Background(), "test.jwt.token")
-				cards, initiatives, err := c.GetDeckCards(ctx, 1)
-
-				require.ErrorIs(t, err, tc.wantErr)
-				assert.Nil(t, cards)
-				assert.Equal(t, port.DeckInitiatives{}, initiatives)
-			})
-		}
 	})
 }

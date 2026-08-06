@@ -61,23 +61,11 @@ func StaticPrivateKeyResolver(key *rsa.PrivateKey, keyID KeyID) PrivateKeyResolv
 type Signer struct {
 	resolver PrivateKeyResolver
 	keyID    KeyID
-	issuer   string
-	ttl      time.Duration
 	now      func() time.Time
 }
 
 // Option は Signer の任意フィールドを上書きする。
 type Option func(*Signer)
-
-// WithIssuer は iss クレーム値を上書きする。
-func WithIssuer(issuer string) Option {
-	return func(s *Signer) { s.issuer = issuer }
-}
-
-// WithTTL は exp - iat の差を上書きする。
-func WithTTL(ttl time.Duration) Option {
-	return func(s *Signer) { s.ttl = ttl }
-}
 
 // WithClock は時刻取得関数を上書きする。
 func WithClock(now func() time.Time) Option {
@@ -89,8 +77,6 @@ func NewSigner(resolver PrivateKeyResolver, keyID KeyID, opts ...Option) *Signer
 	s := &Signer{
 		resolver: resolver,
 		keyID:    keyID,
-		issuer:   Issuer,
-		ttl:      DefaultTTL,
 		now:      time.Now,
 	}
 	for _, opt := range opts {
@@ -111,9 +97,9 @@ func (s *Signer) Issue(playerID string) (string, error) {
 	now := s.now()
 	claims := jwt.RegisteredClaims{
 		Subject:   playerID,
-		Issuer:    s.issuer,
+		Issuer:    Issuer,
 		IssuedAt:  jwt.NewNumericDate(now),
-		ExpiresAt: jwt.NewNumericDate(now.Add(s.ttl)),
+		ExpiresAt: jwt.NewNumericDate(now.Add(DefaultTTL)),
 	}
 	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	tok.Header["kid"] = string(s.keyID)

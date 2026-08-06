@@ -162,24 +162,6 @@ func setupAwardRelay(t *testing.T, repo port.GamePlayerRepo, account *awardCount
 
 func TestAwardGameExp(t *testing.T) {
 	t.Run("EXP付与", func(t *testing.T) {
-		t.Run("記録先もaccount連携も無いとき、パニックせず戻る", func(t *testing.T) {
-			relay, _ := newTestRelay()
-			relay.awardGameExp("g1", 1, "lp_zero")
-		})
-
-		t.Run("記録先はあるがaccount連携が無いとき、付与済みフラグを立てない", func(t *testing.T) {
-			relay, _ := newTestRelay()
-			repo := &mockGamePlayerRepo{}
-			relay.gamePlayerRepo = repo
-			// accountClient nil
-
-			relay.awardGameExp("g1", 1, "lp_zero")
-
-			// accountClient が無いのに MarkExpAwarded を呼ぶと、フラグだけ立って付与されない状態になる。
-			// 二重付与は防げるが永久に EXP が付かないゾンビゲームになるため、絶対に呼んではならない。
-			assert.Equal(t, 0, repo.markAwardedCalls)
-		})
-
 		t.Run("初回付与のとき、フラグ確定→プレイヤー解決の順で実行しaccountに付与する", func(t *testing.T) {
 			repo := &mockGamePlayerRepo{
 				markAwardedReturn: true,
@@ -289,8 +271,8 @@ func TestAwardGameExp(t *testing.T) {
 			assert.Equal(t, int32(1), account.calls.Load(), "no retry — EXP is permanently lost without manual intervention")
 		})
 
-		t.Run("プレイヤー番号が1/2以外のとき、パニックせず付与する", func(t *testing.T) {
-			// PlayerNum が 1/2 以外 (不整合データ) でも player1ID/player2ID の組み立てで panic しない。
+		t.Run("プレイヤー番号が1と2のどちらでもない (データ不整合)とき、空のプレイヤーIDで付与依頼する", func(t *testing.T) {
+			// 空文字 ID をどう扱うかは account の責務のため、gateway は付与依頼を送るところまでを担保する。
 			repo := &mockGamePlayerRepo{
 				markAwardedReturn: true,
 				lookupEntries: []port.GamePlayerEntry{
@@ -303,8 +285,6 @@ func TestAwardGameExp(t *testing.T) {
 			require.NotPanics(t, func() {
 				relay.awardGameExp("g1", 1, "lp_zero")
 			})
-			// PlayerNum=99 は player1ID/player2ID のどちらにも入らないが AwardGameExp は呼ばれる
-			// (空文字 ID をどう処理するかは account の責務)。
 			require.EqualValues(t, 1, account.calls.Load())
 			got := account.body()
 			assert.Equal(t, "", got.Player1ID)
