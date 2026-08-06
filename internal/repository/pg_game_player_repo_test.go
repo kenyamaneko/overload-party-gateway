@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -19,6 +20,47 @@ const (
 )
 
 func TestPgGamePlayerRepository(t *testing.T) {
+	t.Run("対戦へのプレイヤー登録の冪等性", func(t *testing.T) {
+		t.Run("同一対戦・同一スロットへ重ねて登録したとき、エラーにならず先に登録した内容を保持する", func(t *testing.T) {
+			sharedPG.Truncate(t)
+			repo := repository.NewPgGamePlayerRepository(sharedPG.Pool)
+			ctx := context.Background()
+			require.NoError(t, repo.InsertGamePlayer(ctx, "g1", 1, testPlayer1ID))
+
+			err := repo.InsertGamePlayer(ctx, "g1", 1, testPlayer2ID)
+
+			require.NoError(t, err)
+			entries, lookupErr := repo.LookupGamePlayers(ctx, "g1")
+			require.NoError(t, lookupErr)
+			require.Len(t, entries, 1)
+			assert.Equal(t, testPlayer1ID, entries[0].PlayerID)
+		})
+	})
+
+	t.Run("プレイヤーIDからのスロット番号の照会", func(t *testing.T) {
+		t.Run("対戦に登録済みのプレイヤーのとき、スロット番号を返す", func(t *testing.T) {
+			sharedPG.Truncate(t)
+			repo := repository.NewPgGamePlayerRepository(sharedPG.Pool)
+			ctx := context.Background()
+			require.NoError(t, repo.InsertGamePlayer(ctx, "g1", 2, testPlayer1ID))
+
+			num, err := repo.LookupPlayerNum(ctx, "g1", testPlayer1ID)
+
+			require.NoError(t, err)
+			assert.Equal(t, 2, num)
+		})
+
+		t.Run("対戦に登録が無いプレイヤーのとき、エラーを返す", func(t *testing.T) {
+			sharedPG.Truncate(t)
+			repo := repository.NewPgGamePlayerRepository(sharedPG.Pool)
+			ctx := context.Background()
+
+			_, err := repo.LookupPlayerNum(ctx, "g1", testPlayer1ID)
+
+			assert.ErrorIs(t, err, pgx.ErrNoRows)
+		})
+	})
+
 	t.Run("対戦ごとの人間プレイヤー数の集計", func(t *testing.T) {
 		t.Run("人間2人の対戦のとき、2を返す", func(t *testing.T) {
 			sharedPG.Truncate(t)
@@ -85,7 +127,32 @@ func TestPgGamePlayerRepository(t *testing.T) {
 	})
 
 	t.Run("対戦のプレイヤースロットの読み出し", func(t *testing.T) {
-		t.Run("登録した対戦のとき、スロットごとのプレイヤーと行の作成時刻を返す", func(t *testing.T) {
+		t.Run("人間が0人の対戦のとき、空の一覧を返す", func(t *testing.T) {
+			sharedPG.Truncate(t)
+			repo := repository.NewPgGamePlayerRepository(sharedPG.Pool)
+			ctx := context.Background()
+
+			entries, err := repo.LookupGamePlayers(ctx, "g1")
+
+			require.NoError(t, err)
+			assert.Empty(t, entries)
+		})
+
+		t.Run("人間が1人の対戦のとき、そのプレイヤーのみを返す", func(t *testing.T) {
+			sharedPG.Truncate(t)
+			repo := repository.NewPgGamePlayerRepository(sharedPG.Pool)
+			ctx := context.Background()
+			require.NoError(t, repo.InsertGamePlayer(ctx, "g1", 1, testPlayer1ID))
+
+			entries, err := repo.LookupGamePlayers(ctx, "g1")
+
+			require.NoError(t, err)
+			require.Len(t, entries, 1)
+			assert.Equal(t, 1, entries[0].PlayerNum)
+			assert.Equal(t, testPlayer1ID, entries[0].PlayerID)
+		})
+
+		t.Run("人間が2人の対戦のとき、スロットごとのプレイヤーと行の作成時刻を返す", func(t *testing.T) {
 			sharedPG.Truncate(t)
 			repo := repository.NewPgGamePlayerRepository(sharedPG.Pool)
 			ctx := context.Background()
@@ -103,6 +170,34 @@ func TestPgGamePlayerRepository(t *testing.T) {
 			assert.Equal(t, testPlayer2ID, entries[1].PlayerID)
 			assert.WithinDuration(t, insertedAt, entries[0].CreatedAt, time.Minute)
 			assert.WithinDuration(t, insertedAt, entries[1].CreatedAt, time.Minute)
+		})
+	})
+
+	t.Run("経験値付与フラグの冪等な設定", func(t *testing.T) {
+		t.Run("初回の呼び出しのとき、フラグを設定してtrueを返す", func(t *testing.T) {
+			sharedPG.Truncate(t)
+			repo := repository.NewPgGamePlayerRepository(sharedPG.Pool)
+			ctx := context.Background()
+			require.NoError(t, repo.InsertGamePlayer(ctx, "g1", 1, testPlayer1ID))
+
+			awarded, err := repo.MarkExpAwarded(ctx, "g1")
+
+			require.NoError(t, err)
+			assert.True(t, awarded)
+		})
+
+		t.Run("既にフラグが設定済みのとき、2回目の呼び出しはfalseを返す", func(t *testing.T) {
+			sharedPG.Truncate(t)
+			repo := repository.NewPgGamePlayerRepository(sharedPG.Pool)
+			ctx := context.Background()
+			require.NoError(t, repo.InsertGamePlayer(ctx, "g1", 1, testPlayer1ID))
+			_, err := repo.MarkExpAwarded(ctx, "g1")
+			require.NoError(t, err)
+
+			awarded, err := repo.MarkExpAwarded(ctx, "g1")
+
+			require.NoError(t, err)
+			assert.False(t, awarded)
 		})
 	})
 }
