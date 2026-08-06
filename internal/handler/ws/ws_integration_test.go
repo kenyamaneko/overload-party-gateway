@@ -521,6 +521,33 @@ func TestWSMatchmakingStart(t *testing.T) {
 			assert.Equal(t, int64(7), calls[0].Level)
 		})
 
+		t.Run("アカウントに表示名が設定されていないとき、空文字でマッチメイキングに登録される", func(t *testing.T) {
+			srv := newWSTestServer(t, nil)
+			srv.seedAccount("uid-mm-noname", "player-mm-noname")
+			srv.account.GetPlayerFn = func() (int, any) {
+				return http.StatusOK, apiaccount.PlayerResponse{
+					PlayerID: "self", OnboardingStatus: apiaccount.OnboardingStatusCompleted, Level: 3,
+				}
+			}
+			srv.account.GetBattleLimitFn = func() (int, any) {
+				return http.StatusOK, apiaccount.BattleLimitResponse{CanBattle: true}
+			}
+			srv.card.ValidateDeckForBattleFn = func(string) (int, any) { return http.StatusOK, nil }
+			rec := &enqueueRecorder{}
+			srv.matchmaking.EnqueueFn = rec.fn
+
+			conn := srv.dial(t, "uid-mm-noname")
+			require.NoError(t, conn.WriteJSON(WSMessage{
+				Type: genws.WSClientMsgMatchmakingStart,
+				Data: mustMarshal(MatchmakingStartMessage{DeckID: 1}),
+			}))
+
+			readUntilType(t, conn, genws.WSServerMsgMatchmakingStarted)
+			calls := rec.snapshotCalls()
+			require.Len(t, calls, 1)
+			assert.Equal(t, "", calls[0].Name)
+		})
+
 		t.Run("dataがオブジェクトでないmatchmaking_startを送ると、invalid_dataのエラーが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-mm-bad-data", "player-mm-bad-data")
