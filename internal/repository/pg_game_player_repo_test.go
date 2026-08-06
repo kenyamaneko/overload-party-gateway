@@ -50,7 +50,7 @@ func TestPgGamePlayerRepository(t *testing.T) {
 			assert.Equal(t, 2, num)
 		})
 
-		t.Run("対戦に登録が無いプレイヤーのとき、エラーを返す", func(t *testing.T) {
+		t.Run("対戦に登録が無いプレイヤーのとき、見つからないエラーを返す", func(t *testing.T) {
 			sharedPG.Truncate(t)
 			repo := repository.NewPgGamePlayerRepository(sharedPG.Pool)
 			ctx := context.Background()
@@ -173,7 +173,7 @@ func TestPgGamePlayerRepository(t *testing.T) {
 		})
 	})
 
-	t.Run("経験値付与フラグの冪等な設定", func(t *testing.T) {
+	t.Run("経験値付与済みフラグの冪等な設定", func(t *testing.T) {
 		t.Run("初回の呼び出しのとき、フラグを設定してtrueを返す", func(t *testing.T) {
 			sharedPG.Truncate(t)
 			repo := repository.NewPgGamePlayerRepository(sharedPG.Pool)
