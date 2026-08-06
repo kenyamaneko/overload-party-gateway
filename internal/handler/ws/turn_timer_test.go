@@ -56,7 +56,7 @@ func (noopTimer) Stop() bool { return true }
 
 func TestResetTurnTimer_StaleTimerGuard(t *testing.T) {
 	t.Run("タイマー交代の競合", func(t *testing.T) {
-		t.Run("旧タイマーのコールバックがStopの後に走っても、旧アクティブプレイヤーはforfeitされない", func(t *testing.T) {
+		t.Run("ターン交代の直後に交代前のタイマーが発火しても、交代前のアクティブプレイヤーはフォーフェイトされない", func(t *testing.T) {
 			bc := newMockBattleClient()
 			hub := NewConnectionHub(HubCallbacks{
 				GetGameID:           func(string) (string, bool) { return "", false },
@@ -74,7 +74,7 @@ func TestResetTurnTimer_StaleTimerGuard(t *testing.T) {
 
 			staleFn() // Stop後もp1側のコールバックが実行された状況を模す
 
-			assert.Empty(t, bc.snapshotProcessActionCalls(), "旧アクティブプレイヤーp1にforfeitが送られてはならない")
+			assert.Empty(t, bc.snapshotProcessActionCalls())
 		})
 	})
 }

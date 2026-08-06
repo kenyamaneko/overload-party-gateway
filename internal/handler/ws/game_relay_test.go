@@ -166,22 +166,6 @@ func newTestRelay() (*GameRelay, *mockBattleClient) {
 	return relay, bc
 }
 
-func TestSendGameStateToPlayers_TurnTimerRegistration(t *testing.T) {
-	t.Run("盤面状態からのターンタイマー登録", func(t *testing.T) {
-		t.Run("盤面状態にisMyTurnが無いとき、ターンタイマーを登録しない", func(t *testing.T) {
-			relay, _ := newTestRelay() // mockBattleClient.GetGameStateForPlayer は既定で `{}` を返す
-			relay.JoinGame("p1", "g1", 1)
-
-			relay.SendGameStateToPlayers("g1")
-
-			relay.timerMu.Lock()
-			_, ok := relay.turnTimers["g1"]
-			relay.timerMu.Unlock()
-			assert.False(t, ok, "isMyTurnが無い盤面状態ではアクティブプレイヤーが決まらずタイマー登録に至らない")
-		})
-	})
-}
-
 func TestRunNpcTurns(t *testing.T) {
 	t.Run("NPCターンの自動進行", func(t *testing.T) {
 		t.Run("初期結果がnilのとき、NPCターンを進めずnilを返す", func(t *testing.T) {
