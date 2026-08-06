@@ -117,7 +117,7 @@ func TestUseDevAuth(t *testing.T) {
 			assert.Equal(t, `{"uid":"user1"}`, w.Body.String())
 		})
 
-		t.Run("Authorization headerが無いとき、401になる", func(t *testing.T) {
+		t.Run("Authorization headerが無いとき、401でmissing authorization headerを返す", func(t *testing.T) {
 			r := gin.New()
 			r.Use(UseDevAuth())
 			r.GET("/test", func(c *gin.Context) {
@@ -130,14 +130,24 @@ func TestUseDevAuth(t *testing.T) {
 			r.ServeHTTP(w, req)
 
 			require.Equal(t, http.StatusUnauthorized, w.Code)
+			assert.JSONEq(t, `{"error":"missing authorization header"}`, w.Body.String())
 		})
 
 		invalidHeaderCases := []struct {
 			name       string
 			authHeader string
+			wantBody   string
 		}{
-			{name: "Bearer接頭辞が無いとき、401になる", authHeader: "dev-token-user1"},
-			{name: "dev-token形式でないtokenのとき、401になる", authHeader: "Bearer some-other-token"},
+			{
+				name:       "Bearer接頭辞が無いとき、401でinvalid authorization formatを返す",
+				authHeader: "dev-token-user1",
+				wantBody:   `{"error":"invalid authorization format"}`,
+			},
+			{
+				name:       "dev-token形式でないtokenのとき、401でinvalid dev token formatを返す",
+				authHeader: "Bearer some-other-token",
+				wantBody:   `{"error":"invalid dev token format"}`,
+			},
 		}
 		for _, tc := range invalidHeaderCases {
 			t.Run(tc.name, func(t *testing.T) {
@@ -154,6 +164,7 @@ func TestUseDevAuth(t *testing.T) {
 				r.ServeHTTP(w, req)
 
 				require.Equal(t, http.StatusUnauthorized, w.Code)
+				assert.JSONEq(t, tc.wantBody, w.Body.String())
 			})
 		}
 	})
@@ -209,50 +220,69 @@ func TestUseDevAuthWithPlayerResolve(t *testing.T) {
 			assert.Equal(t, `{"player_id":"existing-id"}`, w.Body.String())
 		})
 
-		statusCases := []struct {
-			name           string
-			authHeader     string
-			findStatuses   []int
-			registerStatus int
-			wantStatus     int
+		authFormatCases := []struct {
+			name       string
+			authHeader string
+		}{
+			{name: "Authorization headerが無いとき、401になる", authHeader: ""},
+			{name: "Bearer接頭辞が無いとき、401になる", authHeader: "dev-token-user1"},
+			{name: "dev-token形式でないtokenのとき、401になる", authHeader: "Bearer other-token"},
+		}
+		for _, tc := range authFormatCases {
+			t.Run(tc.name, func(t *testing.T) {
+				fa := newSequencedAccountFake(t, nil, 0)
+
+				r := gin.New()
+				r.Use(UseDevAuthWithPlayerResolve(accountclient.New(fa.URL(), &http.Client{})))
+				r.GET("/test", func(c *gin.Context) {
+					c.JSON(http.StatusOK, gin.H{"player_id": GetPlayerID(c)})
+				})
+
+				req := httptest.NewRequest("GET", "/test", nil)
+				req.Header.Set("Authorization", tc.authHeader)
+				w := httptest.NewRecorder()
+				r.ServeHTTP(w, req)
+
+				assert.Equal(t, http.StatusUnauthorized, w.Code, w.Body.String())
+			})
+		}
+
+		resolveErrorCases := []struct {
+			name             string
+			authHeader       string
+			findStatuses     []int
+			registerStatus   int
+			wantBodyContains string
 		}{
 			{
-				name:       "Authorization headerが無いとき、401になる",
-				authHeader: "",
-				wantStatus: http.StatusUnauthorized,
+				name:             "プレイヤー検索が500のとき、500でfind by firebase uid:を含むエラーを返す",
+				authHeader:       "Bearer dev-token-u-findfail",
+				findStatuses:     []int{http.StatusInternalServerError},
+				wantBodyContains: "resolve player: find by firebase uid:",
 			},
 			{
-				name:       "Bearer接頭辞が無いとき、401になる",
-				authHeader: "dev-token-user1",
-				wantStatus: http.StatusUnauthorized,
+				name:             "未登録で登録が500のとき、500でregister dev player:を含むエラーを返す",
+				authHeader:       "Bearer dev-token-u-registerfail",
+				findStatuses:     []int{http.StatusNotFound},
+				registerStatus:   http.StatusInternalServerError,
+				wantBodyContains: "resolve player: register dev player:",
 			},
 			{
-				name:       "dev-token形式でないtokenのとき、401になる",
-				authHeader: "Bearer other-token",
-				wantStatus: http.StatusUnauthorized,
+				name:             "登録が競合(409)し再検索も失敗するとき、500でrecover from race:を含むエラーを返す",
+				authHeader:       "Bearer dev-token-u-racefail",
+				findStatuses:     []int{http.StatusNotFound, http.StatusInternalServerError},
+				registerStatus:   http.StatusConflict,
+				wantBodyContains: "resolve player: recover from race:",
 			},
 			{
-				name:         "プレイヤー検索が500のとき、500になる",
-				authHeader:   "Bearer dev-token-u500",
-				findStatuses: []int{http.StatusInternalServerError},
-				wantStatus:   http.StatusInternalServerError,
-			},
-			{
-				name:           "未登録で登録が500のとき、500になる",
-				authHeader:     "Bearer dev-token-u-registerfail",
-				findStatuses:   []int{http.StatusNotFound},
-				registerStatus: http.StatusInternalServerError,
-				wantStatus:     http.StatusInternalServerError,
-			},
-			{
-				name:           "登録が競合したのに再検索でも見つからないとき、500になる",
-				authHeader:     "Bearer dev-token-u-conflictmiss",
-				findStatuses:   []int{http.StatusNotFound, http.StatusNotFound},
-				registerStatus: http.StatusConflict,
-				wantStatus:     http.StatusInternalServerError,
+				name:             "登録が競合したのに再検索でも見つからないとき、500でregister returned already-registered but player not foundを返す",
+				authHeader:       "Bearer dev-token-u-conflictmiss",
+				findStatuses:     []int{http.StatusNotFound, http.StatusNotFound},
+				registerStatus:   http.StatusConflict,
+				wantBodyContains: "resolve player: register returned already-registered but player not found",
 			},
 		}
-		for _, tc := range statusCases {
+		for _, tc := range resolveErrorCases {
 			t.Run(tc.name, func(t *testing.T) {
 				fa := newSequencedAccountFake(t, tc.findStatuses, tc.registerStatus)
 
@@ -267,7 +297,8 @@ func TestUseDevAuthWithPlayerResolve(t *testing.T) {
 				w := httptest.NewRecorder()
 				r.ServeHTTP(w, req)
 
-				assert.Equal(t, tc.wantStatus, w.Code, w.Body.String())
+				require.Equal(t, http.StatusInternalServerError, w.Code, w.Body.String())
+				assert.Contains(t, w.Body.String(), tc.wantBodyContains)
 			})
 		}
 
