@@ -3,15 +3,51 @@ package ws
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
+	gamelogic "github.com/kenyamaneko/overload-party-battle/packages/game-logic-constants-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+// fakeAfterFuncClock は Clock.AfterFunc に渡されたコールバックを実行せず捕捉する。
+// テストは捕捉したコールバックを直接呼び出すことでタイマー発火を即時に再現する。
+type fakeAfterFuncClock struct {
+	mu    sync.Mutex
+	calls []func()
+}
+
+func (c *fakeAfterFuncClock) Now() time.Time { return time.Unix(0, 0) }
+
+func (c *fakeAfterFuncClock) AfterFunc(_ time.Duration, f func()) Timer {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.calls = append(c.calls, f)
+	return noopTimer{}
+}
+
+type noopTimer struct{}
+
+func (noopTimer) Stop() bool { return true }
+
+// newTestRelayWithClock は fakeAfterFuncClock を差し込んだ GameRelay を返す。
+// resetTurnTimer が登録するコールバックを実発火させずに捕捉し、手動で呼び出せるようにする。
+func newTestRelayWithClock(clock *fakeAfterFuncClock) (*GameRelay, *mockBattleClient) {
+	bc := newMockBattleClient()
+	hub := NewConnectionHub(HubCallbacks{
+		GetGameID:           func(string) (string, bool) { return "", false },
+		OnDisconnectTimeout: func(string, string) {},
+	}, DefaultDisconnectTimeout, nil)
+	relay := NewGameRelay(hub, bc, nil, nil, nil, nil, WithClock(clock))
+	return relay, bc
+}
+
 func TestResetTurnTimer(t *testing.T) {
-	t.Run("ターンタイマーの登録・更新", func(t *testing.T) {
+	// 実発火時には battle server 呼び出しが起こるため、発火を伴わない範囲で振る舞いを検証する。
+	// timeBank は十分大きな値を渡し、テスト中には発火させない。
+	t.Run("timeBankがターンタイマー登録要否の境界になる", func(t *testing.T) {
 		nonPositiveCases := []struct {
 			name            string
 			timeBankSeconds int64
@@ -21,58 +57,63 @@ func TestResetTurnTimer(t *testing.T) {
 		}
 		for _, tc := range nonPositiveCases {
 			t.Run(tc.name, func(t *testing.T) {
-				relay, _ := newTestRelay()
+				clock := &fakeAfterFuncClock{}
+				relay, _ := newTestRelayWithClock(clock)
 				relay.JoinGame("p1", "g1", 1)
 
 				relay.resetTurnTimer("g1", "p1", tc.timeBankSeconds)
 
-				relay.timerMu.Lock()
-				_, ok := relay.turnTimers["g1"]
-				relay.timerMu.Unlock()
-				assert.False(t, ok, "no timer should be registered when timeBank<=0")
+				assert.Empty(t, clock.calls, "no timer should be scheduled when timeBank<=0")
 			})
 		}
 	})
-}
 
-// manualFireClock は AfterFunc に渡された関数を実時間で走らせず、captured() 経由で
-// テストが任意のタイミングで手動起動できるようにする Clock テストダブル。
-type manualFireClock struct {
-	lastFn func()
-}
+	t.Run("ターンタイマー発火時の強制終了送信", func(t *testing.T) {
+		t.Run("登録したタイマーが発火すると、そのプレイヤーの強制終了が送信される", func(t *testing.T) {
+			clock := &fakeAfterFuncClock{}
+			relay, bc := newTestRelayWithClock(clock)
+			relay.JoinGame("p1", "g1", 1)
 
-func (c *manualFireClock) Now() time.Time { return time.Now() }
+			relay.resetTurnTimer("g1", "p1", 60)
+			require.Len(t, clock.calls, 1)
+			clock.calls[0]()
 
-func (c *manualFireClock) AfterFunc(_ time.Duration, f func()) Timer {
-	c.lastFn = f
-	return noopTimer{}
-}
+			calls := bc.snapshotProcessActionCalls()
+			require.Len(t, calls, 1)
+			assert.Equal(t, gamelogic.ActionTypeForfeit, calls[0].actionType)
+			assert.Equal(t, 1, calls[0].playerNum)
+		})
 
-func (c *manualFireClock) captured() func() { return c.lastFn }
-
-type noopTimer struct{}
-
-func (noopTimer) Stop() bool { return true }
-
-func TestResetTurnTimer_StaleTimerGuard(t *testing.T) {
-	t.Run("タイマー交代の競合", func(t *testing.T) {
-		t.Run("ターン交代の直後に交代前のタイマーが発火しても、交代前のアクティブプレイヤーは強制終了されない", func(t *testing.T) {
-			bc := newMockBattleClient()
-			hub := NewConnectionHub(HubCallbacks{
-				GetGameID:           func(string) (string, bool) { return "", false },
-				OnDisconnectTimeout: func(string, string) {},
-			}, DefaultDisconnectTimeout, nil)
-			clock := &manualFireClock{}
-			relay := NewGameRelay(hub, bc, nil, nil, nil, nil, WithClock(clock))
+		t.Run("ターンがp1からp2に代わった後、p2のタイマーが発火すると、p2の強制終了が送信される", func(t *testing.T) {
+			clock := &fakeAfterFuncClock{}
+			relay, bc := newTestRelayWithClock(clock)
 			relay.JoinGame("p1", "g1", 1)
 			relay.JoinGame("p2", "g1", 2)
 
 			relay.resetTurnTimer("g1", "p1", 60)
-			staleFn := clock.captured()
+			relay.resetTurnTimer("g1", "p2", 60)
+			require.Len(t, clock.calls, 2)
+			clock.calls[1]()
 
-			relay.resetTurnTimer("g1", "p2", 60) // p1のタイマーをStopしてp2で置き換える
+			calls := bc.snapshotProcessActionCalls()
+			require.Len(t, calls, 1)
+			assert.Equal(t, gamelogic.ActionTypeForfeit, calls[0].actionType)
+			assert.Equal(t, 2, calls[0].playerNum)
+		})
 
-			staleFn() // Stop後もp1側のコールバックが実行された状況を模す
+		t.Run("ターンがp1からp2に代わった後、旧タイマー(p1)が発火しても、強制終了は送信されない", func(t *testing.T) {
+			// time.AfterFunc の Stop() は、コールバックの実行が既に始まっていると
+			// 呼び出しても止められないことがある。この競合を、fake clock で捕捉した
+			// コールバックを直接呼び出すことで再現する。
+			clock := &fakeAfterFuncClock{}
+			relay, bc := newTestRelayWithClock(clock)
+			relay.JoinGame("p1", "g1", 1)
+			relay.JoinGame("p2", "g1", 2)
+
+			relay.resetTurnTimer("g1", "p1", 60)
+			relay.resetTurnTimer("g1", "p2", 60)
+			require.Len(t, clock.calls, 2)
+			clock.calls[0]()
 
 			assert.Empty(t, bc.snapshotProcessActionCalls())
 		})
@@ -80,7 +121,7 @@ func TestResetTurnTimer_StaleTimerGuard(t *testing.T) {
 }
 
 func TestResetTurnTimer_TimerStoreMirroring(t *testing.T) {
-	t.Run("ターン期限のバックアップの書き込み", func(t *testing.T) {
+	t.Run("ターン期限の外部保存先への書き込み", func(t *testing.T) {
 		t.Run("正のtimeBankのとき、発火時刻を絶対時刻として書き込む", func(t *testing.T) {
 			relay, _ := newTestRelay()
 			store := &fakeTimerStore{}
@@ -112,28 +153,40 @@ func TestResetTurnTimer_TimerStoreMirroring(t *testing.T) {
 			assert.Equal(t, []string{"g1"}, store.snapshotClearTurnCalls())
 		})
 
-		t.Run("バックアップが未設定のとき、パニックしない", func(t *testing.T) {
+		t.Run("ターン期限を外部保存する設定が無くても、ターンタイマーは登録される", func(t *testing.T) {
 			relay, _ := newTestRelay()
 			relay.JoinGame("p1", "g1", 1)
 
-			assert.NotPanics(t, func() { relay.resetTurnTimer("g1", "p1", 60) })
+			relay.resetTurnTimer("g1", "p1", 60)
+
+			relay.timerMu.Lock()
+			_, ok := relay.turnTimers["g1"]
+			relay.timerMu.Unlock()
+			assert.True(t, ok)
+
 			relay.cancelTurnTimer("g1")
 		})
 
-		t.Run("バックアップの書き込みが失敗しても、パニックしない", func(t *testing.T) {
+		t.Run("ターン期限の外部保存に失敗しても、ターンタイマーは登録される", func(t *testing.T) {
 			relay, _ := newTestRelay()
 			relay.timerStore = &fakeTimerStore{setTurnErr: errors.New("redis down")}
 			relay.JoinGame("p1", "g1", 1)
 
-			assert.NotPanics(t, func() { relay.resetTurnTimer("g1", "p1", 60) })
+			relay.resetTurnTimer("g1", "p1", 60)
+
+			relay.timerMu.Lock()
+			_, ok := relay.turnTimers["g1"]
+			relay.timerMu.Unlock()
+			assert.True(t, ok)
+
 			relay.cancelTurnTimer("g1")
 		})
 	})
 }
 
 func TestCancelTurnTimer_TimerStoreMirroring(t *testing.T) {
-	t.Run("ターン期限のバックアップの削除", func(t *testing.T) {
-		t.Run("取り消すと、バックアップの期限も削除される", func(t *testing.T) {
+	t.Run("ターン期限の外部保存先からの削除", func(t *testing.T) {
+		t.Run("取り消すと、外部保存先の期限も削除される", func(t *testing.T) {
 			relay, _ := newTestRelay()
 			store := &fakeTimerStore{}
 			relay.timerStore = store
@@ -143,12 +196,6 @@ func TestCancelTurnTimer_TimerStoreMirroring(t *testing.T) {
 			relay.cancelTurnTimer("g1")
 
 			assert.Equal(t, []string{"g1"}, store.snapshotClearTurnCalls())
-		})
-
-		t.Run("バックアップが未設定のとき、パニックしない", func(t *testing.T) {
-			relay, _ := newTestRelay()
-
-			assert.NotPanics(t, func() { relay.cancelTurnTimer("g1") })
 		})
 	})
 }

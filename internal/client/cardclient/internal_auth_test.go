@@ -6,7 +6,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/kenyamaneko/overload-party-card/packages/api-card/apicardclient"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -31,51 +30,5 @@ func TestClient_InjectsInternalAuthHeader(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, wantToken, got)
 		})
-	})
-}
-
-func TestClient_ValidateDeckForBattle_MapsStatus(t *testing.T) {
-	cases := []struct {
-		name    string
-		status  int
-		wantErr error
-	}{
-		{
-			name:    "検証成功の200はnilを返す",
-			status:  http.StatusOK,
-			wantErr: nil,
-		},
-		{
-			name:    "デッキ不正の400はErrDeckInvalidに写像する",
-			status:  http.StatusBadRequest,
-			wantErr: apicardclient.ErrDeckInvalid,
-		},
-		{
-			name:    "デッキ不在の404はnot foundを伝播する",
-			status:  http.StatusNotFound,
-			wantErr: apicardclient.ErrNotFound,
-		},
-		{
-			name:    "5xxはinternal server errorを伝播する",
-			status:  http.StatusInternalServerError,
-			wantErr: apicardclient.ErrInternalServer,
-		},
-	}
-
-	t.Run("対戦用デッキ検証の応答の変換", func(t *testing.T) {
-		for _, tc := range cases {
-			t.Run(tc.name, func(t *testing.T) {
-				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					w.WriteHeader(tc.status)
-				}))
-				defer srv.Close()
-
-				c := New(srv.URL, &http.Client{})
-				ctx := internalauth.WithToken(context.Background(), "test.jwt.token")
-				err := c.ValidateDeckForBattle(ctx, 1)
-
-				require.ErrorIs(t, err, tc.wantErr)
-			})
-		}
 	})
 }

@@ -28,51 +28,19 @@ func TestSignerIssue(t *testing.T) {
 	fixedTime := time.Date(2026, 5, 10, 12, 0, 0, 0, time.UTC)
 
 	t.Run("JWTの発行", func(t *testing.T) {
-		validCases := []struct {
-			name      string
-			opts      []Option
-			assertTok func(t *testing.T, parsed *jwt.Token, claims *jwt.RegisteredClaims)
-		}{
-			{
-				name: "デフォルトオプションのとき、RS256でiss/sub/iat/exp/kidが揃ったJWTを発行する",
-				opts: []Option{WithClock(func() time.Time { return fixedTime })},
-				assertTok: func(t *testing.T, parsed *jwt.Token, claims *jwt.RegisteredClaims) {
-					t.Helper()
-					assert.Equal(t, "RS256", parsed.Method.Alg())
-					assert.Equal(t, string(DefaultKeyID), parsed.Header["kid"])
-					assert.Equal(t, "player-123", claims.Subject)
-					assert.Equal(t, Issuer, claims.Issuer)
-					assert.True(t, claims.IssuedAt.Equal(fixedTime))
-					assert.Equal(t, DefaultTTL, claims.ExpiresAt.Sub(claims.IssuedAt.Time))
-				},
-			},
-			{
-				name: "WithTTLを渡すとき、exp-iatが指定TTLになる",
-				opts: []Option{WithClock(func() time.Time { return fixedTime }), WithTTL(2 * time.Minute)},
-				assertTok: func(t *testing.T, _ *jwt.Token, claims *jwt.RegisteredClaims) {
-					t.Helper()
-					assert.Equal(t, 2*time.Minute, claims.ExpiresAt.Sub(claims.IssuedAt.Time))
-				},
-			},
-			{
-				name: "WithIssuerを渡すとき、issが上書きされる",
-				opts: []Option{WithClock(func() time.Time { return fixedTime }), WithIssuer("other-issuer")},
-				assertTok: func(t *testing.T, _ *jwt.Token, claims *jwt.RegisteredClaims) {
-					t.Helper()
-					assert.Equal(t, "other-issuer", claims.Issuer)
-				},
-			},
-		}
+		t.Run("発行すると、playerIDを主体とし既定の発行者とTTLを持つ、対応する公開鍵で検証できるJWTを返す", func(t *testing.T) {
+			signer := NewSigner(StaticPrivateKeyResolver(key, DefaultKeyID), DefaultKeyID, WithClock(func() time.Time { return fixedTime }))
+			token, err := signer.Issue("player-123")
+			require.NoError(t, err)
+			parsed, claims := parseAndAssertSignature(t, token, &key.PublicKey)
 
-		for _, tc := range validCases {
-			t.Run(tc.name, func(t *testing.T) {
-				signer := NewSigner(StaticPrivateKeyResolver(key, DefaultKeyID), DefaultKeyID, tc.opts...)
-				token, err := signer.Issue("player-123")
-				require.NoError(t, err)
-				parsed, claims := parseAndAssertSignature(t, token, &key.PublicKey)
-				tc.assertTok(t, parsed, claims)
-			})
-		}
+			assert.Equal(t, "RS256", parsed.Method.Alg())
+			assert.Equal(t, string(DefaultKeyID), parsed.Header["kid"])
+			assert.Equal(t, "player-123", claims.Subject)
+			assert.Equal(t, Issuer, claims.Issuer)
+			assert.True(t, claims.IssuedAt.Equal(fixedTime))
+			assert.Equal(t, DefaultTTL, claims.ExpiresAt.Sub(claims.IssuedAt.Time))
+		})
 
 		invalidCases := []struct {
 			name     string

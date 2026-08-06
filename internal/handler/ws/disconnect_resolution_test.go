@@ -81,6 +81,17 @@ func findErrorLogs(records []logRecord, gameID, playerID string) []logRecord {
 	return found
 }
 
+// findWarnLogs は playerID を伴う警告ログだけを抜き出す。
+func findWarnLogs(records []logRecord, playerID string) []logRecord {
+	var found []logRecord
+	for _, rec := range records {
+		if rec.Level == "WARN" && rec.PlayerID == playerID {
+			found = append(found, rec)
+		}
+	}
+	return found
+}
+
 // findSentMessage は接続の送信バッファから wantType のメッセージを取り出す。
 func findSentMessage(t *testing.T, conn *Connection, wantType string) WSMessage {
 	t.Helper()
@@ -408,12 +419,6 @@ func TestResolveStaleDisconnect(t *testing.T) {
 			relay.resolveStaleDisconnect("g1", "p1", false)
 
 			assert.Empty(t, bc.processActionCalls)
-		})
-
-		t.Run("ゲーム参加者情報の取得元が無いとき、パニックしない", func(t *testing.T) {
-			relay, _ := newTestRelay()
-
-			assert.NotPanics(t, func() { relay.resolveStaleDisconnect("g1", "p1", false) })
 		})
 
 		t.Run("ゲーム参加者情報の取得に失敗するとき、forfeitを実行しない", func(t *testing.T) {

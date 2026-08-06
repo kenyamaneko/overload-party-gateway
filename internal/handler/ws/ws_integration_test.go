@@ -82,7 +82,7 @@ func (r *statefulGamePlayerRepo) LookupPlayerNum(_ context.Context, gameID, play
 			return e.PlayerNum, nil
 		}
 	}
-	return 0, fmt.Errorf("player %s not found in game %s", playerID, gameID)
+	return 0, fmt.Errorf("player %s not found in game %s: %w", playerID, gameID, port.ErrNotFound)
 }
 
 func (r *statefulGamePlayerRepo) LookupGamePlayers(_ context.Context, gameID string) ([]port.GamePlayerEntry, error) {

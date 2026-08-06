@@ -564,7 +564,13 @@ func (r *GameRelay) HandleGameEnter(conn *Connection, data json.RawMessage) {
 			// 接続切断につき中止
 			return
 		}
-		slog.Error("lookup player_num failed", "player_id", conn.playerID, "game_id", req.GameID, "error", err)
+		if errors.Is(err, port.ErrNotFound) {
+			// クライアントが古い/不正な game_id を送ってきた通常の異常系であり、
+			// システム運用に支障をきたす事象ではない。
+			slog.Warn("lookup player_num: player not in game", "player_id", conn.playerID, "game_id", req.GameID)
+		} else {
+			slog.Error("lookup player_num failed", "player_id", conn.playerID, "game_id", req.GameID, "error", err)
+		}
 		sendError(conn, "game_error", "player not found in game", false)
 		return
 	}

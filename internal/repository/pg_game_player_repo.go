@@ -2,8 +2,10 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/port"
@@ -35,13 +37,17 @@ func (r *PgGamePlayerRepository) InsertGamePlayer(ctx context.Context, gameID st
 	return nil
 }
 
-// LookupPlayerNum はゲーム内のプレイヤー番号を取得します
+// LookupPlayerNum はゲーム内のプレイヤー番号を取得します。
+// 該当行が無い場合は port.ErrNotFound を返す（fail-fast）。
 func (r *PgGamePlayerRepository) LookupPlayerNum(ctx context.Context, gameID string, playerID string) (int, error) {
 	var playerNum int
 	err := connFrom(ctx, r.pool).QueryRow(ctx,
 		`SELECT player_num FROM gateway.game_players WHERE game_id = $1 AND player_id = $2`,
 		gameID, playerID,
 	).Scan(&playerNum)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, fmt.Errorf("lookup player num: %w", port.ErrNotFound)
+	}
 	if err != nil {
 		return 0, fmt.Errorf("lookup player num: %w", err)
 	}
