@@ -50,7 +50,9 @@ func TestWSGameAction(t *testing.T) {
 			srv.setupPvPGame(gameID, "uid-action-p1", "p-action-1", "uid-action-p2", "p-action-2")
 			rec := &processActionRecorder{}
 			srv.battle.ProcessActionFn = rec.fn
-			conn := srv.enterGame(t, "uid-action-p1", gameID)
+			// スロット 2 のプレイヤーに行動させ、ProcessAction へ渡る PlayerNum が
+			// 常に 1 になるわけではないこと (resolvePlayerNum が正しく引けていること) を確認する。
+			conn := srv.enterGame(t, "uid-action-p2", gameID)
 
 			require.NoError(t, conn.WriteJSON(WSMessage{
 				Type: genws.WSClientMsgGameAction,
@@ -68,7 +70,7 @@ func TestWSGameAction(t *testing.T) {
 			calls := rec.snapshotCalls()
 			require.Len(t, calls, 1)
 			assert.Equal(t, "play_card", calls[0].ActionType)
-			assert.EqualValues(t, 1, calls[0].PlayerNum)
+			assert.EqualValues(t, 2, calls[0].PlayerNum)
 		})
 
 		t.Run("盤面が拒否する行動を送ると、拒否理由付きでaction_rejectedが返る", func(t *testing.T) {

@@ -34,7 +34,9 @@ func TestWSUseStamp(t *testing.T) {
 			p1Conn := srv.enterGame(t, "uid-stamp-p1", gameID)
 			p2Conn := srv.enterGame(t, "uid-stamp-p2", gameID)
 
-			require.NoError(t, p1Conn.WriteJSON(WSMessage{
+			// スロット 2 のプレイヤーに送らせ、配信される PlayerNum が常に 1 になるわけではない
+			// こと (resolvePlayerNum が正しく引けていること) を確認する。
+			require.NoError(t, p2Conn.WriteJSON(WSMessage{
 				Type: genws.WSClientMsgUseStamp,
 				Data: mustMarshal(UseStampMessage{GameID: gameID, StampNo: 3}),
 			}))
@@ -43,7 +45,7 @@ func TestWSUseStamp(t *testing.T) {
 				msg := readUntilType(t, conn, genws.WSServerMsgStampUsed)
 				var stamp StampUsedMessage
 				require.NoError(t, json.Unmarshal(msg.Data, &stamp))
-				assert.EqualValues(t, 1, stamp.PlayerNum)
+				assert.EqualValues(t, 2, stamp.PlayerNum)
 				assert.EqualValues(t, 3, stamp.StampNo)
 			}
 		})

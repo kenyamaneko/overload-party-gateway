@@ -7,7 +7,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -21,13 +20,17 @@ import (
 // (snake_case) を使う。対応が終わった種別はこのリストからも削除すること。
 var serverMessageTypeCoverageExceptions = map[string]string{
 	"game_state_restore": "Go 側に送信箇所が無く未使用 (issue #179)",
-	"npc_battle_created": "npc_battle_start dispatch の実観測テストは issue #85 の別 PR で追加予定、未マージ",
+	"npc_battle_created": "npc_battle_start dispatch の実観測テストは issue #85 の別ブランチで追加予定、未マージ。マージ後はこの行を削除して再実行し green を確認すること",
 }
 
 func TestWSServerMessageTypeCoverage(t *testing.T) {
 	t.Run("サーバー送出メッセージ種別の網羅観測", func(t *testing.T) {
 		consts := serverMessageTypeConstants(t)
-		tested := identifiersReferencedInTestFiles(t, "WSServerMsg")
+		identifiers := make([]string, len(consts))
+		for i, c := range consts {
+			identifiers[i] = c.identifier
+		}
+		tested := serverMessageTypesObservedInTestFiles(t, identifiers)
 
 		t.Run("定数が受信フレームとして観測されているか、理由付きで例外リストに存在する", func(t *testing.T) {
 			for _, c := range consts {
@@ -117,13 +120,22 @@ func serverMessageTypeConstants(t *testing.T) []serverMessageTypeConstant {
 	return consts
 }
 
-// identifiersReferencedInTestFiles は internal/ 配下の全 *_test.go を走査し、
-// prefix から始まる識別子として参照されている語の集合を返す。パッケージの
-// import エイリアスに依存しないよう、識別子の裸の語だけを照合する。
-func identifiersReferencedInTestFiles(t *testing.T, prefix string) map[string]struct{} {
+// serverMessageTypesObservedInTestFiles は internal/ 配下の全 *_test.go を AST 解析し、
+// knownIdentifiers のうち「受信フレームの type を検証する」呼び出しの中で実際に
+// 使われているものの集合を返す。識別子がソース中に文字列として現れているだけの
+// 箇所 (コメント・例外リストの値など) は対象にしない。
+//
+// 「観測」とみなす呼び出しは 2 パターン:
+//   - assert.Equal / require.Equal 等 (関数名に Equal を含む) の引数に識別子が現れる
+//   - readUntilType のような readUntil 接頭辞のヘルパーの引数に識別子が現れる
+//
+// action_performed のように、種別が呼び出し側の引数でなくヘルパー名自体
+// (readUntilActionPerformed) に埋め込まれている場合もあるため、readUntil 接頭辞の
+// 呼び出しは関数名の残り部分を識別子の末尾と突き合わせても判定する。
+func serverMessageTypesObservedInTestFiles(t *testing.T, knownIdentifiers []string) map[string]struct{} {
 	t.Helper()
-	pattern := regexp.MustCompile(`\b` + prefix + `\w+\b`)
-	found := make(map[string]struct{})
+	observed := make(map[string]struct{})
+	fset := token.NewFileSet()
 
 	root := filepath.Join(repoRoot(t), "internal")
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
@@ -133,11 +145,67 @@ func identifiersReferencedInTestFiles(t *testing.T, prefix string) map[string]st
 		}
 		src, err := os.ReadFile(path)
 		require.NoError(t, err)
-		for _, m := range pattern.FindAllString(string(src), -1) {
-			found[m] = struct{}{}
-		}
+		file, err := parser.ParseFile(fset, path, src, 0)
+		require.NoError(t, err)
+
+		ast.Inspect(file, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			calleeName := calleeName(call.Fun)
+			if calleeName == "" || !isObservationCallName(calleeName) {
+				return true
+			}
+			for _, arg := range call.Args {
+				ast.Inspect(arg, func(m ast.Node) bool {
+					if name := identifierName(m); strings.HasPrefix(name, "WSServerMsg") {
+						observed[name] = struct{}{}
+					}
+					return true
+				})
+			}
+			if strings.HasPrefix(calleeName, "readUntil") {
+				suffix := strings.TrimPrefix(calleeName, "readUntil")
+				for _, ident := range knownIdentifiers {
+					if suffix != "" && strings.HasSuffix(ident, suffix) {
+						observed[ident] = struct{}{}
+					}
+				}
+			}
+			return true
+		})
 		return nil
 	})
 	require.NoError(t, err)
-	return found
+	return observed
+}
+
+// isObservationCallName は呼び出しが「受信フレームの type を検証する」意図かを判定する。
+func isObservationCallName(name string) bool {
+	return strings.Contains(name, "Equal") || strings.HasPrefix(name, "readUntil")
+}
+
+// calleeName は呼び出し式から関数名 (パッケージ修飾子を除く) を取り出す。
+func calleeName(fun ast.Expr) string {
+	switch f := fun.(type) {
+	case *ast.Ident:
+		return f.Name
+	case *ast.SelectorExpr:
+		return f.Sel.Name
+	default:
+		return ""
+	}
+}
+
+// identifierName は式が単純な識別子またはセレクタ式であれば、その裸の名前を返す。
+func identifierName(n ast.Node) string {
+	switch e := n.(type) {
+	case *ast.Ident:
+		return e.Name
+	case *ast.SelectorExpr:
+		return e.Sel.Name
+	default:
+		return ""
+	}
 }
