@@ -516,8 +516,8 @@ func TestGameIDForPlayer(t *testing.T) {
 }
 
 func TestLeaveAllPlayers(t *testing.T) {
-	t.Run("全プレイヤーの一括退出", func(t *testing.T) {
-		t.Run("呼ぶと、全プレイヤーが外れgameMembersも破棄される", func(t *testing.T) {
+	t.Run("そのゲームの全参加者の一括退出", func(t *testing.T) {
+		t.Run("呼ぶと、そのゲームの参加者全員のGameIDForPlayerがfalseになり、gameMembersも破棄される", func(t *testing.T) {
 			relay, _ := newTestRelay()
 
 			relay.JoinGame("p1", "game_1", 1)
@@ -536,7 +536,7 @@ func TestLeaveAllPlayers(t *testing.T) {
 			assert.False(t, membersExist, "gameMembers should be cleaned up")
 		})
 
-		t.Run("呼ぶと、退出した全プレイヤーの切断猶予期限の写しが削除される", func(t *testing.T) {
+		t.Run("呼ぶと、退出した全プレイヤーの切断猶予期限が外部保存先からも削除される", func(t *testing.T) {
 			relay, _ := newTestRelay()
 			store := &fakeTimerStore{}
 			relay.hub.timerStore = store
