@@ -202,7 +202,7 @@ func TestBattleClient_ListNpcModels(t *testing.T) {
 			require.Nil(t, got)
 		})
 
-		t.Run("200のとき、モデル一覧を返す", func(t *testing.T) {
+		t.Run("battleのエンドポイントにリクエストが届いたとき、モデル一覧を返す", func(t *testing.T) {
 			srv := newBattleServer(t, http.StatusOK, `{"models":[{"model":"TST-NPC-A","display_name":"Test NPC A","faction":"SHE","difficulty":"normal"}]}`)
 			c := NewBattleClient(srv.URL, &http.Client{})
 
