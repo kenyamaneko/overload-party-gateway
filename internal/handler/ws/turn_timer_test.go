@@ -47,7 +47,7 @@ func newTestRelayWithClock(clock *fakeAfterFuncClock) (*GameRelay, *mockBattleCl
 func TestResetTurnTimer(t *testing.T) {
 	// 実発火時には battle server 呼び出しが起こるため、発火を伴わない範囲で振る舞いを検証する。
 	// timeBank は十分大きな値を渡し、テスト中には発火させない。
-	t.Run("ターンタイマーの登録・更新", func(t *testing.T) {
+	t.Run("timeBankがターンタイマー登録要否の境界になる", func(t *testing.T) {
 		nonPositiveCases := []struct {
 			name            string
 			timeBankSeconds int64
@@ -57,36 +57,19 @@ func TestResetTurnTimer(t *testing.T) {
 		}
 		for _, tc := range nonPositiveCases {
 			t.Run(tc.name, func(t *testing.T) {
-				relay, _ := newTestRelay()
+				clock := &fakeAfterFuncClock{}
+				relay, _ := newTestRelayWithClock(clock)
 				relay.JoinGame("p1", "g1", 1)
 
 				relay.resetTurnTimer("g1", "p1", tc.timeBankSeconds)
 
-				relay.timerMu.Lock()
-				_, ok := relay.turnTimers["g1"]
-				relay.timerMu.Unlock()
-				assert.False(t, ok, "no timer should be registered when timeBank<=0")
+				assert.Empty(t, clock.calls, "no timer should be scheduled when timeBank<=0")
 			})
 		}
-
-		t.Run("正のtimeBankのとき、アクティブプレイヤー付きで登録される", func(t *testing.T) {
-			relay, _ := newTestRelay()
-			relay.JoinGame("p1", "g1", 1)
-
-			relay.resetTurnTimer("g1", "p1", 60)
-
-			relay.timerMu.Lock()
-			info, ok := relay.turnTimers["g1"]
-			relay.timerMu.Unlock()
-			require.True(t, ok)
-			assert.Equal(t, "p1", info.activePlayerID)
-
-			relay.cancelTurnTimer("g1")
-		})
 	})
 
-	t.Run("ターンタイマー発火時のforfeit送信", func(t *testing.T) {
-		t.Run("登録したタイマーが発火すると、そのプレイヤーのforfeitが送信される", func(t *testing.T) {
+	t.Run("ターンタイマー発火時の強制終了送信", func(t *testing.T) {
+		t.Run("登録したタイマーが発火すると、そのプレイヤーの強制終了が送信される", func(t *testing.T) {
 			clock := &fakeAfterFuncClock{}
 			relay, bc := newTestRelayWithClock(clock)
 			relay.JoinGame("p1", "g1", 1)
@@ -101,7 +84,7 @@ func TestResetTurnTimer(t *testing.T) {
 			assert.Equal(t, 1, calls[0].playerNum)
 		})
 
-		t.Run("ターンがp1からp2に代わった後、p2のタイマーが発火すると、p2のforfeitが送信される", func(t *testing.T) {
+		t.Run("ターンがp1からp2に代わった後、p2のタイマーが発火すると、p2の強制終了が送信される", func(t *testing.T) {
 			clock := &fakeAfterFuncClock{}
 			relay, bc := newTestRelayWithClock(clock)
 			relay.JoinGame("p1", "g1", 1)
@@ -118,7 +101,7 @@ func TestResetTurnTimer(t *testing.T) {
 			assert.Equal(t, 2, calls[0].playerNum)
 		})
 
-		t.Run("ターンがp1からp2に代わった後、旧タイマー(p1)が発火しても、forfeitは送信されない", func(t *testing.T) {
+		t.Run("ターンがp1からp2に代わった後、旧タイマー(p1)が発火しても、強制終了は送信されない", func(t *testing.T) {
 			// time.AfterFunc の Stop() は、コールバックの実行が既に始まっていると
 			// 呼び出しても止められないことがある。この競合を、fake clock で捕捉した
 			// コールバックを直接呼び出すことで再現する。
