@@ -248,7 +248,7 @@ func TestWSNpcBattleStart(t *testing.T) {
 			assert.Equal(t, "npc capacity exceeded", errBody.Message)
 		})
 
-		t.Run("オンボーディング完了済みでデッキ検証を通過すると、npc_battle_createdが返りスロット1に登録される", func(t *testing.T) {
+		t.Run("オンボーディング完了済みでデッキ検証を通過すると、npc_battle_createdが返り人間側プレイヤーがスロット1(player_num=1)として登録される", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-npc-ok", "player-npc-ok")
 			setOnboardedAccount(srv.account, "TST-PLAYER", 1)
@@ -283,7 +283,7 @@ func TestWSNpcBattleStart(t *testing.T) {
 
 func TestWSNpcTurnRelay(t *testing.T) {
 	t.Run("NPCターンの中継", func(t *testing.T) {
-		t.Run("NPCがターン内に複数回行動するとき、行動のたびにaction_performedフレームが順に届く", func(t *testing.T) {
+		t.Run("NPCがターン内に複数回行動するとき、行動した順序でaction_performedフレームが届く", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			const gameID = "TST-GAME-NPC-RELAY-OK"
 			srv.setupNpcGame(gameID, "uid-npc-relay-ok", "p-npc-relay-ok")
