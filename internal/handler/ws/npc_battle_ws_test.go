@@ -86,29 +86,61 @@ func (r *createNpcGameRecorder) snapshotRequest() apibattle.NpcBattleRequest {
 
 func TestWSNpcBattleStart(t *testing.T) {
 	t.Run("NPC対戦開始", func(t *testing.T) {
-		t.Run("オンボーディング未完了のとき、再試行不可のnpc_battle_errorが返る", func(t *testing.T) {
+		t.Run("オンボーディング未完了のとき、再試行可能フラグOFFのnpc_battle_errorが返り、状態を変えずに再送しても同じエラーになり、オンボーディングを完了させてから再送するとnpc_battle_createdが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-npc-onboarding", "player-npc-onboarding")
+			onboarded := false
+			name := "TST-PLAYER"
 			srv.account.GetPlayerFn = func() (int, any) {
+				if onboarded {
+					return http.StatusOK, apiaccount.PlayerResponse{
+						PlayerID: "self", OnboardingStatus: apiaccount.OnboardingStatusCompleted, Name: &name,
+					}
+				}
 				return http.StatusOK, apiaccount.PlayerResponse{
 					PlayerID: "self", OnboardingStatus: apiaccount.OnboardingStatusNameSet,
 				}
 			}
 			conn := srv.dial(t, "uid-npc-onboarding")
-
-			require.NoError(t, conn.WriteJSON(WSMessage{
+			msg := WSMessage{
 				Type: genws.WSClientMsgNpcBattleStart,
 				Data: mustMarshal(NPCBattleStartMessage{DeckID: 1, NpcModel: "TST-NPC-A"}),
-			}))
+			}
 
+			require.NoError(t, conn.WriteJSON(msg))
 			errMsg := readUntilType(t, conn, genws.WSServerMsgError)
 			errBody := decodeError(t, errMsg)
 			assert.Equal(t, "npc_battle_error", errBody.ErrorCode)
 			assert.False(t, errBody.Retryable)
 			assert.Equal(t, "onboarding not completed", errBody.Message)
+
+			require.NoError(t, conn.WriteJSON(msg))
+			retryErrMsg := readUntilType(t, conn, genws.WSServerMsgError)
+			retryErrBody := decodeError(t, retryErrMsg)
+			assert.Equal(t, "onboarding not completed", retryErrBody.Message)
+
+			onboarded = true
+			srv.account.GetBattleLimitFn = func() (int, any) {
+				return http.StatusOK, apiaccount.BattleLimitResponse{CanBattle: true}
+			}
+			srv.card.GetDeckFn = validNpcDeckFn
+			srv.card.ValidateDeckForBattleFn = func(string) (int, any) { return http.StatusOK, nil }
+			srv.battle.ListNpcModelsFn = func() (int, any) {
+				return http.StatusOK, apibattle.NpcModelsResponse{
+					Models: []apibattle.NpcModelEntry{{Model: "TST-NPC-A", DisplayName: "Test NPC A"}},
+				}
+			}
+			srv.battle.CreateNpcGameFn = func(apibattle.NpcBattleRequest) (int, any) {
+				return http.StatusOK, apibattle.GameCreatedResult{GameID: "TST-GAME-NPC-ONBOARDED"}
+			}
+			require.NoError(t, conn.WriteJSON(msg))
+			created := readUntilType(t, conn, genws.WSServerMsgNpcBattleCreated)
+			var createdBody NPCBattleCreatedMessage
+			require.NoError(t, json.Unmarshal(created.Data, &createdBody))
+			assert.Equal(t, "TST-GAME-NPC-ONBOARDED", createdBody.GameID)
 		})
 
-		t.Run("当日のバトル回数上限に達しているとき、再試行不可のnpc_battle_errorが返る", func(t *testing.T) {
+		t.Run("当日のバトル回数上限に達しているとき、再試行可能フラグOFFのnpc_battle_errorが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-npc-limit", "player-npc-limit")
 			name := "TST-PLAYER"
@@ -134,7 +166,7 @@ func TestWSNpcBattleStart(t *testing.T) {
 			assert.Equal(t, "daily battle limit reached", errBody.Message)
 		})
 
-		t.Run("デッキ検証に失敗すると、再試行不可のnpc_battle_errorが返る", func(t *testing.T) {
+		t.Run("デッキ検証に失敗すると、再試行可能フラグOFFのnpc_battle_errorが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-npc-deck-invalid", "player-npc-deck-invalid")
 			setOnboardedAccount(srv.account, "TST-PLAYER", 1)
@@ -154,7 +186,7 @@ func TestWSNpcBattleStart(t *testing.T) {
 			assert.False(t, errBody.Retryable)
 		})
 
-		t.Run("デッキの解決に失敗すると、再試行可のnpc_battle_errorが返る", func(t *testing.T) {
+		t.Run("デッキの解決に失敗すると、再試行可能フラグONのnpc_battle_errorが返り、原因解消後に同じメッセージを再送するとnpc_battle_createdが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-npc-deck-fail", "player-npc-deck-fail")
 			setOnboardedAccount(srv.account, "TST-PLAYER", 1)
@@ -162,20 +194,36 @@ func TestWSNpcBattleStart(t *testing.T) {
 				return http.StatusInternalServerError, "deck lookup failed"
 			}
 			conn := srv.dial(t, "uid-npc-deck-fail")
-
-			require.NoError(t, conn.WriteJSON(WSMessage{
+			msg := WSMessage{
 				Type: genws.WSClientMsgNpcBattleStart,
 				Data: mustMarshal(NPCBattleStartMessage{DeckID: 1, NpcModel: "TST-NPC-A"}),
-			}))
+			}
 
+			require.NoError(t, conn.WriteJSON(msg))
 			errMsg := readUntilType(t, conn, genws.WSServerMsgError)
 			errBody := decodeError(t, errMsg)
 			assert.Equal(t, "npc_battle_error", errBody.ErrorCode)
 			assert.True(t, errBody.Retryable)
 			assert.Equal(t, "failed to resolve deck", errBody.Message)
+
+			srv.card.GetDeckFn = validNpcDeckFn
+			srv.card.ValidateDeckForBattleFn = func(string) (int, any) { return http.StatusOK, nil }
+			srv.battle.ListNpcModelsFn = func() (int, any) {
+				return http.StatusOK, apibattle.NpcModelsResponse{
+					Models: []apibattle.NpcModelEntry{{Model: "TST-NPC-A", DisplayName: "Test NPC A"}},
+				}
+			}
+			srv.battle.CreateNpcGameFn = func(apibattle.NpcBattleRequest) (int, any) {
+				return http.StatusOK, apibattle.GameCreatedResult{GameID: "TST-GAME-NPC-DECK-RETRY"}
+			}
+			require.NoError(t, conn.WriteJSON(msg))
+			created := readUntilType(t, conn, genws.WSServerMsgNpcBattleCreated)
+			var createdBody NPCBattleCreatedMessage
+			require.NoError(t, json.Unmarshal(created.Data, &createdBody))
+			assert.Equal(t, "TST-GAME-NPC-DECK-RETRY", createdBody.GameID)
 		})
 
-		t.Run("NPCモデル一覧の取得に失敗すると、再試行可のnpc_battle_errorが返る", func(t *testing.T) {
+		t.Run("NPCモデル一覧の取得に失敗すると、再試行可能フラグONのnpc_battle_errorが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-npc-models-fail", "player-npc-models-fail")
 			setOnboardedAccount(srv.account, "TST-PLAYER", 1)
@@ -197,7 +245,7 @@ func TestWSNpcBattleStart(t *testing.T) {
 			assert.Equal(t, "failed to resolve npc model: battle returned no npc models", errBody.Message)
 		})
 
-		t.Run("指定したNPCモデルが一覧に無いとき、再試行可のnpc_battle_errorが返る", func(t *testing.T) {
+		t.Run("指定したNPCモデルが一覧に無いとき、再試行可能フラグONのnpc_battle_errorが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-npc-model-missing", "player-npc-model-missing")
 			setOnboardedAccount(srv.account, "TST-PLAYER", 1)
@@ -221,7 +269,7 @@ func TestWSNpcBattleStart(t *testing.T) {
 			assert.Equal(t, "failed to resolve npc model: npc model not found: TST-NPC-UNKNOWN", errBody.Message)
 		})
 
-		t.Run("ゲームの作成に失敗すると、再試行可のnpc_battle_errorが返る", func(t *testing.T) {
+		t.Run("ゲームの作成に失敗すると、再試行可能フラグONのnpc_battle_errorが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-npc-create-fail", "player-npc-create-fail")
 			setOnboardedAccount(srv.account, "TST-PLAYER", 1)
