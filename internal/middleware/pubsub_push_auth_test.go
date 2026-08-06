@@ -106,7 +106,7 @@ func TestGoogleIDTokenValidator_Validate(t *testing.T) {
 			assert.Equal(t, "sa@test.iam.gserviceaccount.com", email)
 		})
 
-		t.Run("audienceを指定したとき、その値がそのままトークン検証に使われる", func(t *testing.T) {
+		t.Run("audienceを指定したとき、検証呼び出しにそのまま渡される", func(t *testing.T) {
 			var gotAudience string
 			v := &googleIDTokenValidator{validate: func(_ context.Context, _ string, audience string) (*idtoken.Payload, error) {
 				gotAudience = audience

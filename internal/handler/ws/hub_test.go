@@ -54,7 +54,7 @@ func TestUnregister(t *testing.T) {
 			assert.Empty(t, store.snapshotSetDisconnectCalls())
 		})
 
-		t.Run("猶予期限を外部保存する設定が無くても、そのプレイヤーは切断済みとして扱われる", func(t *testing.T) {
+		t.Run("外部保存先を設定していない状態で参加中のプレイヤーが切断すると、接続中でなくなる", func(t *testing.T) {
 			hub := newTestHub(nil, true, "game_1")
 			conn := NewConnection(nil, "p1")
 			hub.Register(conn)
@@ -64,7 +64,7 @@ func TestUnregister(t *testing.T) {
 			assert.False(t, hub.IsConnected("p1"))
 		})
 
-		t.Run("猶予期限の外部保存に失敗しても、そのプレイヤーは切断済みとして扱われる", func(t *testing.T) {
+		t.Run("外部保存先への書き込みに失敗しても、参加中のプレイヤーが切断すると接続中でなくなる", func(t *testing.T) {
 			store := &fakeTimerStore{setDisconnectErr: errors.New("redis down")}
 			hub := newTestHub(store, true, "game_1")
 			conn := NewConnection(nil, "p1")
@@ -103,7 +103,7 @@ func TestRegister(t *testing.T) {
 			assert.Equal(t, "p1", calls[0])
 		})
 
-		t.Run("猶予期限を外部保存する設定が無くても、そのプレイヤーは接続中として扱われる", func(t *testing.T) {
+		t.Run("外部保存先を設定していない状態でプレイヤーが接続すると、接続中として扱われる", func(t *testing.T) {
 			hub := newTestHub(nil, true, "game_1")
 			conn := NewConnection(nil, "p1")
 
@@ -112,7 +112,7 @@ func TestRegister(t *testing.T) {
 			assert.True(t, hub.IsConnected("p1"))
 		})
 
-		t.Run("外部保存からの猶予期限削除に失敗しても、そのプレイヤーは接続中として扱われる", func(t *testing.T) {
+		t.Run("外部保存先からの猶予期限削除に失敗しても、プレイヤーが接続すると接続中として扱われる", func(t *testing.T) {
 			store := &fakeTimerStore{clearDisconnectErr: errors.New("redis down")}
 			hub := newTestHub(store, true, "game_1")
 			conn := NewConnection(nil, "p1")

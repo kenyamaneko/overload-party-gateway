@@ -28,7 +28,7 @@ func TestSignerIssue(t *testing.T) {
 	fixedTime := time.Date(2026, 5, 10, 12, 0, 0, 0, time.UTC)
 
 	t.Run("JWTの発行", func(t *testing.T) {
-		t.Run("デフォルトオプションのとき、RS256でiss/sub/iat/exp/kidが揃ったJWTを発行する", func(t *testing.T) {
+		t.Run("発行者とTTLを指定しないとき、RS256でiss/sub/iat/exp/kidが揃ったJWTを既定の発行者・TTLで発行する", func(t *testing.T) {
 			signer := NewSigner(StaticPrivateKeyResolver(key, DefaultKeyID), DefaultKeyID, WithClock(func() time.Time { return fixedTime }))
 			token, err := signer.Issue("player-123")
 			require.NoError(t, err)
