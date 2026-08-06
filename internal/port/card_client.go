@@ -14,7 +14,6 @@ type DeckInitiatives struct {
 
 // CardClient は gateway が card サービスへアクセスするための port。
 type CardClient interface {
-	ListAllCards(ctx context.Context) ([]*apicard.CardDefinition, error)
 	GetDeckCards(ctx context.Context, deckID int64) ([]apicard.DeckCard, DeckInitiatives, error)
 	ValidateDeckForBattle(ctx context.Context, deckID int64) error
 }

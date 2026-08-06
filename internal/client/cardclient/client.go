@@ -1,6 +1,6 @@
 // Package cardclient は card サービスへの HTTP クライアントを提供する。
-// gateway 内部で必要な 3 endpoint (ListAllCards / ValidateDeckForBattle /
-// GetDeckCards) のみを公開し、内部は apicardclient SDK に委譲する。
+// gateway 内部で必要な 2 endpoint (ValidateDeckForBattle / GetDeckCards)
+// のみを公開し、内部は apicardclient SDK に委譲する。
 package cardclient
 
 import (
@@ -36,19 +36,6 @@ func New(baseURL string, httpClient *http.Client) *Client {
 		panic(fmt.Sprintf("cardclient: %v", err))
 	}
 	return &Client{api: api}
-}
-
-// ListAllCards は test 用途で internalauth 注入の経路検証に使う。
-func (c *Client) ListAllCards(ctx context.Context) ([]*apicard.CardDefinition, error) {
-	cards, err := c.api.ListCards(ctx)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]*apicard.CardDefinition, len(cards))
-	for i := range cards {
-		out[i] = &cards[i]
-	}
-	return out, nil
 }
 
 // GetDeckCards はマッチ成立時や NPC バトル開始時に gateway がデッキを resolve するために使う。

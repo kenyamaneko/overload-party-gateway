@@ -34,10 +34,6 @@ type fakeCardClient struct {
 	getDeckCardsErr map[int64]error
 }
 
-func (f *fakeCardClient) ListAllCards(context.Context) ([]*apicard.CardDefinition, error) {
-	return nil, nil
-}
-
 func (f *fakeCardClient) GetDeckCards(_ context.Context, deckID int64) ([]apicard.DeckCard, port.DeckInitiatives, error) {
 	if err, ok := f.getDeckCardsErr[deckID]; ok {
 		return nil, port.DeckInitiatives{}, err
