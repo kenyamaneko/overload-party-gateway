@@ -775,6 +775,7 @@ func (r *GameRelay) leaveAllPlayers(gameID string) {
 func (r *GameRelay) HandleUseStamp(ctx context.Context, conn *Connection, data json.RawMessage) {
 	var req UseStampMessage
 	if err := json.Unmarshal(data, &req); err != nil {
+		slog.Warn("invalid use_stamp data", "player_id", conn.playerID, "error", err)
 		return
 	}
 	pNum, err := r.resolvePlayerNum(ctx, req.GameID, conn.playerID)
