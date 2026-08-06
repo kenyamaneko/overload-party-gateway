@@ -40,7 +40,7 @@ func newTestRelayWithClock(clock *fakeAfterFuncClock) (*GameRelay, *mockBattleCl
 		GetGameID:           func(string) (string, bool) { return "", false },
 		OnDisconnectTimeout: func(string, string) {},
 	}, DefaultDisconnectTimeout, nil)
-	relay := NewGameRelay(hub, bc, nil, nil, nil, nil, WithClock(clock))
+	relay := NewGameRelay(hub, bc, nil, nil, nil, WithClock(clock))
 	return relay, bc
 }
 
