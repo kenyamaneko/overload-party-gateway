@@ -494,9 +494,6 @@ func (m *Manager) resolveDeckCards(ctx context.Context, playerID string, deckID 
 }
 
 func (m *Manager) checkAndIncrementBattleLimit(ctx context.Context) (string, error) {
-	if m.accountClient == nil {
-		return "", nil
-	}
 	limitResp, err := m.accountClient.GetBattleLimit(ctx)
 	if err != nil {
 		return "", err

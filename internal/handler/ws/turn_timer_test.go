@@ -134,6 +134,11 @@ func TestCancelTurnTimer(t *testing.T) {
 			relay.timerMu.Unlock()
 			assert.False(t, ok)
 		})
+
+		t.Run("存在しないゲームを取り消しても、パニックしない", func(t *testing.T) {
+			relay, _ := newTestRelay()
+			relay.cancelTurnTimer("nonexistent_game")
+		})
 	})
 }
 

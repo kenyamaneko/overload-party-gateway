@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -317,6 +319,16 @@ func decodeError(t *testing.T, msg WSMessage) ErrorMessage {
 	return errBody
 }
 
+// assertNoMessageWithin は within の間、何もメッセージが届かないことを確認する。
+func assertNoMessageWithin(t *testing.T, conn *websocket.Conn, within time.Duration) {
+	t.Helper()
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(within)))
+	_, _, err := conn.ReadMessage()
+	require.Error(t, err)
+	var netErr net.Error
+	require.True(t, errors.As(err, &netErr) && netErr.Timeout(), "want a read timeout (no message), got: %v", err)
+}
+
 // fakeGameState は battle の GetGameStateFn に返す最小限の ClientGameState を組み立てる。
 // isMyTurn は常に false にしてよい呼び出し元がターンタイマーを起動させない
 // (発火すると forfeit 呼び出しが走りテストが不安定になる)。
@@ -525,6 +537,33 @@ func TestWSMatchmakingStart(t *testing.T) {
 			assert.Equal(t, int64(42), calls[0].DeckID)
 			assert.Equal(t, "TST-PLAYER", calls[0].Name)
 			assert.Equal(t, int64(7), calls[0].Level)
+		})
+
+		t.Run("アカウントに表示名が設定されていないとき、空文字でマッチメイキングに登録される", func(t *testing.T) {
+			srv := newWSTestServer(t, nil)
+			srv.seedAccount("uid-mm-noname", "player-mm-noname")
+			srv.account.GetPlayerFn = func() (int, any) {
+				return http.StatusOK, apiaccount.PlayerResponse{
+					PlayerID: "self", OnboardingStatus: apiaccount.OnboardingStatusCompleted, Level: 3,
+				}
+			}
+			srv.account.GetBattleLimitFn = func() (int, any) {
+				return http.StatusOK, apiaccount.BattleLimitResponse{CanBattle: true}
+			}
+			srv.card.ValidateDeckForBattleFn = func(string) (int, any) { return http.StatusOK, nil }
+			rec := &enqueueRecorder{}
+			srv.matchmaking.EnqueueFn = rec.fn
+
+			conn := srv.dial(t, "uid-mm-noname")
+			require.NoError(t, conn.WriteJSON(WSMessage{
+				Type: genws.WSClientMsgMatchmakingStart,
+				Data: mustMarshal(MatchmakingStartMessage{DeckID: 1}),
+			}))
+
+			readUntilType(t, conn, genws.WSServerMsgMatchmakingStarted)
+			calls := rec.snapshotCalls()
+			require.Len(t, calls, 1)
+			assert.Equal(t, "", calls[0].Name)
 		})
 
 		t.Run("dataがオブジェクトでないmatchmaking_startを送ると、invalid_dataのエラーが返る", func(t *testing.T) {

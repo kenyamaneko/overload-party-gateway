@@ -775,6 +775,8 @@ func (r *GameRelay) leaveAllPlayers(gameID string) {
 func (r *GameRelay) HandleUseStamp(ctx context.Context, conn *Connection, data json.RawMessage) {
 	var req UseStampMessage
 	if err := json.Unmarshal(data, &req); err != nil {
+		// スタンプは演出用途で失敗しても対戦進行に影響しないため、他の入口と異なり
+		// invalid_data エラーは返さない。ログのみ残す。
 		slog.Warn("invalid use_stamp data", "player_id", conn.playerID, "error", err)
 		return
 	}

@@ -527,7 +527,7 @@ func TestManagerReconnect(t *testing.T) {
 				{PlayerNum: 1, PlayerID: "p1"},
 				{PlayerNum: 2, PlayerID: "p2"},
 			}}
-			// 最初の接続時点では猶予期限の写しがまだ無い (found=false)。Unregister で
+			// 最初の接続時点では猶予期限のバックアップがまだ無い (found=false)。Unregister で
 			// 実際に切断させたあと、対戦相手 (p2) が猶予切れであるという状況を想定して
 			// 応答を書き換える。
 			store := &fakeTimerStore{getDisconnectFound: false}
