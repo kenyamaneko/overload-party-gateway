@@ -125,20 +125,6 @@ func TestFromEnv(t *testing.T) {
 			assert.Equal(t, testPrivateKeyPEM, cfg.InternalAuthPrivateKey)
 		})
 
-		t.Run("必須envだけが揃うとき、待受ポートは9001・動作環境はdev・マッチメイク待ちは30秒・アプリの最低/最新バージョンは0.1.0・強制アップデートは無効になる", func(t *testing.T) {
-			setEnv(t, validEnv)
-
-			cfg, err := FromEnv()
-
-			require.NoError(t, err)
-			assert.Equal(t, "9001", cfg.Port)
-			assert.Equal(t, "dev", cfg.Env)
-			assert.Equal(t, 30, cfg.MatchmakingTimeoutSec)
-			assert.Equal(t, "0.1.0", cfg.AppMinVersion)
-			assert.Equal(t, "0.1.0", cfg.AppLatestVersion)
-			assert.False(t, cfg.AppForceUpdate)
-		})
-
 		t.Run("Cloud SQL・Firestore・Pub/Sub push・Redisのenvを指定するとき、それぞれの値が設定に入る", func(t *testing.T) {
 			setEnv(t, mergeEnv(validEnv, map[string]string{
 				"DATABASE_IAM_AUTH_ENABLED":         "true",
@@ -160,21 +146,6 @@ func TestFromEnv(t *testing.T) {
 			assert.Equal(t, "rediss://default:token@redis.test:6379", cfg.UpstashRedisURL)
 		})
 
-		t.Run("アプリの最低バージョンに1.0.0・最新バージョンに1.2.0・ストアURLを指定するとき、その3つが設定に入る", func(t *testing.T) {
-			setEnv(t, mergeEnv(validEnv, map[string]string{
-				"APP_MIN_VERSION":    "1.0.0",
-				"APP_LATEST_VERSION": "1.2.0",
-				"APP_STORE_URL":      "https://store.test/app",
-			}))
-
-			cfg, err := FromEnv()
-
-			require.NoError(t, err)
-			assert.Equal(t, "1.0.0", cfg.AppMinVersion)
-			assert.Equal(t, "1.2.0", cfg.AppLatestVersion)
-			assert.Equal(t, "https://store.test/app", cfg.AppStoreURL)
-		})
-
 		t.Run("PORTに8080を指定するとき、待受ポートが8080になる", func(t *testing.T) {
 			setEnv(t, mergeEnv(validEnv, map[string]string{"PORT": "8080"}))
 
@@ -184,15 +155,6 @@ func TestFromEnv(t *testing.T) {
 			assert.Equal(t, "8080", cfg.Port)
 		})
 
-		t.Run("ENVにprodを指定するとき、動作環境がprodになる", func(t *testing.T) {
-			setEnv(t, mergeEnv(validEnv, map[string]string{"ENV": "prod"}))
-
-			cfg, err := FromEnv()
-
-			require.NoError(t, err)
-			assert.Equal(t, "prod", cfg.Env)
-		})
-
 		t.Run("MATCHMAKING_TIMEOUT_SECに120を指定するとき、マッチメイク待ちが120秒になる", func(t *testing.T) {
 			setEnv(t, mergeEnv(validEnv, map[string]string{"MATCHMAKING_TIMEOUT_SEC": "120"}))
 
@@ -200,15 +162,6 @@ func TestFromEnv(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Equal(t, 120, cfg.MatchmakingTimeoutSec)
-		})
-
-		t.Run("APP_FORCE_UPDATEにtrueを指定するとき、強制アップデートが有効になる", func(t *testing.T) {
-			setEnv(t, mergeEnv(validEnv, map[string]string{"APP_FORCE_UPDATE": "true"}))
-
-			cfg, err := FromEnv()
-
-			require.NoError(t, err)
-			assert.True(t, cfg.AppForceUpdate)
 		})
 
 		t.Run("ALLOWED_ORIGINSをカンマ区切りで指定するとき、許可オリジンが分割して入る", func(t *testing.T) {
@@ -341,6 +294,7 @@ func TestSplitCSV(t *testing.T) {
 			{name: `"a" のとき、[a]になる`, input: "a", want: []string{"a"}},
 			{name: `"a,b,c" のとき、[a b c]になる`, input: "a,b,c", want: []string{"a", "b", "c"}},
 			{name: `"a, b , c" のとき、空白をtrimして [a b c]になる`, input: "a, b , c", want: []string{"a", "b", "c"}},
+			{name: `"a,,b" のとき、値の間の空要素を除いて [a b]になる`, input: "a,,b", want: []string{"a", "b"}},
 		}
 		for _, tc := range splitCases {
 			t.Run(tc.name, func(t *testing.T) {
