@@ -311,7 +311,7 @@ func TestAwardGameExp(t *testing.T) {
 			assert.Equal(t, "", got.Player2ID)
 		})
 
-		t.Run("2人のゲームでプレイヤー1が勝ったとき、付与依頼に両プレイヤーID・勝者1・理由・pvpが載る", func(t *testing.T) {
+		t.Run("人間プレイヤー2人が対戦しプレイヤー1が勝ったとき、付与依頼に両プレイヤーのID・プレイヤー1が勝者であること・勝利理由・PvP戦であることが載る", func(t *testing.T) {
 			repo := &mockGamePlayerRepo{
 				markAwardedReturn: true,
 				lookupEntries: []port.GamePlayerEntry{
@@ -332,7 +332,7 @@ func TestAwardGameExp(t *testing.T) {
 			assert.Equal(t, gamedesign.MatchTypePvp, got.MatchType)
 		})
 
-		t.Run("参加者が1人だけ (NPC戦)のとき、付与依頼のマッチ種別がnpcになる", func(t *testing.T) {
+		t.Run("人間プレイヤーが1人だけ (NPC戦)のとき、付与依頼にNPC戦であることと対戦相手プレイヤーIDが空であることが載る", func(t *testing.T) {
 			repo := &mockGamePlayerRepo{
 				markAwardedReturn: true,
 				lookupEntries: []port.GamePlayerEntry{
