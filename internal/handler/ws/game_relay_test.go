@@ -661,6 +661,15 @@ func TestRemoveString(t *testing.T) {
 				assert.Equal(t, tt.expected, result)
 			})
 		}
+
+		t.Run("同じスライスを別の変数からも参照しているとき、除去してももう一方の中身は変わらない", func(t *testing.T) {
+			original := []string{"a", "b", "c"}
+			aliased := original
+
+			removeString(original, "b")
+
+			assert.Equal(t, []string{"a", "b", "c"}, aliased)
+		})
 	})
 }
 

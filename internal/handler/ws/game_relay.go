@@ -913,10 +913,17 @@ func buildForfeitReason(reason string) json.RawMessage {
 	return mustMarshal(map[string]string{"reason": reason})
 }
 
+// removeString は slice から s を取り除いた新しいスライスを返す。
+// 呼び出し元は r.mu の Lock 中に使うが、sendToOpponent 等は RLock 中に取得した
+// 同じ backing array を RUnlock 後も参照し続けるため、元の backing array を
+// 書き換えない（in-place mutation はデータ競合になる）。
 func removeString(slice []string, s string) []string {
 	for i, v := range slice {
 		if v == s {
-			return append(slice[:i], slice[i+1:]...)
+			result := make([]string, 0, len(slice)-1)
+			result = append(result, slice[:i]...)
+			result = append(result, slice[i+1:]...)
+			return result
 		}
 	}
 	return slice
