@@ -99,7 +99,7 @@ gateway は match_made 専用の受け口として位置づけられ、他サー
 
 SIGTERM 受信時、**HTTP / WS 新規受付停止 → 既存 WS への close 送出 → in-flight 処理完了待ち** の順にドレインする。ドレインタイムアウト超過時は強制キャンセルで、そのタイミングで in-flight だった game_action / advance-npc は battle 側で未処理として残るが、WS 再接続時にクライアントが `game_state` を再取得して収束する。
 
-Cloud Run は処理中のインスタンスにも終了を始めることがあり、ドレインの完了は保証されない。対戦ごとの計時が終了とともに失われないよう、期限は Redis に写しを置く（[ADR-059](https://github.com/kenyamaneko/overload-party-common/blob/main/docs/adr/059-gateway-timer-state-in-memory-with-redis-backup.md)）。
+Cloud Run は処理中のインスタンスにも終了を始めることがあり、ドレインの完了は保証されない。プレイヤーの切断猶予期限が終了とともに失われないよう、期限は Redis に写しを置く（[ADR-059](https://github.com/kenyamaneko/overload-party-common/blob/main/docs/adr/059-gateway-timer-state-in-memory-with-redis-backup.md)）。ターンタイマーは battle server が権威ある `TimeBank` を持つため、WS 再接続時の `game_enter` 再送で自己修復し、写しを必要としない。
 
 ### 停止で無効になった対戦
 
@@ -119,5 +119,5 @@ gateway の env は [internal/config/config.go](../internal/config/config.go) �
 
 - **`CLOUDSQL_CONNECTION_NAME`**: Cloud SQL インスタンスの接続名。値は Terraform 側の接続名と一致させる
 - **`MATCHMAKING_TIMEOUT_SEC`**: マッチ待機タイムアウト。短すぎるとキューが浅い時間帯にユーザーが離脱しやすい。matchmaking サービスのキュー長メトリクスと併せて調整する
-- **`UPSTASH_REDIS_URL`**: 対戦ごとの計時（切断猶予・ターン）の写しを保持する Redis の接続先。書き込み失敗は警告ログのみで対戦を止めない。写しからプロセス再起動をまたいだ状態を復元する読み出し経路は後続 Issue で追加する
+- **`UPSTASH_REDIS_URL`**: プレイヤーの切断猶予期限の写しを保持する Redis の接続先。書き込み失敗は警告ログのみで対戦を止めない。再接続時にこの写しを読み出し、プロセス再起動をまたいだ猶予切れを判定する
 - **`PUBSUB_PUSH_SERVICE_ACCOUNT_EMAIL`** / **`PUBSUB_PUSH_AUDIENCE`**: push 受け口が受け付けるサービスアカウントと audience。gateway は外部から未認証で到達できるため、この 2 つが push リクエストを識別する唯一の手段になる。値は配信元を定義する Terraform 側と一致させる

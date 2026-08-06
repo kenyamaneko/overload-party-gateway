@@ -13,10 +13,8 @@ import (
 
 const (
 	disconnectKeyPrefix = "gateway:timer:disconnect:"
-	turnKeyPrefix       = "gateway:timer:turn:"
 
 	fieldGameID         = "game_id"
-	fieldActivePlayerID = "active_player_id"
 	fieldDeadlineMillis = "deadline_unix_ms"
 
 	// strayTTL は明示的な削除が行われなかったキーを取り残さないための安全網。
@@ -75,48 +73,6 @@ func (s *Store) GetDisconnectDeadline(ctx context.Context, playerID string) (por
 	return port.DisconnectDeadline{
 		GameID:   fields[fieldGameID],
 		Deadline: deadline,
-	}, true, nil
-}
-
-// SetTurnDeadline はゲームの現在のターンの期限を書き込む。
-func (s *Store) SetTurnDeadline(ctx context.Context, gameID, activePlayerID string, deadline time.Time) error {
-	key := turnKeyPrefix + gameID
-	if err := s.client.HSet(ctx, key, map[string]any{
-		fieldActivePlayerID: activePlayerID,
-		fieldDeadlineMillis: deadline.UnixMilli(),
-	}).Err(); err != nil {
-		return fmt.Errorf("redistimer: set turn deadline: %w", err)
-	}
-	if err := s.client.Expire(ctx, key, strayTTL).Err(); err != nil {
-		return fmt.Errorf("redistimer: expire turn deadline: %w", err)
-	}
-	return nil
-}
-
-// ClearTurnDeadline はゲームのターン期限を削除する。
-func (s *Store) ClearTurnDeadline(ctx context.Context, gameID string) error {
-	if err := s.client.Del(ctx, turnKeyPrefix+gameID).Err(); err != nil {
-		return fmt.Errorf("redistimer: clear turn deadline: %w", err)
-	}
-	return nil
-}
-
-// GetTurnDeadline はゲームの現在のターンの期限を読み出す。
-func (s *Store) GetTurnDeadline(ctx context.Context, gameID string) (port.TurnDeadline, bool, error) {
-	fields, err := s.client.HGetAll(ctx, turnKeyPrefix+gameID).Result()
-	if err != nil {
-		return port.TurnDeadline{}, false, fmt.Errorf("redistimer: get turn deadline: %w", err)
-	}
-	if len(fields) == 0 {
-		return port.TurnDeadline{}, false, nil
-	}
-	deadline, err := parseDeadline(fields[fieldDeadlineMillis])
-	if err != nil {
-		return port.TurnDeadline{}, false, fmt.Errorf("redistimer: parse turn deadline: %w", err)
-	}
-	return port.TurnDeadline{
-		ActivePlayerID: fields[fieldActivePlayerID],
-		Deadline:       deadline,
 	}, true, nil
 }
 

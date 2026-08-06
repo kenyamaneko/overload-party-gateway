@@ -165,7 +165,7 @@ func newTestRelay() (*GameRelay, *mockBattleClient) {
 		GetGameID:           func(string) (string, bool) { return "", false },
 		OnDisconnectTimeout: func(string, string) {},
 	}, DefaultDisconnectTimeout, nil)
-	relay := NewGameRelay(hub, bc, nil, nil, nil, nil)
+	relay := NewGameRelay(hub, bc, nil, nil, nil)
 	return relay, bc
 }
 

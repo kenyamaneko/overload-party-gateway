@@ -53,10 +53,6 @@ type GameRelay struct {
 	timerMu    sync.Mutex
 	turnTimers map[string]*turnTimerInfo // gameID → active turn timer
 
-	// timerStore はターン期限を Redis へ写す。未設定 (nil) の場合は写しを行わない
-	// （ローカル開発など Redis を使わない環境向け）。
-	timerStore port.TimerStore
-
 	clock Clock
 }
 
@@ -69,15 +65,14 @@ func WithClock(clock Clock) GameRelayOption {
 }
 
 // NewGameRelay は GameRelay を生成します。
-// accountClient / gamePlayerRepo / invalidatedGameRepo / timerStore は nil 可
-// （mock モード / テスト用 / 写し無し）。
+// accountClient / gamePlayerRepo / invalidatedGameRepo は nil 可
+// （mock モード / テスト用）。
 func NewGameRelay(
 	hub *ConnectionHub,
 	battleClient service.BattleClient,
 	accountClient port.AccountClient,
 	gamePlayerRepo port.GamePlayerRepo,
 	invalidatedGameRepo port.InvalidatedGameRepo,
-	timerStore port.TimerStore,
 	opts ...GameRelayOption,
 ) *GameRelay {
 	r := &GameRelay{
@@ -89,7 +84,6 @@ func NewGameRelay(
 		gameMembers:         make(map[string][]string),
 		playerGames:         make(map[string]playerSession),
 		turnTimers:          make(map[string]*turnTimerInfo),
-		timerStore:          timerStore,
 		clock:               systemClock{},
 	}
 	for _, opt := range opts {

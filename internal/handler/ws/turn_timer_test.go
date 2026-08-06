@@ -40,7 +40,7 @@ func newTestRelayWithClock(clock *fakeAfterFuncClock) (*GameRelay, *mockBattleCl
 		GetGameID:           func(string) (string, bool) { return "", false },
 		OnDisconnectTimeout: func(string, string) {},
 	}, DefaultDisconnectTimeout, nil)
-	relay := NewGameRelay(hub, bc, nil, nil, nil, nil, WithClock(clock))
+	relay := NewGameRelay(hub, bc, nil, nil, nil, WithClock(clock))
 	return relay, bc
 }
 
@@ -116,86 +116,6 @@ func TestResetTurnTimer(t *testing.T) {
 			clock.calls[0]()
 
 			assert.Empty(t, bc.snapshotProcessActionCalls())
-		})
-	})
-}
-
-func TestResetTurnTimer_TimerStoreMirroring(t *testing.T) {
-	t.Run("ターン期限の外部保存先への書き込み", func(t *testing.T) {
-		t.Run("正のtimeBankのとき、発火時刻を絶対時刻として書き込む", func(t *testing.T) {
-			relay, _ := newTestRelay()
-			store := &fakeTimerStore{}
-			relay.timerStore = store
-			relay.JoinGame("p1", "g1", 1)
-			before := time.Now()
-
-			relay.resetTurnTimer("g1", "p1", 60)
-
-			calls := store.snapshotSetTurnCalls()
-			require.Len(t, calls, 1)
-			assert.Equal(t, "g1", calls[0].gameID)
-			assert.Equal(t, "p1", calls[0].activePlayerID)
-			wantDeadline := before.Add(60*time.Second + 2*time.Second)
-			assert.WithinDuration(t, wantDeadline, calls[0].deadline, 2*time.Second)
-
-			relay.cancelTurnTimer("g1")
-		})
-
-		t.Run("timeBankが0のとき、書き込まず期限を削除する", func(t *testing.T) {
-			relay, _ := newTestRelay()
-			store := &fakeTimerStore{}
-			relay.timerStore = store
-			relay.JoinGame("p1", "g1", 1)
-
-			relay.resetTurnTimer("g1", "p1", 0)
-
-			assert.Empty(t, store.snapshotSetTurnCalls())
-			assert.Equal(t, []string{"g1"}, store.snapshotClearTurnCalls())
-		})
-
-		t.Run("ターン期限を外部保存する設定が無くても、ターンタイマーは登録される", func(t *testing.T) {
-			relay, _ := newTestRelay()
-			relay.JoinGame("p1", "g1", 1)
-
-			relay.resetTurnTimer("g1", "p1", 60)
-
-			relay.timerMu.Lock()
-			_, ok := relay.turnTimers["g1"]
-			relay.timerMu.Unlock()
-			assert.True(t, ok)
-
-			relay.cancelTurnTimer("g1")
-		})
-
-		t.Run("ターン期限の外部保存に失敗しても、ターンタイマーは登録される", func(t *testing.T) {
-			relay, _ := newTestRelay()
-			relay.timerStore = &fakeTimerStore{setTurnErr: errors.New("redis down")}
-			relay.JoinGame("p1", "g1", 1)
-
-			relay.resetTurnTimer("g1", "p1", 60)
-
-			relay.timerMu.Lock()
-			_, ok := relay.turnTimers["g1"]
-			relay.timerMu.Unlock()
-			assert.True(t, ok)
-
-			relay.cancelTurnTimer("g1")
-		})
-	})
-}
-
-func TestCancelTurnTimer_TimerStoreMirroring(t *testing.T) {
-	t.Run("ターン期限の外部保存先からの削除", func(t *testing.T) {
-		t.Run("取り消すと、外部保存先の期限も削除される", func(t *testing.T) {
-			relay, _ := newTestRelay()
-			store := &fakeTimerStore{}
-			relay.timerStore = store
-			relay.JoinGame("p1", "g1", 1)
-			relay.resetTurnTimer("g1", "p1", 60)
-
-			relay.cancelTurnTimer("g1")
-
-			assert.Equal(t, []string{"g1"}, store.snapshotClearTurnCalls())
 		})
 	})
 }
