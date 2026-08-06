@@ -389,6 +389,28 @@ func (s *wsTestServer) setupPvPGame(gameID, p1UID, p1PlayerID, p2UID, p2PlayerID
 	}
 }
 
+// setupNpcGame は NPC 対戦 (登録スロット 1 件のみ) の game_players 行と account の登録情報を
+// 仕込み、battle の GetGameStateFn / GetTurnControlsFn / AdvanceNpcTurnFn に安定した応答を
+// 設定する。AdvanceNpcTurnFn は NpcPending=false の no-op を返すため、game_enter に伴う
+// advanceNpcIfNeeded の呼出は runNpcTurns へループせず 1 回で終わる (呼び出し元が
+// runNpcTurns 自体の挙動を検証する際に、入室時の自動進行を無害化するため)。
+// WS 接続そのものは行わない (呼び出し元が enterGame で行う)。
+func (s *wsTestServer) setupNpcGame(gameID, p1UID, p1PlayerID string) {
+	s.seedAccount(p1UID, p1PlayerID)
+	ctx := context.Background()
+	_ = s.gamePlayerRepo.InsertGamePlayer(ctx, gameID, 1, p1PlayerID)
+
+	s.battle.GetGameStateFn = func(gID string, _ int) (int, any) {
+		return http.StatusOK, fakeGameState(gID, "TST-P1", "TST-NPC")
+	}
+	s.battle.GetTurnControlsFn = func(string, int) (int, any) {
+		return http.StatusOK, apibattle.TurnControlsMessage{}
+	}
+	s.battle.AdvanceNpcTurnFn = func(string) (int, any) {
+		return http.StatusOK, apibattle.ActionResult{NpcPending: false}
+	}
+}
+
 // enterGame は game_enter を送信し、入室バーストを読み切った状態の接続を返す。
 func (s *wsTestServer) enterGame(t *testing.T, uid, gameID string) *websocket.Conn {
 	t.Helper()
