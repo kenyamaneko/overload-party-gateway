@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	apiaccount "github.com/kenyamaneko/overload-party-account/packages/api-account"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -79,34 +80,40 @@ func TestClient_MapsDownstreamStatusToPortSentinel(t *testing.T) {
 	})
 }
 
-func TestClient_FindByFirebaseUID_FoldsNotFoundToNil(t *testing.T) {
+func TestClient_FindByFirebaseUID(t *testing.T) {
 	cases := []struct {
 		name       string
 		status     int
-		wantPlayer bool
+		body       string
+		wantPlayer *apiaccount.PlayerResponse
 	}{
 		{
 			name:       "未登録は404を (nil, nil)に畳む",
 			status:     http.StatusNotFound,
-			wantPlayer: false,
+			body:       "",
+			wantPlayer: nil,
 		},
 		{
-			name:       "登録済みはplayerを返す",
-			status:     http.StatusOK,
-			wantPlayer: true,
+			name:   "登録済みはplayer本体を返す",
+			status: http.StatusOK,
+			body:   `{"player_id":"player-1","firebase_uid":"uid-1"}`,
+			wantPlayer: &apiaccount.PlayerResponse{
+				PlayerID:    "player-1",
+				FirebaseUID: "uid-1",
+			},
 		},
 	}
 
 	t.Run("Firebase UIDによるプレイヤー検索", func(t *testing.T) {
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
-				srv := newStatusServer(t, tc.status, `{}`)
+				srv := newStatusServer(t, tc.status, tc.body)
 				c := New(srv.URL, &http.Client{})
 
 				player, err := c.FindByFirebaseUID(context.Background(), "uid-1")
 
 				require.NoError(t, err)
-				assert.Equal(t, tc.wantPlayer, player != nil)
+				assert.Equal(t, tc.wantPlayer, player)
 			})
 		}
 	})

@@ -234,6 +234,26 @@ func TestBattleClient_PostErrorResponse(t *testing.T) {
 				},
 			},
 			{
+				name:    "アクション送信が503の非JSONエラーを受けたとき、ステータスコードとbody文字列を含める",
+				status:  http.StatusServiceUnavailable,
+				body:    "service unavailable",
+				wantMsg: "battle server returned 503: service unavailable",
+				call: func(ctx context.Context, c BattleClient) error {
+					_, err := c.ProcessAction(ctx, "game-1", 1, "play_card", json.RawMessage(`{}`))
+					return err
+				},
+			},
+			{
+				name:    "NPC対戦の作成が404の構造化エラーを受けたとき、messageをエラー文に含める",
+				status:  http.StatusNotFound,
+				body:    `{"error":"npc model not found"}`,
+				wantMsg: "npc model not found",
+				call: func(ctx context.Context, c BattleClient) error {
+					_, err := c.StartNPCBattle(ctx, nil, DeckInitiatives{}, "npc-1", PlayerSummaryRequest{}, PlayerSummaryRequest{})
+					return err
+				},
+			},
+			{
 				name:    "NPC対戦の作成が500の非JSONエラーを受けたとき、ステータスコードとbody文字列を含める",
 				status:  http.StatusInternalServerError,
 				body:    "boom",
@@ -250,6 +270,36 @@ func TestBattleClient_PostErrorResponse(t *testing.T) {
 				wantMsg: "deck mismatch",
 				call: func(ctx context.Context, c BattleClient) error {
 					_, err := c.CreatePvPGame(ctx, nil, nil, DeckInitiatives{}, DeckInitiatives{}, PlayerSummaryRequest{}, PlayerSummaryRequest{})
+					return err
+				},
+			},
+			{
+				name:    "PvP対戦の作成がerrorフィールドが空の応答を受けたとき、ステータスコードとbody文字列を含める",
+				status:  http.StatusBadGateway,
+				body:    `{"error":""}`,
+				wantMsg: `battle server returned 502: {"error":""}`,
+				call: func(ctx context.Context, c BattleClient) error {
+					_, err := c.CreatePvPGame(ctx, nil, nil, DeckInitiatives{}, DeckInitiatives{}, PlayerSummaryRequest{}, PlayerSummaryRequest{})
+					return err
+				},
+			},
+			{
+				name:    "NPCターンの進行が409の構造化エラーを受けたとき、messageをエラー文に含める",
+				status:  http.StatusConflict,
+				body:    `{"error":"no pending npc turn"}`,
+				wantMsg: "no pending npc turn",
+				call: func(ctx context.Context, c BattleClient) error {
+					_, err := c.AdvanceNpcTurn(ctx, "game-1")
+					return err
+				},
+			},
+			{
+				name:    "NPCターンの進行が500の非JSONエラーを受けたとき、ステータスコードとbody文字列を含める",
+				status:  http.StatusInternalServerError,
+				body:    "advance failed",
+				wantMsg: "battle server returned 500: advance failed",
+				call: func(ctx context.Context, c BattleClient) error {
+					_, err := c.AdvanceNpcTurn(ctx, "game-1")
 					return err
 				},
 			},

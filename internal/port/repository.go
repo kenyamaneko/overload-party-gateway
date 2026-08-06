@@ -11,6 +11,8 @@ import (
 // exp_awarded を更新する。
 type GamePlayerRepo interface {
 	InsertGamePlayer(ctx context.Context, gameID string, playerNum int, playerID string) error
+	// LookupPlayerNum は指定したプレイヤーのゲーム内スロット番号を返す。
+	// 該当行が無い場合は ErrNotFound を返す（fail-fast）。
 	LookupPlayerNum(ctx context.Context, gameID string, playerID string) (int, error)
 	LookupGamePlayers(ctx context.Context, gameID string) ([]GamePlayerEntry, error)
 	MarkExpAwarded(ctx context.Context, gameID string) (bool, error)
