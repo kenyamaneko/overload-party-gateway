@@ -26,7 +26,7 @@ func (r *PgInvalidatedGameRepository) MarkInvalidated(ctx context.Context, gameI
 	if len(gameIDs) == 0 {
 		return nil
 	}
-	_, err := connFrom(ctx, r.pool).Exec(ctx,
+	_, err := r.pool.Exec(ctx,
 		`INSERT INTO gateway.invalidated_games (game_id)
 		 SELECT unnest($1::text[])
 		 ON CONFLICT (game_id) DO NOTHING`,
@@ -40,7 +40,7 @@ func (r *PgInvalidatedGameRepository) MarkInvalidated(ctx context.Context, gameI
 
 // ListUnfinished は決着していない無効な対戦の ID を取得します
 func (r *PgInvalidatedGameRepository) ListUnfinished(ctx context.Context) ([]string, error) {
-	rows, err := connFrom(ctx, r.pool).Query(ctx,
+	rows, err := r.pool.Query(ctx,
 		`SELECT game_id FROM gateway.invalidated_games
 		  WHERE finished_at IS NULL
 		  ORDER BY invalidated_at`,
@@ -63,7 +63,7 @@ func (r *PgInvalidatedGameRepository) ListUnfinished(ctx context.Context) ([]str
 
 // MarkFinished は無効な対戦を決着済みとして記録します
 func (r *PgInvalidatedGameRepository) MarkFinished(ctx context.Context, gameID string) error {
-	_, err := connFrom(ctx, r.pool).Exec(ctx,
+	_, err := r.pool.Exec(ctx,
 		`UPDATE gateway.invalidated_games SET finished_at = now()
 		  WHERE game_id = $1 AND finished_at IS NULL`,
 		gameID,
@@ -76,7 +76,7 @@ func (r *PgInvalidatedGameRepository) MarkFinished(ctx context.Context, gameID s
 
 // ListRevertPending は決着済みで消費バトル回数を戻していない対戦の ID を取得します
 func (r *PgInvalidatedGameRepository) ListRevertPending(ctx context.Context) ([]string, error) {
-	rows, err := connFrom(ctx, r.pool).Query(ctx,
+	rows, err := r.pool.Query(ctx,
 		`SELECT game_id FROM gateway.invalidated_games
 		  WHERE finished_at IS NOT NULL AND reverted_at IS NULL
 		  ORDER BY invalidated_at`,
@@ -99,7 +99,7 @@ func (r *PgInvalidatedGameRepository) ListRevertPending(ctx context.Context) ([]
 
 // MarkReverted は無効な対戦の消費バトル回数を返却済みとして記録します
 func (r *PgInvalidatedGameRepository) MarkReverted(ctx context.Context, gameID string) error {
-	_, err := connFrom(ctx, r.pool).Exec(ctx,
+	_, err := r.pool.Exec(ctx,
 		`UPDATE gateway.invalidated_games SET reverted_at = now()
 		  WHERE game_id = $1 AND reverted_at IS NULL`,
 		gameID,
@@ -113,7 +113,7 @@ func (r *PgInvalidatedGameRepository) MarkReverted(ctx context.Context, gameID s
 // IsInvalidated は対戦が無効として記録済みかを取得します
 func (r *PgInvalidatedGameRepository) IsInvalidated(ctx context.Context, gameID string) (bool, error) {
 	var invalidated bool
-	err := connFrom(ctx, r.pool).QueryRow(ctx,
+	err := r.pool.QueryRow(ctx,
 		`SELECT EXISTS (SELECT 1 FROM gateway.invalidated_games WHERE game_id = $1)`,
 		gameID,
 	).Scan(&invalidated)

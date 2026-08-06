@@ -25,7 +25,7 @@ func NewPgGamePlayerRepository(pool *pgxpool.Pool) *PgGamePlayerRepository {
 
 // InsertGamePlayer はゲームにプレイヤースロットを登録します
 func (r *PgGamePlayerRepository) InsertGamePlayer(ctx context.Context, gameID string, playerNum int, playerID string) error {
-	_, err := connFrom(ctx, r.pool).Exec(ctx,
+	_, err := r.pool.Exec(ctx,
 		`INSERT INTO gateway.game_players (game_id, player_num, player_id)
 		 VALUES ($1, $2, $3)
 		 ON CONFLICT (game_id, player_num) DO NOTHING`,
@@ -41,7 +41,7 @@ func (r *PgGamePlayerRepository) InsertGamePlayer(ctx context.Context, gameID st
 // 該当行が無い場合は port.ErrNotFound を返す（fail-fast）。
 func (r *PgGamePlayerRepository) LookupPlayerNum(ctx context.Context, gameID string, playerID string) (int, error) {
 	var playerNum int
-	err := connFrom(ctx, r.pool).QueryRow(ctx,
+	err := r.pool.QueryRow(ctx,
 		`SELECT player_num FROM gateway.game_players WHERE game_id = $1 AND player_id = $2`,
 		gameID, playerID,
 	).Scan(&playerNum)
@@ -56,7 +56,7 @@ func (r *PgGamePlayerRepository) LookupPlayerNum(ctx context.Context, gameID str
 
 // LookupGamePlayers はゲームの全プレイヤーエントリを取得します
 func (r *PgGamePlayerRepository) LookupGamePlayers(ctx context.Context, gameID string) ([]port.GamePlayerEntry, error) {
-	rows, err := connFrom(ctx, r.pool).Query(ctx,
+	rows, err := r.pool.Query(ctx,
 		`SELECT player_num, player_id, created_at FROM gateway.game_players WHERE game_id = $1 ORDER BY player_num`,
 		gameID,
 	)
@@ -78,7 +78,7 @@ func (r *PgGamePlayerRepository) LookupGamePlayers(ctx context.Context, gameID s
 
 // CountPlayersByGame は指定したゲームごとの人間プレイヤーのスロット数を取得します
 func (r *PgGamePlayerRepository) CountPlayersByGame(ctx context.Context, gameIDs []string) (map[string]int, error) {
-	rows, err := connFrom(ctx, r.pool).Query(ctx,
+	rows, err := r.pool.Query(ctx,
 		`SELECT game_id, count(*) FROM gateway.game_players WHERE game_id = ANY($1) GROUP BY game_id`,
 		gameIDs,
 	)
@@ -101,7 +101,7 @@ func (r *PgGamePlayerRepository) CountPlayersByGame(ctx context.Context, gameIDs
 
 // MarkExpAwarded は経験値付与済みフラグを設定します
 func (r *PgGamePlayerRepository) MarkExpAwarded(ctx context.Context, gameID string) (bool, error) {
-	tag, err := connFrom(ctx, r.pool).Exec(ctx,
+	tag, err := r.pool.Exec(ctx,
 		`UPDATE gateway.game_players SET exp_awarded = true
 		 WHERE game_id = $1 AND player_num = 1 AND exp_awarded = false`,
 		gameID,

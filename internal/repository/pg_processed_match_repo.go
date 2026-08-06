@@ -24,7 +24,7 @@ func NewPgProcessedMatchRepository(pool *pgxpool.Pool) *PgProcessedMatchReposito
 
 // Claim は matchId の処理を排他的に開始します。既に claim 済みなら claimed=false を返します。
 func (r *PgProcessedMatchRepository) Claim(ctx context.Context, matchID string) (bool, error) {
-	tag, err := connFrom(ctx, r.pool).Exec(ctx,
+	tag, err := r.pool.Exec(ctx,
 		`INSERT INTO gateway.processed_matches (match_id) VALUES ($1) ON CONFLICT (match_id) DO NOTHING`,
 		matchID,
 	)
@@ -36,7 +36,7 @@ func (r *PgProcessedMatchRepository) Claim(ctx context.Context, matchID string) 
 
 // Release は battle 呼び出し前の失敗時に Claim を取り消します。
 func (r *PgProcessedMatchRepository) Release(ctx context.Context, matchID string) error {
-	_, err := connFrom(ctx, r.pool).Exec(ctx,
+	_, err := r.pool.Exec(ctx,
 		`DELETE FROM gateway.processed_matches WHERE match_id = $1`,
 		matchID,
 	)
@@ -48,7 +48,7 @@ func (r *PgProcessedMatchRepository) Release(ctx context.Context, matchID string
 
 // RecordGameCreated は claim 済みの matchId に対して作成された battle game の ID を記録します。
 func (r *PgProcessedMatchRepository) RecordGameCreated(ctx context.Context, matchID, gameID string) error {
-	_, err := connFrom(ctx, r.pool).Exec(ctx,
+	_, err := r.pool.Exec(ctx,
 		`UPDATE gateway.processed_matches SET game_id = $2 WHERE match_id = $1`,
 		matchID, gameID,
 	)
@@ -60,7 +60,7 @@ func (r *PgProcessedMatchRepository) RecordGameCreated(ctx context.Context, matc
 
 // MarkNotified は成立通知の送信権を排他的に取得します。既に送信済みなら marked=false を返します。
 func (r *PgProcessedMatchRepository) MarkNotified(ctx context.Context, matchID string) (bool, error) {
-	tag, err := connFrom(ctx, r.pool).Exec(ctx,
+	tag, err := r.pool.Exec(ctx,
 		`UPDATE gateway.processed_matches SET notified = true WHERE match_id = $1 AND notified = false`,
 		matchID,
 	)
@@ -73,7 +73,7 @@ func (r *PgProcessedMatchRepository) MarkNotified(ctx context.Context, matchID s
 // GameIDFor は matchId に対して既に作成済みの battle game の ID を返します。未作成なら found=false です。
 func (r *PgProcessedMatchRepository) GameIDFor(ctx context.Context, matchID string) (string, bool, error) {
 	var gameID *string
-	err := connFrom(ctx, r.pool).QueryRow(ctx,
+	err := r.pool.QueryRow(ctx,
 		`SELECT game_id FROM gateway.processed_matches WHERE match_id = $1`,
 		matchID,
 	).Scan(&gameID)
