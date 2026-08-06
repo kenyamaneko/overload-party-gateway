@@ -28,13 +28,13 @@ func TestWSServerMessageTypeCoverage(t *testing.T) {
 	}
 	observed := serverMessageTypesObservedInTestFiles(t, identifiers)
 
-	t.Run("サーバー送出メッセージ種別ごとに、テストで観測されているか例外リストに理由付きで登録されている", func(t *testing.T) {
+	t.Run("クライアントへ送るWebSocketメッセージのタイプごとに、テストで観測されているか例外リストに理由付きで登録されている", func(t *testing.T) {
 		for _, c := range consts {
 			t.Run(c.value, func(t *testing.T) {
 				_, isObserved := observed[c.identifier]
 				_, isExcepted := serverMessageTypeCoverageExceptions[c.value]
 				assert.Truef(t, isObserved || isExcepted,
-					"サーバー送出メッセージ種別 %q (%s) がどのテストにも観測されておらず、例外リストにも無い",
+					"クライアントへ送るWebSocketメッセージのタイプ %q (%s) がどのテストにも観測されておらず、例外リストにも無い",
 					c.value, c.identifier)
 			})
 		}
