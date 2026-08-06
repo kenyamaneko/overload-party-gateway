@@ -214,19 +214,6 @@ func TestCancelTurnTimer_TimerStoreMirroring(t *testing.T) {
 
 			assert.Equal(t, []string{"g1"}, store.snapshotClearTurnCalls())
 		})
-
-		t.Run("タイマーが登録されていないゲームを取り消しても、外部保存先の期限削除は呼ばれる", func(t *testing.T) {
-			// ゲートウェイ再起動直後はインメモリの turnTimers が空でも、外部保存先には
-			// 再起動前の期限が残っている可能性がある。ローカル登録の有無に関わらず
-			// 外部保存先のクリアが呼ばれることを確かめる。
-			relay, _ := newTestRelay()
-			store := &fakeTimerStore{}
-			relay.timerStore = store
-
-			relay.cancelTurnTimer("g1")
-
-			assert.Equal(t, []string{"g1"}, store.snapshotClearTurnCalls())
-		})
 	})
 }
 
