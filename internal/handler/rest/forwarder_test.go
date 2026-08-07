@@ -57,7 +57,7 @@ func newCapturingBackend(t *testing.T, status int, body string) (*httptest.Serve
 func TestNewForwarder(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	t.Run("リクエストの透過転送", func(t *testing.T) {
+	t.Run("[転送・ルーティング]リクエストの透過転送", func(t *testing.T) {
 		cases := []struct {
 			name           string
 			token          string
@@ -230,14 +230,14 @@ func TestNewForwarder(t *testing.T) {
 		}
 	})
 
-	t.Run("targetURLの検証", func(t *testing.T) {
+	t.Run("[転送・ルーティング]targetURLの検証", func(t *testing.T) {
 		t.Run("不正なtargetURLのとき、エラーになる", func(t *testing.T) {
 			_, err := rest.NewForwarder("://not-a-url")
 			require.Error(t, err)
 		})
 	})
 
-	t.Run("ヘッダの透過", func(t *testing.T) {
+	t.Run("[転送・ルーティング]ヘッダーの透過", func(t *testing.T) {
 		t.Run("リクエストのContent-Typeがバックエンドに届き、レスポンスのContent-Typeがクライアントに返る", func(t *testing.T) {
 			var gotContentType string
 			backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

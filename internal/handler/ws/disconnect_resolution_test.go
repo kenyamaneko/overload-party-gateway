@@ -130,7 +130,7 @@ func newDisconnectResolutionRelay(entries []port.GamePlayerEntry, timerStore *fa
 }
 
 func TestOpponentPlayerID(t *testing.T) {
-	t.Run("対戦相手のプレイヤーID解決", func(t *testing.T) {
+	t.Run("[切断・再接続]対戦相手のプレイヤーID解決", func(t *testing.T) {
 		tests := []struct {
 			name    string
 			entries []port.GamePlayerEntry
@@ -184,7 +184,7 @@ func TestPlayerNumOf(t *testing.T) {
 		{PlayerNum: 2, PlayerID: "p2"},
 	}
 
-	t.Run("プレイヤー番号の解決", func(t *testing.T) {
+	t.Run("[切断・再接続]プレイヤー番号の解決", func(t *testing.T) {
 		tests := []struct {
 			name     string
 			playerID string
@@ -208,7 +208,7 @@ func TestHandleDisconnectTimeout(t *testing.T) {
 		{PlayerNum: 2, PlayerID: "p2"},
 	}
 
-	t.Run("切断猶予切れの決着判定", func(t *testing.T) {
+	t.Run("[切断・再接続]切断猶予切れの決着判定", func(t *testing.T) {
 		t.Run("対戦相手が接続中のとき、forfeitを実行する", func(t *testing.T) {
 			relay, bc, hub := newDisconnectResolutionRelay(entries, nil)
 			relay.JoinGame("p1", "g1", 1)
@@ -289,7 +289,7 @@ func TestResolveStaleDisconnect(t *testing.T) {
 		{PlayerNum: 2, PlayerID: "p2"},
 	}
 
-	t.Run("復帰時点での両者の猶予評価", func(t *testing.T) {
+	t.Run("[切断・再接続]復帰時点での両者の猶予評価", func(t *testing.T) {
 		t.Run("対戦相手が接続中のとき、何もしない", func(t *testing.T) {
 			relay, bc, hub := newDisconnectResolutionRelay(entries, nil)
 			hub.Register(NewConnection(nil, "p2"))
@@ -433,7 +433,7 @@ func TestResolveStaleDisconnect(t *testing.T) {
 }
 
 func TestHandleReconnect(t *testing.T) {
-	t.Run("復帰処理", func(t *testing.T) {
+	t.Run("[切断・再接続]復帰処理", func(t *testing.T) {
 		t.Run("対戦相手の切断猶予が切れているとき、復帰処理により対戦相手のforfeitが実行される", func(t *testing.T) {
 			entries := []port.GamePlayerEntry{
 				{PlayerNum: 1, PlayerID: "p1"},

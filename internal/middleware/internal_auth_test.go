@@ -34,8 +34,8 @@ func newErrorSigner() *internalauth.Signer {
 }
 
 func TestIssueInternalAuth(t *testing.T) {
-	t.Run("内部認証tokenの発行と注入", func(t *testing.T) {
-		t.Run("player_idがあるとき、tokenを発行しRequest.Contextに注入する", func(t *testing.T) {
+	t.Run("[内部認証]内部認証トークンの発行と注入", func(t *testing.T) {
+		t.Run("player_idがあるとき、トークンを発行しRequest.Contextに注入する", func(t *testing.T) {
 			engine := gin.New()
 			var observedToken string
 			var observedOK bool

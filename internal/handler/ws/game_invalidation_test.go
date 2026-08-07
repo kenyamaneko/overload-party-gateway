@@ -117,7 +117,7 @@ func npcEntries() []port.GamePlayerEntry {
 }
 
 func TestInvalidateActiveGames(t *testing.T) {
-	t.Run("停止時の対戦の無効化", func(t *testing.T) {
+	t.Run("[停止時の対戦保護]停止時の対戦の無効化", func(t *testing.T) {
 		t.Run("人間2人の対戦が進行中のとき、その対戦が無効として記録される", func(t *testing.T) {
 			f := newInvalidationFixture(t, pvpEntries(), map[string]int{"g1": 2})
 			f.relay.JoinGame("p1", "g1", 1)
@@ -178,7 +178,7 @@ func TestInvalidateActiveGames(t *testing.T) {
 }
 
 func TestManagerShutdown(t *testing.T) {
-	t.Run("停止時の一連の処理", func(t *testing.T) {
+	t.Run("[停止時の対戦保護]停止時の一連の処理", func(t *testing.T) {
 		t.Run("進行中の対戦があるとき、その対戦が無効として記録され、接続はサーバー更新を理由に閉じられる", func(t *testing.T) {
 			battle := newMockBattleClient()
 			gamePlayers := &mockGamePlayerRepo{lookupEntries: pvpEntries(), playerCounts: map[string]int{"g1": 2}}
@@ -204,7 +204,7 @@ func TestManagerShutdown(t *testing.T) {
 }
 
 func TestRecoverInvalidatedGames(t *testing.T) {
-	t.Run("無効になった対戦の起動時の後始末", func(t *testing.T) {
+	t.Run("[停止時の対戦保護]無効になった対戦の起動時の後始末", func(t *testing.T) {
 		t.Run("決着していない記録があるとき、その対戦の両者強制決着がbattleに要求される", func(t *testing.T) {
 			f := newInvalidationFixture(t, pvpEntries(), map[string]int{"g1": 2})
 			require.NoError(t, f.invalidatedGames.MarkInvalidated(context.Background(), []string{"g1"}))
@@ -280,7 +280,7 @@ func TestRecoverInvalidatedGames(t *testing.T) {
 }
 
 func TestRevertBattleCountOfInvalidatedGames(t *testing.T) {
-	t.Run("無効になった対戦の消費バトル回数の返却", func(t *testing.T) {
+	t.Run("[停止時の対戦保護]無効になった対戦の消費バトル回数の返却", func(t *testing.T) {
 		markInvalidated := func(t *testing.T, f *invalidationFixture, gameID string) {
 			t.Helper()
 			require.NoError(t, f.invalidatedGames.MarkInvalidated(context.Background(), []string{gameID}))
@@ -414,7 +414,7 @@ func TestRevertBattleCountOfInvalidatedGames(t *testing.T) {
 }
 
 func TestStaleDisconnectOnInvalidatedGame(t *testing.T) {
-	t.Run("無効になった対戦の切断猶予の評価", func(t *testing.T) {
+	t.Run("[停止時の対戦保護]無効になった対戦の切断猶予の評価", func(t *testing.T) {
 		t.Run("対戦が無効として記録済みのとき、両者の猶予が切れていても決着させない", func(t *testing.T) {
 			f := newInvalidationFixture(t, pvpEntries(), map[string]int{"g1": 2})
 			f.timers.getDisconnectFound = true
@@ -456,7 +456,7 @@ func TestStaleDisconnectOnInvalidatedGame(t *testing.T) {
 }
 
 func TestGameEnterOnInvalidatedGame(t *testing.T) {
-	t.Run("無効になった対戦への入室", func(t *testing.T) {
+	t.Run("[停止時の対戦保護]無効になった対戦への入室", func(t *testing.T) {
 		enterData := mustMarshal(GameEnterMessage{GameID: "g1"})
 
 		t.Run("対戦が無効として記録済みのとき、無効になったことを伝えるエラーが返る", func(t *testing.T) {

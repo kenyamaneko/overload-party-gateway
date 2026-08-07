@@ -170,7 +170,7 @@ func newTestRelay() (*GameRelay, *mockBattleClient) {
 }
 
 func TestRunNpcTurns(t *testing.T) {
-	t.Run("NPCターンの自動進行", func(t *testing.T) {
+	t.Run("[対戦連携]NPCターンの自動進行", func(t *testing.T) {
 		t.Run("初期結果がnilのとき、NPCターンを進めずnilを返す", func(t *testing.T) {
 			relay, bc := newTestRelay()
 			ctx := context.Background()
@@ -289,7 +289,7 @@ func readStampUsed(t *testing.T, conn *websocket.Conn) StampUsedMessage {
 }
 
 func TestJoinGame(t *testing.T) {
-	t.Run("スタンプ使用時の到達範囲", func(t *testing.T) {
+	t.Run("[ゲーム進行]スタンプ使用時の到達範囲", func(t *testing.T) {
 		t.Run("use_stampが両プレイヤーに届く", func(t *testing.T) {
 			cases := []struct {
 				name          string
@@ -342,7 +342,7 @@ func TestJoinGame(t *testing.T) {
 }
 
 func TestLeaveGame(t *testing.T) {
-	t.Run("ゲームからの退出", func(t *testing.T) {
+	t.Run("[ゲーム進行]ゲームからの退出", func(t *testing.T) {
 		t.Run("退出すると、退出したプレイヤーには届かなくなるが、残ったプレイヤーには届く", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			const gameID = "TST-GAME-LEAVE-SOLO"
@@ -388,7 +388,7 @@ func TestResolvePlayerNum(t *testing.T) {
 		{PlayerNum: 2, PlayerID: "p2"},
 	}
 
-	t.Run("プレイヤー番号の解決", func(t *testing.T) {
+	t.Run("[ゲーム進行]プレイヤー番号の解決", func(t *testing.T) {
 		t.Run("入室済みのプレイヤーのとき、入室時のスロット番号を返す", func(t *testing.T) {
 			relay, _, _ := newDisconnectResolutionRelay(nil, nil)
 			relay.gamePlayerRepo = &mockGamePlayerRepo{lookupErr: errors.New("db down")}
@@ -450,7 +450,7 @@ func TestResolvePlayerNum(t *testing.T) {
 }
 
 func TestGameIDForPlayer(t *testing.T) {
-	t.Run("プレイヤーのゲームID解決", func(t *testing.T) {
+	t.Run("[ゲーム進行]プレイヤーのゲームID解決", func(t *testing.T) {
 		t.Run("参加前は無く、参加後に取得でき、退出後に再び無くなる", func(t *testing.T) {
 			relay, _ := newTestRelay()
 
@@ -470,7 +470,7 @@ func TestGameIDForPlayer(t *testing.T) {
 }
 
 func TestLeaveAllPlayers(t *testing.T) {
-	t.Run("そのゲームの全参加者の一括退出", func(t *testing.T) {
+	t.Run("[ゲーム進行]そのゲームの全参加者の一括退出", func(t *testing.T) {
 		t.Run("呼ぶと、そのゲームの参加者全員のGameIDForPlayerがfalseになり、gameMembersも破棄される", func(t *testing.T) {
 			relay, _ := newTestRelay()
 
@@ -506,7 +506,7 @@ func TestLeaveAllPlayers(t *testing.T) {
 }
 
 func TestAppendUnique(t *testing.T) {
-	t.Run("重複なし追加", func(t *testing.T) {
+	t.Run("[ゲーム進行]重複なし追加", func(t *testing.T) {
 		tests := []struct {
 			name     string
 			initial  []string
@@ -549,7 +549,7 @@ func TestAppendUnique(t *testing.T) {
 }
 
 func TestRemoveString(t *testing.T) {
-	t.Run("文字列スライスからの除去", func(t *testing.T) {
+	t.Run("[ゲーム進行]文字列スライスからの除去", func(t *testing.T) {
 		tests := []struct {
 			name     string
 			initial  []string
@@ -619,7 +619,7 @@ func TestRemoveString(t *testing.T) {
 }
 
 func TestMustMarshal(t *testing.T) {
-	t.Run("JSONマーシャル", func(t *testing.T) {
+	t.Run("[ゲーム進行]JSONマーシャル", func(t *testing.T) {
 		t.Run("mapを渡すと、JSON文字列になる", func(t *testing.T) {
 			result := mustMarshal(map[string]string{"key": "value"})
 			assert.JSONEq(t, `{"key":"value"}`, string(result))

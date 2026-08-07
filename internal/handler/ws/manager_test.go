@@ -169,7 +169,7 @@ func matchMadeEvent(matchID string) apimatchmaking.MatchMadeEvent {
 }
 
 func TestHandleMatchMade(t *testing.T) {
-	t.Run("match_madeイベントの永続dedup", func(t *testing.T) {
+	t.Run("[マッチング]match_madeイベントの永続dedup", func(t *testing.T) {
 		t.Run("有効なイベントのとき、battleにゲーム作成を1回依頼し両プレイヤーのgame_players行を挿入する", func(t *testing.T) {
 			bc := newMockBattleClient()
 			bc.createPvPGameResult = &service.GameCreatedResult{GameID: "g1"}
@@ -336,7 +336,7 @@ func TestHandleMatchMade(t *testing.T) {
 		})
 	})
 
-	t.Run("マッチ成立イベントからのゲーム作成", func(t *testing.T) {
+	t.Run("[マッチング]マッチ成立イベントからのゲーム作成", func(t *testing.T) {
 		participantCountCases := []struct {
 			name    string
 			players []apimatchmaking.MatchedPlayer
@@ -445,7 +445,7 @@ func TestHandleMatchMade(t *testing.T) {
 		})
 	})
 
-	t.Run("デッキのバトル転送形式への展開", func(t *testing.T) {
+	t.Run("[マッチング]デッキのバトル転送形式への展開", func(t *testing.T) {
 		t.Run("デッキに複数枚積んだカードは、その枚数分だけ作成依頼のカード一覧に並ぶ", func(t *testing.T) {
 			bc := newMockBattleClient()
 			bc.createPvPGameResult = &service.GameCreatedResult{GameID: "g_expand"}
@@ -515,7 +515,7 @@ func (noopMatchmakingClient) ReportMatchAbandoned(_ context.Context, _ string, _
 var _ port.MatchmakingClient = noopMatchmakingClient{}
 
 func TestManagerReconnect(t *testing.T) {
-	t.Run("切断猶予切れ状態での復帰時の決着評価", func(t *testing.T) {
+	t.Run("[切断・再接続]切断猶予切れ状態での復帰時の決着評価", func(t *testing.T) {
 		t.Run("対戦相手の猶予切れのまま再接続すると、対戦相手のforfeitが実行される", func(t *testing.T) {
 			bc := newMockBattleClient()
 			bc.processActionResult = &service.ActionResult{}
@@ -558,7 +558,7 @@ func newTestManagerForBattleLimit(accountClient port.AccountClient) *Manager {
 }
 
 func TestCheckAndIncrementBattleLimit(t *testing.T) {
-	t.Run("バトル開始受付時のバトル回数制限確認と加算", func(t *testing.T) {
+	t.Run("[マッチング]バトル開始受付時のバトル回数制限確認と加算", func(t *testing.T) {
 		t.Run("当日のバトル残回数があるとき、当日のバトル回数を1増やし、呼び出し元への制限メッセージは空になる", func(t *testing.T) {
 			fa := apiaccountserverfake.NewServer()
 			defer fa.Close()

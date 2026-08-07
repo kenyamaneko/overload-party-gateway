@@ -25,8 +25,8 @@ func newStatusServer(t *testing.T, status int) *httptest.Server {
 }
 
 func TestClient_InjectsInternalAuthHeader(t *testing.T) {
-	t.Run("X-Internal-Auth headerの注入", func(t *testing.T) {
-		t.Run("ctxに格納したtokenがX-Internal-Auth headerとして送られる", func(t *testing.T) {
+	t.Run("[内部認証]matchmaking宛リクエストへのX-Internal-Authヘッダーの注入", func(t *testing.T) {
+		t.Run("トークンを格納したコンテキストのとき、X-Internal-Authヘッダーとして送信される", func(t *testing.T) {
 			const wantToken = "test.jwt.token"
 			var got string
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -61,7 +61,7 @@ func TestClient_Enqueue_MapsStatusToSentinel(t *testing.T) {
 		},
 	}
 
-	t.Run("マッチング登録の失敗応答の変換", func(t *testing.T) {
+	t.Run("[マッチング]マッチング登録の失敗応答の変換", func(t *testing.T) {
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
 				srv := newStatusServer(t, tc.status)
@@ -98,7 +98,7 @@ func TestClient_Cancel_FoldsAndMapsStatus(t *testing.T) {
 		},
 	}
 
-	t.Run("マッチング取消の応答の変換", func(t *testing.T) {
+	t.Run("[マッチング]マッチング取消の応答の変換", func(t *testing.T) {
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
 				srv := newStatusServer(t, tc.status)

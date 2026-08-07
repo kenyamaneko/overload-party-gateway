@@ -15,7 +15,7 @@ import (
 )
 
 func TestClient_GetDeckCards(t *testing.T) {
-	t.Run("デッキカードの取得", func(t *testing.T) {
+	t.Run("[カード連携]デッキカードの取得", func(t *testing.T) {
 		t.Run("デッキIDを指定すると、カード一覧とルーチン/スペシャル施策IDを返す", func(t *testing.T) {
 			const (
 				wantRoutine = "RTN-0007"

@@ -27,8 +27,8 @@ func newStatusServer(t *testing.T, status int, body string) *httptest.Server {
 }
 
 func TestClient_InjectsInternalAuthHeader(t *testing.T) {
-	t.Run("X-Internal-Auth headerの注入", func(t *testing.T) {
-		t.Run("ctxに格納したtokenがX-Internal-Auth headerとして送られる", func(t *testing.T) {
+	t.Run("[内部認証]account宛リクエストへのX-Internal-Authヘッダーの注入", func(t *testing.T) {
+		t.Run("トークンを格納したコンテキストのとき、X-Internal-Authヘッダーとして送信される", func(t *testing.T) {
 			const wantToken = "test.jwt.token"
 			var got string
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -66,7 +66,7 @@ func TestClient_MapsDownstreamStatusToPortSentinel(t *testing.T) {
 		},
 	}
 
-	t.Run("登録・ログインの失敗応答の変換", func(t *testing.T) {
+	t.Run("[認証]登録・ログインの失敗応答の変換", func(t *testing.T) {
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
 				srv := newStatusServer(t, tc.status, `{}`)
@@ -104,7 +104,7 @@ func TestClient_FindByFirebaseUID(t *testing.T) {
 		},
 	}
 
-	t.Run("Firebase UIDによるプレイヤー検索", func(t *testing.T) {
+	t.Run("[認証]Firebase UIDによるプレイヤー検索", func(t *testing.T) {
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
 				srv := newStatusServer(t, tc.status, tc.body)

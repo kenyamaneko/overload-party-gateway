@@ -52,7 +52,7 @@ func TestMatchSubscriber_ProcessMessage(t *testing.T) {
 		{PlayerID: "p-2", DeckID: 20},
 	}
 
-	t.Run("マッチ成立イベントの処理", func(t *testing.T) {
+	t.Run("[マッチング]マッチ成立イベントの処理", func(t *testing.T) {
 		t.Run("有効なマッチ成立イベントのとき、エラーを返さず受信した内容をそのまま処理に渡す", func(t *testing.T) {
 			handler := &fakeMatchHandler{}
 			sub, err := NewMatchSubscriber(handler)

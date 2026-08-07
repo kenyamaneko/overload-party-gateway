@@ -67,7 +67,7 @@ func readNotifyThenClose(t *testing.T, clientConn *websocket.Conn) (notifyType s
 }
 
 func TestConnectionShutdown(t *testing.T) {
-	t.Run("SIGTERM時のサーバー更新通知", func(t *testing.T) {
+	t.Run("[停止時の対戦保護]SIGTERM時のサーバー更新通知", func(t *testing.T) {
 		t.Run("サーバー更新の通知を送信した後、異常な切断と区別できるcloseコードと終了理由を添えて接続を閉じる", func(t *testing.T) {
 			serverConn, clientConn := newTestWSPair(t)
 

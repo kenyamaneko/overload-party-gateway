@@ -65,7 +65,7 @@ func TestVerifier_Verify(t *testing.T) {
 	key := newTestKey(t)
 	v := NewVerifier(StaticPublicKeyResolver(&key.PublicKey, DefaultKeyID))
 
-	t.Run("JWTの検証", func(t *testing.T) {
+	t.Run("[内部認証]JWTの検証", func(t *testing.T) {
 		t.Run("有効なJWTのとき、subをplayer_idとして返す", func(t *testing.T) {
 			token := signWithKid(t, key, string(DefaultKeyID), validClaims(time.Now()))
 
@@ -122,7 +122,7 @@ func TestVerifier_Verify(t *testing.T) {
 				token: "not-a-jwt",
 			},
 			{
-				name:  "kid headerが無いとき、拒否される",
+				name:  "kidヘッダーが無いとき、拒否される",
 				token: signWithoutKid(t, key, validClaims(now)),
 			},
 			{
@@ -169,7 +169,7 @@ func TestVerifier_Verify(t *testing.T) {
 func TestStaticPublicKeyResolver(t *testing.T) {
 	key := newTestKey(t)
 
-	t.Run("公開鍵の解決", func(t *testing.T) {
+	t.Run("[内部認証]公開鍵の解決", func(t *testing.T) {
 		t.Run("登録済みのkidのとき、公開鍵を返す", func(t *testing.T) {
 			resolver := StaticPublicKeyResolver(&key.PublicKey, DefaultKeyID)
 
@@ -187,7 +187,7 @@ func TestStaticPublicKeyResolver(t *testing.T) {
 }
 
 func TestParsePublicKeyPEM(t *testing.T) {
-	t.Run("PEM公開鍵の読み取り", func(t *testing.T) {
+	t.Run("[内部認証]PEM公開鍵の読み取り", func(t *testing.T) {
 		t.Run("正しいPEMのとき、署名の検証に使える鍵が得られる", func(t *testing.T) {
 			key := newTestKey(t)
 			der, err := x509.MarshalPKIXPublicKey(&key.PublicKey)

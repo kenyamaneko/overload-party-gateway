@@ -51,7 +51,7 @@ func decodeBody(t *testing.T, w *httptest.ResponseRecorder) map[string]any {
 }
 
 func TestHandleMatchMade(t *testing.T) {
-	t.Run("push配信エンドポイント", func(t *testing.T) {
+	t.Run("[マッチング]push配信エンドポイント", func(t *testing.T) {
 		t.Run("有効なenvelopeのとき、200を返し復号したペイロードを処理へ渡す", func(t *testing.T) {
 			processor := &fakePushProcessor{}
 			r := newPushTestRouter(processor)

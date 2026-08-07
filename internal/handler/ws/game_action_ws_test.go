@@ -41,7 +41,7 @@ func (r *processActionRecorder) snapshotCalls() []apibattle.GameActionRequest {
 }
 
 func TestWSGameAction(t *testing.T) {
-	t.Run("ゲーム内行動", func(t *testing.T) {
+	t.Run("[対戦連携]ゲーム内行動", func(t *testing.T) {
 		t.Run("有効な行動を送ると、action_performedが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			const gameID = "TST-GAME-ACTION-OK"

@@ -29,7 +29,7 @@ func getVersionBody(t *testing.T, cfg *config.Config) map[string]any {
 }
 
 func TestStaticHandler_GetVersion(t *testing.T) {
-	t.Run("アプリバージョン情報の取得", func(t *testing.T) {
+	t.Run("[設定]アプリバージョン情報の取得", func(t *testing.T) {
 		t.Run("最低バージョン・最新バージョン・強制アップデート要否・ストアURLが設定されているとき、その4つが返る", func(t *testing.T) {
 			body := getVersionBody(t, &config.Config{
 				AppMinVersion:    "1.0.0",

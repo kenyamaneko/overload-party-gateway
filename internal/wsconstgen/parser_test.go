@@ -7,7 +7,7 @@ import (
 )
 
 func TestParseMessageTypes(t *testing.T) {
-	t.Run("WSメッセージ種別の抽出", func(t *testing.T) {
+	t.Run("[契約整合]WSメッセージ種別の抽出", func(t *testing.T) {
 		t.Run("サーバー向けとクライアント向けの定数があるとき、宣言順のまま送信方向ごとに分かれる", func(t *testing.T) {
 			src := []byte(`package ws
 

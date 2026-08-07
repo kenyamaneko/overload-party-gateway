@@ -22,7 +22,7 @@ func newAuthTestEngine(verifier Verifier) (*gin.Engine, *string) {
 }
 
 func TestVerifyInternalAuth(t *testing.T) {
-	t.Run("内部認証middlewareの検証", func(t *testing.T) {
+	t.Run("[内部認証]内部認証ミドルウェアの検証", func(t *testing.T) {
 		t.Run("検証成功のとき、200でplayer_idをcontextに設定する", func(t *testing.T) {
 			verifier := &MockVerifier{VerifyFn: func(string) (string, error) { return "player-123", nil }}
 			engine, observed := newAuthTestEngine(verifier)
