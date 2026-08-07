@@ -516,7 +516,7 @@ func TestWSMessageRouting(t *testing.T) {
 
 func TestWSMatchmakingStart(t *testing.T) {
 	t.Run("[マッチング]マッチング開始", func(t *testing.T) {
-		t.Run("オンボーディング完了済みでデッキ検証を通過すると、matchmaking_startedが返り待ち行列へ登録される", func(t *testing.T) {
+		t.Run("オンボーディング完了済みでデッキ検証を通過すると、matchmaking_startedが返りキューに登録される", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-mm-ok", "player-mm-ok")
 			setOnboardedAccount(srv.account, "TST-PLAYER", 7)
@@ -641,7 +641,7 @@ func TestWSMatchmakingStart(t *testing.T) {
 			assert.False(t, errBody.Retryable)
 		})
 
-		t.Run("待ち行列への登録が受付停止 (503)のとき、再試行可のmatchmaking_errorが返る", func(t *testing.T) {
+		t.Run("キューへの登録が受付停止 (503)のとき、再試行可のmatchmaking_errorが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-mm-503", "player-mm-503")
 			setOnboardedAccount(srv.account, "TST-PLAYER", 1)
@@ -662,7 +662,7 @@ func TestWSMatchmakingStart(t *testing.T) {
 			assert.True(t, errBody.Retryable)
 		})
 
-		t.Run("待ち行列への登録が異常応答 (500)のとき、再試行不可のmatchmaking_errorが返る", func(t *testing.T) {
+		t.Run("キューへの登録が異常応答 (500)のとき、再試行不可のmatchmaking_errorが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-mm-500", "player-mm-500")
 			setOnboardedAccount(srv.account, "TST-PLAYER", 1)
@@ -713,12 +713,26 @@ func TestWSMatchmakingStart(t *testing.T) {
 
 func TestWSMatchmakingCancel(t *testing.T) {
 	t.Run("[マッチング]マッチングキャンセル", func(t *testing.T) {
-		t.Run("マッチング待ちをキャンセルすると、matchmaking_cancelledが返り待ち行列から除去される", func(t *testing.T) {
+		t.Run("マッチング待ちをキャンセルすると、matchmaking_cancelledが返りキューから除去される", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-cancel-ok", "player-cancel-ok")
 			rec := &cancelRecorder{}
 			srv.matchmaking.CancelFn = rec.fn
 			conn := srv.dial(t, "uid-cancel-ok")
+
+			require.NoError(t, conn.WriteJSON(WSMessage{Type: genws.WSClientMsgMatchmakingCancel}))
+
+			msg := readUntilType(t, conn, genws.WSServerMsgMatchmakingCancelled)
+			assert.Equal(t, genws.WSServerMsgMatchmakingCancelled, msg.Type)
+			assert.EqualValues(t, 1, rec.calls.Load())
+		})
+
+		t.Run("マッチ成立直後の入れ違いでキャンセルが404を受けても、matchmaking_cancelledが返る", func(t *testing.T) {
+			srv := newWSTestServer(t, nil)
+			srv.seedAccount("uid-cancel-notfound", "player-cancel-notfound")
+			rec := &cancelRecorder{status: http.StatusNotFound}
+			srv.matchmaking.CancelFn = rec.fn
+			conn := srv.dial(t, "uid-cancel-notfound")
 
 			require.NoError(t, conn.WriteJSON(WSMessage{Type: genws.WSClientMsgMatchmakingCancel}))
 
