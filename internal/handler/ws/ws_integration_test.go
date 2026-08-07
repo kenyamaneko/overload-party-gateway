@@ -727,6 +727,20 @@ func TestWSMatchmakingCancel(t *testing.T) {
 			assert.EqualValues(t, 1, rec.calls.Load())
 		})
 
+		t.Run("既に待ち行列に居ない状態でキャンセルすると、matchmaking_cancelledが返る", func(t *testing.T) {
+			srv := newWSTestServer(t, nil)
+			srv.seedAccount("uid-cancel-notfound", "player-cancel-notfound")
+			rec := &cancelRecorder{status: http.StatusNotFound}
+			srv.matchmaking.CancelFn = rec.fn
+			conn := srv.dial(t, "uid-cancel-notfound")
+
+			require.NoError(t, conn.WriteJSON(WSMessage{Type: genws.WSClientMsgMatchmakingCancel}))
+
+			msg := readUntilType(t, conn, genws.WSServerMsgMatchmakingCancelled)
+			assert.Equal(t, genws.WSServerMsgMatchmakingCancelled, msg.Type)
+			assert.EqualValues(t, 1, rec.calls.Load())
+		})
+
 		t.Run("キャンセルが下流エラーのとき、matchmaking_errorが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-cancel-err", "player-cancel-err")
