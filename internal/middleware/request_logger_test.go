@@ -36,7 +36,7 @@ func captureRequestLog(t *testing.T, status int) map[string]any {
 }
 
 func TestUseRequestLogger(t *testing.T) {
-	t.Run("応答ステータスによるログ水準の分類", func(t *testing.T) {
+	t.Run("[HTTPミドルウェア]応答ステータスによるログ水準の分類", func(t *testing.T) {
 		tests := []struct {
 			name   string
 			status int
@@ -57,7 +57,7 @@ func TestUseRequestLogger(t *testing.T) {
 		}
 	})
 
-	t.Run("記録される内容", func(t *testing.T) {
+	t.Run("[HTTPミドルウェア]記録される内容", func(t *testing.T) {
 		t.Run("応答を返すと、要求のメソッド・パスと応答のステータスが載る", func(t *testing.T) {
 			record := captureRequestLog(t, http.StatusOK)
 

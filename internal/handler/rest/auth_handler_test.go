@@ -31,7 +31,7 @@ func withFirebaseUID(uid string) gin.HandlerFunc {
 }
 
 func TestAuthHandler_Register(t *testing.T) {
-	t.Run("プレイヤー登録", func(t *testing.T) {
+	t.Run("[認証]プレイヤー登録", func(t *testing.T) {
 		t.Run("登録成功のとき、201とname未設定のプレイヤーを返す", func(t *testing.T) {
 			fa := apiaccountserverfake.NewServer()
 			defer fa.Close()
@@ -115,7 +115,7 @@ func TestAuthHandler_Register(t *testing.T) {
 }
 
 func TestAuthHandler_Login(t *testing.T) {
-	t.Run("プレイヤーログイン", func(t *testing.T) {
+	t.Run("[認証]プレイヤーログイン", func(t *testing.T) {
 		t.Run("ログイン成功のとき、200とプレイヤーを返す", func(t *testing.T) {
 			fa := apiaccountserverfake.NewServer()
 			defer fa.Close()

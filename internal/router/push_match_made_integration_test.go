@@ -370,7 +370,7 @@ func matchMadePayload(t *testing.T, matchID string) []byte {
 }
 
 func TestPushMatchMadeE2E(t *testing.T) {
-	t.Run("push受け口経由のmatch_made処理", func(t *testing.T) {
+	t.Run("[マッチング]push受け口経由のmatch_made処理", func(t *testing.T) {
 		t.Run("有効なpushを投げると、200を返しbattleにゲーム作成を1回依頼し両プレイヤーのgame_players行が永続化される", func(t *testing.T) {
 			bc := &fakeBattleClient{gameID: "01ARZ3NDEKTSV4RRFFQ69G5FAV"}
 			r, gamePlayerRepo := newTestPushRouter(t, bc)
@@ -443,7 +443,7 @@ func TestPushMatchMadeE2E(t *testing.T) {
 }
 
 func TestPushMatchMadeNotification(t *testing.T) {
-	t.Run("push受け口経由の成立通知", func(t *testing.T) {
+	t.Run("[マッチング]push受け口経由の成立通知", func(t *testing.T) {
 		t.Run("同じ成立イベントが二度届いても、成立通知は各プレイヤーに1回だけ送られる", func(t *testing.T) {
 			bc := &fakeBattleClient{gameID: "01ARZ3NDEKTSV4RRFFQ69G5FB1"}
 			env := newNotifyTestEnv(t, bc, repository.NewPgGamePlayerRepository(sharedPG.Pool), connectedPlayers{player1: true, player2: true})
@@ -493,7 +493,7 @@ func TestPushMatchMadeNotification(t *testing.T) {
 }
 
 func TestPushMatchMadeAbandoned(t *testing.T) {
-	t.Run("push受け口経由のマッチ不成立の申告", func(t *testing.T) {
+	t.Run("[マッチング]push受け口経由のマッチ不成立の申告", func(t *testing.T) {
 		t.Run("片方のプレイヤーだけが接続している状態で成立イベントを受けると、接続している側にマッチング失敗が届く", func(t *testing.T) {
 			bc := &fakeBattleClient{gameID: "01ARZ3NDEKTSV4RRFFQ69G5FC1"}
 			env := newNotifyTestEnv(t, bc, repository.NewPgGamePlayerRepository(sharedPG.Pool), connectedPlayers{player1: true})

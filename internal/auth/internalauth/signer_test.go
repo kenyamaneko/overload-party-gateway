@@ -27,7 +27,7 @@ func TestSignerIssue(t *testing.T) {
 	key := newTestKey(t)
 	fixedTime := time.Date(2026, 5, 10, 12, 0, 0, 0, time.UTC)
 
-	t.Run("JWTの発行", func(t *testing.T) {
+	t.Run("[内部認証]JWTの発行", func(t *testing.T) {
 		t.Run("発行すると、playerIDを主体とし既定の発行者とTTLを持つ、対応する公開鍵で検証できるJWTを返す", func(t *testing.T) {
 			signer := NewSigner(StaticPrivateKeyResolver(key, DefaultKeyID), DefaultKeyID, WithClock(func() time.Time { return fixedTime }))
 			token, err := signer.Issue("player-123")
@@ -70,7 +70,7 @@ func TestSignerIssue(t *testing.T) {
 }
 
 func TestStaticPrivateKeyResolver(t *testing.T) {
-	t.Run("秘密鍵の解決", func(t *testing.T) {
+	t.Run("[内部認証]秘密鍵の解決", func(t *testing.T) {
 		t.Run("未知のkidを渡すとき、エラーになる", func(t *testing.T) {
 			resolver := StaticPrivateKeyResolver(newTestKey(t), DefaultKeyID)
 			_, err := resolver(KeyID("v2"))
@@ -80,7 +80,7 @@ func TestStaticPrivateKeyResolver(t *testing.T) {
 }
 
 func TestParsePrivateKeyPEM(t *testing.T) {
-	t.Run("PEM秘密鍵の読み取り", func(t *testing.T) {
+	t.Run("[内部認証]PEM秘密鍵の読み取り", func(t *testing.T) {
 		t.Run("正しいPEMのとき、発行したJWTが対応する公開鍵で検証できる", func(t *testing.T) {
 			key := newTestKey(t)
 			der, err := x509.MarshalPKCS8PrivateKey(key)

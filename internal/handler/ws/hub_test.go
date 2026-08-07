@@ -26,7 +26,7 @@ func newTestHub(timerStore *fakeTimerStore, inGame bool, gameID string) *Connect
 }
 
 func TestUnregister(t *testing.T) {
-	t.Run("切断時の外部保存先への書き込み", func(t *testing.T) {
+	t.Run("[切断・再接続]切断時の外部保存先への書き込み", func(t *testing.T) {
 		t.Run("ゲームに参加中のプレイヤーが切断すると、猶予期限が書き込まれる", func(t *testing.T) {
 			store := &fakeTimerStore{}
 			hub := newTestHub(store, true, "game_1")
@@ -84,7 +84,7 @@ func TestUnregister(t *testing.T) {
 }
 
 func TestRegister(t *testing.T) {
-	t.Run("再接続時の外部保存先からの削除", func(t *testing.T) {
+	t.Run("[切断・再接続]再接続時の外部保存先からの削除", func(t *testing.T) {
 		t.Run("登録すると、そのプレイヤーの猶予期限が削除される", func(t *testing.T) {
 			store := &fakeTimerStore{}
 			hub := newTestHub(store, true, "game_1")
@@ -121,7 +121,7 @@ type reconnectCall struct {
 }
 
 func TestRegister_WasLate(t *testing.T) {
-	t.Run("復帰したプレイヤー自身の切断猶予期限切れ判定", func(t *testing.T) {
+	t.Run("[切断・再接続]復帰したプレイヤー自身の切断猶予期限切れ判定", func(t *testing.T) {
 		t.Run("インメモリのタイマーがまだ残っているとき、切断猶予期限切れではないと判定される", func(t *testing.T) {
 			var calls []reconnectCall
 			hub := NewConnectionHub(HubCallbacks{
@@ -225,7 +225,7 @@ func TestRegister_WasLate(t *testing.T) {
 }
 
 func TestIsConnected(t *testing.T) {
-	t.Run("接続状況の判定", func(t *testing.T) {
+	t.Run("[切断・再接続]接続状況の判定", func(t *testing.T) {
 		t.Run("Register済みのプレイヤーはtrueになる", func(t *testing.T) {
 			hub := newTestHub(nil, false, "")
 			hub.Register(NewConnection(nil, "p1"))
@@ -252,7 +252,7 @@ func TestIsConnected(t *testing.T) {
 }
 
 func TestIsDisconnectDeadlineExpired(t *testing.T) {
-	t.Run("切断猶予期限の期限切れ判定", func(t *testing.T) {
+	t.Run("[切断・再接続]切断猶予期限の期限切れ判定", func(t *testing.T) {
 		t.Run("インメモリのタイマーがまだ残っているとき、切断猶予期限切れではないと判定される", func(t *testing.T) {
 			hub := newTestHub(nil, true, "game_1")
 			conn := NewConnection(nil, "p1")
@@ -352,7 +352,7 @@ func TestIsDisconnectDeadlineExpired(t *testing.T) {
 }
 
 func TestClearDisconnectDeadline(t *testing.T) {
-	t.Run("ゲーム終了時などの明示的な猶予期限削除", func(t *testing.T) {
+	t.Run("[切断・再接続]ゲーム終了時などの明示的な猶予期限削除", func(t *testing.T) {
 		t.Run("呼ぶと、そのプレイヤーの猶予期限が削除される", func(t *testing.T) {
 			store := &fakeTimerStore{}
 			hub := newTestHub(store, true, "game_1")

@@ -99,7 +99,7 @@ func newSequencedAccountFake(t *testing.T, findStatuses []int, registerStatus in
 }
 
 func TestUseDevAuth(t *testing.T) {
-	t.Run("開発用Bearer認証", func(t *testing.T) {
+	t.Run("[認証]開発用Bearer認証", func(t *testing.T) {
 		t.Run("有効なdev-token-user1のとき、200でuidを解決する", func(t *testing.T) {
 			r := gin.New()
 			r.Use(UseDevAuth())
@@ -117,7 +117,7 @@ func TestUseDevAuth(t *testing.T) {
 			assert.Equal(t, `{"uid":"user1"}`, w.Body.String())
 		})
 
-		t.Run("Authorization headerが無いとき、401でmissing authorization headerを返す", func(t *testing.T) {
+		t.Run("Authorizationヘッダーが無いとき、401でmissing authorization headerを返す", func(t *testing.T) {
 			r := gin.New()
 			r.Use(UseDevAuth())
 			r.GET("/test", func(c *gin.Context) {
@@ -171,7 +171,7 @@ func TestUseDevAuth(t *testing.T) {
 }
 
 func TestUseDevAuthWithPlayerResolve(t *testing.T) {
-	t.Run("開発用認証とプレイヤー解決", func(t *testing.T) {
+	t.Run("[認証]開発用認証とプレイヤー解決", func(t *testing.T) {
 		t.Run("未登録ユーザーのとき、自動作成しonCreatedが呼ばれる", func(t *testing.T) {
 			fa := newStatefulAccountFake()
 			defer fa.close()
@@ -224,7 +224,7 @@ func TestUseDevAuthWithPlayerResolve(t *testing.T) {
 			name       string
 			authHeader string
 		}{
-			{name: "Authorization headerが無いとき、401になる", authHeader: ""},
+			{name: "Authorizationヘッダーが無いとき、401になる", authHeader: ""},
 			{name: "Bearer接頭辞が無いとき、401になる", authHeader: "dev-token-user1"},
 			{name: "dev-token形式でないtokenのとき、401になる", authHeader: "Bearer other-token"},
 		}
@@ -332,7 +332,7 @@ func (s *stubTokenVerifier) VerifyIDToken(ctx context.Context, idToken string) (
 }
 
 func TestUseFirebaseAuth(t *testing.T) {
-	t.Run("Firebase IDトークン認証", func(t *testing.T) {
+	t.Run("[認証]Firebase IDトークン認証", func(t *testing.T) {
 		t.Run("検証に通るトークンのとき、200でUIDを解決する", func(t *testing.T) {
 			verifier := &stubTokenVerifier{VerifyIDTokenFn: func(context.Context, string) (string, error) {
 				return "firebase-uid-1", nil
@@ -371,7 +371,7 @@ func TestUseFirebaseAuth(t *testing.T) {
 			assert.Equal(t, `{"error":"invalid token"}`, w.Body.String())
 		})
 
-		t.Run("Authorization headerが無いとき、401になる", func(t *testing.T) {
+		t.Run("Authorizationヘッダーが無いとき、401になる", func(t *testing.T) {
 			verifier := &stubTokenVerifier{VerifyIDTokenFn: func(context.Context, string) (string, error) {
 				return "firebase-uid-1", nil
 			}}
@@ -389,7 +389,7 @@ func TestUseFirebaseAuth(t *testing.T) {
 			assert.Equal(t, `{"error":"missing authorization header"}`, w.Body.String())
 		})
 
-		t.Run("Bearer形式でないヘッダのとき、401になる", func(t *testing.T) {
+		t.Run("Bearer形式でないヘッダーのとき、401になる", func(t *testing.T) {
 			verifier := &stubTokenVerifier{VerifyIDTokenFn: func(context.Context, string) (string, error) {
 				return "firebase-uid-1", nil
 			}}
@@ -433,7 +433,7 @@ func TestUseFirebaseAuth(t *testing.T) {
 }
 
 func TestUseFirebaseAuthWithPlayerResolve(t *testing.T) {
-	t.Run("Firebase認証とプレイヤー解決のチェイン", func(t *testing.T) {
+	t.Run("[認証]Firebase認証とプレイヤー解決のチェイン", func(t *testing.T) {
 		t.Run("検証に通るトークンのとき、本人のプレイヤーIDが解決される", func(t *testing.T) {
 			fa := newStatefulAccountFake()
 			defer fa.close()
@@ -486,7 +486,7 @@ func TestUseFirebaseAuthWithPlayerResolve(t *testing.T) {
 }
 
 func TestResolvePlayer(t *testing.T) {
-	t.Run("firebase_uidからのプレイヤー解決", func(t *testing.T) {
+	t.Run("[認証]firebase_uidからのプレイヤー解決", func(t *testing.T) {
 		t.Run("firebase_uidが既存プレイヤーのとき、200になり後続のハンドラでそのプレイヤーのplayer_idを取得できる", func(t *testing.T) {
 			fa := newStatefulAccountFake()
 			defer fa.close()
@@ -579,7 +579,7 @@ func TestResolvePlayer(t *testing.T) {
 }
 
 func TestContextGetters(t *testing.T) {
-	t.Run("context値の取得", func(t *testing.T) {
+	t.Run("[認証]context値の取得", func(t *testing.T) {
 		t.Run("firebase_uidが未設定のとき、空文字を返す", func(t *testing.T) {
 			r := gin.New()
 			r.GET("/test", func(c *gin.Context) {

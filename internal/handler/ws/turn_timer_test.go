@@ -47,13 +47,13 @@ func newTestRelayWithClock(clock *fakeAfterFuncClock) (*GameRelay, *mockBattleCl
 func TestResetTurnTimer(t *testing.T) {
 	// 実発火時には battle server 呼び出しが起こるため、発火を伴わない範囲で振る舞いを検証する。
 	// timeBank は十分大きな値を渡し、テスト中には発火させない。
-	t.Run("timeBankがターンタイマー登録要否の境界になる", func(t *testing.T) {
+	t.Run("[ターン管理]タイムバンクがターンタイマー登録要否の境界になる", func(t *testing.T) {
 		nonPositiveCases := []struct {
 			name            string
 			timeBankSeconds int64
 		}{
-			{name: "timeBankが0のとき、タイマーを登録しない", timeBankSeconds: 0},
-			{name: "timeBankが -5のとき、タイマーを登録しない", timeBankSeconds: -5},
+			{name: "タイムバンクが0のとき、タイマーを登録しない", timeBankSeconds: 0},
+			{name: "タイムバンクが -5のとき、タイマーを登録しない", timeBankSeconds: -5},
 		}
 		for _, tc := range nonPositiveCases {
 			t.Run(tc.name, func(t *testing.T) {
@@ -68,7 +68,7 @@ func TestResetTurnTimer(t *testing.T) {
 		}
 	})
 
-	t.Run("ターンタイマー発火時の強制終了送信", func(t *testing.T) {
+	t.Run("[ターン管理]ターンタイマー発火時の強制終了送信", func(t *testing.T) {
 		t.Run("登録したタイマーが発火すると、そのプレイヤーの強制終了が送信される", func(t *testing.T) {
 			clock := &fakeAfterFuncClock{}
 			relay, bc := newTestRelayWithClock(clock)
@@ -121,7 +121,7 @@ func TestResetTurnTimer(t *testing.T) {
 }
 
 func TestCancelTurnTimer(t *testing.T) {
-	t.Run("ターンタイマーの取消", func(t *testing.T) {
+	t.Run("[ターン管理]ターンタイマーの取消", func(t *testing.T) {
 		t.Run("登録済みタイマーを取り消すと、削除される", func(t *testing.T) {
 			relay, _ := newTestRelay()
 			relay.JoinGame("p1", "g1", 1)
@@ -143,7 +143,7 @@ func TestCancelTurnTimer(t *testing.T) {
 }
 
 func TestIsCanceled(t *testing.T) {
-	t.Run("コンテキストキャンセル判定", func(t *testing.T) {
+	t.Run("[ターン管理]コンテキストキャンセル判定", func(t *testing.T) {
 		tests := []struct {
 			name string
 			err  error

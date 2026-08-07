@@ -29,7 +29,7 @@ func (f *fakeShutdownNotifier) Shutdown(int, string) {
 }
 
 func TestShutdownAll(t *testing.T) {
-	t.Run("一括シャットダウンの待ち合わせ", func(t *testing.T) {
+	t.Run("[停止時の対戦保護]一括シャットダウンの待ち合わせ", func(t *testing.T) {
 		t.Run("全ての対象が期限内に終了通知を終えるとき、全対象へ終了通知が行われる", func(t *testing.T) {
 			var calls int32
 			targets := []shutdownNotifier{
@@ -79,7 +79,7 @@ func TestShutdownAll(t *testing.T) {
 }
 
 func TestConnectionHubShutdown(t *testing.T) {
-	t.Run("全接続への一斉終了通知", func(t *testing.T) {
+	t.Run("[停止時の対戦保護]全接続への一斉終了通知", func(t *testing.T) {
 		t.Run("登録されている接続はすべて、シャットダウン用のcloseコードと終了理由を持って閉じられる", func(t *testing.T) {
 			hub := NewConnectionHub(HubCallbacks{
 				GetGameID: func(string) (string, bool) { return "", false },

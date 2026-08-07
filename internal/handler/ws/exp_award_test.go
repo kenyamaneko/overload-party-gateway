@@ -161,7 +161,7 @@ func setupAwardRelay(t *testing.T, repo port.GamePlayerRepo, account *awardCount
 }
 
 func TestAwardGameExp(t *testing.T) {
-	t.Run("EXP付与", func(t *testing.T) {
+	t.Run("[対戦連携]EXP付与", func(t *testing.T) {
 		t.Run("初回付与のとき、フラグ確定→プレイヤー解決の順で実行しaccountに付与する", func(t *testing.T) {
 			repo := &mockGamePlayerRepo{
 				markAwardedReturn: true,

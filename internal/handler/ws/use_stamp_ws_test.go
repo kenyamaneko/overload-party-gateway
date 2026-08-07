@@ -27,7 +27,7 @@ func requireNoMessage(t *testing.T, conn *websocket.Conn) {
 }
 
 func TestWSUseStamp(t *testing.T) {
-	t.Run("スタンプ使用", func(t *testing.T) {
+	t.Run("[ゲーム進行]スタンプ使用", func(t *testing.T) {
 		t.Run("スタンプを使うと、自分と対戦相手の両方にstamp_usedが届く", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			const gameID = "TST-GAME-STAMP-OK"

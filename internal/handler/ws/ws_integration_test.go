@@ -439,7 +439,7 @@ func (s *wsTestServer) enterGame(t *testing.T, uid, gameID string) *websocket.Co
 }
 
 func TestWSConnectionAuth(t *testing.T) {
-	t.Run("WS接続の認証", func(t *testing.T) {
+	t.Run("[認証]WS接続の認証", func(t *testing.T) {
 		t.Run("登録済みプレイヤーのトークンで接続すると、接続が確立しpingにpongが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-ok", "player-ok")
@@ -483,7 +483,7 @@ func TestWSConnectionAuth(t *testing.T) {
 }
 
 func TestWSMessageRouting(t *testing.T) {
-	t.Run("メッセージルーティング", func(t *testing.T) {
+	t.Run("[ゲーム進行]メッセージルーティング", func(t *testing.T) {
 		t.Run("未知のメッセージ種別を送っても、接続は維持され続くpingにpongが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-unknown-msg", "player-unknown-msg")
@@ -515,7 +515,7 @@ func TestWSMessageRouting(t *testing.T) {
 }
 
 func TestWSMatchmakingStart(t *testing.T) {
-	t.Run("マッチング開始", func(t *testing.T) {
+	t.Run("[マッチング]マッチング開始", func(t *testing.T) {
 		t.Run("オンボーディング完了済みでデッキ検証を通過すると、matchmaking_startedが返り待ち行列へ登録される", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-mm-ok", "player-mm-ok")
@@ -712,7 +712,7 @@ func TestWSMatchmakingStart(t *testing.T) {
 }
 
 func TestWSMatchmakingCancel(t *testing.T) {
-	t.Run("マッチングキャンセル", func(t *testing.T) {
+	t.Run("[マッチング]マッチングキャンセル", func(t *testing.T) {
 		t.Run("マッチング待ちをキャンセルすると、matchmaking_cancelledが返り待ち行列から除去される", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-cancel-ok", "player-cancel-ok")
@@ -743,7 +743,7 @@ func TestWSMatchmakingCancel(t *testing.T) {
 }
 
 func TestWSGameEnterAndDisconnectGrace(t *testing.T) {
-	t.Run("ゲーム入室と切断猶予", func(t *testing.T) {
+	t.Run("[切断・再接続]ゲーム入室と切断猶予", func(t *testing.T) {
 		t.Run("ゲームの参加者が入室すると、game_enteredに続いて対戦開始イベントと盤面状態が届く", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			const gameID = "TST-GAME-ENTER-OK"

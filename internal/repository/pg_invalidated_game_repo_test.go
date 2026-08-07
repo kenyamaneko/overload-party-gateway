@@ -13,7 +13,7 @@ import (
 )
 
 func TestPgInvalidatedGameRepository(t *testing.T) {
-	t.Run("無効になった対戦の記録", func(t *testing.T) {
+	t.Run("[停止時の対戦保護]無効になった対戦の記録", func(t *testing.T) {
 		t.Run("記録した対戦は、決着していない対戦として読み出せる", func(t *testing.T) {
 			sharedPG.Truncate(t)
 			repo := repository.NewPgInvalidatedGameRepository(sharedPG.Pool)

@@ -58,7 +58,7 @@ func newFreshStore(t *testing.T) (*Store, *redis.Client) {
 }
 
 func TestDisconnectDeadline(t *testing.T) {
-	t.Run("切断猶予期限の読み書き", func(t *testing.T) {
+	t.Run("[切断・再接続]切断猶予期限の読み書き", func(t *testing.T) {
 		t.Run("書き込んだ期限を別のインスタンスから読み出すと、同じゲームIDと期限が返る", func(t *testing.T) {
 			writer := newTestStore(t)
 			ctx := context.Background()
