@@ -85,7 +85,7 @@ func (r *createNpcGameRecorder) snapshotRequest() apibattle.NpcBattleRequest {
 }
 
 func TestWSNpcBattleStart(t *testing.T) {
-	t.Run("NPC対戦開始", func(t *testing.T) {
+	t.Run("[対戦連携]NPC対戦開始", func(t *testing.T) {
 		t.Run("オンボーディング未完了のとき、再試行可能フラグOFFのnpc_battle_errorが返り、状態を変えずに再送しても同じエラーになり、オンボーディングを完了させてから再送するとnpc_battle_createdが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-npc-onboarding", "player-npc-onboarding")
@@ -330,7 +330,7 @@ func TestWSNpcBattleStart(t *testing.T) {
 }
 
 func TestWSNpcTurnRelay(t *testing.T) {
-	t.Run("NPCターンの中継", func(t *testing.T) {
+	t.Run("[対戦連携]NPCターンの中継", func(t *testing.T) {
 		t.Run("NPCがターン内に複数回行動するとき、行動した順序でaction_performedフレームが届く", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			const gameID = "TST-GAME-NPC-RELAY-OK"

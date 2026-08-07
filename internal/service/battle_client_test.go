@@ -13,7 +13,7 @@ import (
 )
 
 func TestStartNPCBattle(t *testing.T) {
-	t.Run("NPCゲーム作成", func(t *testing.T) {
+	t.Run("[対戦連携]NPCゲーム作成", func(t *testing.T) {
 		t.Run("プレイヤーのデッキ施策 (ルーチン/スペシャル)をリクエストに載せる", func(t *testing.T) {
 			const (
 				wantRoutine = "RTN-0007"
@@ -38,7 +38,7 @@ func TestStartNPCBattle(t *testing.T) {
 }
 
 func TestCreatePvPGame(t *testing.T) {
-	t.Run("PvPゲーム作成", func(t *testing.T) {
+	t.Run("[対戦連携]PvPゲーム作成", func(t *testing.T) {
 		t.Run("両プレイヤーのデッキ施策をそれぞれのスロットに載せる", func(t *testing.T) {
 			const (
 				deck1Routine = "RTN-0001"

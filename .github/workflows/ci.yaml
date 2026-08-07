@@ -23,6 +23,7 @@ jobs:
     uses: kenyamaneko/overload-party-common/.github/workflows/go-service-ci.yaml@main
     with:
       test-packages: ./internal/...
+      extra-test-module-dir: packages/internalauth-go
       collect-unit-coverage: true
       needs-firestore-emulator: true
     secrets: inherit

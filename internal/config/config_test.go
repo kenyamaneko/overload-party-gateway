@@ -106,7 +106,7 @@ var validEnv = map[string]string{
 }
 
 func TestFromEnv(t *testing.T) {
-	t.Run("環境変数からのサービス設定の読み込み", func(t *testing.T) {
+	t.Run("[設定]環境変数からのサービス設定の読み込み", func(t *testing.T) {
 		t.Run("必須envが揃うとき、8つの下流サービスの宛先・DB接続文字列・内部認証の署名鍵が設定に入る", func(t *testing.T) {
 			setEnv(t, validEnv)
 
@@ -238,7 +238,7 @@ func TestFromEnv(t *testing.T) {
 }
 
 func TestParseBool(t *testing.T) {
-	t.Run("真偽値を要求する環境変数の解釈", func(t *testing.T) {
+	t.Run("[設定]真偽値を要求する環境変数の解釈", func(t *testing.T) {
 		t.Run(`"true" のとき、有効になる`, func(t *testing.T) {
 			enabled, err := ParseBool("TEST_FLAG", "true")
 
@@ -272,7 +272,7 @@ func TestParseBool(t *testing.T) {
 }
 
 func TestSplitCSV(t *testing.T) {
-	t.Run("CSV文字列の分割", func(t *testing.T) {
+	t.Run("[設定]CSV文字列の分割", func(t *testing.T) {
 		emptyCases := []struct {
 			name  string
 			input string

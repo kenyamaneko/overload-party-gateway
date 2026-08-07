@@ -15,8 +15,8 @@ import (
 )
 
 func TestClient_InjectsInternalAuthHeader(t *testing.T) {
-	t.Run("X-Internal-Auth headerの注入", func(t *testing.T) {
-		t.Run("ctxに格納したtokenがX-Internal-Auth headerとして送られる", func(t *testing.T) {
+	t.Run("[内部認証]card宛リクエストへのX-Internal-Authヘッダーの注入", func(t *testing.T) {
+		t.Run("トークンを格納したコンテキストのとき、X-Internal-Authヘッダーとして送信される", func(t *testing.T) {
 			const wantToken = "test.jwt.token"
 			var got string
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

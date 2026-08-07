@@ -28,7 +28,7 @@ func validPayload(issuer, email string, emailVerified bool) *idtoken.Payload {
 }
 
 func TestGoogleIDTokenValidator_Validate(t *testing.T) {
-	t.Run("Google IDトークンの検証", func(t *testing.T) {
+	t.Run("[マッチング]Google IDトークンの検証", func(t *testing.T) {
 		t.Run("署名・有効期限・audienceなどGoogleの検証呼び出しがエラーを返すとき、そのエラーを返す", func(t *testing.T) {
 			wantErr := errors.New("idtoken: token expired: now=100, expires=50")
 			v := &googleIDTokenValidator{validate: func(context.Context, string, string) (*idtoken.Payload, error) {
@@ -106,8 +106,8 @@ func newPushAuthTestRouter(validator PubSubPushTokenValidator) *gin.Engine {
 }
 
 func TestUsePubSubPushAuth(t *testing.T) {
-	t.Run("pushリクエストのOIDC認証", func(t *testing.T) {
-		t.Run("Authorizationヘッダが無いとき、401を返し下流に到達しない", func(t *testing.T) {
+	t.Run("[マッチング]pushリクエストのOIDC認証", func(t *testing.T) {
+		t.Run("Authorizationヘッダーが無いとき、401を返し下流に到達しない", func(t *testing.T) {
 			r := newPushAuthTestRouter(&fakePushTokenValidator{email: testPushServiceAccountEmail})
 
 			w := httptest.NewRecorder()
@@ -117,7 +117,7 @@ func TestUsePubSubPushAuth(t *testing.T) {
 			assert.Contains(t, w.Body.String(), "missing authorization header")
 		})
 
-		t.Run("AuthorizationヘッダがBearer形式でないとき、401を返し下流に到達しない", func(t *testing.T) {
+		t.Run("AuthorizationヘッダーがBearer形式でないとき、401を返し下流に到達しない", func(t *testing.T) {
 			r := newPushAuthTestRouter(&fakePushTokenValidator{email: testPushServiceAccountEmail})
 			req := httptest.NewRequest(http.MethodPost, "/push", nil)
 			req.Header.Set("Authorization", "token-without-bearer-prefix")

@@ -9,7 +9,7 @@ import (
 )
 
 func TestInjectHeader(t *testing.T) {
-	t.Run("X-Internal-Authヘッダーへのトークン注入", func(t *testing.T) {
+	t.Run("[内部認証]X-Internal-Authヘッダーへのトークン注入", func(t *testing.T) {
 		cases := []struct {
 			name       string
 			ctx        context.Context

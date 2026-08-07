@@ -22,7 +22,7 @@ func newBattleServer(t *testing.T, status int, body string) *httptest.Server {
 }
 
 func TestBattleClient_ProcessAction(t *testing.T) {
-	t.Run("アクションデータの変換と送信", func(t *testing.T) {
+	t.Run("[対戦連携]アクションデータの変換と送信", func(t *testing.T) {
 		t.Run("不正なJSONデータのとき、battleに送信せずエラーになる", func(t *testing.T) {
 			wasPosted := false
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -77,7 +77,7 @@ func TestBattleClient_ProcessAction(t *testing.T) {
 }
 
 func TestBattleClient_GetGameStateForPlayer(t *testing.T) {
-	t.Run("状態取得のステータス処理", func(t *testing.T) {
+	t.Run("[対戦連携]状態取得のステータス処理", func(t *testing.T) {
 		statusCases := []struct {
 			name    string
 			status  int
@@ -144,7 +144,7 @@ func TestBattleClient_GetGameStateForPlayer(t *testing.T) {
 }
 
 func TestBattleClient_GetTurnControlsForPlayer(t *testing.T) {
-	t.Run("turn controlsの不在判定", func(t *testing.T) {
+	t.Run("[対戦連携]turn controlsの不在判定", func(t *testing.T) {
 		cases := []struct {
 			name    string
 			status  int
@@ -191,7 +191,7 @@ func TestBattleClient_GetTurnControlsForPlayer(t *testing.T) {
 }
 
 func TestBattleClient_ListNpcModels(t *testing.T) {
-	t.Run("NPCモデル一覧取得のステータス処理", func(t *testing.T) {
+	t.Run("[対戦連携]NPCモデル一覧取得のステータス処理", func(t *testing.T) {
 		t.Run("battleのエンドポイントにリクエストが届かず404が返ったとき、NPCモデル一覧の欠落エラーを返す", func(t *testing.T) {
 			srv := newBattleServer(t, http.StatusNotFound, `{"error":"not configured"}`)
 			c := NewBattleClient(srv.URL, &http.Client{})
@@ -215,7 +215,7 @@ func TestBattleClient_ListNpcModels(t *testing.T) {
 }
 
 func TestBattleClient_PostErrorResponse(t *testing.T) {
-	t.Run("送信系の非200応答のエラー変換", func(t *testing.T) {
+	t.Run("[対戦連携]送信系の非200応答のエラー変換", func(t *testing.T) {
 		cases := []struct {
 			name    string
 			status  int

@@ -21,7 +21,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestPgProcessedMatchRepository(t *testing.T) {
-	t.Run("matchIdの永続dedup", func(t *testing.T) {
+	t.Run("[マッチング]matchIdの永続dedup", func(t *testing.T) {
 		t.Run("未処理のmatchIdのとき、処理を開始できる", func(t *testing.T) {
 			sharedPG.Truncate(t)
 			repo := repository.NewPgProcessedMatchRepository(sharedPG.Pool)

@@ -40,7 +40,7 @@ func newHitRecorder(t *testing.T) *hitRecorder {
 func TestRegisterForwardRoutes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	t.Run("パスプレフィックスのルーティング", func(t *testing.T) {
+	t.Run("[転送・ルーティング]パスプレフィックスのルーティング", func(t *testing.T) {
 		// 7 サービス (account / card / shop / scenario / news / support / battle) を全網羅で検証する。
 		account := newHitRecorder(t)
 		card := newHitRecorder(t)
@@ -108,7 +108,7 @@ func TestRegisterForwardRoutes(t *testing.T) {
 		}
 	})
 
-	t.Run("configの検証", func(t *testing.T) {
+	t.Run("[設定]configの検証", func(t *testing.T) {
 		t.Run("不正なtargetURLを含むとき、エラーになる", func(t *testing.T) {
 			cfg := &config.Config{
 				AccountServiceURL:  "http://valid.example",

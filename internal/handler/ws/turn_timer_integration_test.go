@@ -16,7 +16,7 @@ import (
 )
 
 func TestWSTurnTimeout(t *testing.T) {
-	t.Run("ターンタイムアウト", func(t *testing.T) {
+	t.Run("[ターン管理]ターンタイムアウト", func(t *testing.T) {
 		t.Run("プレイヤー1がタイムバンクとネットワーク猶予を両方過ぎてもアクションを送らないとき、プレイヤー2の勝利を示すgame_overが両者に届く", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			const gameID = "TST-GAME-TURN-TIMEOUT"

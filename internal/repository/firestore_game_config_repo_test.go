@@ -41,7 +41,7 @@ func TestFirestoreGameConfigRepository(t *testing.T) {
 
 	repo := repository.NewFirestoreGameConfigRepository(client)
 
-	t.Run("game_configの取得", func(t *testing.T) {
+	t.Run("[対戦連携]game_configの取得", func(t *testing.T) {
 		t.Run("存在するキーexp_winのとき、値40を返す", func(t *testing.T) {
 			got, err := repo.GetInt64(ctx, "exp_win")
 			require.NoError(t, err)

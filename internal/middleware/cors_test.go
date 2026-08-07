@@ -31,7 +31,7 @@ func TestCORS(t *testing.T) {
 		allowMethods = "GET, POST, PUT, DELETE, OPTIONS"
 		allowHeaders = "Authorization, Content-Type"
 	)
-	t.Run("CORSヘッダの付与", func(t *testing.T) {
+	t.Run("[HTTPミドルウェア]CORSヘッダーの付与", func(t *testing.T) {
 		tests := []struct {
 			name           string
 			allowedOrigins []string
@@ -44,14 +44,14 @@ func TestCORS(t *testing.T) {
 			wantMaxAge     string
 		}{
 			{
-				name:           "Origin headerが無いとき、CORSヘッダなしで通過する",
+				name:           "Originヘッダーが無いとき、CORSヘッダーなしで通過する",
 				allowedOrigins: []string{"http://example.com"},
 				method:         http.MethodGet,
 				reqHeaders:     nil,
 				wantCode:       http.StatusOK,
 			},
 			{
-				name:           "許可されたOriginのとき、全CORSヘッダが付く",
+				name:           "許可されたOriginのとき、全CORSヘッダーが付く",
 				allowedOrigins: []string{"http://example.com", "http://other.com"},
 				method:         http.MethodGet,
 				reqHeaders:     map[string]string{"Origin": "http://example.com"},
@@ -62,7 +62,7 @@ func TestCORS(t *testing.T) {
 				wantMaxAge:     corsMaxAge,
 			},
 			{
-				name:           "許可されないOriginのとき、CORSヘッダなしで通過する",
+				name:           "許可されないOriginのとき、CORSヘッダーなしで通過する",
 				allowedOrigins: []string{"http://example.com"},
 				method:         http.MethodGet,
 				reqHeaders:     map[string]string{"Origin": "http://evil.com"},
@@ -80,7 +80,7 @@ func TestCORS(t *testing.T) {
 				wantMaxAge:     corsMaxAge,
 			},
 			{
-				name:           "許可されたOriginへのpreflightのとき、204とCORSヘッダを返す",
+				name:           "許可されたOriginへのpreflightのとき、204とCORSヘッダーを返す",
 				allowedOrigins: []string{"http://example.com"},
 				method:         http.MethodOptions,
 				reqHeaders:     map[string]string{"Origin": "http://example.com"},
@@ -91,7 +91,7 @@ func TestCORS(t *testing.T) {
 				wantMaxAge:     corsMaxAge,
 			},
 			{
-				name:           "許可されないOriginからのpreflightのとき、204で応答せずCORSヘッダなしで後続処理に渡る",
+				name:           "許可されないOriginからのpreflightのとき、204で応答せずCORSヘッダーなしで後続処理に渡る",
 				allowedOrigins: []string{"http://example.com"},
 				method:         http.MethodOptions,
 				reqHeaders:     map[string]string{"Origin": "http://evil.com"},

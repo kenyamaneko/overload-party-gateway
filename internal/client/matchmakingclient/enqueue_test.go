@@ -14,7 +14,7 @@ import (
 )
 
 func TestClient_SendsGatewayInstanceID(t *testing.T) {
-	t.Run("gatewayインスタンス識別子の送信", func(t *testing.T) {
+	t.Run("[マッチング]gatewayインスタンス識別子の送信", func(t *testing.T) {
 		t.Run("生成時に渡した識別子がgateway_instance_idとして送られる", func(t *testing.T) {
 			const wantInstanceID = "test-instance-id"
 			srv, received := newEnqueueRecorder(t)

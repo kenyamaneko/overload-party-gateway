@@ -36,7 +36,7 @@ var undocumentedControlMessageTypes = map[string]struct{}{
 }
 
 func TestAsyncAPIChannelDrift(t *testing.T) {
-	t.Run("asyncapi.yaml と ws-constants の WS メッセージ種別の整合", func(t *testing.T) {
+	t.Run("[契約整合]asyncapi.yaml と ws-constants の WS メッセージ種別の整合", func(t *testing.T) {
 		spec := loadAsyncAPISpec(t)
 		channels, ok := spec["channels"].(map[string]interface{})
 		require.True(t, ok, "channels が見つからない")

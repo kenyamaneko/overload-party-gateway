@@ -20,7 +20,7 @@ const (
 )
 
 func TestPgGamePlayerRepository(t *testing.T) {
-	t.Run("対戦へのプレイヤー登録の冪等性", func(t *testing.T) {
+	t.Run("[マッチング]対戦へのプレイヤー登録の冪等性", func(t *testing.T) {
 		t.Run("同一対戦・同一スロットへ重ねて登録したとき、エラーにならず先に登録した内容を保持する", func(t *testing.T) {
 			sharedPG.Truncate(t)
 			repo := repository.NewPgGamePlayerRepository(sharedPG.Pool)
@@ -37,7 +37,7 @@ func TestPgGamePlayerRepository(t *testing.T) {
 		})
 	})
 
-	t.Run("プレイヤーIDからのスロット番号の照会", func(t *testing.T) {
+	t.Run("[マッチング]プレイヤーIDからのスロット番号の照会", func(t *testing.T) {
 		t.Run("game_idとplayer_idに一致する行があるとき、player_numを返す", func(t *testing.T) {
 			sharedPG.Truncate(t)
 			repo := repository.NewPgGamePlayerRepository(sharedPG.Pool)
@@ -61,7 +61,7 @@ func TestPgGamePlayerRepository(t *testing.T) {
 		})
 	})
 
-	t.Run("対戦ごとの人間プレイヤー数の集計", func(t *testing.T) {
+	t.Run("[マッチング]対戦ごとの人間プレイヤー数の集計", func(t *testing.T) {
 		t.Run("人間2人の対戦のとき、2を返す", func(t *testing.T) {
 			sharedPG.Truncate(t)
 			repo := repository.NewPgGamePlayerRepository(sharedPG.Pool)
@@ -126,7 +126,7 @@ func TestPgGamePlayerRepository(t *testing.T) {
 		})
 	})
 
-	t.Run("対戦のプレイヤースロットの読み出し", func(t *testing.T) {
+	t.Run("[マッチング]対戦のプレイヤースロットの読み出し", func(t *testing.T) {
 		t.Run("人間が0人の対戦のとき、空の一覧を返す", func(t *testing.T) {
 			sharedPG.Truncate(t)
 			repo := repository.NewPgGamePlayerRepository(sharedPG.Pool)
@@ -173,7 +173,7 @@ func TestPgGamePlayerRepository(t *testing.T) {
 		})
 	})
 
-	t.Run("経験値付与済みフラグの冪等な設定", func(t *testing.T) {
+	t.Run("[対戦連携]経験値付与済みフラグの冪等な設定", func(t *testing.T) {
 		t.Run("game_idに一致しplayer_num=1の行でexp_awardedがfalseのとき、trueに更新してtrueを返す", func(t *testing.T) {
 			sharedPG.Truncate(t)
 			repo := repository.NewPgGamePlayerRepository(sharedPG.Pool)
