@@ -727,7 +727,7 @@ func TestWSMatchmakingCancel(t *testing.T) {
 			assert.EqualValues(t, 1, rec.calls.Load())
 		})
 
-		t.Run("既に待ち行列に居ない状態でキャンセルすると、matchmaking_cancelledが返る", func(t *testing.T) {
+		t.Run("マッチ成立直後の入れ違いでキャンセルが404を受けても、matchmaking_cancelledが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-cancel-notfound", "player-cancel-notfound")
 			rec := &cancelRecorder{status: http.StatusNotFound}
