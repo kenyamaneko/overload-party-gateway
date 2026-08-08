@@ -463,13 +463,13 @@ func TestHandleMatchMade(t *testing.T) {
 			calls := bc.snapshotCreatePvPGameCalls()
 			require.Len(t, calls, 1)
 			assert.Len(t, calls[0].deck1Cards, gamedesign.DeckSize)
-			assert.Equal(t, gamedesign.RestrictionCopyCount[gamedesign.RestrictionUnlimited], countCardID(calls[0].deck1Cards, "TST-P1-0001"))
+			assert.Equal(t, gamedesign.RestrictionCopyCount(gamedesign.RestrictionUnlimited), countCardID(calls[0].deck1Cards, "TST-P1-0001"))
 		})
 	})
 }
 
 func legalDeck(cardIDPrefix string) []apicard.DeckCard {
-	maxCopies := gamedesign.RestrictionCopyCount[gamedesign.RestrictionUnlimited]
+	maxCopies := gamedesign.RestrictionCopyCount(gamedesign.RestrictionUnlimited)
 	remaining := gamedesign.DeckSize
 	var deck []apicard.DeckCard
 	for i := 1; remaining > 0; i++ {
