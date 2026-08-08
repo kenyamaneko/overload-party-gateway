@@ -232,16 +232,16 @@ func (m *Manager) handleMatchmakingStart(ctx context.Context, conn *Connection, 
 		return
 	}
 
+	if err := m.cardClient.ValidateDeckForBattle(ctx, req.DeckID); err != nil {
+		sendError(conn, "matchmaking_error", "deck validation failed: "+err.Error(), false)
+		return
+	}
+
 	if msg, err := m.checkAndIncrementBattleLimit(ctx); err != nil {
 		sendError(conn, "matchmaking_error", err.Error(), false)
 		return
 	} else if msg != "" {
 		sendError(conn, "matchmaking_error", msg, false)
-		return
-	}
-
-	if err := m.cardClient.ValidateDeckForBattle(ctx, req.DeckID); err != nil {
-		sendError(conn, "matchmaking_error", "deck validation failed: "+err.Error(), false)
 		return
 	}
 
@@ -275,14 +275,6 @@ func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, da
 		return
 	}
 
-	if msg, err := m.checkAndIncrementBattleLimit(ctx); err != nil {
-		sendError(conn, "npc_battle_error", err.Error(), false)
-		return
-	} else if msg != "" {
-		sendError(conn, "npc_battle_error", msg, false)
-		return
-	}
-
 	if err := m.cardClient.ValidateDeckForBattle(ctx, req.DeckID); err != nil {
 		sendError(conn, "npc_battle_error", "deck validation failed: "+err.Error(), false)
 		return
@@ -297,6 +289,14 @@ func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, da
 	npcDisplayName, err := m.resolveNpcDisplayName(ctx, req.NpcModel)
 	if err != nil {
 		sendError(conn, "npc_battle_error", "failed to resolve npc model: "+err.Error(), true)
+		return
+	}
+
+	if msg, err := m.checkAndIncrementBattleLimit(ctx); err != nil {
+		sendError(conn, "npc_battle_error", err.Error(), false)
+		return
+	} else if msg != "" {
+		sendError(conn, "npc_battle_error", msg, false)
 		return
 	}
 
