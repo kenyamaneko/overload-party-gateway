@@ -58,7 +58,7 @@ func TestUseRequestLogger(t *testing.T) {
 	})
 
 	t.Run("[HTTPミドルウェア]記録される内容", func(t *testing.T) {
-		t.Run("応答を返すと、ログに要求のメソッド・パスと応答のステータスが記録される", func(t *testing.T) {
+		t.Run("ログにリクエストのメソッド・パスと応答のステータスが記録される", func(t *testing.T) {
 			record := captureRequestLog(t, http.StatusOK)
 
 			assert.Equal(t, http.MethodGet, record["method"])
