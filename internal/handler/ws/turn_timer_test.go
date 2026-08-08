@@ -122,17 +122,17 @@ func TestResetTurnTimer(t *testing.T) {
 
 func TestCancelTurnTimer(t *testing.T) {
 	t.Run("[ターン管理]ターンタイマーの取消", func(t *testing.T) {
-		t.Run("登録済みタイマーを取り消すと、削除される", func(t *testing.T) {
-			relay, _ := newTestRelay()
+		t.Run("登録済みタイマーを取り消すと、そのタイマーが発火しても強制終了は送信されない", func(t *testing.T) {
+			clock := &fakeAfterFuncClock{}
+			relay, bc := newTestRelayWithClock(clock)
 			relay.JoinGame("p1", "g1", 1)
 
 			relay.resetTurnTimer("g1", "p1", 60)
 			relay.cancelTurnTimer("g1")
+			require.Len(t, clock.calls, 1)
+			clock.calls[0]()
 
-			relay.timerMu.Lock()
-			_, ok := relay.turnTimers["g1"]
-			relay.timerMu.Unlock()
-			assert.False(t, ok)
+			assert.Empty(t, bc.snapshotProcessActionCalls())
 		})
 
 		t.Run("存在しないゲームを取り消しても、パニックしない", func(t *testing.T) {
@@ -149,12 +149,12 @@ func TestIsCanceled(t *testing.T) {
 			err  error
 			want bool
 		}{
-			{name: "context.Canceledのとき、trueになる", err: context.Canceled, want: true},
-			{name: "context.DeadlineExceededのとき、trueになる", err: context.DeadlineExceeded, want: true},
+			{name: "context.Canceledのとき、中断として判定される", err: context.Canceled, want: true},
+			{name: "context.DeadlineExceededのとき、中断として判定される", err: context.DeadlineExceeded, want: true},
 			// bare string ≠ wrap: 文字列に Canceled を含むだけでは errors.Is に一致しない。
-			{name: "文字列にCanceledを含むだけのエラーのとき、falseになる", err: errors.New("wrap: " + context.Canceled.Error()), want: false},
-			{name: "無関係なエラーのとき、falseになる", err: errFake, want: false},
-			{name: "nilのとき、falseになる", err: nil, want: false},
+			{name: "文字列にCanceledを含むだけのエラーのとき、中断として判定されない", err: errors.New("wrap: " + context.Canceled.Error()), want: false},
+			{name: "無関係なエラーのとき、中断として判定されない", err: errFake, want: false},
+			{name: "nilのとき、中断として判定されない", err: nil, want: false},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {

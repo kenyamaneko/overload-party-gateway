@@ -38,7 +38,7 @@ func TestPgGamePlayerRepository(t *testing.T) {
 	})
 
 	t.Run("[マッチング]プレイヤーIDからのスロット番号の照会", func(t *testing.T) {
-		t.Run("game_idとplayer_idに一致する行があるとき、player_numを返す", func(t *testing.T) {
+		t.Run("game_idとplayer_idに一致する行があるとき、スロット番号を返す", func(t *testing.T) {
 			sharedPG.Truncate(t)
 			repo := repository.NewPgGamePlayerRepository(sharedPG.Pool)
 			ctx := context.Background()
@@ -50,7 +50,7 @@ func TestPgGamePlayerRepository(t *testing.T) {
 			assert.Equal(t, 2, num)
 		})
 
-		t.Run("game_idとplayer_idに一致する行が無いとき、port.ErrNotFoundを返す", func(t *testing.T) {
+		t.Run("game_idとplayer_idに一致する行が無いとき、スロット番号が見つからないことを示すエラーを返す", func(t *testing.T) {
 			sharedPG.Truncate(t)
 			repo := repository.NewPgGamePlayerRepository(sharedPG.Pool)
 			ctx := context.Background()
@@ -87,7 +87,7 @@ func TestPgGamePlayerRepository(t *testing.T) {
 			assert.Equal(t, map[string]int{"g1": 1}, counts)
 		})
 
-		t.Run("行が無い対戦のとき、その対戦を含まない", func(t *testing.T) {
+		t.Run("行が無い対戦のとき、その対戦は人間プレイヤー数の集計結果に含まれない", func(t *testing.T) {
 			sharedPG.Truncate(t)
 			repo := repository.NewPgGamePlayerRepository(sharedPG.Pool)
 			ctx := context.Background()

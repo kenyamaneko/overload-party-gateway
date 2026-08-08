@@ -44,12 +44,12 @@ func TestBattleClient_ProcessAction(t *testing.T) {
 			wantData interface{}
 		}{
 			{
-				name:     "dataがnilのとき、dataフィールドなしで送られる",
+				name:     "アクションデータが無いとき、dataフィールドはnullとして送られる",
 				data:     nil,
 				wantData: nil,
 			},
 			{
-				name:     "オブジェクトのとき、mapとして送られる",
+				name:     "アクションデータがオブジェクトのとき、dataフィールドにJSONオブジェクトが送られる",
 				data:     json.RawMessage(`{"target":"TST-0001"}`),
 				wantData: map[string]interface{}{"target": "TST-0001"},
 			},
@@ -86,7 +86,7 @@ func TestBattleClient_GetGameStateForPlayer(t *testing.T) {
 			wantErr error
 		}{
 			{
-				name:    "404のとき、状態欠落としてerrMissingGameStateを返す",
+				name:    "404のとき、ゲーム状態が見つからないエラーを返す",
 				status:  http.StatusNotFound,
 				body:    `{"error":"game not found"}`,
 				wantErr: errMissingGameState,
@@ -152,19 +152,19 @@ func TestBattleClient_GetTurnControlsForPlayer(t *testing.T) {
 			wantRaw json.RawMessage
 		}{
 			{
-				name:    "null bodyのとき、不在としてnilを返す",
+				name:    "null bodyのとき、controlsを返さない",
 				status:  http.StatusOK,
 				body:    "null",
 				wantRaw: nil,
 			},
 			{
-				name:    "空bodyのとき、不在としてnilを返す",
+				name:    "空bodyのとき、controlsを返さない",
 				status:  http.StatusOK,
 				body:    "",
 				wantRaw: nil,
 			},
 			{
-				name:    "404のとき、不在としてnilを返す",
+				name:    "404のとき、controlsを返さない",
 				status:  http.StatusNotFound,
 				body:    "",
 				wantRaw: nil,
@@ -192,7 +192,7 @@ func TestBattleClient_GetTurnControlsForPlayer(t *testing.T) {
 
 func TestBattleClient_ListNpcModels(t *testing.T) {
 	t.Run("[対戦連携]NPCモデル一覧取得のステータス処理", func(t *testing.T) {
-		t.Run("battleのエンドポイントにリクエストが届かず404が返ったとき、NPCモデル一覧の欠落エラーを返す", func(t *testing.T) {
+		t.Run("404のとき、NPCモデル一覧の欠落エラーを返す", func(t *testing.T) {
 			srv := newBattleServer(t, http.StatusNotFound, `{"error":"not configured"}`)
 			c := NewBattleClient(srv.URL, &http.Client{})
 
@@ -202,7 +202,7 @@ func TestBattleClient_ListNpcModels(t *testing.T) {
 			require.Nil(t, got)
 		})
 
-		t.Run("battleのエンドポイントにリクエストが届いたとき、モデル一覧を返す", func(t *testing.T) {
+		t.Run("200のとき、NPCモデル一覧を返す", func(t *testing.T) {
 			srv := newBattleServer(t, http.StatusOK, `{"models":[{"model":"TST-NPC-A","display_name":"Test NPC A","faction":"SHE","difficulty":"normal"}]}`)
 			c := NewBattleClient(srv.URL, &http.Client{})
 

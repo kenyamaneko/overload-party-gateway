@@ -42,7 +42,7 @@ func (r *processActionRecorder) snapshotCalls() []apibattle.GameActionRequest {
 
 func TestWSGameAction(t *testing.T) {
 	t.Run("[対戦連携]ゲーム内行動", func(t *testing.T) {
-		t.Run("有効な行動を送ると、action_performedが返る", func(t *testing.T) {
+		t.Run("battleが行動を受理すると、action_performedが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			const gameID = "TST-GAME-ACTION-OK"
 			srv.setupPvPGame(gameID, "uid-action-p1", "p-action-1", "uid-action-p2", "p-action-2")
@@ -67,7 +67,7 @@ func TestWSGameAction(t *testing.T) {
 			assert.JSONEq(t, `{"key":"value"}`, string(action.State))
 		})
 
-		t.Run("有効な行動を送ると、行動内容がbattleへ転送される", func(t *testing.T) {
+		t.Run("battleが行動を受理すると、行動内容がbattleへ転送される", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			const gameID = "TST-GAME-ACTION-FORWARD"
 			srv.setupPvPGame(gameID, "uid-fwd-p1", "p-fwd-1", "uid-fwd-p2", "p-fwd-2")
@@ -93,7 +93,7 @@ func TestWSGameAction(t *testing.T) {
 			assert.EqualValues(t, 2, calls[0].PlayerNum)
 		})
 
-		t.Run("不正な行動を送ると、拒否理由付きでaction_rejectedが返る", func(t *testing.T) {
+		t.Run("battleが行動を拒否すると、拒否理由付きでaction_rejectedが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			const gameID = "TST-GAME-ACTION-REJECT"
 			srv.setupPvPGame(gameID, "uid-reject-p1", "p-reject-1", "uid-reject-p2", "p-reject-2")
@@ -142,7 +142,7 @@ func TestWSGameAction(t *testing.T) {
 			}
 		})
 
-		t.Run("ゲームに登録されていないプレイヤーが行動を送ると、game_errorが返る", func(t *testing.T) {
+		t.Run("行動対象のゲームでスロットを持たないプレイヤーが行動を送ると、game_errorが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-action-unregistered", "player-action-unregistered")
 			conn := srv.dial(t, "uid-action-unregistered")

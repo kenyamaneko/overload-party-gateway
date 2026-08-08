@@ -50,12 +50,12 @@ func TestClient_Enqueue_MapsStatusToSentinel(t *testing.T) {
 		wantErr error
 	}{
 		{
-			name:    "受付停止の503はErrMatchmakingUnavailableに写像する",
+			name:    "受付停止の503は呼び出し元がリトライ可能と判別できるエラーになる",
 			status:  http.StatusServiceUnavailable,
 			wantErr: port.ErrMatchmakingUnavailable,
 		},
 		{
-			name:    "その他の5xxはSDK sentinelを透過する",
+			name:    "503以外の5xxは受付停止として扱われないエラーが返る",
 			status:  http.StatusInternalServerError,
 			wantErr: apimatchmakingclient.ErrInternalServer,
 		},
@@ -92,7 +92,7 @@ func TestClient_Cancel_FoldsAndMapsStatus(t *testing.T) {
 			wantErr: nil,
 		},
 		{
-			name:    "受付停止の503はErrMatchmakingUnavailableに写像する",
+			name:    "受付停止の503は呼び出し元がリトライ可能と判別できるエラーになる",
 			status:  http.StatusServiceUnavailable,
 			wantErr: port.ErrMatchmakingUnavailable,
 		},

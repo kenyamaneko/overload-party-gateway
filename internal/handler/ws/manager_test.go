@@ -170,7 +170,7 @@ func matchMadeEvent(matchID string) apimatchmaking.MatchMadeEvent {
 
 func TestHandleMatchMade(t *testing.T) {
 	t.Run("[マッチング]match_madeイベントの永続dedup", func(t *testing.T) {
-		t.Run("有効なイベントのとき、battleにゲーム作成を1回依頼し両プレイヤーのgame_players行を挿入する", func(t *testing.T) {
+		t.Run("参加者が2人のイベントのとき、battleにゲーム作成を1回依頼し両プレイヤーをゲームに登録する", func(t *testing.T) {
 			bc := newMockBattleClient()
 			bc.createPvPGameResult = &service.GameCreatedResult{GameID: "g1"}
 			gamePlayerRepo := &mockGamePlayerRepo{}
@@ -187,7 +187,7 @@ func TestHandleMatchMade(t *testing.T) {
 			assert.Equal(t, insertGamePlayerCall{gameID: "g1", playerNum: 2, playerID: "p2"}, calls[1])
 		})
 
-		t.Run("同一matchIdのイベントが新しいManagerインスタンスへ再送されるとき、battleへのゲーム作成依頼は1回のまま増えない", func(t *testing.T) {
+		t.Run("同一matchIdのイベントがプロセス再起動をまたいで再送されるとき、battleへのゲーム作成依頼は1回のまま増えない", func(t *testing.T) {
 			dedupRepo := newFakeProcessedMatchRepo()
 
 			bc1 := newMockBattleClient()
@@ -213,7 +213,7 @@ func TestHandleMatchMade(t *testing.T) {
 			assert.Equal(t, "g1", calls[1].gameID)
 		})
 
-		t.Run("matchIdがclaim済みでbattle側の結果がまだ記録されていないとき、ゲーム作成を行わず処理をスキップする", func(t *testing.T) {
+		t.Run("matchIdの処理が既に開始済みでbattle側の結果がまだ記録されていないとき、ゲーム作成を行わず処理をスキップする", func(t *testing.T) {
 			dedupRepo := newFakeProcessedMatchRepo()
 			claimed, err := dedupRepo.Claim(context.Background(), "mch_inflight")
 			require.NoError(t, err)
@@ -230,7 +230,7 @@ func TestHandleMatchMade(t *testing.T) {
 			assert.Empty(t, gamePlayerRepo.snapshotInsertGamePlayerCalls())
 		})
 
-		t.Run("battleのゲーム作成に失敗したmatchIdが再送されると、claimが解放されており再度ゲーム作成を試みて成功する", func(t *testing.T) {
+		t.Run("battleのゲーム作成に失敗したmatchIdが再送されると、ゲーム作成を再び試みて成功する", func(t *testing.T) {
 			dedupRepo := newFakeProcessedMatchRepo()
 			bc := newMockBattleClient()
 			bc.createPvPGameQueue = []createPvPGameResponse{
@@ -252,7 +252,7 @@ func TestHandleMatchMade(t *testing.T) {
 			assert.Equal(t, "g2", calls[0].gameID)
 		})
 
-		t.Run("battleのゲーム作成成功後にdedup記録が失敗するとき、claimを解放せずエラーを返す", func(t *testing.T) {
+		t.Run("battleのゲーム作成に成功した後にgameIDの記録が失敗するとき、処理開始の記録を取り消さずエラーを返す", func(t *testing.T) {
 			dedupRepo := newFakeProcessedMatchRepo()
 			dedupRepo.recordErr = errors.New("db down")
 			bc := newMockBattleClient()
@@ -267,7 +267,7 @@ func TestHandleMatchMade(t *testing.T) {
 			assert.Empty(t, gamePlayerRepo.snapshotInsertGamePlayerCalls())
 		})
 
-		t.Run("dedup記録に失敗したmatchIdが再送されると、battleを再度呼び出さず処理をスキップする", func(t *testing.T) {
+		t.Run("gameIDの記録に失敗したmatchIdが再送されると、battleを再度呼び出さず処理をスキップする", func(t *testing.T) {
 			dedupRepo := newFakeProcessedMatchRepo()
 			dedupRepo.recordErr = errors.New("db down")
 			bc := newMockBattleClient()
@@ -285,7 +285,7 @@ func TestHandleMatchMade(t *testing.T) {
 			assert.Empty(t, gamePlayerRepo.snapshotInsertGamePlayerCalls())
 		})
 
-		t.Run("claim自体が失敗するとき、エラーを返しbattleを呼び出さない", func(t *testing.T) {
+		t.Run("matchIdの処理を排他的に開始すること自体が失敗するとき、エラーを返しbattleを呼び出さない", func(t *testing.T) {
 			dedupRepo := newFakeProcessedMatchRepo()
 			dedupRepo.claimErr = errors.New("db down")
 			bc := newMockBattleClient()
@@ -298,7 +298,7 @@ func TestHandleMatchMade(t *testing.T) {
 			assert.Empty(t, bc.snapshotCreatePvPGameCalls())
 		})
 
-		t.Run("game_players挿入に失敗するとき、エラーを返す", func(t *testing.T) {
+		t.Run("プレイヤーのゲームへの登録に失敗するとき、エラーを返す", func(t *testing.T) {
 			dedupRepo := newFakeProcessedMatchRepo()
 			bc := newMockBattleClient()
 			bc.createPvPGameResult = &service.GameCreatedResult{GameID: "g5"}
@@ -311,7 +311,7 @@ func TestHandleMatchMade(t *testing.T) {
 			require.Len(t, bc.snapshotCreatePvPGameCalls(), 1)
 		})
 
-		t.Run("game_players挿入に失敗したmatchIdが再送されると、battleを再度呼び出さず挿入だけがやり直される", func(t *testing.T) {
+		t.Run("プレイヤーのゲームへの登録に失敗したmatchIdが再送されると、battleを再度呼び出さず登録だけがやり直される", func(t *testing.T) {
 			dedupRepo := newFakeProcessedMatchRepo()
 			bc := newMockBattleClient()
 			bc.createPvPGameResult = &service.GameCreatedResult{GameID: "g6"}
@@ -516,7 +516,7 @@ var _ port.MatchmakingClient = noopMatchmakingClient{}
 
 func TestManagerReconnect(t *testing.T) {
 	t.Run("[切断・再接続]切断猶予切れ状態での復帰時の決着評価", func(t *testing.T) {
-		t.Run("対戦相手の猶予切れのまま再接続すると、対戦相手のforfeitが実行される", func(t *testing.T) {
+		t.Run("対戦相手の猶予が切れており復帰した本人は猶予内のまま再接続すると、対戦相手のforfeitが実行される", func(t *testing.T) {
 			bc := newMockBattleClient()
 			bc.processActionResult = &service.ActionResult{}
 			repo := &mockGamePlayerRepo{lookupEntries: []port.GamePlayerEntry{
@@ -559,7 +559,7 @@ func newTestManagerForBattleLimit(accountClient port.AccountClient) *Manager {
 
 func TestCheckAndIncrementBattleLimit(t *testing.T) {
 	t.Run("[マッチング]バトル開始受付時のバトル回数制限確認と加算", func(t *testing.T) {
-		t.Run("当日のバトル残回数があるとき、当日のバトル回数を1増やし、呼び出し元への制限メッセージは空になる", func(t *testing.T) {
+		t.Run("当日のバトル残回数があるとき、当日のバトル回数を1増やし、バトル回数制限による拒否理由は空になる", func(t *testing.T) {
 			fa := apiaccountserverfake.NewServer()
 			defer fa.Close()
 			fa.GetBattleLimitFn = func() (int, any) {
@@ -579,7 +579,7 @@ func TestCheckAndIncrementBattleLimit(t *testing.T) {
 			assert.Equal(t, int32(1), incrementCalls.Load())
 		})
 
-		t.Run("当日のバトル残回数が無いとき、バトル回数を増やさず、呼び出し元への制限メッセージに拒否理由が載る", func(t *testing.T) {
+		t.Run("当日のバトル残回数が無いとき、バトル回数を増やさず、バトル回数制限による拒否理由が返る", func(t *testing.T) {
 			fa := apiaccountserverfake.NewServer()
 			defer fa.Close()
 			fa.GetBattleLimitFn = func() (int, any) {

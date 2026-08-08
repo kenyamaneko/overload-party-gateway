@@ -371,7 +371,7 @@ func matchMadePayload(t *testing.T, matchID string) []byte {
 
 func TestPushMatchMadeE2E(t *testing.T) {
 	t.Run("[マッチング]push受け口経由のmatch_made処理", func(t *testing.T) {
-		t.Run("有効なpushを投げると、200を返しbattleにゲーム作成を1回依頼し両プレイヤーのgame_players行が永続化される", func(t *testing.T) {
+		t.Run("有効なpushを投げると、200を返しbattleにゲーム作成を1回依頼し両プレイヤー分の対戦の記録が永続化される", func(t *testing.T) {
 			bc := &fakeBattleClient{gameID: "01ARZ3NDEKTSV4RRFFQ69G5FAV"}
 			r, gamePlayerRepo := newTestPushRouter(t, bc)
 			payload := matchMadePayload(t, "mch_e2e_1")
@@ -385,7 +385,7 @@ func TestPushMatchMadeE2E(t *testing.T) {
 			require.Len(t, entries, 2)
 		})
 
-		t.Run("同一payloadのpushを2回投げても、battleへのゲーム作成依頼は1回のままでgame_players行は重複しない", func(t *testing.T) {
+		t.Run("同一payloadのpushを2回投げても、battleへのゲーム作成依頼は1回のままで対戦の記録は重複しない", func(t *testing.T) {
 			bc := &fakeBattleClient{gameID: "01ARZ3NDEKTSV4RRFFQ69G5FA2"}
 			r, gamePlayerRepo := newTestPushRouter(t, bc)
 			payload := matchMadePayload(t, "mch_e2e_dup")

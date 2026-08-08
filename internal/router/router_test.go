@@ -109,7 +109,7 @@ func TestRegisterForwardRoutes(t *testing.T) {
 	})
 
 	t.Run("[設定]configの検証", func(t *testing.T) {
-		t.Run("不正なtargetURLを含むとき、エラーになる", func(t *testing.T) {
+		t.Run("サービスURLの一つにスキームが無いとき、エラーになる", func(t *testing.T) {
 			cfg := &config.Config{
 				AccountServiceURL:  "http://valid.example",
 				CardServiceURL:     "http://valid.example",

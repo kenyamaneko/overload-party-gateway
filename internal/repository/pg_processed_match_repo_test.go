@@ -22,7 +22,7 @@ func TestMain(m *testing.M) {
 
 func TestPgProcessedMatchRepository(t *testing.T) {
 	t.Run("[マッチング]matchIdの永続dedup", func(t *testing.T) {
-		t.Run("未処理のmatchIdのとき、処理を開始できる", func(t *testing.T) {
+		t.Run("処理を開始したことが無いmatchIdのとき、処理を開始できる", func(t *testing.T) {
 			sharedPG.Truncate(t)
 			repo := repository.NewPgProcessedMatchRepository(sharedPG.Pool)
 			ctx := context.Background()
@@ -88,7 +88,7 @@ func TestPgProcessedMatchRepository(t *testing.T) {
 			assert.Equal(t, "g1", gameID)
 		})
 
-		t.Run("処理を開始したことが無いmatchIdのとき、記録は見つからない", func(t *testing.T) {
+		t.Run("処理を開始したことが無いmatchIdのとき、ゲーム作成の記録は見つからない", func(t *testing.T) {
 			sharedPG.Truncate(t)
 			repo := repository.NewPgProcessedMatchRepository(sharedPG.Pool)
 			ctx := context.Background()

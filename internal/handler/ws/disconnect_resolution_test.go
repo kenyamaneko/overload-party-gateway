@@ -156,7 +156,7 @@ func TestOpponentPlayerID(t *testing.T) {
 				want:   "p1",
 			},
 			{
-				name: "エントリが1件 (NPC戦)のとき、空文字を返す",
+				name: "エントリが1件 (NPC戦)のとき、対戦相手のプレイヤーIDとして空文字を返す",
 				entries: []port.GamePlayerEntry{
 					{PlayerNum: 1, PlayerID: "p1"},
 				},
@@ -164,7 +164,7 @@ func TestOpponentPlayerID(t *testing.T) {
 				want:   "",
 			},
 			{
-				name:    "エントリが0件のとき、空文字を返す",
+				name:    "エントリが0件のとき、対戦相手のプレイヤーIDとして空文字を返す",
 				entries: nil,
 				selfID:  "p1",
 				want:    "",
@@ -190,9 +190,9 @@ func TestPlayerNumOf(t *testing.T) {
 			playerID string
 			want     int
 		}{
-			{name: "1Pとして参加しているとき、1を返す", playerID: "p1", want: 1},
-			{name: "2Pとして参加しているとき、2を返す", playerID: "p2", want: 2},
-			{name: "参加していないとき、0を返す", playerID: "p3", want: 0},
+			{name: "1Pとして参加しているとき、プレイヤー番号として1を返す", playerID: "p1", want: 1},
+			{name: "2Pとして参加しているとき、プレイヤー番号として2を返す", playerID: "p2", want: 2},
+			{name: "スロットを持たないプレイヤーIDのとき、プレイヤー番号として0を返す", playerID: "p3", want: 0},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
@@ -209,7 +209,7 @@ func TestHandleDisconnectTimeout(t *testing.T) {
 	}
 
 	t.Run("[切断・再接続]切断猶予切れの決着判定", func(t *testing.T) {
-		t.Run("対戦相手が接続中のとき、forfeitを実行する", func(t *testing.T) {
+		t.Run("対戦相手が接続中のとき、強制終了を実行する", func(t *testing.T) {
 			relay, bc, hub := newDisconnectResolutionRelay(entries, nil)
 			relay.JoinGame("p1", "g1", 1)
 			hub.Register(NewConnection(nil, "p2"))
@@ -223,7 +223,7 @@ func TestHandleDisconnectTimeout(t *testing.T) {
 			assert.Equal(t, gamelogic.ActionTypeForfeit, bc.processActionCalls[0].actionType)
 		})
 
-		t.Run("対戦相手も切断中のとき、切断タイムアウトでもターンタイマー期限切れでもforfeitを実行しない", func(t *testing.T) {
+		t.Run("対戦相手も切断中のとき、切断タイムアウトでもターンタイマー期限切れでも強制終了を実行しない", func(t *testing.T) {
 			relay, bc, _ := newDisconnectResolutionRelay(entries, nil)
 			relay.JoinGame("p1", "g1", 1)
 			relay.resetTurnTimer("g1", "p1", 1) // timeBankSeconds=1 (+turnTimerNetworkBuffer) で数秒後に自然発火する
@@ -236,7 +236,7 @@ func TestHandleDisconnectTimeout(t *testing.T) {
 				"must not forfeit while the opponent is also disconnected, even after the turn timer later fires")
 		})
 
-		t.Run("NPC戦 (対戦相手が居ない)のとき、forfeitを実行する", func(t *testing.T) {
+		t.Run("NPC戦 (対戦相手が居ない)のとき、強制終了を実行する", func(t *testing.T) {
 			relay, bc, _ := newDisconnectResolutionRelay([]port.GamePlayerEntry{{PlayerNum: 1, PlayerID: "p1"}}, nil)
 			relay.JoinGame("p1", "g1", 1)
 			bc.processActionResult = &service.ActionResult{}
@@ -244,9 +244,12 @@ func TestHandleDisconnectTimeout(t *testing.T) {
 			relay.HandleDisconnectTimeout("p1", "g1")
 
 			require.Len(t, bc.processActionCalls, 1)
+			assert.Equal(t, "g1", bc.processActionCalls[0].gameID)
+			assert.Equal(t, 1, bc.processActionCalls[0].playerNum)
+			assert.Equal(t, gamelogic.ActionTypeForfeit, bc.processActionCalls[0].actionType)
 		})
 
-		t.Run("ゲーム参加者情報の取得に失敗するとき、forfeitを実行しない", func(t *testing.T) {
+		t.Run("ゲーム参加者情報の取得に失敗するとき、強制終了を実行しない", func(t *testing.T) {
 			relay, bc, _ := newDisconnectResolutionRelay(nil, nil)
 			relay.gamePlayerRepo = &mockGamePlayerRepo{lookupErr: errors.New("db down")}
 			relay.JoinGame("p1", "g1", 1)
@@ -256,7 +259,7 @@ func TestHandleDisconnectTimeout(t *testing.T) {
 			assert.Empty(t, bc.processActionCalls)
 		})
 
-		t.Run("入室していないプレイヤーの猶予が切れたとき、ゲームの参加者情報のスロット番号でforfeitを実行する", func(t *testing.T) {
+		t.Run("入室していないプレイヤーの猶予が切れたとき、取得したゲーム参加者情報のスロット番号で強制終了を実行する", func(t *testing.T) {
 			relay, bc, hub := newDisconnectResolutionRelay(entries, nil)
 			hub.Register(NewConnection(nil, "p1"))
 			bc.processActionResult = &service.ActionResult{}
@@ -269,7 +272,7 @@ func TestHandleDisconnectTimeout(t *testing.T) {
 			assert.Equal(t, gamelogic.ActionTypeForfeit, bc.processActionCalls[0].actionType)
 		})
 
-		t.Run("ゲームの参加者として登録されていないプレイヤーの猶予が切れたとき、forfeitを実行せずエラーログに残す", func(t *testing.T) {
+		t.Run("ゲームにスロットを持たないプレイヤーの猶予が切れたとき、強制終了を実行せずエラーログに残す", func(t *testing.T) {
 			readLogs := captureLogs(t)
 			relay, bc, _ := newDisconnectResolutionRelay(nil, nil)
 
@@ -290,7 +293,7 @@ func TestResolveStaleDisconnect(t *testing.T) {
 	}
 
 	t.Run("[切断・再接続]復帰時点での両者の猶予評価", func(t *testing.T) {
-		t.Run("対戦相手が接続中のとき、何もしない", func(t *testing.T) {
+		t.Run("対戦相手が接続中のとき、強制終了を実行しない", func(t *testing.T) {
 			relay, bc, hub := newDisconnectResolutionRelay(entries, nil)
 			hub.Register(NewConnection(nil, "p2"))
 
@@ -299,7 +302,7 @@ func TestResolveStaleDisconnect(t *testing.T) {
 			assert.Empty(t, bc.processActionCalls)
 		})
 
-		t.Run("対戦相手が切断中だが猶予内のとき、何もしない", func(t *testing.T) {
+		t.Run("対戦相手が切断中だが猶予内のとき、強制終了を実行しない", func(t *testing.T) {
 			store := &fakeTimerStore{
 				getDisconnectFound:  true,
 				getDisconnectReturn: portDisconnectDeadline("g1", time.Now().Add(time.Minute)),
@@ -311,7 +314,7 @@ func TestResolveStaleDisconnect(t *testing.T) {
 			assert.Empty(t, bc.processActionCalls)
 		})
 
-		t.Run("対戦相手の切断猶予期限のバックアップの読み出しに失敗するとき、エラーログを残しつつforfeitを実行しない", func(t *testing.T) {
+		t.Run("対戦相手の切断猶予期限のバックアップの読み出しに失敗するとき、エラーログを残しつつ強制終了を実行しない", func(t *testing.T) {
 			readLogs := captureLogs(t)
 			store := &fakeTimerStore{getDisconnectErr: errors.New("redis down")}
 			relay, bc, _ := newDisconnectResolutionRelay(entries, store)
@@ -324,7 +327,7 @@ func TestResolveStaleDisconnect(t *testing.T) {
 			assert.Equal(t, "redis down", errorLogs[0].Error)
 		})
 
-		t.Run("対戦相手の猶予が切れており復帰した本人は猶予内だったとき、対戦相手のforfeitを実行する", func(t *testing.T) {
+		t.Run("対戦相手の猶予が切れており復帰した本人は猶予内だったとき、対戦相手の強制終了を実行する", func(t *testing.T) {
 			store := &fakeTimerStore{
 				getDisconnectFound:  true,
 				getDisconnectReturn: portDisconnectDeadline("g1", time.Now().Add(-time.Minute)),
@@ -413,7 +416,7 @@ func TestResolveStaleDisconnect(t *testing.T) {
 			assert.Equal(t, int32(0), account.calls.Load(), "must not award exp for a game that was left unresolved")
 		})
 
-		t.Run("NPC戦 (対戦相手が居ない)のとき、何もしない", func(t *testing.T) {
+		t.Run("NPC戦 (対戦相手が居ない)のとき、強制終了を実行しない", func(t *testing.T) {
 			relay, bc, _ := newDisconnectResolutionRelay([]port.GamePlayerEntry{{PlayerNum: 1, PlayerID: "p1"}}, nil)
 
 			relay.resolveStaleDisconnect("g1", "p1", false)
@@ -421,7 +424,7 @@ func TestResolveStaleDisconnect(t *testing.T) {
 			assert.Empty(t, bc.processActionCalls)
 		})
 
-		t.Run("ゲーム参加者情報の取得に失敗するとき、forfeitを実行しない", func(t *testing.T) {
+		t.Run("ゲーム参加者情報の取得に失敗するとき、強制終了を実行しない", func(t *testing.T) {
 			relay, bc, _ := newDisconnectResolutionRelay(nil, nil)
 			relay.gamePlayerRepo = &mockGamePlayerRepo{lookupErr: errors.New("db down")}
 
@@ -434,7 +437,7 @@ func TestResolveStaleDisconnect(t *testing.T) {
 
 func TestHandleReconnect(t *testing.T) {
 	t.Run("[切断・再接続]復帰処理", func(t *testing.T) {
-		t.Run("対戦相手の切断猶予が切れているとき、復帰処理により対戦相手のforfeitが実行される", func(t *testing.T) {
+		t.Run("対戦相手の切断猶予が切れているとき、復帰処理により対戦相手の強制終了が実行される", func(t *testing.T) {
 			entries := []port.GamePlayerEntry{
 				{PlayerNum: 1, PlayerID: "p1"},
 				{PlayerNum: 2, PlayerID: "p2"},

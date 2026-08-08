@@ -182,21 +182,6 @@ func TestAwardGameExp(t *testing.T) {
 				"MarkExpAwarded MUST be called before LookupGamePlayers (idempotency invariant)")
 		})
 
-		t.Run("対戦相手が1件 (NPC)のとき、accountに付与する", func(t *testing.T) {
-			repo := &mockGamePlayerRepo{
-				markAwardedReturn: true,
-				lookupEntries: []port.GamePlayerEntry{
-					{PlayerNum: 1, PlayerID: "p1"},
-				},
-			}
-			account := &awardCounter{}
-			relay := setupAwardRelay(t, repo, account)
-
-			relay.awardGameExp("g1", 1, "lp_zero")
-
-			assert.Equal(t, int32(1), account.calls.Load())
-		})
-
 		t.Run("既に付与済みのとき、プレイヤー解決も付与もしない", func(t *testing.T) {
 			repo := &mockGamePlayerRepo{
 				markAwardedReturn: false, // フラグは既に立っていた

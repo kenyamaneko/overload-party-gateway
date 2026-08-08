@@ -172,7 +172,7 @@ func TestUseDevAuth(t *testing.T) {
 
 func TestUseDevAuthWithPlayerResolve(t *testing.T) {
 	t.Run("[認証]開発用認証とプレイヤー解決", func(t *testing.T) {
-		t.Run("未登録ユーザーのとき、自動作成しonCreatedが呼ばれる", func(t *testing.T) {
+		t.Run("未登録のプレイヤーのとき、プレイヤーを自動作成し作成後コールバックが呼ばれる", func(t *testing.T) {
 			fa := newStatefulAccountFake()
 			defer fa.close()
 
@@ -199,7 +199,7 @@ func TestUseDevAuthWithPlayerResolve(t *testing.T) {
 			assert.Contains(t, w.Body.String(), "generated-newuser")
 		})
 
-		t.Run("既存ユーザーのとき、既存player_idを解決する", func(t *testing.T) {
+		t.Run("既存のプレイヤーのとき、レスポンスに既存のプレイヤーIDが含まれる", func(t *testing.T) {
 			fa := newStatefulAccountFake()
 			defer fa.close()
 			fa.seed("existinguser", "existing-id")
@@ -302,7 +302,7 @@ func TestUseDevAuthWithPlayerResolve(t *testing.T) {
 			})
 		}
 
-		t.Run("登録が競合 (409)し再検索で見つかるとき、既存のプレイヤーIDで通る", func(t *testing.T) {
+		t.Run("登録が競合(409)し再検索で見つかるとき、レスポンスに既存のプレイヤーIDが含まれる", func(t *testing.T) {
 			fa := newSequencedAccountFake(t, []int{http.StatusNotFound, http.StatusOK}, http.StatusConflict)
 
 			r := gin.New()
@@ -434,7 +434,7 @@ func TestUseFirebaseAuth(t *testing.T) {
 
 func TestUseFirebaseAuthWithPlayerResolve(t *testing.T) {
 	t.Run("[認証]Firebase認証とプレイヤー解決のチェイン", func(t *testing.T) {
-		t.Run("検証に通るトークンのとき、本人のプレイヤーIDが解決される", func(t *testing.T) {
+		t.Run("検証に通るトークンのとき、そのトークンで認証されたプレイヤーのIDがレスポンスに含まれる", func(t *testing.T) {
 			fa := newStatefulAccountFake()
 			defer fa.close()
 			fa.seed("firebase-uid-1", "player-1")
@@ -580,7 +580,7 @@ func TestResolvePlayer(t *testing.T) {
 
 func TestContextGetters(t *testing.T) {
 	t.Run("[認証]context値の取得", func(t *testing.T) {
-		t.Run("firebase_uidが未設定のとき、空文字を返す", func(t *testing.T) {
+		t.Run("firebase_uidが未設定のとき、ハンドラが取得するfirebase_uidは空文字になる", func(t *testing.T) {
 			r := gin.New()
 			r.GET("/test", func(c *gin.Context) {
 				c.JSON(http.StatusOK, gin.H{"uid": GetFirebaseUID(c)})
@@ -593,7 +593,7 @@ func TestContextGetters(t *testing.T) {
 			assert.Equal(t, `{"uid":""}`, w.Body.String())
 		})
 
-		t.Run("player_idが未設定のとき、空文字を返す", func(t *testing.T) {
+		t.Run("player_idが未設定のとき、ハンドラが取得するplayer_idは空文字になる", func(t *testing.T) {
 			r := gin.New()
 			r.GET("/test", func(c *gin.Context) {
 				c.JSON(http.StatusOK, gin.H{"pid": GetPlayerID(c)})

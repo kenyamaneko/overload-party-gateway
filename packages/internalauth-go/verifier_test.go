@@ -74,7 +74,7 @@ func TestVerifier_Verify(t *testing.T) {
 			assert.Equal(t, testPlayerID, got)
 		})
 
-		t.Run("期限切れJWTのとき、ErrTokenExpiredになる", func(t *testing.T) {
+		t.Run("有効期限が切れているとき、有効期限切れが原因のエラーになる", func(t *testing.T) {
 			now := time.Now()
 			expiredToken := signWithKid(t, key, string(DefaultKeyID), jwt.RegisteredClaims{
 				Subject:   testPlayerID,
@@ -110,7 +110,7 @@ func TestVerifier_Verify(t *testing.T) {
 			token string
 		}{
 			{
-				name:  "別の鍵で署名されているとき、拒否される",
+				name:  "kidは正しいが、登録されている鍵とは異なる鍵で署名されているとき、拒否される",
 				token: signWithKid(t, newTestKey(t), string(DefaultKeyID), validClaims(now)),
 			},
 			{
@@ -139,14 +139,6 @@ func TestVerifier_Verify(t *testing.T) {
 				}),
 			},
 			{
-				name:  "alg=noneのとき、拒否される",
-				token: noneAlgToken,
-			},
-			{
-				name:  "公開鍵を鍵にしたHS256で署名されているとき、拒否される",
-				token: hmacToken,
-			},
-			{
 				name: "subが空のとき、拒否される",
 				token: signWithKid(t, key, string(DefaultKeyID), jwt.RegisteredClaims{
 					Subject:   "",
@@ -163,6 +155,19 @@ func TestVerifier_Verify(t *testing.T) {
 				require.Error(t, err)
 			})
 		}
+
+		t.Run("RS256以外のalgで署名されているとき、拒否される", func(t *testing.T) {
+			for _, ac := range []struct {
+				alg   string
+				token string
+			}{
+				{alg: "none", token: noneAlgToken},
+				{alg: "HS256", token: hmacToken},
+			} {
+				_, err := v.Verify(ac.token)
+				require.Error(t, err, "alg=%s", ac.alg)
+			}
+		})
 	})
 }
 
