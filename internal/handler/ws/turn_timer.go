@@ -104,7 +104,7 @@ func (r *GameRelay) handleTurnTimeout(gameID, playerID string) {
 		slog.Error("turn timeout forfeit failed", "game_id", gameID, "player_id", playerID, "error", err)
 		// forfeit が battle server に到達しないとゲームが終了せず、両プレイヤーが
 		// 待ち続けてしまう。両プレイヤーに通知し、回復は再接続/監視に委ねる。
-		sendErrorToPlayer(r.hub, playerID, "turn_timeout_failed", "failed to register turn timeout", true)
+		sendErrorToPlayer(r.hub, playerID, "turn_timeout_failed", "failed to register turn timeout")
 		return
 	}
 	if result != nil && result.GameOver {

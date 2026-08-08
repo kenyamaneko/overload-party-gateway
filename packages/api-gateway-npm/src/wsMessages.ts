@@ -32,7 +32,6 @@ export interface UseStampMessage {
 export interface ErrorMessage {
   error_code: string;
   message: string;
-  retryable: boolean;
 }
 
 export interface MatchFoundMessage {

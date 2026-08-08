@@ -164,7 +164,7 @@ func (m *Manager) handleMatchWaitTimeout(playerID string) {
 	m.matchWaitMu.Unlock()
 
 	slog.Info("matchmaking wait timeout", "player_id", playerID, "timeout", m.matchmakingTimeout)
-	sendErrorToPlayer(m.Hub, playerID, "matchmaking_error", "matchmaking timed out", true)
+	sendErrorToPlayer(m.Hub, playerID, "matchmaking_error", "matchmaking timed out")
 
 	// タイマー発火経路は WS リクエスト ctx を持たない。上流キャンセルは接続状態に依存せず完了させたい。
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -192,7 +192,7 @@ func (m *Manager) HandleMessage(conn *Connection, msg *WSMessage) {
 	case genws.WSClientMsgMatchmakingCancel:
 		m.stopMatchWait(conn.playerID)
 		if err := m.matchmakingClient.Cancel(ctx); err != nil {
-			sendError(conn, "matchmaking_error", "failed to cancel: "+err.Error(), true)
+			sendError(conn, "matchmaking_error", "failed to cancel: "+err.Error())
 			return
 		}
 		conn.SendMessage(&WSMessage{Type: genws.WSServerMsgMatchmakingCancelled})
@@ -218,30 +218,30 @@ func (m *Manager) HandleMessage(conn *Connection, msg *WSMessage) {
 func (m *Manager) handleMatchmakingStart(ctx context.Context, conn *Connection, data json.RawMessage) {
 	var req MatchmakingStartMessage
 	if err := json.Unmarshal(data, &req); err != nil {
-		sendError(conn, "invalid_data", "invalid matchmaking_start data", false)
+		sendError(conn, "invalid_data", "invalid matchmaking_start data")
 		return
 	}
 
 	me, err := m.accountClient.GetMe(ctx)
 	if err != nil {
-		sendError(conn, "matchmaking_error", "failed to fetch player profile: "+err.Error(), true)
+		sendError(conn, "matchmaking_error", "failed to fetch player profile: "+err.Error())
 		return
 	}
 	if me.OnboardingStatus != apiaccount.OnboardingStatusCompleted {
-		sendError(conn, "matchmaking_error", "onboarding not completed", false)
+		sendError(conn, "matchmaking_error", "onboarding not completed")
 		return
 	}
 
 	if err := m.cardClient.ValidateDeckForBattle(ctx, req.DeckID); err != nil {
-		sendError(conn, "matchmaking_error", "deck validation failed: "+err.Error(), false)
+		sendError(conn, "matchmaking_error", "deck validation failed: "+err.Error())
 		return
 	}
 
 	if msg, err := m.checkAndIncrementBattleLimit(ctx); err != nil {
-		sendError(conn, "matchmaking_error", err.Error(), false)
+		sendError(conn, "matchmaking_error", err.Error())
 		return
 	} else if msg != "" {
-		sendError(conn, "matchmaking_error", msg, false)
+		sendError(conn, "matchmaking_error", msg)
 		return
 	}
 
@@ -250,8 +250,7 @@ func (m *Manager) handleMatchmakingStart(ctx context.Context, conn *Connection, 
 		name = *me.Name
 	}
 	if err := m.matchmakingClient.Enqueue(ctx, req.DeckID, name, me.Level); err != nil {
-		isRetryable := errors.Is(err, port.ErrMatchmakingUnavailable)
-		sendError(conn, "matchmaking_error", "failed to enqueue: "+err.Error(), isRetryable)
+		sendError(conn, "matchmaking_error", "failed to enqueue: "+err.Error())
 		return
 	}
 	m.startMatchWait(conn.playerID)
@@ -261,42 +260,42 @@ func (m *Manager) handleMatchmakingStart(ctx context.Context, conn *Connection, 
 func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, data json.RawMessage) {
 	var req NPCBattleStartMessage
 	if err := json.Unmarshal(data, &req); err != nil {
-		sendError(conn, "invalid_data", "invalid npc_battle_start data", false)
+		sendError(conn, "invalid_data", "invalid npc_battle_start data")
 		return
 	}
 
 	me, err := m.accountClient.GetMe(ctx)
 	if err != nil {
-		sendError(conn, "npc_battle_error", "failed to fetch player profile: "+err.Error(), true)
+		sendError(conn, "npc_battle_error", "failed to fetch player profile: "+err.Error())
 		return
 	}
 	if me.OnboardingStatus != apiaccount.OnboardingStatusCompleted {
-		sendError(conn, "npc_battle_error", "onboarding not completed", false)
+		sendError(conn, "npc_battle_error", "onboarding not completed")
 		return
 	}
 
 	if err := m.cardClient.ValidateDeckForBattle(ctx, req.DeckID); err != nil {
-		sendError(conn, "npc_battle_error", "deck validation failed: "+err.Error(), false)
+		sendError(conn, "npc_battle_error", "deck validation failed: "+err.Error())
 		return
 	}
 
 	cards, deckInitiatives, err := m.resolveDeckCards(ctx, conn.playerID, req.DeckID)
 	if err != nil {
-		sendError(conn, "npc_battle_error", "failed to resolve deck", true)
+		sendError(conn, "npc_battle_error", "failed to resolve deck")
 		return
 	}
 
 	npcDisplayName, err := m.resolveNpcDisplayName(ctx, req.NpcModel)
 	if err != nil {
-		sendError(conn, "npc_battle_error", "failed to resolve npc model: "+err.Error(), true)
+		sendError(conn, "npc_battle_error", "failed to resolve npc model: "+err.Error())
 		return
 	}
 
 	if msg, err := m.checkAndIncrementBattleLimit(ctx); err != nil {
-		sendError(conn, "npc_battle_error", err.Error(), false)
+		sendError(conn, "npc_battle_error", err.Error())
 		return
 	} else if msg != "" {
-		sendError(conn, "npc_battle_error", msg, false)
+		sendError(conn, "npc_battle_error", msg)
 		return
 	}
 
@@ -309,7 +308,7 @@ func (m *Manager) handleNpcBattleStart(ctx context.Context, conn *Connection, da
 
 	game, err := m.battleClient.StartNPCBattle(ctx, cards, deckInitiatives, req.NpcModel, player1Summary, player2Summary)
 	if err != nil {
-		sendError(conn, "npc_battle_error", err.Error(), true)
+		sendError(conn, "npc_battle_error", err.Error())
 		return
 	}
 	if m.gamePlayerRepo != nil {

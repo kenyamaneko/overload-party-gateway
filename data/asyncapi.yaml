@@ -366,14 +366,12 @@ components:
     ErrorMessage:
       type: object
       description: サーバー由来のエラー通知。
-      required: [error_code, message, retryable]
+      required: [error_code, message]
       properties:
         error_code:
           type: string
         message:
           type: string
-        retryable:
-          type: boolean
 
     MatchFoundMessage:
       type: object

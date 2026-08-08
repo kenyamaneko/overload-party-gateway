@@ -330,7 +330,7 @@ func (r *GameRelay) SendGameStateToPlayers(gameID string) {
 		state, err := r.battleClient.GetGameStateForPlayer(ctx, gameID, pNum)
 		if err != nil {
 			slog.Error("get game state for player failed", "player_id", pid, "game_id", gameID, "error", err)
-			sendErrorToPlayer(r.hub, pid, "game_state_error", "failed to retrieve game state", true)
+			sendErrorToPlayer(r.hub, pid, "game_state_error", "failed to retrieve game state")
 			continue
 		}
 
@@ -373,7 +373,7 @@ func (r *GameRelay) SendTurnControlsToPlayers(gameID string) {
 		raw, err := r.battleClient.GetTurnControlsForPlayer(ctx, gameID, pNum)
 		if err != nil {
 			slog.Error("get turn controls for player failed", "player_id", pid, "game_id", gameID, "error", err)
-			sendErrorToPlayer(r.hub, pid, "turn_controls_error", "failed to retrieve turn controls", true)
+			sendErrorToPlayer(r.hub, pid, "turn_controls_error", "failed to retrieve turn controls")
 			continue
 		}
 		if raw == nil {
@@ -472,7 +472,7 @@ func (r *GameRelay) runNpcTurns(ctx context.Context, gameID, playerID string, cu
 				slog.Info("runNpcTurns canceled", "game_id", gameID, "player_id", playerID, "error", err)
 			} else {
 				slog.Error("advance NPC turn loop failed", "game_id", gameID, "player_id", playerID, "error", err)
-				sendErrorToPlayer(r.hub, playerID, "npc_turn_error", "failed to advance NPC turn", true)
+				sendErrorToPlayer(r.hub, playerID, "npc_turn_error", "failed to advance NPC turn")
 			}
 			return current
 		}
@@ -499,7 +499,7 @@ func (r *GameRelay) sendActionToPlayers(ctx context.Context, gameID string, pids
 				continue
 			}
 			slog.Error("get game state for action_performed failed", "player_id", pid, "game_id", gameID, "error", err)
-			sendErrorToPlayer(r.hub, pid, "game_state_error", "failed to retrieve game state", true)
+			sendErrorToPlayer(r.hub, pid, "game_state_error", "failed to retrieve game state")
 			continue
 		}
 		r.hub.SendToPlayer(pid, &WSMessage{
@@ -531,7 +531,7 @@ func (r *GameRelay) broadcastGameOver(gameID string, winningPlayerNum int64, rea
 func (r *GameRelay) HandleGameEnter(conn *Connection, data json.RawMessage) {
 	var req GameEnterMessage
 	if err := json.Unmarshal(data, &req); err != nil {
-		sendError(conn, "invalid_data", "invalid game_enter data", false)
+		sendError(conn, "invalid_data", "invalid game_enter data")
 		return
 	}
 
@@ -544,11 +544,11 @@ func (r *GameRelay) HandleGameEnter(conn *Connection, data json.RawMessage) {
 			return
 		}
 		slog.Error("game enter: check invalidated game failed", "player_id", conn.playerID, "game_id", req.GameID, "error", err)
-		sendError(conn, "game_error", "failed to check whether the game is still valid", true)
+		sendError(conn, "game_error", "failed to check whether the game is still valid")
 		return
 	}
 	if invalidated {
-		sendError(conn, gameInvalidatedErrorCode, "the game was invalidated by a server restart", false)
+		sendError(conn, gameInvalidatedErrorCode, "the game was invalidated by a server restart")
 		return
 	}
 
@@ -565,7 +565,7 @@ func (r *GameRelay) HandleGameEnter(conn *Connection, data json.RawMessage) {
 		} else {
 			slog.Error("lookup player_num failed", "player_id", conn.playerID, "game_id", req.GameID, "error", err)
 		}
-		sendError(conn, "game_error", "player not found in game", false)
+		sendError(conn, "game_error", "player not found in game")
 		return
 	}
 
@@ -600,7 +600,7 @@ func (r *GameRelay) advanceNpcIfNeeded(parentCtx context.Context, gameID, player
 			return
 		}
 		slog.Error("advance NPC turn failed", "game_id", gameID, "error", err)
-		sendErrorToPlayer(r.hub, playerID, "npc_turn_error", "failed to advance NPC turn", true)
+		sendErrorToPlayer(r.hub, playerID, "npc_turn_error", "failed to advance NPC turn")
 		return
 	}
 
@@ -624,7 +624,7 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 	pNum, err := r.resolvePlayerNum(ctx, gameID, conn.playerID)
 	if err != nil {
 		slog.Error("resolve player_num for battle_start failed", "player_id", conn.playerID, "game_id", gameID, "error", err)
-		sendError(conn, "game_error", "player not in game", false)
+		sendError(conn, "game_error", "player not in game")
 		return
 	}
 	rawState, err := r.battleClient.GetGameStateForPlayer(ctx, gameID, pNum)
@@ -633,7 +633,7 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 			return
 		}
 		slog.Error("get game state for battle_start failed", "player_id", conn.playerID, "error", err)
-		sendErrorToPlayer(r.hub, conn.playerID, "game_state_error", "failed to retrieve game state", true)
+		sendErrorToPlayer(r.hub, conn.playerID, "game_state_error", "failed to retrieve game state")
 		return
 	}
 
@@ -643,7 +643,7 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 			return
 		}
 		slog.Error("lookup game players for battle_start failed", "game_id", gameID, "error", err)
-		sendErrorToPlayer(r.hub, conn.playerID, "game_state_error", "failed to retrieve game metadata", true)
+		sendErrorToPlayer(r.hub, conn.playerID, "game_state_error", "failed to retrieve game metadata")
 		return
 	}
 	matchType := gamedesign.MatchTypePvp
@@ -654,7 +654,7 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 	var clientState apibattle.ClientGameState
 	if err := json.Unmarshal(rawState, &clientState); err != nil {
 		slog.Error("parse client game state for battle_start failed", "game_id", gameID, "error", err)
-		sendErrorToPlayer(r.hub, conn.playerID, "game_state_error", "failed to parse game state", true)
+		sendErrorToPlayer(r.hub, conn.playerID, "game_state_error", "failed to parse game state")
 		return
 	}
 	mySummary, oppSummary := clientState.Player1Summary, clientState.Player2Summary
@@ -717,14 +717,14 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 func (r *GameRelay) HandleGameAction(ctx context.Context, conn *Connection, data json.RawMessage) {
 	var action GameActionMessage
 	if err := json.Unmarshal(data, &action); err != nil {
-		sendError(conn, "invalid_data", "invalid game_action data", false)
+		sendError(conn, "invalid_data", "invalid game_action data")
 		return
 	}
 
 	pNum, err := r.resolvePlayerNum(ctx, action.GameID, conn.playerID)
 	if err != nil {
 		slog.Error("resolve player_num for game action failed", "player_id", conn.playerID, "game_id", action.GameID, "error", err)
-		sendError(conn, "game_error", "player not found in game", false)
+		sendError(conn, "game_error", "player not found in game")
 		return
 	}
 	result, err := r.battleClient.ProcessAction(ctx, action.GameID, pNum, action.ActionType, action.Data)
@@ -850,7 +850,7 @@ func (r *GameRelay) NotifyMatchFoundTo(gameID, playerID string) bool {
 
 // NotifyMatchmakingFailed はマッチが不成立になったことをプレイヤーに送信します
 func (r *GameRelay) NotifyMatchmakingFailed(playerID string) {
-	sendErrorToPlayer(r.hub, playerID, "matchmaking_error", "opponent was not connected", true)
+	sendErrorToPlayer(r.hub, playerID, "matchmaking_error", "opponent was not connected")
 }
 
 // errGamePlayerRepoUnavailable はスロット番号の引き当て先が構成されていないことを表す。

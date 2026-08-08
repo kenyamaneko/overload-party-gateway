@@ -40,7 +40,6 @@ type NpcBattleStartMessage struct {
 type ErrorMessage struct {
 	ErrorCode string `json:"error_code"`
 	Message   string `json:"message"`
-	Retryable bool   `json:"retryable"`
 }
 
 // MatchFoundMessage は マッチング成立通知。
