@@ -107,7 +107,7 @@ func TestNewForwarder(t *testing.T) {
 				wantClientBody: `{"ok":true}`,
 			},
 			{
-				name:          "PUTのとき、透過する",
+				name:          "PUTのとき、bodyを保持して透過する",
 				token:         "token-put",
 				method:        http.MethodPut,
 				reqPath:       "/api/v1/cards/decks/1",
@@ -125,7 +125,7 @@ func TestNewForwarder(t *testing.T) {
 				wantClientBody: `{"deck_id":1}`,
 			},
 			{
-				name:          "DELETEのとき、透過する",
+				name:          "DELETEのとき、bodyなしで透過し204をそのまま返す",
 				token:         "token-del",
 				method:        http.MethodDelete,
 				reqPath:       "/api/v1/cards/decks/1",
@@ -143,7 +143,7 @@ func TestNewForwarder(t *testing.T) {
 				wantClientBody: "",
 			},
 			{
-				name:          "downstreamが404のとき、そのまま透過する",
+				name:          "downstreamが404のとき、ステータスとbodyをそのまま透過する",
 				token:         "token-3",
 				method:        http.MethodGet,
 				reqPath:       "/api/v1/cards/decks/999",
@@ -161,7 +161,7 @@ func TestNewForwarder(t *testing.T) {
 				wantClientBody: `{"error":"deck not found"}`,
 			},
 			{
-				name:          "downstreamが500のとき、そのまま透過する",
+				name:          "downstreamが500のとき、ステータスとbodyをそのまま透過する",
 				token:         "token-5xx",
 				method:        http.MethodGet,
 				reqPath:       "/api/v1/news/articles",

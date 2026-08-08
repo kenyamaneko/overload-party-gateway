@@ -179,7 +179,7 @@ func TestInvalidateActiveGames(t *testing.T) {
 
 func TestManagerShutdown(t *testing.T) {
 	t.Run("[停止時の対戦保護]停止時の一連の処理", func(t *testing.T) {
-		t.Run("進行中の対戦があるとき、その対戦が無効として記録され、接続はサーバー更新を理由に閉じられる", func(t *testing.T) {
+		t.Run("進行中の対戦があるとき、その対戦が無効として記録され、登録されている接続はサーバー更新を理由に閉じられる", func(t *testing.T) {
 			battle := newMockBattleClient()
 			gamePlayers := &mockGamePlayerRepo{lookupEntries: pvpEntries(), playerCounts: map[string]int{"g1": 2}}
 			invalidatedGames := newFakeInvalidatedGameRepo()
@@ -205,7 +205,7 @@ func TestManagerShutdown(t *testing.T) {
 
 func TestRecoverInvalidatedGames(t *testing.T) {
 	t.Run("[停止時の対戦保護]無効になった対戦の起動時の後始末", func(t *testing.T) {
-		t.Run("決着していない記録があるとき、その対戦の両者強制決着がbattleに要求される", func(t *testing.T) {
+		t.Run("決着していない対戦があるとき、その対戦の両者強制決着がbattleに要求される", func(t *testing.T) {
 			f := newInvalidationFixture(t, pvpEntries(), map[string]int{"g1": 2})
 			require.NoError(t, f.invalidatedGames.MarkInvalidated(context.Background(), []string{"g1"}))
 			f.battle.processActionResult = &service.ActionResult{}
@@ -218,7 +218,7 @@ func TestRecoverInvalidatedGames(t *testing.T) {
 			assert.Equal(t, gamelogic.ActionTypeForfeitBoth, calls[0].actionType)
 		})
 
-		t.Run("決着に成功したとき、その対戦の両プレイヤーの切断猶予の期限が消える", func(t *testing.T) {
+		t.Run("対戦の決着に成功したとき、両プレイヤーの切断猶予の期限が消える", func(t *testing.T) {
 			f := newInvalidationFixture(t, pvpEntries(), map[string]int{"g1": 2})
 			require.NoError(t, f.invalidatedGames.MarkInvalidated(context.Background(), []string{"g1"}))
 			f.battle.processActionResult = &service.ActionResult{}
@@ -268,7 +268,7 @@ func TestRecoverInvalidatedGames(t *testing.T) {
 			assert.Len(t, f.battle.snapshotProcessActionCalls(), 2)
 		})
 
-		t.Run("記録の一覧の取得に失敗するとき、battleへ何も要求しない", func(t *testing.T) {
+		t.Run("決着していない対戦の一覧の取得に失敗するとき、battleへ何も要求しない", func(t *testing.T) {
 			f := newInvalidationFixture(t, pvpEntries(), map[string]int{"g1": 2})
 			f.invalidatedGames.listUnfinishedErr = errors.New("db down")
 
@@ -287,7 +287,7 @@ func TestRevertBattleCountOfInvalidatedGames(t *testing.T) {
 			f.battle.processActionResult = &service.ActionResult{}
 		}
 
-		t.Run("決着に成功した対戦のとき、両プレイヤーの回数が対戦の識別子と消費時刻を添えて戻される", func(t *testing.T) {
+		t.Run("決着に成功した対戦のとき、両プレイヤーの消費バトル回数が対戦の識別子と消費時刻を添えて戻される", func(t *testing.T) {
 			f := newInvalidationFixture(t, pvpEntries(), map[string]int{"g1": 2})
 			markInvalidated(t, f, "g1")
 
@@ -301,7 +301,7 @@ func TestRevertBattleCountOfInvalidatedGames(t *testing.T) {
 			assert.Equal(t, gamePlayersCreatedAtMillis, received[0].ConsumedAtMillis)
 		})
 
-		t.Run("スロット1の行が後から作られたとき、早い方の作成時刻が消費時刻として渡る", func(t *testing.T) {
+		t.Run("スロット1の行が後から作られたとき、早い方の作成時刻が消費時刻としてaccountに渡る", func(t *testing.T) {
 			entries := []port.GamePlayerEntry{
 				{PlayerNum: 1, PlayerID: "p1", CreatedAt: gamePlayersCreatedAt.Add(7 * time.Second)},
 				{PlayerNum: 2, PlayerID: "p2", CreatedAt: gamePlayersCreatedAt},
@@ -316,7 +316,7 @@ func TestRevertBattleCountOfInvalidatedGames(t *testing.T) {
 			assert.Equal(t, gamePlayersCreatedAtMillis, received[0].ConsumedAtMillis)
 		})
 
-		t.Run("返却に成功した対戦は、次の起動で二度目の返却をしない", func(t *testing.T) {
+		t.Run("消費バトル回数を戻すことに成功した対戦は、次の起動でも重ねて戻されない", func(t *testing.T) {
 			f := newInvalidationFixture(t, pvpEntries(), map[string]int{"g1": 2})
 			markInvalidated(t, f, "g1")
 
@@ -326,7 +326,7 @@ func TestRevertBattleCountOfInvalidatedGames(t *testing.T) {
 			assert.Len(t, f.account.snapshotReceived(), 1)
 		})
 
-		t.Run("返却が失敗した対戦は、次の起動でもう一度戻される", func(t *testing.T) {
+		t.Run("消費バトル回数を戻すことに失敗した対戦は、次の起動でもう一度戻される", func(t *testing.T) {
 			f := newInvalidationFixture(t, pvpEntries(), map[string]int{"g1": 2})
 			markInvalidated(t, f, "g1")
 			f.account.setStatus(http.StatusInternalServerError)
@@ -341,7 +341,7 @@ func TestRevertBattleCountOfInvalidatedGames(t *testing.T) {
 			assert.Equal(t, gamePlayersCreatedAtMillis, received[1].ConsumedAtMillis)
 		})
 
-		t.Run("返却済みの記録が失敗した対戦は、次の起動でもう一度戻される", func(t *testing.T) {
+		t.Run("消費バトル回数を返却済みとする記録に失敗した対戦は、次の起動でもう一度戻される", func(t *testing.T) {
 			f := newInvalidationFixture(t, pvpEntries(), map[string]int{"g1": 2})
 			markInvalidated(t, f, "g1")
 			f.invalidatedGames.markRevertedErr = errors.New("db down")
@@ -353,7 +353,7 @@ func TestRevertBattleCountOfInvalidatedGames(t *testing.T) {
 			assert.Len(t, f.account.snapshotReceived(), 2)
 		})
 
-		t.Run("決着の要求が失敗した対戦は、回数が戻されない", func(t *testing.T) {
+		t.Run("決着の要求が失敗した対戦は、消費バトル回数が戻されない", func(t *testing.T) {
 			f := newInvalidationFixture(t, pvpEntries(), map[string]int{"g1": 2})
 			require.NoError(t, f.invalidatedGames.MarkInvalidated(context.Background(), []string{"g1"}))
 			f.battle.processActionErr = errors.New("battle down")
@@ -363,7 +363,7 @@ func TestRevertBattleCountOfInvalidatedGames(t *testing.T) {
 			assert.Empty(t, f.account.snapshotReceived())
 		})
 
-		t.Run("返却待ちの一覧の取得に失敗するとき、回数が戻されない", func(t *testing.T) {
+		t.Run("返却待ちの一覧の取得に失敗するとき、消費バトル回数が戻されない", func(t *testing.T) {
 			f := newInvalidationFixture(t, pvpEntries(), map[string]int{"g1": 2})
 			markInvalidated(t, f, "g1")
 			f.invalidatedGames.listRevertPendingErr = errors.New("db down")
@@ -373,7 +373,7 @@ func TestRevertBattleCountOfInvalidatedGames(t *testing.T) {
 			assert.Empty(t, f.account.snapshotReceived())
 		})
 
-		t.Run("プレイヤーの切断で決着した対戦が停止に巻き込まれても、回数が戻されない", func(t *testing.T) {
+		t.Run("プレイヤーの切断で決着した対戦が停止に巻き込まれても、消費バトル回数が戻されない", func(t *testing.T) {
 			f := newInvalidationFixture(t, pvpEntries(), map[string]int{"g1": 2})
 			f.relay.JoinGame("p1", "g1", 1)
 			f.relay.JoinGame("p2", "g1", 2)
@@ -391,7 +391,7 @@ func TestRevertBattleCountOfInvalidatedGames(t *testing.T) {
 			assert.Empty(t, f.account.snapshotReceived())
 		})
 
-		t.Run("人間1人の対戦が停止に巻き込まれたとき、回数が戻されない", func(t *testing.T) {
+		t.Run("人間1人の対戦が停止に巻き込まれたとき、消費バトル回数が戻されない", func(t *testing.T) {
 			f := newInvalidationFixture(t, npcEntries(), map[string]int{"g1": 1})
 			f.relay.JoinGame("p1", "g1", 1)
 			f.battle.processActionResult = &service.ActionResult{}
@@ -402,7 +402,7 @@ func TestRevertBattleCountOfInvalidatedGames(t *testing.T) {
 			assert.Empty(t, f.account.snapshotReceived())
 		})
 
-		t.Run("人間1人の対戦の記録が残っているとき、回数が戻されない", func(t *testing.T) {
+		t.Run("人間1人の対戦の記録が残っているとき、消費バトル回数が戻されない", func(t *testing.T) {
 			f := newInvalidationFixture(t, npcEntries(), map[string]int{"g1": 1})
 			markInvalidated(t, f, "g1")
 
@@ -415,7 +415,7 @@ func TestRevertBattleCountOfInvalidatedGames(t *testing.T) {
 
 func TestStaleDisconnectOnInvalidatedGame(t *testing.T) {
 	t.Run("[停止時の対戦保護]無効になった対戦の切断猶予の評価", func(t *testing.T) {
-		t.Run("対戦が無効として記録済みのとき、両者の猶予が切れていても決着させない", func(t *testing.T) {
+		t.Run("対戦が無効として記録済みのとき、両者の切断猶予が切れていても決着させない", func(t *testing.T) {
 			f := newInvalidationFixture(t, pvpEntries(), map[string]int{"g1": 2})
 			f.timers.getDisconnectFound = true
 			f.timers.getDisconnectReturn = portDisconnectDeadline("g1", time.Now().Add(-time.Minute))
@@ -427,7 +427,7 @@ func TestStaleDisconnectOnInvalidatedGame(t *testing.T) {
 			assert.Empty(t, f.battle.snapshotProcessActionCalls())
 		})
 
-		t.Run("無効かどうかの確認に失敗するとき、決着させない", func(t *testing.T) {
+		t.Run("対戦が無効かどうかの確認に失敗するとき、決着させない", func(t *testing.T) {
 			f := newInvalidationFixture(t, pvpEntries(), map[string]int{"g1": 2})
 			f.timers.getDisconnectFound = true
 			f.timers.getDisconnectReturn = portDisconnectDeadline("g1", time.Now().Add(-time.Minute))
@@ -439,7 +439,7 @@ func TestStaleDisconnectOnInvalidatedGame(t *testing.T) {
 			assert.Empty(t, f.battle.snapshotProcessActionCalls())
 		})
 
-		t.Run("対戦が無効として記録されていないとき、両者の猶予が切れていれば両者強制決着で終わる", func(t *testing.T) {
+		t.Run("対戦が無効として記録されていないとき、両者の切断猶予が切れていれば両者強制決着で終わる", func(t *testing.T) {
 			f := newInvalidationFixture(t, pvpEntries(), map[string]int{"g1": 2})
 			f.timers.getDisconnectFound = true
 			f.timers.getDisconnectReturn = portDisconnectDeadline("g1", time.Now().Add(-time.Minute))
@@ -473,7 +473,7 @@ func TestGameEnterOnInvalidatedGame(t *testing.T) {
 			assert.False(t, errMsg.Retryable)
 		})
 
-		t.Run("無効かどうかの確認に失敗するとき、やり直せるエラーが返る", func(t *testing.T) {
+		t.Run("対戦が無効かどうかの確認に失敗するとき、やり直せるエラーが返る", func(t *testing.T) {
 			f := newInvalidationFixture(t, pvpEntries(), map[string]int{"g1": 2})
 			f.invalidatedGames.isInvalidatedErr = errors.New("db down")
 			conn := NewConnection(nil, "p1")

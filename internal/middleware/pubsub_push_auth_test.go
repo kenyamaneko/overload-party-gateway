@@ -71,7 +71,7 @@ func TestGoogleIDTokenValidator_Validate(t *testing.T) {
 			assert.Error(t, err)
 		})
 
-		t.Run("すべての検証に成功するとき、emailクレームを返す", func(t *testing.T) {
+		t.Run("Googleの検証呼び出しが成功し、issuer・email_verified・emailクレームを満たすとき、そのemailクレームを返す", func(t *testing.T) {
 			v := &googleIDTokenValidator{validate: func(context.Context, string, string) (*idtoken.Payload, error) {
 				return validPayload(googleOIDCIssuer, "sa@test.iam.gserviceaccount.com", true), nil
 			}}

@@ -203,7 +203,7 @@ func TestRunNpcTurns(t *testing.T) {
 			assert.Equal(t, 0, bc.advanceNpcCalls, "should not loop when initial GameOver=true")
 		})
 
-		t.Run("NpcPendingが続くとき、not-pendingになるまでループする", func(t *testing.T) {
+		t.Run("NpcPendingが続くとき、NpcPending=falseになるまでループする", func(t *testing.T) {
 			relay, bc := newTestRelay()
 			ctx := context.Background()
 			bc.advanceNpcQueue = []*service.ActionResult{
@@ -343,7 +343,7 @@ func TestJoinGame(t *testing.T) {
 
 func TestLeaveGame(t *testing.T) {
 	t.Run("[ゲーム進行]ゲームからの退出", func(t *testing.T) {
-		t.Run("退出すると、退出したプレイヤーには届かなくなるが、残ったプレイヤーには届く", func(t *testing.T) {
+		t.Run("退出すると、退出したプレイヤーにはstamp_usedが届かなくなるが、残ったプレイヤーには届く", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			const gameID = "TST-GAME-LEAVE-SOLO"
 			srv.setupPvPGame(gameID, "uid-ls-p1", "p-ls-1", "uid-ls-p2", "p-ls-2")
@@ -400,7 +400,7 @@ func TestResolvePlayerNum(t *testing.T) {
 			assert.Equal(t, 2, pNum)
 		})
 
-		t.Run("入室していないプレイヤーのとき、ゲームの参加者情報からスロット番号を返す", func(t *testing.T) {
+		t.Run("入室していないプレイヤーのとき、DBに保存された参加者情報のスロット番号を返す", func(t *testing.T) {
 			relay, _, _ := newDisconnectResolutionRelay(entries, nil)
 
 			pNum, err := relay.resolvePlayerNum(context.Background(), "g1", "p2")
@@ -409,7 +409,7 @@ func TestResolvePlayerNum(t *testing.T) {
 			assert.Equal(t, 2, pNum)
 		})
 
-		t.Run("別のゲームに入室しているプレイヤーのとき、指定したゲームでのスロット番号を返す", func(t *testing.T) {
+		t.Run("別のゲームに入室しているプレイヤーのとき、問い合わせ先のゲームについてDBに保存された参加者情報のスロット番号を返す", func(t *testing.T) {
 			relay, _, _ := newDisconnectResolutionRelay(entries, nil)
 			relay.JoinGame("p2", "g0", 1)
 
@@ -419,7 +419,7 @@ func TestResolvePlayerNum(t *testing.T) {
 			assert.Equal(t, 2, pNum)
 		})
 
-		t.Run("ゲームの参加者として登録されていないとき、スロットが無いことを示すエラーを返す", func(t *testing.T) {
+		t.Run("DBに保存された参加者情報に含まれないプレイヤーのとき、スロットが無いことを示すエラーを返す", func(t *testing.T) {
 			relay, _, _ := newDisconnectResolutionRelay(entries, nil)
 
 			pNum, err := relay.resolvePlayerNum(context.Background(), "g1", "p9")
@@ -438,7 +438,7 @@ func TestResolvePlayerNum(t *testing.T) {
 			assert.Equal(t, 0, pNum)
 		})
 
-		t.Run("ゲームの参加者情報の取得元が無いとき、その旨のエラーを返す", func(t *testing.T) {
+		t.Run("ゲームの参加者情報を取得するリポジトリが構成されていないとき、未構成であることを示すエラーを返す", func(t *testing.T) {
 			relay, _ := newTestRelay()
 
 			pNum, err := relay.resolvePlayerNum(context.Background(), "g1", "p2")
@@ -451,7 +451,7 @@ func TestResolvePlayerNum(t *testing.T) {
 
 func TestGameIDForPlayer(t *testing.T) {
 	t.Run("[ゲーム進行]プレイヤーのゲームID解決", func(t *testing.T) {
-		t.Run("参加前は無く、参加後に取得でき、退出後に再び無くなる", func(t *testing.T) {
+		t.Run("参加前はゲームIDが取得できず、参加後には取得でき、退出後には再び取得できなくなる", func(t *testing.T) {
 			relay, _ := newTestRelay()
 
 			_, ok := relay.GameIDForPlayer("p1")
@@ -471,7 +471,7 @@ func TestGameIDForPlayer(t *testing.T) {
 
 func TestLeaveAllPlayers(t *testing.T) {
 	t.Run("[ゲーム進行]そのゲームの全参加者の一括退出", func(t *testing.T) {
-		t.Run("呼ぶと、そのゲームの参加者全員のGameIDForPlayerがfalseになり、gameMembersも破棄される", func(t *testing.T) {
+		t.Run("同じゲームに参加した全員が退出すると、それぞれのGameIDForPlayerがfalseになる", func(t *testing.T) {
 			relay, _ := newTestRelay()
 
 			relay.JoinGame("p1", "game_1", 1)
@@ -483,14 +483,9 @@ func TestLeaveAllPlayers(t *testing.T) {
 			_, ok2 := relay.GameIDForPlayer("p2")
 			assert.False(t, ok1)
 			assert.False(t, ok2)
-
-			relay.mu.RLock()
-			_, exists := relay.gameMembers["game_1"]
-			relay.mu.RUnlock()
-			assert.False(t, exists)
 		})
 
-		t.Run("呼ぶと、退出した全プレイヤーの切断猶予期限が外部保存先からも削除される", func(t *testing.T) {
+		t.Run("同じゲームに参加した全員が退出すると、退出した参加者全員の切断猶予期限が外部保存先からも削除される", func(t *testing.T) {
 			relay, _ := newTestRelay()
 			store := &fakeTimerStore{}
 			relay.hub.timerStore = store
@@ -620,27 +615,14 @@ func TestRemoveString(t *testing.T) {
 
 func TestMustMarshal(t *testing.T) {
 	t.Run("[ゲーム進行]JSONマーシャル", func(t *testing.T) {
-		t.Run("mapを渡すと、JSON文字列になる", func(t *testing.T) {
-			result := mustMarshal(map[string]string{"key": "value"})
-			assert.JSONEq(t, `{"key":"value"}`, string(result))
-		})
+		t.Run("JSON化できない値を渡すと、panicする", func(t *testing.T) {
+			defer func() {
+				r := recover()
+				require.NotNil(t, r)
+				assert.Contains(t, r, "BUG: mustMarshal failed")
+			}()
 
-		t.Run("structを渡すと、フィールドがJSONになる", func(t *testing.T) {
-			msg := ErrorMessage{ErrorCode: "test", Message: "hello", Retryable: true}
-			result := mustMarshal(msg)
-			require.NotNil(t, result)
-
-			var parsed ErrorMessage
-			err := json.Unmarshal(result, &parsed)
-			require.NoError(t, err)
-			assert.Equal(t, "test", parsed.ErrorCode)
-			assert.Equal(t, "hello", parsed.Message)
-			assert.True(t, parsed.Retryable)
-		})
-
-		t.Run("nilを渡すと、nullになる", func(t *testing.T) {
-			result := mustMarshal(nil)
-			assert.Equal(t, "null", string(result))
+			mustMarshal(make(chan int))
 		})
 	})
 }

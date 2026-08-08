@@ -1,6 +1,9 @@
 package rest
 
 import (
+	"bytes"
+	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,6 +16,7 @@ import (
 	"github.com/kenyamaneko/overload-party-account/packages/api-account/apiaccountserverfake"
 
 	"github.com/kenyamaneko/overload-party-gateway/internal/client/accountclient"
+	"github.com/kenyamaneko/overload-party-gateway/internal/middleware"
 )
 
 func init() {
@@ -112,6 +116,35 @@ func TestAuthHandler_Register(t *testing.T) {
 			assert.Equal(t, http.StatusInternalServerError, w.Code)
 		})
 	})
+
+	t.Run("[認証]登録結果のログレベル", func(t *testing.T) {
+		t.Run("プレイヤーが登録済みのとき、ログレベルはWARNになる", func(t *testing.T) {
+			fa := apiaccountserverfake.NewServer()
+			defer fa.Close()
+			fa.RegisterFn = func(_ apiaccount.RegisterRequest) (int, any) {
+				return http.StatusConflict, nil
+			}
+			h := NewAuthHandler(accountclient.New(fa.URL(), &http.Client{}))
+
+			var buf bytes.Buffer
+			previous := slog.Default()
+			slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+			t.Cleanup(func() { slog.SetDefault(previous) })
+
+			r := gin.New()
+			r.Use(middleware.UseRequestLogger())
+			r.Use(withFirebaseUID("uid-dup"))
+			r.POST("/register", h.Register)
+
+			req := httptest.NewRequest(http.MethodPost, "/register", nil)
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			var record map[string]any
+			require.NoError(t, json.Unmarshal(buf.Bytes(), &record))
+			assert.Equal(t, "WARN", record["level"])
+		})
+	})
 }
 
 func TestAuthHandler_Login(t *testing.T) {
@@ -141,7 +174,7 @@ func TestAuthHandler_Login(t *testing.T) {
 			assert.Contains(t, w.Body.String(), `"player_id":"p-x"`)
 		})
 
-		t.Run("未登録のとき、404になる", func(t *testing.T) {
+		t.Run("プレイヤーが未登録のとき、404になる", func(t *testing.T) {
 			fa := apiaccountserverfake.NewServer()
 			defer fa.Close()
 			fa.LoginFn = func(_ apiaccount.LoginRequest) (int, any) {
@@ -192,6 +225,35 @@ func TestAuthHandler_Login(t *testing.T) {
 			r.ServeHTTP(w, req)
 
 			assert.Equal(t, http.StatusInternalServerError, w.Code)
+		})
+	})
+
+	t.Run("[認証]ログイン結果のログレベル", func(t *testing.T) {
+		t.Run("プレイヤーが未登録のとき、ログレベルはINFOになる", func(t *testing.T) {
+			fa := apiaccountserverfake.NewServer()
+			defer fa.Close()
+			fa.LoginFn = func(_ apiaccount.LoginRequest) (int, any) {
+				return http.StatusNotFound, nil
+			}
+			h := NewAuthHandler(accountclient.New(fa.URL(), &http.Client{}))
+
+			var buf bytes.Buffer
+			previous := slog.Default()
+			slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+			t.Cleanup(func() { slog.SetDefault(previous) })
+
+			r := gin.New()
+			r.Use(middleware.UseRequestLogger())
+			r.Use(withFirebaseUID("uid-unknown"))
+			r.POST("/login", h.Login)
+
+			req := httptest.NewRequest(http.MethodPost, "/login", nil)
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			var record map[string]any
+			require.NoError(t, json.Unmarshal(buf.Bytes(), &record))
+			assert.Equal(t, "INFO", record["level"])
 		})
 	})
 }

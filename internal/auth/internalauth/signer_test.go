@@ -28,7 +28,7 @@ func TestSignerIssue(t *testing.T) {
 	fixedTime := time.Date(2026, 5, 10, 12, 0, 0, 0, time.UTC)
 
 	t.Run("[内部認証]JWTの発行", func(t *testing.T) {
-		t.Run("発行すると、playerIDを主体とし既定の発行者とTTLを持つ、対応する公開鍵で検証できるJWTを返す", func(t *testing.T) {
+		t.Run("発行すると、プレイヤーIDを主体とし既定の発行者とTTLを持つ、対応する公開鍵で検証できるJWTを返す", func(t *testing.T) {
 			signer := NewSigner(StaticPrivateKeyResolver(key, DefaultKeyID), DefaultKeyID, WithClock(func() time.Time { return fixedTime }))
 			token, err := signer.Issue("player-123")
 			require.NoError(t, err)
@@ -48,12 +48,12 @@ func TestSignerIssue(t *testing.T) {
 			resolver PrivateKeyResolver
 		}{
 			{
-				name:     "playerIDが空のとき、エラーになる",
+				name:     "プレイヤーIDが空のとき、エラーになる",
 				playerID: "",
 				resolver: StaticPrivateKeyResolver(key, DefaultKeyID),
 			},
 			{
-				name:     "resolverがエラーを返すとき、そのエラーが伝搬する",
+				name:     "秘密鍵の解決に失敗するとき、そのエラーが伝搬する",
 				playerID: "player-123",
 				resolver: func(KeyID) (*rsa.PrivateKey, error) { return nil, errors.New("boom") },
 			},

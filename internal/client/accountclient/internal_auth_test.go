@@ -53,13 +53,13 @@ func TestClient_MapsDownstreamStatusToPortSentinel(t *testing.T) {
 		wantErr error
 	}{
 		{
-			name:    "重複登録の409はErrPlayerAlreadyRegisteredに写像する",
+			name:    "重複登録の409は登録済みを表すエラーに写像する",
 			status:  http.StatusConflict,
 			call:    func(ctx context.Context, c *Client) error { _, err := c.Register(ctx, "uid-1"); return err },
 			wantErr: port.ErrPlayerAlreadyRegistered,
 		},
 		{
-			name:    "未登録プレイヤーの404はErrAccountNotFoundに写像する",
+			name:    "未登録プレイヤーの404はアカウント未登録を表すエラーに写像する",
 			status:  http.StatusNotFound,
 			call:    func(ctx context.Context, c *Client) error { _, err := c.Login(ctx, "uid-1"); return err },
 			wantErr: port.ErrAccountNotFound,
@@ -94,7 +94,7 @@ func TestClient_FindByFirebaseUID(t *testing.T) {
 			wantPlayer: nil,
 		},
 		{
-			name:   "登録済みはplayer本体を返す",
+			name:   "登録済みはプレイヤー本体を返す",
 			status: http.StatusOK,
 			body:   `{"player_id":"player-1","firebase_uid":"uid-1"}`,
 			wantPlayer: &apiaccount.PlayerResponse{

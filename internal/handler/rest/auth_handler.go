@@ -2,6 +2,7 @@ package rest
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -32,6 +33,8 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	player, err := h.account.Register(c.Request.Context(), firebaseUID)
 	if err != nil {
 		if errors.Is(err, port.ErrPlayerAlreadyRegistered) {
+			// 二重登録はクライアントの再送等で起こり得るため、409 だが Warn として記録する。
+			middleware.SetRequestLogLevel(c, slog.LevelWarn)
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 			return
 		}
@@ -51,6 +54,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	player, err := h.account.Login(c.Request.Context(), firebaseUID)
 	if err != nil {
 		if errors.Is(err, port.ErrAccountNotFound) {
+			// 初回ログイン時は未登録が正常系のため、404 だが Info として記録する。
+			middleware.SetRequestLogLevel(c, slog.LevelInfo)
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
 		}

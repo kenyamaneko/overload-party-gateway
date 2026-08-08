@@ -48,7 +48,7 @@ func TestFirestoreGameConfigRepository(t *testing.T) {
 			assert.Equal(t, int64(40), got)
 		})
 
-		t.Run("存在しないキーのとき、ErrNotFoundになる", func(t *testing.T) {
+		t.Run("存在しないキーのとき、値が見つからないことを示すエラーになる", func(t *testing.T) {
 			_, err := repo.GetInt64(ctx, "does_not_exist")
 			require.Error(t, err)
 			assert.True(t, errors.Is(err, port.ErrNotFound), "expected ErrNotFound, got: %v", err)

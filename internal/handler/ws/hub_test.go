@@ -54,7 +54,7 @@ func TestUnregister(t *testing.T) {
 			assert.Empty(t, store.snapshotSetDisconnectCalls())
 		})
 
-		t.Run("外部保存先への書き込みに失敗しても、警告ログを残すだけで対戦は継続する", func(t *testing.T) {
+		t.Run("ゲームに参加中のプレイヤーの猶予期限の書き込みに失敗しても、警告ログを残したうえでそのプレイヤーの接続は解除される", func(t *testing.T) {
 			readLogs := captureLogs(t)
 			store := &fakeTimerStore{setDisconnectErr: errors.New("redis down")}
 			hub := newTestHub(store, true, "game_1")
@@ -85,7 +85,7 @@ func TestUnregister(t *testing.T) {
 
 func TestRegister(t *testing.T) {
 	t.Run("[切断・再接続]再接続時の外部保存先からの削除", func(t *testing.T) {
-		t.Run("登録すると、そのプレイヤーの猶予期限が削除される", func(t *testing.T) {
+		t.Run("プレイヤーが接続すると、その猶予期限が外部保存先から削除される", func(t *testing.T) {
 			store := &fakeTimerStore{}
 			hub := newTestHub(store, true, "game_1")
 			conn := NewConnection(nil, "p1")
@@ -184,7 +184,7 @@ func TestRegister_WasLate(t *testing.T) {
 			assert.True(t, calls[0].wasLate)
 		})
 
-		t.Run("インメモリにも外部保存先にも記録が無いとき、新規接続として扱われ再接続時の処理は呼ばれない", func(t *testing.T) {
+		t.Run("インメモリにも外部保存先にも記録が無いとき、再接続の通知は呼ばれず新規接続として登録が完了する", func(t *testing.T) {
 			var calls []reconnectCall
 			store := &fakeTimerStore{}
 			hub := NewConnectionHub(HubCallbacks{
@@ -226,14 +226,14 @@ func TestRegister_WasLate(t *testing.T) {
 
 func TestIsConnected(t *testing.T) {
 	t.Run("[切断・再接続]接続状況の判定", func(t *testing.T) {
-		t.Run("Register済みのプレイヤーはtrueになる", func(t *testing.T) {
+		t.Run("接続したプレイヤーは、接続中と判定される", func(t *testing.T) {
 			hub := newTestHub(nil, false, "")
 			hub.Register(NewConnection(nil, "p1"))
 
 			assert.True(t, hub.IsConnected("p1"))
 		})
 
-		t.Run("Unregister後はfalseになる", func(t *testing.T) {
+		t.Run("接続後に切断したプレイヤーは、接続中と判定されない", func(t *testing.T) {
 			hub := newTestHub(nil, false, "")
 			conn := NewConnection(nil, "p1")
 			hub.Register(conn)
@@ -243,7 +243,7 @@ func TestIsConnected(t *testing.T) {
 			assert.False(t, hub.IsConnected("p1"))
 		})
 
-		t.Run("一度も接続していないプレイヤーはfalseになる", func(t *testing.T) {
+		t.Run("一度も接続していないプレイヤーは、接続中と判定されない", func(t *testing.T) {
 			hub := newTestHub(nil, false, "")
 
 			assert.False(t, hub.IsConnected("unknown"))
@@ -353,7 +353,7 @@ func TestIsDisconnectDeadlineExpired(t *testing.T) {
 
 func TestClearDisconnectDeadline(t *testing.T) {
 	t.Run("[切断・再接続]ゲーム終了時などの明示的な猶予期限削除", func(t *testing.T) {
-		t.Run("呼ぶと、そのプレイヤーの猶予期限が削除される", func(t *testing.T) {
+		t.Run("指定したプレイヤーの猶予期限が外部保存先から削除される", func(t *testing.T) {
 			store := &fakeTimerStore{}
 			hub := newTestHub(store, true, "game_1")
 

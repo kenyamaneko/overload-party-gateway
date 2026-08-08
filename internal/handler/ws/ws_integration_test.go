@@ -782,7 +782,7 @@ func TestWSGameEnterAndDisconnectGrace(t *testing.T) {
 			assert.Equal(t, genws.WSServerMsgTurnControls, turnControls.Type)
 		})
 
-		t.Run("ゲームに登録されていないプレイヤーが入室しようとすると、game_errorが返る", func(t *testing.T) {
+		t.Run("ゲームの参加者として一度も登録されたことがないプレイヤーが入室しようとすると、game_errorが返る", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-enter-unregistered", "player-enter-unregistered")
 			// gamePlayerRepo に対応する行を投入しない。

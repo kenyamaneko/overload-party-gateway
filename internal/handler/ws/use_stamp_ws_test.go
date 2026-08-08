@@ -50,7 +50,7 @@ func TestWSUseStamp(t *testing.T) {
 			}
 		})
 
-		t.Run("ゲームに登録されていないプレイヤーがスタンプを使っても、フレームは送られない", func(t *testing.T) {
+		t.Run("ゲームに登録されていないプレイヤーがスタンプを使っても、stamp_usedは届かない", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-stamp-unregistered", "player-stamp-unregistered")
 			conn := srv.dial(t, "uid-stamp-unregistered")
@@ -63,7 +63,7 @@ func TestWSUseStamp(t *testing.T) {
 			requireNoMessage(t, conn)
 		})
 
-		t.Run("dataが文字列のuse_stampを送っても、フレームは送られない", func(t *testing.T) {
+		t.Run("dataが文字列のuse_stampを送っても、stamp_usedは届かない", func(t *testing.T) {
 			srv := newWSTestServer(t, nil)
 			srv.seedAccount("uid-stamp-bad-data", "player-stamp-bad-data")
 			conn := srv.dial(t, "uid-stamp-bad-data")
