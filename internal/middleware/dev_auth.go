@@ -40,12 +40,9 @@ func UseDevAuth() gin.HandlerFunc {
 	}
 }
 
-// DevPlayerSetup は dev プレイヤーが自動作成された後に呼ばれるコールバックです
-type DevPlayerSetup func(ctx context.Context, playerID string) error
-
 // UseDevAuthWithPlayerResolve は dev トークン認証と firebase_uid → playerID 解決を行う Gin middleware を返します。
 // プレイヤーが未登録の場合は account サービス経由で自動作成する。
-func UseDevAuthWithPlayerResolve(accountClient port.AccountClient, onCreated ...DevPlayerSetup) gin.HandlerFunc {
+func UseDevAuthWithPlayerResolve(accountClient port.AccountClient) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -67,33 +64,24 @@ func UseDevAuthWithPlayerResolve(accountClient port.AccountClient, onCreated ...
 		uid := strings.TrimPrefix(idToken, DevTokenPrefix)
 		c.Set(string(firebaseUIDKey), uid)
 
-		playerID, created, err := resolveOrCreateDevPlayer(c.Request.Context(), accountClient, uid)
+		playerID, err := resolveOrCreateDevPlayer(c.Request.Context(), accountClient, uid)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("resolve player: %v", err)})
 			return
 		}
 		c.Set(string(playerIDKey), playerID)
 
-		if created {
-			for _, fn := range onCreated {
-				if err := fn(c.Request.Context(), playerID); err != nil {
-					c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("dev player setup: %v", err)})
-					return
-				}
-			}
-		}
-
 		c.Next()
 	}
 }
 
-func resolveOrCreateDevPlayer(ctx context.Context, accountClient port.AccountClient, firebaseUID string) (string, bool, error) {
+func resolveOrCreateDevPlayer(ctx context.Context, accountClient port.AccountClient, firebaseUID string) (string, error) {
 	player, err := accountClient.FindByFirebaseUID(ctx, firebaseUID)
 	if err != nil {
-		return "", false, fmt.Errorf("find by firebase uid: %w", err)
+		return "", fmt.Errorf("find by firebase uid: %w", err)
 	}
 	if player != nil {
-		return player.PlayerID, false, nil
+		return player.PlayerID, nil
 	}
 
 	newPlayer, err := accountClient.Register(ctx, firebaseUID)
@@ -102,16 +90,16 @@ func resolveOrCreateDevPlayer(ctx context.Context, accountClient port.AccountCli
 		if errors.Is(err, port.ErrPlayerAlreadyRegistered) {
 			existing, lerr := accountClient.FindByFirebaseUID(ctx, firebaseUID)
 			if lerr != nil {
-				return "", false, fmt.Errorf("recover from race: %w", lerr)
+				return "", fmt.Errorf("recover from race: %w", lerr)
 			}
 			if existing == nil {
-				return "", false, errors.New("register returned already-registered but player not found")
+				return "", errors.New("register returned already-registered but player not found")
 			}
-			return existing.PlayerID, false, nil
+			return existing.PlayerID, nil
 		}
-		return "", false, fmt.Errorf("register dev player: %w", err)
+		return "", fmt.Errorf("register dev player: %w", err)
 	}
 	slog.Info("auto-created dev player", "firebase_uid", firebaseUID, "player_id", newPlayer.PlayerID)
 
-	return newPlayer.PlayerID, true, nil
+	return newPlayer.PlayerID, nil
 }
