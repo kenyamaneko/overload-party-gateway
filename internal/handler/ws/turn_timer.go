@@ -11,8 +11,9 @@ import (
 
 // turnTimerInfo はアクティブなターンタイマーの状態を保持する。
 type turnTimerInfo struct {
-	timer          Timer
-	activePlayerID string
+	timer           Timer
+	activePlayerID  string
+	timeBankSeconds int64
 }
 
 // turnTimerNetworkBuffer は battle server とのネットワーク遅延を吸収するための加算値。
@@ -25,6 +26,11 @@ const turnTimerNetworkBuffer = 2 * time.Second
 func (r *GameRelay) resetTurnTimer(gameID, activePlayerID string, timeBankSeconds int64) {
 	r.timerMu.Lock()
 	if info, ok := r.turnTimers[gameID]; ok {
+		// タイムバンクはターン開始時にリセットされない累積値のため、直前と同じ値なら再設定をスキップする。
+		if info.activePlayerID == activePlayerID && info.timeBankSeconds == timeBankSeconds {
+			r.timerMu.Unlock()
+			return
+		}
 		info.timer.Stop()
 		delete(r.turnTimers, gameID)
 	}
@@ -52,8 +58,9 @@ func (r *GameRelay) resetTurnTimer(gameID, activePlayerID string, timeBankSecond
 	})
 
 	r.turnTimers[gameID] = &turnTimerInfo{
-		timer:          timer,
-		activePlayerID: activePlayerID,
+		timer:           timer,
+		activePlayerID:  activePlayerID,
+		timeBankSeconds: timeBankSeconds,
 	}
 	r.timerMu.Unlock()
 }
