@@ -43,8 +43,8 @@ func TestUseRequestLogger(t *testing.T) {
 			want   string
 		}{
 			{name: "応答が200のとき、ログレベルはINFOになる", status: http.StatusOK, want: "INFO"},
-			{name: "応答が400のとき、ログレベルはWARNになる", status: http.StatusBadRequest, want: "WARN"},
-			{name: "応答が499のとき、ログレベルはWARNになる", status: 499, want: "WARN"},
+			{name: "応答が302のとき、ログレベルはINFOになる", status: http.StatusFound, want: "INFO"},
+			{name: "応答が400のとき、ログレベルはERRORになる", status: http.StatusBadRequest, want: "ERROR"},
 			{name: "応答が500のとき、ログレベルはERRORになる", status: http.StatusInternalServerError, want: "ERROR"},
 		}
 
