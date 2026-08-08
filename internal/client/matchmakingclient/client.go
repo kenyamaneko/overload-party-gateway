@@ -42,12 +42,12 @@ func New(baseURL, instanceID string, httpClient *http.Client) *Client {
 
 // Enqueue はプレイヤーをマッチメイキングキューに追加する。
 func (c *Client) Enqueue(ctx context.Context, deckID int64, name string, level int64) error {
-	return toPortErr(c.api.EnqueuePlayer(ctx, apimatchmaking.EnqueueRequest{
+	return c.api.EnqueuePlayer(ctx, apimatchmaking.EnqueueRequest{
 		DeckID:            deckID,
 		Name:              name,
 		Level:             level,
 		GatewayInstanceID: c.instanceID,
-	}))
+	})
 }
 
 // Cancel はプレイヤーをマッチメイキングキューから除去する。
@@ -56,22 +56,14 @@ func (c *Client) Cancel(ctx context.Context) error {
 	if errors.Is(err, apimatchmakingclient.ErrNotFound) {
 		return nil
 	}
-	return toPortErr(err)
+	return err
 }
 
 // ReportMatchAbandoned は成立したマッチを、配信先が接続していなかったため不成立として申告する。
 func (c *Client) ReportMatchAbandoned(ctx context.Context, matchID string, playerIDs []string) error {
-	return toPortErr(c.api.ReportMatchAbandoned(ctx, apimatchmaking.MatchAbandonedRequest{
+	return c.api.ReportMatchAbandoned(ctx, apimatchmaking.MatchAbandonedRequest{
 		MatchID:   matchID,
 		PlayerIDs: playerIDs,
 		Reason:    apimatchmaking.MatchAbandonedRequestReasonPlayerNotConnected,
-	}))
-}
-
-// toPortErr は SDK の sentinel を port の sentinel に変換する。
-func toPortErr(err error) error {
-	if errors.Is(err, apimatchmakingclient.ErrServiceUnavailable) {
-		return fmt.Errorf("%w: %v", port.ErrMatchmakingUnavailable, err)
-	}
-	return err
+	})
 }
