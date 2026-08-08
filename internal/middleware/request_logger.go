@@ -22,6 +22,7 @@ func UseRequestLogger() gin.HandlerFunc {
 		if status >= http.StatusInternalServerError {
 			level = slog.LevelError
 		} else if status >= http.StatusBadRequest {
+			// クライアント起因のエラー (4xx) は運用に支障をきたさないため、Warn 止まりとする。
 			level = slog.LevelWarn
 		}
 

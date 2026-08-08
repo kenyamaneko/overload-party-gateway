@@ -36,16 +36,16 @@ func captureRequestLog(t *testing.T, status int) map[string]any {
 }
 
 func TestUseRequestLogger(t *testing.T) {
-	t.Run("[HTTPミドルウェア]応答ステータスによるログ水準の分類", func(t *testing.T) {
+	t.Run("[HTTPミドルウェア]応答ステータスによるログレベルの分類", func(t *testing.T) {
 		tests := []struct {
 			name   string
 			status int
 			want   string
 		}{
-			{name: "応答が200のとき、水準はINFOになる", status: http.StatusOK, want: "INFO"},
-			{name: "応答が400のとき、水準はWARNになる", status: http.StatusBadRequest, want: "WARN"},
-			{name: "応答が499のとき、水準はWARNになる", status: 499, want: "WARN"},
-			{name: "応答が500のとき、水準はERRORになる", status: http.StatusInternalServerError, want: "ERROR"},
+			{name: "応答が200のとき、ログレベルはINFOになる", status: http.StatusOK, want: "INFO"},
+			{name: "応答が400のとき、ログレベルはWARNになる", status: http.StatusBadRequest, want: "WARN"},
+			{name: "応答が499のとき、ログレベルはWARNになる", status: 499, want: "WARN"},
+			{name: "応答が500のとき、ログレベルはERRORになる", status: http.StatusInternalServerError, want: "ERROR"},
 		}
 
 		for _, tt := range tests {
@@ -58,7 +58,7 @@ func TestUseRequestLogger(t *testing.T) {
 	})
 
 	t.Run("[HTTPミドルウェア]記録される内容", func(t *testing.T) {
-		t.Run("応答を返すと、要求のメソッド・パスと応答のステータスが載る", func(t *testing.T) {
+		t.Run("応答を返すと、ログに要求のメソッド・パスと応答のステータスが記録される", func(t *testing.T) {
 			record := captureRequestLog(t, http.StatusOK)
 
 			assert.Equal(t, http.MethodGet, record["method"])
