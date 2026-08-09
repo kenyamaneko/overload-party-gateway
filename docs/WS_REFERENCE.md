@@ -28,7 +28,6 @@
 Gateway Server が提供する WebSocket API。リアルタイムのゲーム通信（マッチメイキング、ゲーム状態同期）に使用する。
 
 - REST API 契約: [../data/openapi.yaml](../data/openapi.yaml)
-- サービス責務・契約: [FEATURE_SPEC.md](FEATURE_SPEC.md)
 - WS 終端方針・マッチメイキングの WS push 経路・Pod 単一性前提などの設計意図: [ARCHITECTURE.md](ARCHITECTURE.md)
 
 ### エンドポイント
