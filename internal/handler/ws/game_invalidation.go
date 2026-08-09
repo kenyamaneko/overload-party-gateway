@@ -12,6 +12,8 @@ import (
 // pvpHumanSlots は PvP の対戦が持つ人間プレイヤーのスロット数。
 const pvpHumanSlots = 2
 
+const npcHumanSlots = 1
+
 // invalidationMarkTimeout は停止時に無効化の記録を書き込む上限時間。
 const invalidationMarkTimeout = 2 * time.Second
 
