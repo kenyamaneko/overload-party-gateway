@@ -41,5 +41,4 @@ export interface PlayerResponse {
 export interface ErrorResponse {
   error_code: string;
   message: string;
-  retryable?: boolean;
 }

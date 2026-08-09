@@ -130,7 +130,7 @@ func (c *Connection) ReadPump(hub *ConnectionHub, manager *Manager) {
 		if err := json.Unmarshal(data, &msg); err != nil {
 			c.SendMessage(&WSMessage{
 				Type: genws.WSServerMsgError,
-				Data: mustMarshal(ErrorMessage{ErrorCode: "invalid_message", Message: "invalid JSON", Retryable: false}),
+				Data: mustMarshal(ErrorMessage{ErrorCode: "invalid_message", Message: "invalid JSON"}),
 			})
 			continue
 		}
