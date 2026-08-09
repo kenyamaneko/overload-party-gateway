@@ -675,22 +675,12 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 		mySummary, oppSummary = clientState.Player2Summary, clientState.Player1Summary
 	}
 
-	// NPC は level を持たないため呼び出し側で 0 に正規化する (legacy client contract で
-	// level は number 必須のため null を 0 として渡す)。
-	var myLevel, oppLevel int64
-	if mySummary.Level != nil {
-		myLevel = *mySummary.Level
-	}
-	if oppSummary.Level != nil {
-		oppLevel = *oppSummary.Level
-	}
-
 	battleStartData := map[string]interface{}{
 		"match_type":     matchType,
 		"my_name":        mySummary.Name,
-		"my_level":       myLevel,
+		"my_level":       mySummary.Level,
 		"opponent_name":  oppSummary.Name,
-		"opponent_level": oppLevel,
+		"opponent_level": oppSummary.Level,
 	}
 
 	// Sequence 0: battle_start / turn_start は gateway 合成イベントであり battle server のイベントシーケンスに含まれない
