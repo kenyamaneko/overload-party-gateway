@@ -25,7 +25,8 @@ func NewFirestoreGameConfigRepository(client *firestore.Client) *FirestoreGameCo
 }
 
 // GetInt64 は指定キーの設定値を int64 で返します。
-// ドキュメント不在は port.ErrNotFound を返す（fail-fast）。
+// 設定が保存されていない場合は port.ErrNotFound を、設定は保存されているが値が未設定の場合は
+// それとは別のエラーを返します（いずれも fail-fast）。
 func (r *FirestoreGameConfigRepository) GetInt64(ctx context.Context, key string) (int64, error) {
 	snap, err := r.client.Collection(gameConfigCollection).Doc(key).Get(ctx)
 	if err != nil {
@@ -33,6 +34,10 @@ func (r *FirestoreGameConfigRepository) GetInt64(ctx context.Context, key string
 			return 0, fmt.Errorf("game config %q: %w", key, port.ErrNotFound)
 		}
 		return 0, fmt.Errorf("get game config %q: %w", key, err)
+	}
+
+	if _, ok := snap.Data()["value"]; !ok {
+		return 0, fmt.Errorf("game config %q: value field missing", key)
 	}
 
 	var doc struct {
