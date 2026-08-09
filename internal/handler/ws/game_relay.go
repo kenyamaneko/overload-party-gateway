@@ -593,7 +593,14 @@ func (r *GameRelay) advanceNpcIfNeeded(parentCtx context.Context, gameID, player
 	ctx, cancel := context.WithTimeout(parentCtx, downstreamCallTimeout)
 	defer cancel()
 
-	matchType := r.lookupMatchType(ctx, gameID)
+	matchType, err := r.lookupMatchType(ctx, gameID)
+	if err != nil {
+		if isCanceled(err) {
+			return
+		}
+		slog.Error("lookup match type failed", "game_id", gameID, "player_id", playerID, "error", err)
+		return
+	}
 	if matchType != gamedesign.MatchTypeNpc {
 		return
 	}
@@ -650,9 +657,11 @@ func (r *GameRelay) sendBattleStartAndTurnStart(conn *Connection, gameID string)
 		sendErrorToPlayer(r.hub, conn.playerID, "game_state_error", "failed to retrieve game metadata")
 		return
 	}
-	matchType := gamedesign.MatchTypePvp
-	if len(entries) == 1 {
-		matchType = gamedesign.MatchTypeNpc
+	matchType, err := resolveMatchTypeFromPlayerCount(len(entries))
+	if err != nil {
+		slog.Error("determine match type for battle_start failed", "game_id", gameID, "error", err)
+		sendErrorToPlayer(r.hub, conn.playerID, "game_state_error", "failed to retrieve game metadata")
+		return
 	}
 
 	var clientState apibattle.ClientGameState
@@ -890,20 +899,30 @@ func (r *GameRelay) resolvePlayerNum(ctx context.Context, gameID, playerID strin
 }
 
 // lookupMatchType は game_players の行数からマッチタイプを導出する。
-// 失敗時は空文字を返し、呼び出し元は MatchTypeNpc 分岐に入らない（≒ 何もしない）安全側にフォールスルーする。
-func (r *GameRelay) lookupMatchType(ctx context.Context, gameID string) string {
+func (r *GameRelay) lookupMatchType(ctx context.Context, gameID string) (string, error) {
 	if r.gamePlayerRepo == nil {
-		return ""
+		return "", nil
 	}
 	entries, err := r.gamePlayerRepo.LookupGamePlayers(ctx, gameID)
 	if err != nil {
-		slog.Error("lookup match type failed", "game_id", gameID, "error", err)
-		return ""
+		return "", fmt.Errorf("lookup game players for game %s: %w", gameID, err)
 	}
-	if len(entries) == 1 {
-		return gamedesign.MatchTypeNpc
+	matchType, err := resolveMatchTypeFromPlayerCount(len(entries))
+	if err != nil {
+		return "", fmt.Errorf("game %s: %w", gameID, err)
 	}
-	return gamedesign.MatchTypePvp
+	return matchType, nil
+}
+
+func resolveMatchTypeFromPlayerCount(count int) (string, error) {
+	switch count {
+	case npcHumanSlots:
+		return gamedesign.MatchTypeNpc, nil
+	case pvpHumanSlots:
+		return gamedesign.MatchTypePvp, nil
+	default:
+		return "", fmt.Errorf("unexpected human player count: %d", count)
+	}
 }
 
 func appendUnique(slice []string, s string) []string {
