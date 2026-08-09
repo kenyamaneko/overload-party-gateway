@@ -325,6 +325,7 @@ func (r *GameRelay) SendGameStateToPlayers(gameID string) {
 		pNum, err := r.resolvePlayerNum(ctx, gameID, pid)
 		if err != nil {
 			slog.Error("resolve player_num for game state failed", "player_id", pid, "game_id", gameID, "error", err)
+			sendErrorToPlayer(r.hub, pid, "game_state_error", "failed to retrieve game state")
 			continue
 		}
 		state, err := r.battleClient.GetGameStateForPlayer(ctx, gameID, pNum)
@@ -368,6 +369,7 @@ func (r *GameRelay) SendTurnControlsToPlayers(gameID string) {
 		pNum, err := r.resolvePlayerNum(ctx, gameID, pid)
 		if err != nil {
 			slog.Error("resolve player_num for turn controls failed", "player_id", pid, "game_id", gameID, "error", err)
+			sendErrorToPlayer(r.hub, pid, "turn_controls_error", "failed to retrieve turn controls")
 			continue
 		}
 		raw, err := r.battleClient.GetTurnControlsForPlayer(ctx, gameID, pNum)
@@ -403,8 +405,9 @@ func (r *GameRelay) sendActionPerformed(ctx context.Context, gameID, actingPlaye
 
 	actingPlayerNum, err := r.resolvePlayerNum(ctx, gameID, actingPlayerID)
 	if err != nil {
-		// 行動したプレイヤーのスロット番号でイベントの宛先を決めるため、引けない場合は配信しない。
+		// 行動したプレイヤーのスロット番号でイベントの宛先を決めるため、引けない場合はどのイベントも振り分けられない。
 		slog.Error("resolve acting player_num for action_performed failed", "player_id", actingPlayerID, "game_id", gameID, "error", err)
+		sendErrorToPlayer(r.hub, actingPlayerID, "action_performed_error", "failed to process action result")
 		return
 	}
 	for _, event := range result.Events {
@@ -489,6 +492,7 @@ func (r *GameRelay) sendActionToPlayers(ctx context.Context, gameID string, pids
 		pNum, err := r.resolvePlayerNum(ctx, gameID, pid)
 		if err != nil {
 			slog.Error("resolve player_num for action_performed failed", "player_id", pid, "game_id", gameID, "error", err)
+			sendErrorToPlayer(r.hub, pid, "action_performed_error", "failed to process action result")
 			continue
 		}
 		state, err := r.battleClient.GetGameStateForPlayer(ctx, gameID, pNum)
