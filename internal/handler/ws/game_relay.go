@@ -786,6 +786,7 @@ func (r *GameRelay) HandleUseStamp(ctx context.Context, conn *Connection, data j
 	pNum, err := r.resolvePlayerNum(ctx, req.GameID, conn.playerID)
 	if err != nil {
 		slog.Error("resolve player_num for stamp failed", "player_id", conn.playerID, "game_id", req.GameID, "error", err)
+		sendErrorToPlayer(r.hub, conn.playerID, "stamp_error", "failed to send stamp")
 		return
 	}
 	r.BroadcastToGame(req.GameID, &WSMessage{
@@ -822,6 +823,9 @@ func (r *GameRelay) HandleDisconnectTimeout(playerID, gameID string) {
 	// 切断タイムアウトは WS コネクション喪失後に発火するので Background ベースで実行する。
 	ctx2, cancel2 := context.WithTimeout(context.Background(), downstreamCallTimeout)
 	defer cancel2()
+
+	// 本人は既に切断済みで通知できないため、以降の異常系はログのみ残し対戦相手の別経路
+	// (DB 観測・再接続) でのリカバリに委ねる。
 	pNum, err := r.resolvePlayerNum(ctx2, gameID, playerID)
 	if err != nil {
 		slog.Error("disconnect timeout: resolve player_num failed, game left unresolved", "game_id", gameID, "player_id", playerID, "error", err)
@@ -829,9 +833,6 @@ func (r *GameRelay) HandleDisconnectTimeout(playerID, gameID string) {
 	}
 	result, err := r.battleClient.ProcessAction(ctx2, gameID, pNum, gamelogic.ActionTypeForfeit, buildForfeitReason(gamelogic.WinReasonDisconnect))
 	if err != nil {
-		// 切断 forfeit は対戦相手にも影響する（ゲーム終了せず宙ぶらりんになる）。
-		// 接続は既に切れているので本人通知は不可能だが、対戦相手は DB 観測 / 別経路の
-		// 再接続でリカバリする想定。要監視。
 		slog.Error("disconnect forfeit failed (opponent stuck risk)", "game_id", gameID, "player_id", playerID, "error", err)
 		return
 	}
