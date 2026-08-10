@@ -147,7 +147,7 @@ func runServicesWithTimeout(t *testing.T, ctx context.Context, cfg *config.Confi
 // あらかじめキャンセル済みの ctx を渡すと http.Server.ListenAndServe が listen 自体を
 // 行わずに即終了してしまい、「起動してから正常に閉じた」ことを確かめられないため、
 // BaseContext (listener が確立してから呼ばれる) を合図に使う。
-func runServicesAfterListening(t *testing.T) (error, *fakeWSLifecycle) {
+func runServicesAfterListening(t *testing.T) (*fakeWSLifecycle, error) {
 	t.Helper()
 
 	fake := &fakeWSLifecycle{}
@@ -173,10 +173,10 @@ func runServicesAfterListening(t *testing.T) (error, *fakeWSLifecycle) {
 
 	select {
 	case err := <-errCh:
-		return err, fake
+		return fake, err
 	case <-time.After(5 * time.Second):
 		t.Fatal("runServices did not return within the timeout")
-		return nil, fake
+		return fake, nil
 	}
 }
 
@@ -198,19 +198,19 @@ func newTestConfig() *config.Config {
 func TestRunServices(t *testing.T) {
 	t.Run("シャットダウンシグナル受信時の制御", func(t *testing.T) {
 		t.Run("HTTPサーバが接続を受け付けた後にctxがキャンセルされると、エラーなく終了する", func(t *testing.T) {
-			err, _ := runServicesAfterListening(t)
+			_, err := runServicesAfterListening(t)
 
 			assert.NoError(t, err)
 		})
 
 		t.Run("対戦の復旧処理には、60秒の上限時間が設定される", func(t *testing.T) {
-			_, fake := runServicesAfterListening(t)
+			fake, _ := runServicesAfterListening(t)
 
 			assertDeadlineWithin(t, fake.calledRecover(), 60*time.Second)
 		})
 
 		t.Run("WS接続への終了通知には、5秒の上限時間が設定される", func(t *testing.T) {
-			_, fake := runServicesAfterListening(t)
+			fake, _ := runServicesAfterListening(t)
 
 			assertDeadlineWithin(t, fake.calledShutdown(), 5*time.Second)
 		})

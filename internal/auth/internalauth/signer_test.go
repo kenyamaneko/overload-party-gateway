@@ -178,7 +178,7 @@ func TestIssue(t *testing.T) {
 
 			token := parseIssuedToken(t, tokenString, &key.PublicKey)
 			claims := token.Claims.(*jwt.RegisteredClaims)
-			assert.Equal(t, fixedNow.Add(5*time.Minute), claims.ExpiresAt.Time.UTC())
+			assert.Equal(t, fixedNow.Add(5*time.Minute), claims.ExpiresAt.UTC())
 		})
 
 		t.Run("発行された内部認証トークンのヘッダーには、署名に使った鍵を識別する情報(kid)が、その鍵の識別子と一致する値で含まれる", func(t *testing.T) {

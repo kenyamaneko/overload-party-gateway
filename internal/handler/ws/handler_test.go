@@ -103,7 +103,7 @@ func assertUpgradeRejected(t *testing.T, serverURL, token string, header http.He
 	require.Error(t, err)
 	require.NotNil(t, resp)
 	if conn != nil {
-		conn.Close()
+		_ = conn.Close()
 	}
 	assert.Equal(t, wantStatus, resp.StatusCode)
 	assert.Contains(t, readBody(t, resp), wantBodyContains)
@@ -115,7 +115,7 @@ func assertUpgradeEstablished(t *testing.T, serverURL, token string, header http
 	if err != nil {
 		t.Fatalf("expected the connection to upgrade, got status=%d body=%q err=%v", resp.StatusCode, readBody(t, resp), err)
 	}
-	conn.Close()
+	_ = conn.Close()
 }
 
 func registeredAccountStub(playerID string) *stubAccountClient {
