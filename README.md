@@ -2,6 +2,8 @@
 
 クライアントが唯一通信する薄い WS/REST ゲートウェイ。認証・ルーティング・WebSocket リレーを担い、ドメインロジックはすべて下流サービスに委譲する。
 
+設計判断 (Why) は [common の ADR](https://github.com/kenyamaneko/overload-party-common/tree/main/docs/adr) に記録する。
+
 [テスト観点カタログ](https://kenyamaneko.github.io/overload-party-gateway/): テスト名から生成した、テスト済みの観点の一覧。
 
 ## サービス間連携
@@ -21,7 +23,7 @@ Gateway (このサービス, :9001)
   ├─ HTTP → scenario  (:9007)  エピソード / スクリプト
   ├─ HTTP → news      (:9008)  ニュース記事
   ├─ HTTP → support   (:9009)  お知らせ
-  ├─ PostgreSQL                 gateway.game_players (所有)
+  ├─ PostgreSQL                 gateway.game_players / gateway.processed_matches / gateway.invalidated_games (所有)
   └─ POST /internal/v1/pubsub/match-made  ← Cloud Pub/Sub push 配信
 ```
 
@@ -37,11 +39,14 @@ REST エンドポイント契約は [data/openapi.yaml](data/openapi.yaml) を�
 |---|---|---|
 | `PORT` | `9001` | リッスンポート |
 | `ENV` | `dev` | 動作環境 (`dev` / `stg` / `prod`) |
-| `DATABASE_CONN` | *(必須)* | PostgreSQL 接続文字列 (`gateway.game_players`) |
+| `DATABASE_CONN` | *(必須)* | PostgreSQL 接続文字列 (`gateway.game_players` / `gateway.processed_matches` / `gateway.invalidated_games`) |
 | `DATABASE_IAM_AUTH_ENABLED` | *(必須)* | Cloud SQL への接続を Cloud SQL Go Connector 経由の自動 IAM データベース認証で行うかどうか。`true` / `false` のいずれか必須で、フォールバックは無い |
 | `CLOUDSQL_CONNECTION_NAME` | *(空)* | Cloud SQL インスタンスの接続名 (`project:region:instance`)。`DATABASE_IAM_AUTH_ENABLED=true` のときのみ必須 |
 | `GOOGLE_CLOUD_PROJECT_ID` | *(必須)* | Google Cloud プロジェクト ID (Pub/Sub および Firestore game_config) |
 | `INTERNAL_AUTH_PRIVATE_KEY` | *(必須)* | 内部認証 JWT (RS256) の署名鍵。PKCS#8 の PEM |
+| `UPSTASH_REDIS_URL` | *(必須)* | プレイヤーの切断猶予・ターンタイマー期限の写しを保持する Upstash Redis の接続 URL |
+| `PUBSUB_PUSH_SERVICE_ACCOUNT_EMAIL` | *(必須)* | match-made push subscription の OIDC トークンに期待するサービスアカウント email |
+| `PUBSUB_PUSH_AUDIENCE` | *(必須)* | match-made push subscription の OIDC トークンに期待する audience |
 
 **ConfigMap (サービス URL):**
 

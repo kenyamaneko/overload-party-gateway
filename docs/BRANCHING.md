@@ -11,7 +11,7 @@ GitHub Ruleset で `main` に以下を設定している。
 - 直 push 禁止、PR マージのみ (linear history)
 - force push 禁止、削除禁止
 - 必須ステータスチェック: ci / lint, ci / test-unit, ci / test-integration, ci / image-scan, ci / codegen-sync
-- required reviews: 1 (self-approve 不可)
+- required reviews: 0 (一人開発のため。複数人化する際に 1 へ引き上げる)
 
 チェック名の `ci` は `ci.yaml` の呼び出し側ジョブ名で、続く名前は common の `go-service-ci.yaml` のジョブ名。
 
@@ -22,7 +22,7 @@ GitHub Ruleset で `main` に以下を設定している。
 | [ci.yaml](../.github/workflows/ci.yaml) | PR: main | lint + テスト + 脆弱性スキャン + コード生成ドリフト検出。中身は common の `go-service-ci.yaml` に集約している |
 | [test-catalog.yaml](../.github/workflows/test-catalog.yaml) | push: main | `ci.yaml` を呼び、そのテスト結果からテスト観点カタログを生成して GitHub Pages に公開 |
 | [deploy.yaml](../.github/workflows/deploy.yaml) | push: main / タグ `v*` / workflow_dispatch | dev へのデプロイ、タグからの stg 昇格、prod への手動昇格 |
-| [publish.yaml](../.github/workflows/publish.yaml) | push: main (`packages/**` 変更時) + workflow_dispatch | `packages/` 配下の Go モジュールのタグ付けと npm パッケージの Cloudsmith 公開 |
+| [publish.yaml](../.github/workflows/publish.yaml) | workflow_dispatch | `packages/` 配下の Go モジュールのタグ付けと npm パッケージの Cloudsmith 公開 |
 
 `feature/*` への直 push では CI が走らない。main 宛の PR を作ると実行され、追加 push のたびに再実行される。
 
@@ -42,7 +42,7 @@ gateway は Go の 3 モジュール (`api-gateway` / `ws-constants` / `internal
 | `packages/api-gateway-npm` | Cloudsmith (npm) |
 | `packages/ws-constants-npm` | Cloudsmith (npm) |
 
-発行は [publish.yaml](../.github/workflows/publish.yaml) が担当し、`packages/**` に main で変更が入ると変更を検出したモジュールだけをタグ付け・公開する。桁を人が選ぶときは `workflow_dispatch` で `bump` を指定する。
+発行は [publish.yaml](../.github/workflows/publish.yaml) の `workflow_dispatch` で人が実行する。`target` を `auto` にすると前回タグからの変更を検出したモジュールだけを、個別に指定すると指定したモジュールだけをタグ付け・公開する。桁は `bump` で選ぶ。
 
 各パッケージのバージョンはサービス本体のバージョンと独立で、REST 契約型や WS プロトコルに破壊的変更が入るときは対応するパッケージの桁を上げる。
 

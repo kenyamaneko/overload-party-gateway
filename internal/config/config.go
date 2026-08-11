@@ -45,6 +45,7 @@ type Config struct {
 
 	// matchmaking_start 後のプレイヤー待機タイムアウト（秒）。
 	// タイムアウト時に gateway がエラーを push し、上流の enqueue をキャンセルする。
+	// 短すぎるとキューが浅い時間帯にプレイヤーが離脱しやすいため、matchmaking のキュー長メトリクスと併せて調整する。
 	MatchmakingTimeoutSec int
 
 	AppMinVersion    string

@@ -31,11 +31,32 @@ gateway スキーマは人間プレイヤーとゲームスロット (1/2) の�
 - battle と gateway のスキーマ分離は「battle がプレイヤー ID を知らない」というアーキテクチャ上の境界を DB レベルで表現している
 - `exp_awarded` フラグは、ゲーム終了通知が重複した場合の冪等性を保証する。gateway はゲーム終了を検知すると、このフラグを確認してから account サービスに経験値加算 API を呼ぶ
 - `created_at` は、無効になった対戦のバトル回数を戻すときに消費時刻として account へ渡す。回数を消費するのはマッチメイキング開始時で行の作成はその数秒後だが、ゲーム日 (JST 05:00 境界) の判定が変わるのは境界をまたぐ狭い窓だけなので、行の作成時刻で代用する
+- `player_id → player_num` の索引: WS message ごとに battle へ player_num を問い合わせるコストを避けるため、match_made 時に確定する対応をこのテーブルにキャッシュし、以降の game_enter / game_action で参照する。インメモリのプレイヤーセッションはこのテーブルの写しであり、プロセス再起動で失われた場合はテーブルから引き直す
 
 **ライフサイクル:**
 1. matchmaking の `match_made` Pub/Sub イベント受信時に INSERT（PvP の場合）
 2. NPC 戦の場合は gateway が battle に CreateGame を呼んだ後に INSERT
 3. ゲーム終了時に `exp_awarded = TRUE` に UPDATE
+
+### processed_matches
+
+matchmaking の `match_made` イベントの永続的な重複排除。Pub/Sub は at-least-once 配信のため、同一 match_id のイベントが複数回届いても対戦を二重に作らないためのガード。
+
+- **PK:** `match_id`
+
+<!-- BEGIN GENERATED: processed_matches -->
+| カラム名 | 型 | Nullable | 説明 |
+|---|---|---|---|
+| `match_id` | VARCHAR(64) | No | matchmaking の match_id (mch_&lt;ULID&gt;) |
+| `game_id` | VARCHAR(26) | Yes | battle.games(game_id) を参照 (app-level FK)。作成前は NULL |
+| `notified` | BOOLEAN | No | 成立通知の送信済みフラグ（再配信での二重通知防止） |
+| `claimed_at` | TIMESTAMPTZ | No | 行を作成した時刻 |
+<!-- END GENERATED: processed_matches -->
+
+**設計判断:**
+- `match_id` を PK にした行の存在自体が「処理済み」を表す。再配信されたイベントは `INSERT ... ON CONFLICT DO NOTHING` で無視し、対戦の重複作成を防ぐ
+- `game_id` を作成前は NULL のまま持つのは、対戦作成 (battle への CreateGame 呼び出し) の成否に関わらず、まず match_id の到着自体を記録して重複排除の窓を閉じるため
+- `notified` は対戦成立の WS 通知が重複配信されないようにするための別フラグ。対戦作成と通知送信は別々に失敗しうるため、それぞれ独立して冪等性を持たせる
 
 ### invalidated_games
 
@@ -76,6 +97,9 @@ gateway スキーマは人間プレイヤーとゲームスロット (1/2) の�
   └── 1:N ── game_players (PK: game_id, player_num)
                 │
                 └── ─ ─ ─ [account.players] (cross-schema, app-level)
+
+processed_matches (独立、FK なし)
+invalidated_games (独立、FK なし)
 ```
 
 ---

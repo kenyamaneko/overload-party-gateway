@@ -19,7 +19,7 @@ import (
 
 // battleStateMeta は battle server のゲーム状態 JSON の最小射影。
 // ターン関連メタデータ（タイマー、アクティブプレイヤー）の抽出にのみ使用する。
-// gateway はゲーム状態を変換せずそのままパススルーする。
+// 最小射影に留めるのは、battle のドメイン変更に gateway の再デプロイが必要にならないようにするため。
 type battleStateMeta struct {
 	CurrentTurn int64 `json:"currentTurn"`
 	IsMyTurn    bool  `json:"isMyTurn"`
@@ -853,6 +853,8 @@ func (r *GameRelay) NotifyMatchFoundTo(gameID, playerID string) bool {
 }
 
 // NotifyMatchmakingFailed はマッチが不成立になったことをプレイヤーに送信します
+//
+// 専用のエラー種別を追加するとクライアントと ws-constants の両側に追随が要るため、既存の error 種別を使う。
 func (r *GameRelay) NotifyMatchmakingFailed(playerID string) {
 	sendErrorToPlayer(r.hub, playerID, "matchmaking_error", "opponent was not connected")
 }
