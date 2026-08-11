@@ -4,7 +4,7 @@
 
 既定値のある変数は、未設定なら既定値を使い、空文字が設定されていれば起動時にエラーで止まる。値を投入する側が渡した空文字を既定値で覆い隠さないため。
 
-**Deployment env (インフラ層):**
+**インフラ層:**
 
 | 変数名 | デフォルト | 説明 |
 |---|---|---|
@@ -19,7 +19,7 @@
 | `PUBSUB_PUSH_SERVICE_ACCOUNT_EMAIL` | *(必須)* | match-made push subscription の OIDC トークンに期待するサービスアカウント email |
 | `PUBSUB_PUSH_AUDIENCE` | *(必須)* | match-made push subscription の OIDC トークンに期待する audience |
 
-**ConfigMap (サービス URL):**
+**サービス URL:**
 
 8 本すべてが必須で、未設定または空なら起動時に落ちる。欠けた宛先への転送は実行時まで誤りが見えないため、既定値へのフォールバックを持たない。
 
@@ -34,7 +34,7 @@
 | `NEWS_SERVICE_URL` | *(必須)* | News サービス URL |
 | `SUPPORT_SERVICE_URL` | *(必須)* | Support サービス URL |
 
-**ConfigMap (アプリ挙動):**
+**アプリ挙動:**
 
 | 変数名 | デフォルト | 説明 |
 |---|---|---|
