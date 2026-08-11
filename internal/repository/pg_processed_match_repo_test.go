@@ -21,7 +21,7 @@ func TestClaim(t *testing.T) {
 	repo := repository.NewPgProcessedMatchRepository(sharedPg.Pool)
 	ctx := context.Background()
 
-	t.Run("マッチの処理開始権の取得", func(t *testing.T) {
+	t.Run("[マッチメイキング]マッチの処理開始権の取得", func(t *testing.T) {
 		noPreClaim := func(t *testing.T) {}
 		preClaimed := func(t *testing.T) {
 			_, err := repo.Claim(ctx, pmMatchID1)
@@ -62,7 +62,7 @@ func TestRelease(t *testing.T) {
 	repo := repository.NewPgProcessedMatchRepository(sharedPg.Pool)
 	ctx := context.Background()
 
-	t.Run("処理開始の取り消し", func(t *testing.T) {
+	t.Run("[マッチメイキング]処理開始の取り消し", func(t *testing.T) {
 		noPreClaim := func(t *testing.T) {}
 		preClaimed := func(t *testing.T) {
 			_, err := repo.Claim(ctx, pmMatchID1)
@@ -102,7 +102,7 @@ func TestRecordGameCreated(t *testing.T) {
 	repo := repository.NewPgProcessedMatchRepository(sharedPg.Pool)
 	ctx := context.Background()
 
-	t.Run("対戦作成結果の記録", func(t *testing.T) {
+	t.Run("[マッチメイキング]対戦作成結果の記録", func(t *testing.T) {
 		t.Run("処理を開始済みのマッチに対して対戦のIDを記録すると、以降そのマッチについて記録済みの対戦IDを取得できるようになる", func(t *testing.T) {
 			sharedPg.Truncate(t)
 			_, err := repo.Claim(ctx, pmMatchID1)
@@ -132,7 +132,7 @@ func TestMarkNotified(t *testing.T) {
 	repo := repository.NewPgProcessedMatchRepository(sharedPg.Pool)
 	ctx := context.Background()
 
-	t.Run("成立通知の送信権の取得", func(t *testing.T) {
+	t.Run("[マッチメイキング]成立通知の送信権の取得", func(t *testing.T) {
 		noPreClaim := func(t *testing.T) {}
 		claimedNotYetNotified := func(t *testing.T) {
 			_, err := repo.Claim(ctx, pmMatchID1)
@@ -184,7 +184,7 @@ func TestGameIDFor(t *testing.T) {
 	repo := repository.NewPgProcessedMatchRepository(sharedPg.Pool)
 	ctx := context.Background()
 
-	t.Run("マッチに対応する対戦IDの取得", func(t *testing.T) {
+	t.Run("[マッチメイキング]マッチに対応する対戦IDの取得", func(t *testing.T) {
 		t.Run("対象のマッチについて処理が開始されていないとき、取得すると、見つからなかったことを示す結果が返る", func(t *testing.T) {
 			sharedPg.Truncate(t)
 

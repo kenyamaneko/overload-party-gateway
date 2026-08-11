@@ -17,7 +17,7 @@ func TestGetInt64(t *testing.T) {
 	repo := repository.NewFirestoreGameConfigRepository(sharedFirestoreClient)
 	ctx := context.Background()
 
-	t.Run("設定値の取得", func(t *testing.T) {
+	t.Run("[設定]設定値の取得", func(t *testing.T) {
 		valueCases := []struct {
 			name  string
 			key   string

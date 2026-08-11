@@ -56,7 +56,7 @@ func TestMarkInvalidated(t *testing.T) {
 	repo := repository.NewPgInvalidatedGameRepository(sharedPg.Pool)
 	ctx := context.Background()
 
-	t.Run("対戦の無効化記録", func(t *testing.T) {
+	t.Run("[起動時復旧]対戦の無効化記録", func(t *testing.T) {
 		t.Run("対戦IDを1件も指定しなかったとき、記録処理を呼んでも何も起きず、エラーにもならない", func(t *testing.T) {
 			sharedPg.Truncate(t)
 
@@ -126,7 +126,7 @@ func TestListUnfinished(t *testing.T) {
 	repo := repository.NewPgInvalidatedGameRepository(sharedPg.Pool)
 	ctx := context.Background()
 
-	t.Run("未決着の無効な対戦一覧の取得", func(t *testing.T) {
+	t.Run("[起動時復旧]未決着の無効な対戦一覧の取得", func(t *testing.T) {
 		t.Run("無効な対戦が1件も記録されていないとき、一覧を取得すると、要素を1件も含まない一覧が返る", func(t *testing.T) {
 			sharedPg.Truncate(t)
 
@@ -169,7 +169,7 @@ func TestMarkFinished(t *testing.T) {
 	repo := repository.NewPgInvalidatedGameRepository(sharedPg.Pool)
 	ctx := context.Background()
 
-	t.Run("対戦の決着記録", func(t *testing.T) {
+	t.Run("[起動時復旧]対戦の決着記録", func(t *testing.T) {
 		t.Run("未決着の無効な対戦を決着済みとして記録すると、以降その対戦は未決着の一覧に含まれなくなる", func(t *testing.T) {
 			sharedPg.Truncate(t)
 			require.NoError(t, repo.MarkInvalidated(ctx, []string{igGameID1}))
@@ -221,7 +221,7 @@ func TestListRevertPending(t *testing.T) {
 	repo := repository.NewPgInvalidatedGameRepository(sharedPg.Pool)
 	ctx := context.Background()
 
-	t.Run("消費バトル回数の返却待ち一覧の取得", func(t *testing.T) {
+	t.Run("[起動時復旧]消費バトル回数の返却待ち一覧の取得", func(t *testing.T) {
 		t.Run("決着済みで返却待ちの無効な対戦が1件も無いとき、一覧を取得すると、要素を1件も含まない一覧が返る", func(t *testing.T) {
 			sharedPg.Truncate(t)
 
@@ -266,7 +266,7 @@ func TestMarkReverted(t *testing.T) {
 	repo := repository.NewPgInvalidatedGameRepository(sharedPg.Pool)
 	ctx := context.Background()
 
-	t.Run("消費バトル回数の返却記録", func(t *testing.T) {
+	t.Run("[起動時復旧]消費バトル回数の返却記録", func(t *testing.T) {
 		t.Run("返却待ちの対戦を返却済みとして記録すると、以降その対戦は返却待ちの一覧に含まれなくなる", func(t *testing.T) {
 			sharedPg.Truncate(t)
 			require.NoError(t, repo.MarkInvalidated(ctx, []string{igGameID1}))
@@ -311,7 +311,7 @@ func TestIsInvalidated(t *testing.T) {
 	repo := repository.NewPgInvalidatedGameRepository(sharedPg.Pool)
 	ctx := context.Background()
 
-	t.Run("対戦の無効化有無の判定", func(t *testing.T) {
+	t.Run("[起動時復旧]対戦の無効化有無の判定", func(t *testing.T) {
 		t.Run("対戦が無効として記録されていないとき、判定すると、無効でないことを示す結果が返る", func(t *testing.T) {
 			sharedPg.Truncate(t)
 
