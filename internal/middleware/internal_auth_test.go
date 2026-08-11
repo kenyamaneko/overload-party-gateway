@@ -17,7 +17,7 @@ import (
 )
 
 func TestIssueInternalAuth(t *testing.T) {
-	t.Run("内部認証トークンの発行", func(t *testing.T) {
+	t.Run("[認証]内部認証トークンの発行", func(t *testing.T) {
 		key, err := rsa.GenerateKey(rand.Reader, 2048)
 		require.NoError(t, err)
 		workingSigner := internalauth.NewSigner(internalauth.StaticPrivateKeyResolver(key, internalauth.DefaultKeyID), internalauth.DefaultKeyID)

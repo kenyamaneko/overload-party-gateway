@@ -77,7 +77,7 @@ func referencedConstName(t *testing.T, out, typeName string) string {
 }
 
 func TestRenderTypeScript(t *testing.T) {
-	t.Run("サーバー向け・クライアント向けメッセージ種別一覧からのコード生成", func(t *testing.T) {
+	t.Run("[コード生成]サーバー向け・クライアント向けメッセージ種別一覧からのコード生成", func(t *testing.T) {
 		t.Run("サーバー向け・クライアント向けそれぞれのメッセージ種別一覧を渡すと、それぞれについて値を並べた配列の宣言と、その配列の要素だけを取り得る型の宣言が生成される", func(t *testing.T) {
 			out := RenderTypeScript(MessageTypes{
 				Server: []string{"server_alpha"},

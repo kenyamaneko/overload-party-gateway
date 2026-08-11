@@ -8,7 +8,7 @@ import (
 )
 
 func TestParseMessageTypes(t *testing.T) {
-	t.Run("Goの定数宣言からのWebSocketメッセージ種別抽出と送信方向分類", func(t *testing.T) {
+	t.Run("[コード生成]Goの定数宣言からのWebSocketメッセージ種別抽出と送信方向分類", func(t *testing.T) {
 		t.Run("サーバー方向・クライアント方向のそれぞれに定数が1件だけあるとき、それぞれ1件の一覧として返る", func(t *testing.T) {
 			src := []byte(`package foo
 const (

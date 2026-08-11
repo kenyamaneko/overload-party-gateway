@@ -14,7 +14,7 @@ import (
 )
 
 func TestAwardGameExp(t *testing.T) {
-	t.Run("対戦終了後の経験値付与", func(t *testing.T) {
+	t.Run("[対戦終了]対戦終了後の経験値付与", func(t *testing.T) {
 		t.Run("経験値付与の連携先が構成されていない環境のとき、付与済みかどうかの記録への問い合わせも行われないまま、何も送信されない", func(t *testing.T) {
 			gamePlayers := &stubGamePlayerRepo{}
 			relay := newTestGameRelay(t, relayDeps{accountUnconfigured: true, gamePlayerRepo: gamePlayers})

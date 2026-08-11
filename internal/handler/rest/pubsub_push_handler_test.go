@@ -28,7 +28,7 @@ func doPubSubPush(r *gin.Engine, body string) *httptest.ResponseRecorder {
 }
 
 func TestPubSubPushHandlerHandleMatchMade(t *testing.T) {
-	t.Run("pushメッセージの受理", func(t *testing.T) {
+	t.Run("[転送配信]pushメッセージの受理", func(t *testing.T) {
 		t.Run("リクエストボディが規定のpushメッセージ形式に沿っていないとき、ステータスコード400で、メッセージ形式が不正である旨のエラー内容を返す", func(t *testing.T) {
 			cases := []struct {
 				name string

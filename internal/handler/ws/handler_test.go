@@ -139,7 +139,7 @@ func playerNotFoundAccountStub() *stubAccountClient {
 }
 
 func TestHandleUpgrade(t *testing.T) {
-	t.Run("接続要求の認証判定", func(t *testing.T) {
+	t.Run("[認証]接続要求の認証判定", func(t *testing.T) {
 		t.Run("接続要求にトークンが含まれていない(空文字)とき、本番運用・開発運用のいずれでも、HTTPステータス401、エラー内容\"missing token\"が返り、接続はWebSocketへ確立されない", func(t *testing.T) {
 			t.Run("開発運用のとき", func(t *testing.T) {
 				h := NewHandler(newTestManager(t, managerDeps{}), nil, &stubAccountClient{}, nil)
@@ -231,7 +231,7 @@ func TestHandleUpgrade(t *testing.T) {
 		})
 	})
 
-	t.Run("接続元オリジンによる許可判定", func(t *testing.T) {
+	t.Run("[接続管理]接続元オリジンによる許可判定", func(t *testing.T) {
 		t.Run("許可オリジンの制限が1件も設定されていない(0件、制限なしモード)とき、どのOriginからの接続要求も許可される", func(t *testing.T) {
 			account := registeredAccountStub("player-any-origin")
 			h := NewHandler(newTestManager(t, managerDeps{account: account}), nil, account, nil)

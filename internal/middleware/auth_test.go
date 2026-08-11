@@ -14,7 +14,7 @@ import (
 )
 
 func TestUseFirebaseAuth(t *testing.T) {
-	t.Run("Firebase IDトークンによるリクエスト認証", func(t *testing.T) {
+	t.Run("[認証]Firebase IDトークンによるリクエスト認証", func(t *testing.T) {
 		t.Run("リクエストに認証ヘッダーが無いとき、401で拒否される", func(t *testing.T) {
 			reached := false
 			var gotUID string
@@ -120,7 +120,7 @@ func TestUseFirebaseAuth(t *testing.T) {
 }
 
 func TestResolvePlayer(t *testing.T) {
-	t.Run("認証済みユーザーのプレイヤー解決", func(t *testing.T) {
+	t.Run("[認証]認証済みユーザーのプレイヤー解決", func(t *testing.T) {
 		verifierReturning := func(uid string) *stubTokenVerifier {
 			return &stubTokenVerifier{
 				verifyIDToken: func(ctx context.Context, idToken string) (string, error) {

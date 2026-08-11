@@ -14,7 +14,7 @@ import (
 )
 
 func TestNewForwarder(t *testing.T) {
-	t.Run("転送先設定の検証", func(t *testing.T) {
+	t.Run("[転送配信]転送先設定の検証", func(t *testing.T) {
 		t.Run("転送先として妥当な形式のURL文字列を指定したとき、以降のリクエストを転送できる状態が構築され、エラーは返らない", func(t *testing.T) {
 			handler, err := NewForwarder("http://example.com")
 
@@ -30,7 +30,7 @@ func TestNewForwarder(t *testing.T) {
 		})
 	})
 
-	t.Run("下流サービスへの転送リクエストの構成", func(t *testing.T) {
+	t.Run("[転送配信]下流サービスへの転送リクエストの構成", func(t *testing.T) {
 		t.Run("リクエストを下流サービスへ転送するとき、転送先へ送られるリクエストには、サービス間の内部認証を示すヘッダーが付与された状態になる", func(t *testing.T) {
 			var gotHeader string
 			downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

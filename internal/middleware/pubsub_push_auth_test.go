@@ -14,7 +14,7 @@ import (
 )
 
 func TestGoogleIDTokenValidatorValidate(t *testing.T) {
-	t.Run("Pub/Sub pushトークンの正当性判定", func(t *testing.T) {
+	t.Run("[転送配信]PubSub pushトークンの正当性判定", func(t *testing.T) {
 		validClaims := map[string]interface{}{"email_verified": true, "email": "sa@example.com"}
 
 		errorCases := []struct {
@@ -92,7 +92,7 @@ func TestGoogleIDTokenValidatorValidate(t *testing.T) {
 }
 
 func TestUsePubSubPushAuth(t *testing.T) {
-	t.Run("Pub/Sub pushリクエストの認可", func(t *testing.T) {
+	t.Run("[転送配信]PubSub pushリクエストの認可", func(t *testing.T) {
 		const expectedEmail = "push-sa@example.com"
 		const audience = "https://gateway.example.com/pubsub/push"
 

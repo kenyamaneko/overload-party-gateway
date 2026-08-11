@@ -16,7 +16,7 @@ import (
 )
 
 func TestReadPump(t *testing.T) {
-	t.Run("WebSocket接続から受信したメッセージの処理", func(t *testing.T) {
+	t.Run("[接続管理]WebSocket接続から受信したメッセージの処理", func(t *testing.T) {
 		t.Run("受信したデータが正しいメッセージ形式(ping)のとき、対応する応答(pong)がその接続に返る", func(t *testing.T) {
 			account := registeredAccountStub("player-readpump-valid")
 			manager := newTestManager(t, managerDeps{account: account})
@@ -60,7 +60,7 @@ func TestReadPump(t *testing.T) {
 }
 
 func TestSendRaw(t *testing.T) {
-	t.Run("送信バッファの上限到達時の送信", func(t *testing.T) {
+	t.Run("[接続管理]送信バッファの上限到達時の送信", func(t *testing.T) {
 		t.Run("送信チャネルが上限まで埋まっているとき、それ以上の送信はブロックされずに破棄される", func(t *testing.T) {
 			connCh := make(chan *Connection, 1)
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

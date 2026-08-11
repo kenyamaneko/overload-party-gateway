@@ -30,7 +30,7 @@ func stateMarkerFor(playerNum int) json.RawMessage {
 }
 
 func TestGameIDForPlayer(t *testing.T) {
-	t.Run("ゲーム所属の問い合わせ", func(t *testing.T) {
+	t.Run("[ゲーム参加]ゲーム所属の問い合わせ", func(t *testing.T) {
 		t.Run("そのプレイヤーが現在いずれかの対戦に参加登録されているとき、その対戦の識別子と「見つかった」ことが返る", func(t *testing.T) {
 			relay := newTestGameRelay(t, relayDeps{})
 			relay.JoinGame("player-1", "game-1", 1)
@@ -53,7 +53,7 @@ func TestGameIDForPlayer(t *testing.T) {
 }
 
 func TestJoinGame(t *testing.T) {
-	t.Run("ゲームへの参加登録", func(t *testing.T) {
+	t.Run("[ゲーム参加]ゲームへの参加登録", func(t *testing.T) {
 		t.Run("対象のプレイヤーがどの対戦にも参加登録されていない状態で参加登録すると、その対戦の参加登録者としてスロット番号とともに記録される", func(t *testing.T) {
 			relay := newTestGameRelay(t, relayDeps{})
 
@@ -107,7 +107,7 @@ func TestJoinGame(t *testing.T) {
 }
 
 func TestLeaveGame(t *testing.T) {
-	t.Run("ゲームからの離脱登録", func(t *testing.T) {
+	t.Run("[ゲーム参加]ゲームからの離脱登録", func(t *testing.T) {
 		t.Run("対象のプレイヤーがいずれかの対戦に参加登録されているとき、離脱させるとその対戦の参加登録者一覧から外れ、以後その対戦への配信は届かなくなる", func(t *testing.T) {
 			hub := newTestHub(t, hubDeps{})
 			relay := newTestGameRelay(t, relayDeps{hub: hub})
@@ -145,7 +145,7 @@ func TestLeaveGame(t *testing.T) {
 }
 
 func TestResolvePlayerNum(t *testing.T) {
-	t.Run("プレイヤーのスロット番号解決", func(t *testing.T) {
+	t.Run("[ゲーム参加]プレイヤーのスロット番号解決", func(t *testing.T) {
 		t.Run("対象のプレイヤーが、まさに問い合わせているその対戦に現在参加登録されているとき、参加登録時に記録されたスロット番号がそのまま使われて返る", func(t *testing.T) {
 			relay := newTestGameRelay(t, relayDeps{})
 			relay.JoinGame("player-1", "game-1", 2)
@@ -214,7 +214,7 @@ func TestResolvePlayerNum(t *testing.T) {
 }
 
 func TestLookupMatchType(t *testing.T) {
-	t.Run("対戦のマッチ種別判定", func(t *testing.T) {
+	t.Run("[NPC]対戦のマッチ種別判定", func(t *testing.T) {
 		t.Run("参加者記録の参照先が利用できない構成のとき、種別は「不明」として返り、呼び出し元はNPC対戦向けの処理を行わない", func(t *testing.T) {
 			relay := newTestGameRelay(t, relayDeps{gamePlayerRepoUnconfigured: true})
 
@@ -286,7 +286,7 @@ func TestLookupMatchType(t *testing.T) {
 }
 
 func TestAreBothPlayersDisconnected(t *testing.T) {
-	t.Run("双方切断状態の判定", func(t *testing.T) {
+	t.Run("[切断復帰]双方切断状態の判定", func(t *testing.T) {
 		t.Run("参加者記録の参照先が利用できない構成のとき、「双方切断ではない」という結果が返る(エラーにはならない)", func(t *testing.T) {
 			relay := newTestGameRelay(t, relayDeps{gamePlayerRepoUnconfigured: true})
 
@@ -349,7 +349,7 @@ func TestAreBothPlayersDisconnected(t *testing.T) {
 }
 
 func TestOpponentPlayerID(t *testing.T) {
-	t.Run("対戦相手の識別(記録済みの参加者一覧から)", func(t *testing.T) {
+	t.Run("[ゲーム参加]対戦相手の識別(記録済みの参加者一覧から)", func(t *testing.T) {
 		t.Run("その対戦に記録されている人間参加者がちょうど2人のとき、自分以外のもう1人のプレイヤーIDが対戦相手として返る", func(t *testing.T) {
 			entries := []port.GamePlayerEntry{{PlayerNum: 1, PlayerID: "player-1"}, {PlayerNum: 2, PlayerID: "player-2"}}
 
@@ -369,7 +369,7 @@ func TestOpponentPlayerID(t *testing.T) {
 }
 
 func TestPlayerIDsBySlot(t *testing.T) {
-	t.Run("スロットごとの参加者特定", func(t *testing.T) {
+	t.Run("[ゲーム参加]スロットごとの参加者特定", func(t *testing.T) {
 		t.Run("記録上、スロット1・スロット2の両方に人間参加者が割り当てられているとき、両方のスロットのプレイヤーIDが返る", func(t *testing.T) {
 			entries := []port.GamePlayerEntry{{PlayerNum: 1, PlayerID: "player-1"}, {PlayerNum: 2, PlayerID: "player-2"}}
 
@@ -391,7 +391,7 @@ func TestPlayerIDsBySlot(t *testing.T) {
 }
 
 func TestNotifyOpponentDisconnected(t *testing.T) {
-	t.Run("対戦相手への切断通知", func(t *testing.T) {
+	t.Run("[切断復帰]対戦相手への切断通知", func(t *testing.T) {
 		t.Run("そのプレイヤーが参加登録されている対戦に自分以外の参加登録者が1人いるとき、その1人に「対戦相手が切断した」ことを知らせるメッセージが届く", func(t *testing.T) {
 			hub := newTestHub(t, hubDeps{})
 			relay := newTestGameRelay(t, relayDeps{hub: hub})
@@ -420,7 +420,7 @@ func TestNotifyOpponentDisconnected(t *testing.T) {
 }
 
 func TestNotifyOpponentReconnected(t *testing.T) {
-	t.Run("対戦相手への復帰通知", func(t *testing.T) {
+	t.Run("[切断復帰]対戦相手への復帰通知", func(t *testing.T) {
 		t.Run("そのプレイヤーが参加登録されている対戦に自分以外の参加登録者が1人いるとき、その1人に「対戦相手が復帰した」ことを知らせるメッセージが届く", func(t *testing.T) {
 			hub := newTestHub(t, hubDeps{})
 			relay := newTestGameRelay(t, relayDeps{hub: hub})
@@ -449,7 +449,7 @@ func TestNotifyOpponentReconnected(t *testing.T) {
 }
 
 func TestBroadcastToGame(t *testing.T) {
-	t.Run("ゲーム内メンバーへのメッセージ配信(内容は呼び出し元が指定)", func(t *testing.T) {
+	t.Run("[接続管理]ゲーム内メンバーへのメッセージ配信(内容は呼び出し元が指定)", func(t *testing.T) {
 		t.Run("対戦に現在参加登録されている人が誰もいないとき、誰にも届かない", func(t *testing.T) {
 			relay := newTestGameRelay(t, relayDeps{})
 
@@ -498,7 +498,7 @@ func TestBroadcastToGame(t *testing.T) {
 }
 
 func TestNotifyMatchFoundTo(t *testing.T) {
-	t.Run("マッチ成立通知", func(t *testing.T) {
+	t.Run("[マッチメイキング]マッチ成立通知", func(t *testing.T) {
 		t.Run("通知対象のプレイヤーが現在接続中のとき、そのプレイヤーに対戦識別子を含む「マッチが成立した」ことを示すメッセージが届き、呼び出し元には配信できたことが返る", func(t *testing.T) {
 			hub := newTestHub(t, hubDeps{})
 			relay := newTestGameRelay(t, relayDeps{hub: hub})
@@ -526,7 +526,7 @@ func TestNotifyMatchFoundTo(t *testing.T) {
 }
 
 func TestNotifyMatchmakingFailed(t *testing.T) {
-	t.Run("マッチ不成立通知", func(t *testing.T) {
+	t.Run("[マッチメイキング]マッチ不成立通知", func(t *testing.T) {
 		t.Run("通知対象のプレイヤーが現在接続中のとき、そのプレイヤーに「対戦相手が接続していなかった」ことを示すエラーが届く", func(t *testing.T) {
 			hub := newTestHub(t, hubDeps{})
 			relay := newTestGameRelay(t, relayDeps{hub: hub})
@@ -548,7 +548,7 @@ func TestNotifyMatchmakingFailed(t *testing.T) {
 }
 
 func TestHandleUseStamp(t *testing.T) {
-	t.Run("スタンプ演出の中継", func(t *testing.T) {
+	t.Run("[接続管理]スタンプ演出の中継", func(t *testing.T) {
 		t.Run("要求のデータ形式が不正なとき、誰にも届かない(要求した本人にもエラーは届かない)", func(t *testing.T) {
 			hub := newTestHub(t, hubDeps{})
 			relay := newTestGameRelay(t, relayDeps{hub: hub})
@@ -606,7 +606,7 @@ func TestHandleUseStamp(t *testing.T) {
 }
 
 func TestLeaveAllPlayers(t *testing.T) {
-	t.Run("対戦終了後の全員退出処理", func(t *testing.T) {
+	t.Run("[対戦終了]対戦終了後の全員退出処理", func(t *testing.T) {
 		t.Run("対象の対戦に参加登録者が2人いるとき、両方が対戦の参加登録者でなくなり、両方の切断猶予の記録も消える", func(t *testing.T) {
 			timerStore := &stubTimerStore{}
 			hub := newTestHub(t, hubDeps{timerStore: timerStore})
@@ -647,7 +647,7 @@ func TestLeaveAllPlayers(t *testing.T) {
 }
 
 func TestHandleDisconnectTimeout(t *testing.T) {
-	t.Run("切断タイムアウトによる強制敗北", func(t *testing.T) {
+	t.Run("[切断復帰]切断タイムアウトによる強制敗北", func(t *testing.T) {
 		t.Run("双方が現在切断中かどうかの判定自体に失敗したとき、何もしない(未解決のまま残る)", func(t *testing.T) {
 			battle := &stubBattleClient{}
 			gamePlayers := &stubGamePlayerRepo{lookupGamePlayersFunc: func(ctx context.Context, gameID string) ([]port.GamePlayerEntry, error) {
@@ -801,7 +801,7 @@ func TestHandleDisconnectTimeout(t *testing.T) {
 }
 
 func TestSendGameStateToPlayers(t *testing.T) {
-	t.Run("ゲーム状態の配信とターン計時の更新", func(t *testing.T) {
+	t.Run("[ターン進行]ゲーム状態の配信とターン計時の更新", func(t *testing.T) {
 		t.Run("対戦に現在参加登録されている人が誰もいないとき、誰にも配信されず、ターンの制限時間の計測にも影響しない", func(t *testing.T) {
 			battle := &stubBattleClient{}
 			relay := newTestGameRelay(t, relayDeps{battleClient: battle})
@@ -931,7 +931,7 @@ func TestSendGameStateToPlayers(t *testing.T) {
 }
 
 func TestSendTurnControlsToPlayers(t *testing.T) {
-	t.Run("ターンコントロール情報の配信", func(t *testing.T) {
+	t.Run("[ターン進行]ターンコントロール情報の配信", func(t *testing.T) {
 		t.Run("対戦に現在参加登録されている人が誰もいないとき、誰にも配信されない", func(t *testing.T) {
 			relay := newTestGameRelay(t, relayDeps{})
 
@@ -987,7 +987,7 @@ func TestSendTurnControlsToPlayers(t *testing.T) {
 }
 
 func TestSendActionPerformed(t *testing.T) {
-	t.Run("行動結果イベントの配信先振り分け", func(t *testing.T) {
+	t.Run("[ターン進行]行動結果イベントの配信先振り分け", func(t *testing.T) {
 		t.Run("直前の処理結果自体が得られていない、またはイベントが1件もないとき、誰にも配信されない", func(t *testing.T) {
 			cases := []struct {
 				name   string
@@ -1127,7 +1127,7 @@ func TestSendActionPerformed(t *testing.T) {
 }
 
 func TestPlayerNumOf(t *testing.T) {
-	t.Run("プレイヤーのスロット番号照会(記録済みの参加者一覧から)", func(t *testing.T) {
+	t.Run("[ゲーム参加]プレイヤーのスロット番号照会(記録済みの参加者一覧から)", func(t *testing.T) {
 		t.Run("記録上そのプレイヤーが対戦の参加者一覧に含まれているとき、そのプレイヤーが登録されているスロット(1 または 2)の番号が得られる", func(t *testing.T) {
 			entries := []port.GamePlayerEntry{{PlayerNum: 1, PlayerID: "player-1"}, {PlayerNum: 2, PlayerID: "player-2"}}
 
@@ -1147,7 +1147,7 @@ func TestPlayerNumOf(t *testing.T) {
 }
 
 func TestBroadcastGameOver(t *testing.T) {
-	t.Run("対戦終了のブロードキャストと結果反映", func(t *testing.T) {
+	t.Run("[対戦終了]対戦終了のブロードキャストと結果反映", func(t *testing.T) {
 		t.Run("対戦終了が確定したとき、その時点の参加登録者全員に、勝者のプレイヤー番号と終了理由を含む対戦終了通知が届く", func(t *testing.T) {
 			account := &stubAccountClient{}
 			gamePlayers := &stubGamePlayerRepo{
@@ -1219,7 +1219,7 @@ func futureDeadlineTimerStore() *stubTimerStore {
 }
 
 func TestResolveStaleDisconnect(t *testing.T) {
-	t.Run("復帰を起点とした未決着対戦の解消", func(t *testing.T) {
+	t.Run("[切断復帰]復帰を起点とした未決着対戦の解消", func(t *testing.T) {
 		t.Run("復帰した対戦が停止によって無効と記録済みのとき、対戦を継続させる", func(t *testing.T) {
 			battle := &stubBattleClient{}
 			invalidated := &stubInvalidatedGameRepo{isInvalidatedFunc: func(ctx context.Context, gameID string) (bool, error) { return true, nil }}
@@ -1485,7 +1485,7 @@ func TestResolveStaleDisconnect(t *testing.T) {
 }
 
 func TestHandleReconnect(t *testing.T) {
-	t.Run("プレイヤー復帰時の通知と未決着解消のきっかけ", func(t *testing.T) {
+	t.Run("[切断復帰]プレイヤー復帰時の通知と未決着解消のきっかけ", func(t *testing.T) {
 		t.Run("プレイヤーが切断していた対戦に復帰したとき、対戦相手へ「対戦相手が復帰した」ことを知らせるメッセージが届く", func(t *testing.T) {
 			invalidated := &stubInvalidatedGameRepo{isInvalidatedFunc: func(ctx context.Context, gameID string) (bool, error) { return true, nil }}
 			hub := newTestHub(t, hubDeps{})
@@ -1531,7 +1531,7 @@ func TestHandleReconnect(t *testing.T) {
 }
 
 func TestRunNpcTurns(t *testing.T) {
-	t.Run("NPCの連続ターン進行", func(t *testing.T) {
+	t.Run("[NPC]NPCの連続ターン進行", func(t *testing.T) {
 		t.Run("直前の処理結果が「NPCの手番が続けて必要」を示していない、または既に対戦が終了しているとき、それ以上NPCの行動を進めず、進行を終える", func(t *testing.T) {
 			cases := []struct {
 				name    string
@@ -1693,7 +1693,7 @@ func itoa(n int) string {
 }
 
 func TestSendBattleStartAndTurnStart(t *testing.T) {
-	t.Run("参加時の演出イベント(対戦開始・ターン開始)配信", func(t *testing.T) {
+	t.Run("[ゲーム参加]参加時の演出イベント(対戦開始・ターン開始)配信", func(t *testing.T) {
 		t.Run("参加しようとしている本人のスロット番号が特定できないとき、本人に参加登録が無いことを示すエラーが届き、演出イベントは届かない", func(t *testing.T) {
 			gamePlayers := &stubGamePlayerRepo{lookupGamePlayersFunc: func(ctx context.Context, gameID string) ([]port.GamePlayerEntry, error) {
 				return []port.GamePlayerEntry{}, nil
@@ -1995,7 +1995,7 @@ func TestSendBattleStartAndTurnStart(t *testing.T) {
 }
 
 func TestAdvanceNpcIfNeeded(t *testing.T) {
-	t.Run("参加時のNPC自動進行", func(t *testing.T) {
+	t.Run("[NPC]参加時のNPC自動進行", func(t *testing.T) {
 		t.Run("対戦の記録上の人間参加者が2人(PvP対戦)のとき、NPCの自動進行は行われない", func(t *testing.T) {
 			battle := &stubBattleClient{}
 			gamePlayers := &stubGamePlayerRepo{lookupGamePlayersFunc: func(ctx context.Context, gameID string) ([]port.GamePlayerEntry, error) {
@@ -2173,7 +2173,7 @@ func gameEnterData(t *testing.T, gameID string, deckID int64) json.RawMessage {
 }
 
 func TestHandleGameEnter(t *testing.T) {
-	t.Run("ゲーム参加(game_enter)の受付", func(t *testing.T) {
+	t.Run("[ゲーム参加]ゲーム参加(game_enter)の受付", func(t *testing.T) {
 		t.Run("参加要求のデータ形式が不正なとき、要求した本人にエラーが届く。それ以外の処理(対戦の有効性確認・参加登録・演出イベント配信・NPC自動進行)は行われない", func(t *testing.T) {
 			invalidated := &stubInvalidatedGameRepo{}
 			gamePlayers := &stubGamePlayerRepo{}
@@ -2241,7 +2241,7 @@ func TestHandleGameEnter(t *testing.T) {
 			assert.Equal(t, "failed to check whether the game is still valid", payload.Message)
 		})
 
-		t.Run("要求した本人がその対戦の参加登録者として記録されていないとき(古い/不正な対戦識別子を送ってきた場合を含む)、原因が何であれ(接続断による中断を除く)、本人には同一のエラー(参加登録が無いことを示すもの)が届く", func(t *testing.T) {
+		t.Run("要求した本人がその対戦の参加登録者として記録されていないとき(古い・不正な対戦識別子を送ってきた場合を含む)、原因が何であれ(接続断による中断を除く)、本人には同一のエラー(参加登録が無いことを示すもの)が届く", func(t *testing.T) {
 			cases := []struct {
 				name string
 				err  error
@@ -2483,7 +2483,7 @@ func gameActionData(t *testing.T, gameID, actionType string, data json.RawMessag
 }
 
 func TestHandleGameAction(t *testing.T) {
-	t.Run("対戦アクション(game_action)の受付", func(t *testing.T) {
+	t.Run("[ターン進行]対戦アクション(game_action)の受付", func(t *testing.T) {
 		t.Run("行動要求のデータ形式が不正なとき、要求した本人にエラーが届く。対戦への行動処理は行われない(対戦状態の再配信もターンコントロール情報の再配信も発生しない)", func(t *testing.T) {
 			battle := &stubBattleClient{}
 			hub := newTestHub(t, hubDeps{})
