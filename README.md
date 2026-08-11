@@ -88,17 +88,3 @@ make run-local
 `make run-local` が起動するのは `cmd/local` で、Firebase ID トークンの代わりに `dev-token-{uid}` を受け付ける。PostgreSQL と下流サービスへの接続は要求時まで遅延するため、それらが落ちていても起動して `/health` は 200 を返す。転送を伴う操作には宛先の起動が要る。
 
 `make run-gateway` が起動するのは Cloud Run 向けの `cmd/main` で、Firebase Auth・Firestore・Pub/Sub push 検証を前提とするため Google の資格情報 (ADC) が別途要る。
-
-## 公開パッケージ
-
-| パッケージ | 言語 | 説明 |
-|---|---|---|
-| `packages/ws-constants/` | Go | WS メッセージ型定数 |
-| `packages/ws-constants-npm/` | npm | 同上 (クライアント向け) |
-| `packages/api-gateway/` | Go | REST / WS エンベロープ型 |
-| `packages/api-gateway-npm/` | npm | 同上 (クライアント向け) |
-| `packages/internalauth-go/` | Go | 内部認証 JWT の検証 (下流サービス向け) |
-
-SSoT: `data/openapi.yaml` + `data/asyncapi.yaml`。`make generate-types` (`scripts/generate_types.sh`) で `packages/api-gateway` の `*_gen.go` と `packages/ws-constants-npm/src/index.ts` を再生成する。生成物は直接編集しない。
-
-WS メッセージ種別だけは全件が `packages/ws-constants/constants.go` にある。`data/asyncapi.yaml` は payload を持つ種別しか載せず、battle 由来の生 JSON をそのまま積む種別 (`game_state` や `pong` など) を表現できないためである。TypeScript 版はこの Go 定数から生成し、両者の食い違いは CI の codegen-sync ジョブ (再生成して差分が出たら失敗) が検出する。
