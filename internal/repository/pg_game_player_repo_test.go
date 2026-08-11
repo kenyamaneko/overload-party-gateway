@@ -36,7 +36,7 @@ func TestInsertGamePlayer(t *testing.T) {
 	repo := repository.NewPgGamePlayerRepository(sharedPg.Pool)
 	ctx := context.Background()
 
-	t.Run("スロットへのプレイヤー登録", func(t *testing.T) {
+	t.Run("[ゲーム参加]スロットへのプレイヤー登録", func(t *testing.T) {
 		t.Run("指定した対戦の指定したスロット番号にまだ誰も登録されていないとき、登録すると、そのプレイヤーがそのスロットに記録される", func(t *testing.T) {
 			sharedPg.Truncate(t)
 
@@ -69,7 +69,7 @@ func TestLookupPlayerNum(t *testing.T) {
 	repo := repository.NewPgGamePlayerRepository(sharedPg.Pool)
 	ctx := context.Background()
 
-	t.Run("プレイヤーのスロット番号の取得", func(t *testing.T) {
+	t.Run("[ゲーム参加]プレイヤーのスロット番号の取得", func(t *testing.T) {
 		t.Run("指定した対戦に指定したプレイヤーが登録されているとき、取得すると、登録したスロット番号が返る", func(t *testing.T) {
 			sharedPg.Truncate(t)
 			require.NoError(t, repo.InsertGamePlayer(ctx, gpGameID1, 2, gpPlayerID1))
@@ -100,7 +100,7 @@ func TestLookupGamePlayers(t *testing.T) {
 	repo := repository.NewPgGamePlayerRepository(sharedPg.Pool)
 	ctx := context.Background()
 
-	t.Run("ゲーム内プレイヤー一覧の取得", func(t *testing.T) {
+	t.Run("[ゲーム参加]ゲーム内プレイヤー一覧の取得", func(t *testing.T) {
 		t.Run("指定した対戦にプレイヤーが1人も登録されていないとき、一覧を取得すると、要素を1件も含まない一覧が返る", func(t *testing.T) {
 			sharedPg.Truncate(t)
 
@@ -149,7 +149,7 @@ func TestCountPlayersByGame(t *testing.T) {
 	repo := repository.NewPgGamePlayerRepository(sharedPg.Pool)
 	ctx := context.Background()
 
-	t.Run("ゲームごとのプレイヤー人数の集計", func(t *testing.T) {
+	t.Run("[ゲーム参加]ゲームごとのプレイヤー人数の集計", func(t *testing.T) {
 		t.Run("問い合わせる対戦IDを1件も指定しなかったとき、集計すると、要素を1件も含まない集計結果が返る", func(t *testing.T) {
 			sharedPg.Truncate(t)
 
@@ -214,7 +214,7 @@ func TestMarkExpAwarded(t *testing.T) {
 	repo := repository.NewPgGamePlayerRepository(sharedPg.Pool)
 	ctx := context.Background()
 
-	t.Run("経験値付与済みの記録", func(t *testing.T) {
+	t.Run("[対戦終了]経験値付与済みの記録", func(t *testing.T) {
 		noPlayers := func(t *testing.T) {}
 		notYetAwarded := func(t *testing.T) {
 			require.NoError(t, repo.InsertGamePlayer(ctx, gpGameID1, 1, gpPlayerID1))

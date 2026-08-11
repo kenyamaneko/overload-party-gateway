@@ -52,7 +52,7 @@ func newTestStore(t *testing.T) *Store {
 }
 
 func TestDisconnectDeadline(t *testing.T) {
-	t.Run("プレイヤーの切断猶予期限の書き込みと読み出し", func(t *testing.T) {
+	t.Run("[切断復帰]プレイヤーの切断猶予期限の書き込みと読み出し", func(t *testing.T) {
 		t.Run("あるプレイヤーの切断猶予期限を一度も書き込んでいないとき、読み出すと「見つからない」になる", func(t *testing.T) {
 			store := newTestStore(t)
 			ctx := context.Background()
@@ -129,7 +129,7 @@ func TestDisconnectDeadline(t *testing.T) {
 }
 
 func TestGetDisconnectDeadline(t *testing.T) {
-	t.Run("保存されている期限データの解釈", func(t *testing.T) {
+	t.Run("[切断復帰]保存されている期限データの解釈", func(t *testing.T) {
 		t.Run("保存されている期限の値が数値として解釈できない形式であるとき、読み出しはエラーになる", func(t *testing.T) {
 			client := newTestClient(t)
 			store := NewStore(client)
