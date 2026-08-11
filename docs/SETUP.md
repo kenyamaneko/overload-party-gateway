@@ -1,27 +1,4 @@
-# サービス間連携・環境変数・ローカル実行
-
-## サービス間連携
-
-```
-Client (React / Capacitor)
-  ├─ WS  /ws                        ← ゲーム状態同期、マッチメイキング
-  └─ REST /api/v1/*                  ← 認証、デッキ、カード、ショップ等
-              │
-              ▼
-Gateway (このサービス, :9001)
-  ├─ HTTP → account   (:9005)  プレイヤー / 認証 / 設定 / EXP
-  ├─ HTTP → card      (:9003)  カードマスター / デッキ CRUD
-  ├─ HTTP → matchmaking(:9004) enqueue / cancel
-  ├─ HTTP → battle    (:9002)  ゲーム作成 / アクション / 状態取得
-  ├─ HTTP → shop      (:9006)  商品 / 購入 / サブスクリプション
-  ├─ HTTP → scenario  (:9007)  エピソード / スクリプト
-  ├─ HTTP → news      (:9008)  ニュース記事
-  ├─ HTTP → support   (:9009)  お知らせ
-  ├─ PostgreSQL                 gateway.game_players / gateway.processed_matches / gateway.invalidated_games (所有)
-  └─ POST /internal/v1/pubsub/match-made  ← Cloud Pub/Sub push 配信
-```
-
-REST エンドポイント契約は [../data/openapi.yaml](../data/openapi.yaml) を参照。
+# セットアップ
 
 ## 環境変数
 
@@ -75,7 +52,7 @@ cp .env.example .env
 make run-local
 ```
 
-`.env` は Makefile が読み込んで export する。`.env.example` は下流サービスの宛先 8 本と `DATABASE_CONN` を上のサービス間連携図のポートで埋めてあり、値の書き換えなしで起動する。
+`.env` は Makefile が読み込んで export する。`.env.example` は下流サービスの宛先 8 本と `DATABASE_CONN` を埋めてあり、値の書き換えなしで起動する。
 
 `INTERNAL_AUTH_PRIVATE_KEY` だけは `.env` に置けない。PEM が複数行で Makefile の `include` に載らないため、`make run-local` が `.localdev/` に RSA 鍵を生成して環境変数として渡す。生成には `openssl` を使う。
 
