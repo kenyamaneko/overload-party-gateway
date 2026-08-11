@@ -101,6 +101,7 @@ func (r *PgGamePlayerRepository) CountPlayersByGame(ctx context.Context, gameIDs
 
 // MarkExpAwarded は経験値付与済みフラグを設定します
 func (r *PgGamePlayerRepository) MarkExpAwarded(ctx context.Context, gameID string) (bool, error) {
+	// 同一ゲームに対する付与トリガが複数回成立しないよう、player_num = 1 の行だけを冪等キーとして使う。
 	tag, err := r.pool.Exec(ctx,
 		`UPDATE gateway.game_players SET exp_awarded = true
 		 WHERE game_id = $1 AND player_num = 1 AND exp_awarded = false`,

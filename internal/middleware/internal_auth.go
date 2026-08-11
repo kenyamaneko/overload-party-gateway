@@ -8,7 +8,7 @@ import (
 	"github.com/kenyamaneko/overload-party-gateway/internal/auth/internalauth"
 )
 
-// IssueInternalAuth は context の player_id から HMAC JWT を発行し、Request.Context に格納する
+// IssueInternalAuth は context の player_id から RS256 JWT を発行し、Request.Context に格納する
 // Gin middleware を返す。
 func IssueInternalAuth(signer *internalauth.Signer) gin.HandlerFunc {
 	return func(c *gin.Context) {

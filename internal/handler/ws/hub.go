@@ -108,6 +108,7 @@ func (h *ConnectionHub) Register(conn *Connection) {
 		slog.Info("player reconnected", "player_id", conn.playerID)
 	}
 
+	// 同一 playerID の接続は 1 本だけを許すため、新しい接続が来たら旧接続を閉じる。
 	if old, ok := h.connections[conn.playerID]; ok {
 		old.Close()
 	}
