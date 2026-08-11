@@ -23,6 +23,9 @@ jobs:
     uses: kenyamaneko/overload-party-common/.github/workflows/go-service-ci.yaml@main
     with:
       test-packages: ./internal/...
+      # go:build integration を持つのはこの2パッケージのみ。絞らないと -tags=integration が
+      # 残りの全パッケージも再コンパイル・再実行し、単体テストと同じ結果を二重に生む。
+      integration-test-packages: ./internal/repository/... ./internal/adapter/redistimer/...
       extra-test-module-dir: packages/internalauth-go
       collect-unit-coverage: true
       needs-firestore-emulator: true
