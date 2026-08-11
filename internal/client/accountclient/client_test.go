@@ -48,7 +48,7 @@ func marshalPlayerResponse(t *testing.T, resp apiaccount.PlayerResponse) []byte 
 }
 
 func TestAccountClient(t *testing.T) {
-	t.Run("アカウント操作の下流エラー種別変換", func(t *testing.T) {
+	t.Run("[下流サービス連携]アカウント操作の下流エラー種別変換", func(t *testing.T) {
 		tests := []struct {
 			name   string
 			status int
@@ -154,7 +154,7 @@ func TestAccountClient(t *testing.T) {
 }
 
 func TestFindByFirebaseUID(t *testing.T) {
-	t.Run("Firebase UIDによるプレイヤー検索における未登録の扱い", func(t *testing.T) {
+	t.Run("[下流サービス連携]Firebase UIDによるプレイヤー検索における未登録の扱い", func(t *testing.T) {
 		t.Run("対象のFirebase UIDのプレイヤーが存在するとき、プレイヤー情報が返る", func(t *testing.T) {
 			srv := newStubAccountServer(t, http.StatusOK, marshalPlayerResponse(t, newTestPlayerResponse("TST-P2")))
 			c := New(srv.URL, srv.Client())

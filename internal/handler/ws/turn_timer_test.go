@@ -90,7 +90,7 @@ func newTurnTimeoutSuccessFixture(t *testing.T) *turnTimeoutSuccessFixture {
 }
 
 func TestResetTurnTimer(t *testing.T) {
-	t.Run("ターンタイマーの設定・更新", func(t *testing.T) {
+	t.Run("[ターン進行]ターンタイマーの設定・更新", func(t *testing.T) {
 		t.Run("タイムバンクが0秒のとき、期限切れによる強制決着は発生しない", func(t *testing.T) {
 			f := newTurnTimerFixture(t, alwaysFailProcessAction)
 
@@ -169,7 +169,7 @@ func TestResetTurnTimer(t *testing.T) {
 }
 
 func TestCancelTurnTimer(t *testing.T) {
-	t.Run("ターンタイマーの取り消し", func(t *testing.T) {
+	t.Run("[ターン進行]ターンタイマーの取り消し", func(t *testing.T) {
 		t.Run("対戦にタイマーが設定されているとき、取り消すと、その期限が来ても強制決着は発生しない", func(t *testing.T) {
 			f := newTurnTimerFixture(t, alwaysFailProcessAction)
 			f.relay.resetTurnTimer(f.gameID, "player-active", 1)
@@ -190,7 +190,7 @@ func TestCancelTurnTimer(t *testing.T) {
 }
 
 func TestHandleTurnTimeout(t *testing.T) {
-	t.Run("ターン制限時間超過時の処理", func(t *testing.T) {
+	t.Run("[ターン進行]ターン制限時間超過時の処理", func(t *testing.T) {
 		t.Run("対戦相手も切断中のとき、時間切れになっても、誰にも通知が届かず、対戦サービスへの時間切れの登録は行われない(処理は先送りされる)", func(t *testing.T) {
 			battle := &stubBattleClient{}
 			gamePlayers := &stubGamePlayerRepo{lookupGamePlayersFunc: func(ctx context.Context, gid string) ([]port.GamePlayerEntry, error) {
@@ -316,7 +316,7 @@ func TestHandleTurnTimeout(t *testing.T) {
 }
 
 func TestIsCanceled(t *testing.T) {
-	t.Run("エラー要因が中断によるものかどうかの判定", func(t *testing.T) {
+	t.Run("[ターン進行]エラー要因が中断によるものかどうかの判定", func(t *testing.T) {
 		t.Run("呼び出し元の停止によりコンテキストが取り消されたことが原因のエラーのとき、中断によるものと判定される", func(t *testing.T) {
 			assert.True(t, isCanceled(context.Canceled))
 		})

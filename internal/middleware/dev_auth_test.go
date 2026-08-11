@@ -15,7 +15,7 @@ import (
 )
 
 func TestUseDevAuth(t *testing.T) {
-	t.Run("開発用トークンによるリクエスト認証", func(t *testing.T) {
+	t.Run("[認証]開発用トークンによるリクエスト認証", func(t *testing.T) {
 		t.Run("リクエストに認証ヘッダーが無いとき、401で拒否される", func(t *testing.T) {
 			reached := false
 			var gotUID string
@@ -118,7 +118,7 @@ func TestUseDevAuth(t *testing.T) {
 }
 
 func TestUseDevAuthWithPlayerResolve(t *testing.T) {
-	t.Run("開発用プレイヤーの解決と自動登録", func(t *testing.T) {
+	t.Run("[認証]開発用プレイヤーの解決と自動登録", func(t *testing.T) {
 		t.Run("リクエストに認証ヘッダーが無いとき、401で拒否される", func(t *testing.T) {
 			reached := false
 			var gotPlayerID string

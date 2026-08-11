@@ -24,7 +24,7 @@ func flattenMarkInvalidatedCalls(calls [][]string) []string {
 }
 
 func TestInvalidateActiveGames(t *testing.T) {
-	t.Run("停止時の進行中対戦の無効化記録", func(t *testing.T) {
+	t.Run("[起動時復旧]停止時の進行中対戦の無効化記録", func(t *testing.T) {
 		t.Run("無効化記録の機能が構成されていない環境のとき、対戦参加者情報への問い合わせも行われないまま、無効化の記録は行われない", func(t *testing.T) {
 			gamePlayers := &stubGamePlayerRepo{}
 			relay := newTestGameRelay(t, relayDeps{invalidatedGameRepoUnconfigured: true, gamePlayerRepo: gamePlayers})
@@ -134,7 +134,7 @@ func TestInvalidateActiveGames(t *testing.T) {
 }
 
 func TestFinishInvalidatedGames(t *testing.T) {
-	t.Run("無効化された対戦の決着(起動時復旧)", func(t *testing.T) {
+	t.Run("[起動時復旧]無効化された対戦の決着(起動時復旧)", func(t *testing.T) {
 		t.Run("無効化記録の機能が構成されていない環境のとき、復旧処理は何も行わない", func(t *testing.T) {
 			battle := &stubBattleClient{}
 			relay := newTestGameRelay(t, relayDeps{invalidatedGameRepoUnconfigured: true, battleClient: battle})
@@ -263,7 +263,7 @@ func TestFinishInvalidatedGames(t *testing.T) {
 }
 
 func TestRevertInvalidatedGameBattleCounts(t *testing.T) {
-	t.Run("無効化された対戦の消費バトル回数の払い戻し(起動時復旧)", func(t *testing.T) {
+	t.Run("[起動時復旧]無効化された対戦の消費バトル回数の払い戻し(起動時復旧)", func(t *testing.T) {
 		t.Run("アカウントサービスとの連携先が構成されていない環境のとき、払い戻し待ちの対戦の問い合わせも行われないまま、払い戻しは行われない", func(t *testing.T) {
 			invalidated := &stubInvalidatedGameRepo{}
 			relay := newTestGameRelay(t, relayDeps{accountUnconfigured: true, invalidatedGameRepo: invalidated})
@@ -424,7 +424,7 @@ func TestRevertInvalidatedGameBattleCounts(t *testing.T) {
 }
 
 func TestEarliestCreatedAt(t *testing.T) {
-	t.Run("対戦参加記録の中で最も早い作成時刻の算出", func(t *testing.T) {
+	t.Run("[起動時復旧]対戦参加記録の中で最も早い作成時刻の算出", func(t *testing.T) {
 		t.Run("参加記録が複数件あり作成時刻が異なるとき、算出結果はその中で最も早い時刻になる", func(t *testing.T) {
 			earliest := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 			later := earliest.Add(time.Hour)
@@ -453,7 +453,7 @@ func TestEarliestCreatedAt(t *testing.T) {
 }
 
 func TestIsGameInvalidated(t *testing.T) {
-	t.Run("対戦が無効化済みかどうかの判定", func(t *testing.T) {
+	t.Run("[起動時復旧]対戦が無効化済みかどうかの判定", func(t *testing.T) {
 		t.Run("無効化記録の機能が構成されていない環境のとき、対戦は無効化されていないと判定される", func(t *testing.T) {
 			relay := newTestGameRelay(t, relayDeps{invalidatedGameRepoUnconfigured: true})
 

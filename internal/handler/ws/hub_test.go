@@ -81,7 +81,7 @@ func (r *hubCallbackRecorder) callbacks() HubCallbacks {
 }
 
 func TestConnectionHubRegister(t *testing.T) {
-	t.Run("再接続時の切断状態引き継ぎ判定", func(t *testing.T) {
+	t.Run("[切断復帰]再接続時の切断状態引き継ぎ判定", func(t *testing.T) {
 		t.Run("これまで一度も切断していないプレイヤーが接続するとき、対戦相手への復帰通知は行われない", func(t *testing.T) {
 			recorder := newHubCallbackRecorder()
 			hub := newTestHub(t, hubDeps{callbacks: recorder.callbacks()})
@@ -169,7 +169,7 @@ func TestConnectionHubRegister(t *testing.T) {
 		})
 	})
 
-	t.Run("同一プレイヤーの二重接続と旧接続の後始末", func(t *testing.T) {
+	t.Run("[接続管理]同一プレイヤーの二重接続と旧接続の後始末", func(t *testing.T) {
 		t.Run("既に接続済みのプレイヤーが別のソケットで新たに接続するとき、古い方の接続は切断される", func(t *testing.T) {
 			hub := newTestHub(t, hubDeps{})
 			factory := newTestSocketFactory(t, hub)
@@ -209,19 +209,21 @@ func TestConnectionHubRegister(t *testing.T) {
 		})
 	})
 
-	t.Run("接続が登録されると、外部に写された切断猶予期限の記録が削除される", func(t *testing.T) {
-		timerStore := &stubTimerStore{}
-		hub := newTestHub(t, hubDeps{timerStore: timerStore})
-		factory := newTestSocketFactory(t, hub)
+	t.Run("[接続管理]接続登録", func(t *testing.T) {
+		t.Run("接続が登録されると、外部に写された切断猶予期限の記録が削除される", func(t *testing.T) {
+			timerStore := &stubTimerStore{}
+			hub := newTestHub(t, hubDeps{timerStore: timerStore})
+			factory := newTestSocketFactory(t, hub)
 
-		factory.connect(t, "player-1")
+			factory.connect(t, "player-1")
 
-		assert.Contains(t, timerStore.clearDisconnectDeadlineCallsSnapshot(), "player-1")
+			assert.Contains(t, timerStore.clearDisconnectDeadlineCallsSnapshot(), "player-1")
+		})
 	})
 }
 
 func TestConnectionHubUnregister(t *testing.T) {
-	t.Run("切断時の対戦所属有無による後始末の切り替え", func(t *testing.T) {
+	t.Run("[切断復帰]切断時の対戦所属有無による後始末の切り替え", func(t *testing.T) {
 		t.Run("切断した接続が、その時点でそのプレイヤーに現在登録されている接続と一致しないとき(「同一プレイヤーの二重接続と旧接続の後始末」の規定による差し替えケース)、対戦相手への切断通知・再接続の猶予タイマー開始・マッチメイキングからの退出のいずれも発生しない", func(t *testing.T) {
 			recorder := newHubCallbackRecorder()
 			recorder.setInGame("player-1", "game-1")
@@ -336,7 +338,7 @@ func TestConnectionHubUnregister(t *testing.T) {
 }
 
 func TestConnectionHubDisconnectTimeout(t *testing.T) {
-	t.Run("切断猶予期限超過時の対戦セッション側後始末の起動", func(t *testing.T) {
+	t.Run("[切断復帰]切断猶予期限超過時の対戦セッション側後始末の起動", func(t *testing.T) {
 		t.Run("対戦中に切断し、猶予時間内に再接続されないとき、猶予時間の経過後に対戦セッション側の後始末処理(不戦敗が成立するかどうかを含め、「切断タイムアウトによる強制敗北」の規定に従う)が起動する", func(t *testing.T) {
 			clock := newFakeClock(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
 			recorder := newHubCallbackRecorder()
@@ -373,7 +375,7 @@ func TestConnectionHubDisconnectTimeout(t *testing.T) {
 }
 
 func TestConnectionHubIsDisconnectDeadlineExpired(t *testing.T) {
-	t.Run("切断猶予期限切れの判定", func(t *testing.T) {
+	t.Run("[切断復帰]切断猶予期限切れの判定", func(t *testing.T) {
 		t.Run("同一プロセスが切断を検知し続けている間は、実際の経過時間に関わらず「期限切れではない」という結果が返る(インメモリのタイマーがまだ発火していないため)", func(t *testing.T) {
 			clock := newFakeClock(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
 			recorder := newHubCallbackRecorder()
@@ -440,7 +442,7 @@ func TestConnectionHubIsDisconnectDeadlineExpired(t *testing.T) {
 }
 
 func TestConnectionHubShutdown(t *testing.T) {
-	t.Run("シャットダウン時の一斉接続終了", func(t *testing.T) {
+	t.Run("[接続管理]シャットダウン時の一斉接続終了", func(t *testing.T) {
 		t.Run("登録されている接続が無い(0件)とき、通知対象が無いため即座に処理が呼び出し元に戻る", func(t *testing.T) {
 			hub := newTestHub(t, hubDeps{})
 
@@ -491,7 +493,7 @@ func (n *delayedShutdownNotifier) Shutdown(code int, reason string) {
 }
 
 func TestShutdownAll(t *testing.T) {
-	t.Run("一斉終了通知の上限時間による打ち切り", func(t *testing.T) {
+	t.Run("[接続管理]一斉終了通知の上限時間による打ち切り", func(t *testing.T) {
 		t.Run("全ての通知が上限時間内に完了するとき、全ての通知の完了を待ってから処理が呼び出し元に戻る", func(t *testing.T) {
 			n1 := &delayedShutdownNotifier{delay: 10 * time.Millisecond}
 			n2 := &delayedShutdownNotifier{delay: 10 * time.Millisecond}

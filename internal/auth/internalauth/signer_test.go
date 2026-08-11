@@ -40,7 +40,7 @@ func parseIssuedToken(t *testing.T, tokenString string, pub *rsa.PublicKey) *jwt
 }
 
 func TestParsePrivateKeyPEM(t *testing.T) {
-	t.Run("秘密鍵の読み取り", func(t *testing.T) {
+	t.Run("[内部認証]秘密鍵の読み取り", func(t *testing.T) {
 		key := generateRSAPrivateKey(t)
 		pkcs8PEM := encodePKCS8PEM(t, key)
 
@@ -102,7 +102,7 @@ func TestParsePrivateKeyPEM(t *testing.T) {
 }
 
 func TestStaticPrivateKeyResolver(t *testing.T) {
-	t.Run("鍵識別子に基づく鍵の解決", func(t *testing.T) {
+	t.Run("[内部認証]鍵識別子に基づく鍵の解決", func(t *testing.T) {
 		t.Run("登録した鍵識別子と一致する鍵識別子を問い合わせたとき、登録した秘密鍵が返る", func(t *testing.T) {
 			key := generateRSAPrivateKey(t)
 			resolver := StaticPrivateKeyResolver(key, "v1")
@@ -125,7 +125,7 @@ func TestStaticPrivateKeyResolver(t *testing.T) {
 }
 
 func TestIssue(t *testing.T) {
-	t.Run("内部認証トークンの発行", func(t *testing.T) {
+	t.Run("[内部認証]内部認証トークンの発行", func(t *testing.T) {
 		t.Run("空文字でないプレイヤー識別子を指定したとき、発行される内部認証トークンの主体(sub)クレームがそのプレイヤー識別子になる", func(t *testing.T) {
 			key := generateRSAPrivateKey(t)
 			signer := NewSigner(StaticPrivateKeyResolver(key, DefaultKeyID), DefaultKeyID)

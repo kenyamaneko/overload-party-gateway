@@ -22,7 +22,7 @@ func (s *stubMatchEventHandler) HandleMatchMade(ctx context.Context, event apima
 }
 
 func TestNewMatchSubscriber(t *testing.T) {
-	t.Run("イベントディスパッチャの生成", func(t *testing.T) {
+	t.Run("[PubSub連携]イベントディスパッチャの生成", func(t *testing.T) {
 		t.Run("イベントの配信先が指定されているとき、生成は成功する", func(t *testing.T) {
 			handler := &stubMatchEventHandler{}
 
@@ -41,7 +41,7 @@ func TestNewMatchSubscriber(t *testing.T) {
 }
 
 func TestProcessMessage(t *testing.T) {
-	t.Run("match_madeイベント通知の処理", func(t *testing.T) {
+	t.Run("[PubSub連携]match_madeイベント通知の処理", func(t *testing.T) {
 		t.Run("受信したデータが正しい形式で、対象のイベント種別(match_made)であり、配信先での処理が成功するとき、通知処理はエラーにならず完了する", func(t *testing.T) {
 			handler := &stubMatchEventHandler{}
 			subscriber, err := NewMatchSubscriber(handler)

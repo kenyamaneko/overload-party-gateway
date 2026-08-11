@@ -14,7 +14,7 @@ import (
 )
 
 func TestCancel(t *testing.T) {
-	t.Run("マッチメイキングキューからの除去", func(t *testing.T) {
+	t.Run("[下流サービス連携]マッチメイキングキューからの除去", func(t *testing.T) {
 		t.Run("対象プレイヤーがキューに存在するとき、除去に成功する", func(t *testing.T) {
 			var gotMethod, gotPath string
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

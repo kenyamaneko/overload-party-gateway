@@ -10,7 +10,7 @@ import (
 )
 
 func TestUseCORS(t *testing.T) {
-	t.Run("オリジン許可判定とプリフライト応答", func(t *testing.T) {
+	t.Run("[接続管理]オリジン許可判定とプリフライト応答", func(t *testing.T) {
 		t.Run("リクエストにOriginヘッダーが無いとき、CORSヘッダーは付与されない", func(t *testing.T) {
 			reached := false
 			r := gin.New()

@@ -116,7 +116,7 @@ func captureRequestLogLevel(t *testing.T, doRequest func()) slog.Level {
 }
 
 func TestAuthHandlerRegister(t *testing.T) {
-	t.Run("新規プレイヤー登録の受付", func(t *testing.T) {
+	t.Run("[認証]新規プレイヤー登録の受付", func(t *testing.T) {
 		t.Run("認証情報にユーザー識別子が含まれていないとき、ステータスコード401で、認証情報が無い旨のエラー内容を返す", func(t *testing.T) {
 			r := newAuthEngineWithoutAuth(&stubAccountClient{})
 			w := httptest.NewRecorder()
@@ -179,7 +179,7 @@ func TestAuthHandlerRegister(t *testing.T) {
 		})
 	})
 
-	t.Run("異常系ログの重大度の切り分け", func(t *testing.T) {
+	t.Run("[リクエストログ]異常系ログの重大度の切り分け", func(t *testing.T) {
 		t.Run("新規プレイヤー登録の受付で、ユーザー識別子が既に登録済みだったとき(409)、Warnレベルでログに記録される", func(t *testing.T) {
 			account := &stubAccountClient{
 				registerFunc: func(_ context.Context, _ string) (*apiaccount.PlayerResponse, error) {
@@ -200,7 +200,7 @@ func TestAuthHandlerRegister(t *testing.T) {
 }
 
 func TestAuthHandlerLogin(t *testing.T) {
-	t.Run("プレイヤーログインの受付", func(t *testing.T) {
+	t.Run("[認証]プレイヤーログインの受付", func(t *testing.T) {
 		t.Run("認証情報にユーザー識別子が含まれていないとき、ステータスコード401で、認証情報が無い旨のエラー内容を返す", func(t *testing.T) {
 			r := newAuthEngineWithoutAuth(&stubAccountClient{})
 			w := httptest.NewRecorder()
@@ -263,7 +263,7 @@ func TestAuthHandlerLogin(t *testing.T) {
 		})
 	})
 
-	t.Run("異常系ログの重大度の切り分け", func(t *testing.T) {
+	t.Run("[リクエストログ]異常系ログの重大度の切り分け", func(t *testing.T) {
 		t.Run("プレイヤーログインの受付で、ユーザー識別子に対応するプレイヤーが登録されていなかったとき(404)、Infoレベルでログに記録される", func(t *testing.T) {
 			account := &stubAccountClient{
 				loginFunc: func(_ context.Context, _ string) (*apiaccount.PlayerResponse, error) {

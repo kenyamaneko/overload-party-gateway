@@ -55,7 +55,7 @@ func exceededBattleLimit() *apiaccount.BattleLimitResponse {
 }
 
 func TestHandleMessage(t *testing.T) {
-	t.Run("受信メッセージ種別ごとの振り分け", func(t *testing.T) {
+	t.Run("[接続管理]受信メッセージ種別ごとの振り分け", func(t *testing.T) {
 		t.Run("受信したメッセージの種別が ping のとき、その接続にだけ即座に pong が返る", func(t *testing.T) {
 			manager := newTestManager(t, managerDeps{})
 			factory := newTestSocketFactory(t, manager.Hub)
@@ -176,7 +176,7 @@ func TestHandleMessage(t *testing.T) {
 }
 
 func TestHandleMatchmakingStart(t *testing.T) {
-	t.Run("マッチメイキング開始リクエストの検証", func(t *testing.T) {
+	t.Run("[マッチメイキング]マッチメイキング開始リクエストの検証", func(t *testing.T) {
 		t.Run(`受信したデータが matchmaking_start として解釈できない(不正な形式)とき、error_code が invalid_data のエラーが返る(エラー内容 "invalid matchmaking_start data")`, func(t *testing.T) {
 			manager := newTestManager(t, managerDeps{})
 			factory := newTestSocketFactory(t, manager.Hub)
@@ -390,7 +390,7 @@ func TestHandleMatchmakingStart(t *testing.T) {
 }
 
 func TestHandleNpcBattleStart(t *testing.T) {
-	t.Run("NPC対戦開始リクエストの検証", func(t *testing.T) {
+	t.Run("[NPC]NPC対戦開始リクエストの検証", func(t *testing.T) {
 		t.Run(`受信したデータが npc_battle_start として解釈できない(不正な形式)とき、error_code が invalid_data のエラーが返る(エラー内容 "invalid npc_battle_start data")`, func(t *testing.T) {
 			manager := newTestManager(t, managerDeps{})
 			factory := newTestSocketFactory(t, manager.Hub)
@@ -738,7 +738,7 @@ func TestHandleNpcBattleStart(t *testing.T) {
 }
 
 func TestDeckCardsToBattleDeckCards(t *testing.T) {
-	t.Run("デッキ構成からバトル用カードリストへの変換", func(t *testing.T) {
+	t.Run("[ゲーム参加]デッキ構成からバトル用カードリストへの変換", func(t *testing.T) {
 		t.Run("デッキに含まれるカード種別の枚数が1枚のとき、変換後のリストにそのカードが1件含まれる", func(t *testing.T) {
 			card := &stubCardClient{getDeckCardsFunc: func(ctx context.Context, deckID int64) ([]apicard.DeckCard, port.DeckInitiatives, error) {
 				return []apicard.DeckCard{{CardID: "card-1", ArtNo: 1, Count: 1}}, port.DeckInitiatives{}, nil
@@ -797,7 +797,7 @@ func TestDeckCardsToBattleDeckCards(t *testing.T) {
 }
 
 func TestResolveNpcDisplayName(t *testing.T) {
-	t.Run("NPCモデル名から表示名を解決する", func(t *testing.T) {
+	t.Run("[NPC]NPCモデル名から表示名を解決する", func(t *testing.T) {
 		t.Run("候補となるNPCモデルが1件も無い(0件)とき、指定したモデルは解決できず、モデルが見つからない旨のエラーになる", func(t *testing.T) {
 			battle := &stubBattleClient{listNpcModelsFunc: func(ctx context.Context) ([]service.NpcModelEntry, error) { return []service.NpcModelEntry{}, nil }}
 			manager := newTestManager(t, managerDeps{battle: battle})
@@ -833,7 +833,7 @@ func TestResolveNpcDisplayName(t *testing.T) {
 }
 
 func TestMatchWaitTimeout(t *testing.T) {
-	t.Run("マッチメイキング待機タイムアウトの管理", func(t *testing.T) {
+	t.Run("[マッチメイキング]マッチメイキング待機タイムアウトの管理", func(t *testing.T) {
 		t.Run("待機タイムアウトの時間が0以下に設定されている(機能が無効化されている)とき、待機を開始してもタイムアウトは発生しない", func(t *testing.T) {
 			manager := NewManager(&stubBattleClient{}, &stubAccountClient{}, &stubCardClient{}, &stubMatchmakingClient{}, &stubGamePlayerRepo{}, &stubProcessedMatchRepo{}, &stubInvalidatedGameRepo{}, 0, newTestInternalSigner(t), &stubTimerStore{}, DefaultDisconnectTimeout)
 			factory := newTestSocketFactory(t, manager.Hub)
@@ -889,7 +889,7 @@ func TestMatchWaitTimeout(t *testing.T) {
 }
 
 func TestHandleMatchMadeParticipantCount(t *testing.T) {
-	t.Run("マッチ成立イベントの参加人数検証", func(t *testing.T) {
+	t.Run("[マッチメイキング]マッチ成立イベントの参加人数検証", func(t *testing.T) {
 		cases := []struct {
 			name    string
 			players []apimatchmaking.MatchedPlayer
@@ -931,7 +931,7 @@ func deckResolvableCardStub() *stubCardClient {
 }
 
 func TestHandleMatchMadeDeduplication(t *testing.T) {
-	t.Run("マッチ成立イベントの重複・競合処理", func(t *testing.T) {
+	t.Run("[マッチメイキング]マッチ成立イベントの重複・競合処理", func(t *testing.T) {
 		t.Run("同一の成立イベントが、既に通知済みの状態で再度届いたとき、通知は再送されず、イベントは処理済みとして扱われる", func(t *testing.T) {
 			processedMatch := &stubProcessedMatchRepo{
 				claimFunc:        func(ctx context.Context, matchID string) (bool, error) { return false, nil },
@@ -1037,7 +1037,7 @@ func TestHandleMatchMadeDeduplication(t *testing.T) {
 }
 
 func TestHandleMatchMadeNotificationFollowUp(t *testing.T) {
-	t.Run("マッチ成立通知の配信結果に応じた後続処理", func(t *testing.T) {
+	t.Run("[マッチメイキング]マッチ成立通知の配信結果に応じた後続処理", func(t *testing.T) {
 		t.Run("両プレイヤーへの成立通知が届くとき、それ以上の追加処理は行われない。成立したゲームIDで、1人目・2人目それぞれのプレイヤーが正しい対応で対戦相手として記録される", func(t *testing.T) {
 			processedMatch := &stubProcessedMatchRepo{
 				claimFunc:             func(ctx context.Context, matchID string) (bool, error) { return true, nil },
@@ -1148,7 +1148,7 @@ func TestHandleMatchMadeNotificationFollowUp(t *testing.T) {
 }
 
 func TestHandleMatchMadeStopsMatchWait(t *testing.T) {
-	t.Run("マッチ成立時の待機タイムアウト停止", func(t *testing.T) {
+	t.Run("[マッチメイキング]マッチ成立時の待機タイムアウト停止", func(t *testing.T) {
 		t.Run("両プレイヤーがマッチメイキングの待機タイムアウト発生前にマッチ成立イベントを受け取るとき、それぞれの待機タイムアウトは以後発生しなくなる", func(t *testing.T) {
 			processedMatch := &stubProcessedMatchRepo{
 				claimFunc:             func(ctx context.Context, matchID string) (bool, error) { return true, nil },

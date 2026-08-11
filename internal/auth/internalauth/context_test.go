@@ -9,7 +9,7 @@ import (
 )
 
 func TestTokenFrom(t *testing.T) {
-	t.Run("内部認証トークンの取得", func(t *testing.T) {
+	t.Run("[内部認証]内部認証トークンの取得", func(t *testing.T) {
 		t.Run("内部認証トークンを保持していない状態から取得すると、無しになる", func(t *testing.T) {
 			ctx := context.Background()
 
@@ -38,7 +38,7 @@ func TestTokenFrom(t *testing.T) {
 }
 
 func TestInjectHeader(t *testing.T) {
-	t.Run("内部認証ヘッダーへの反映", func(t *testing.T) {
+	t.Run("[内部認証]内部認証ヘッダーへの反映", func(t *testing.T) {
 		t.Run("内部認証トークンを保持しているとき、HTTPリクエストヘッダーに\"X-Internal-Auth\"という名前でその値が設定される", func(t *testing.T) {
 			ctx := WithToken(context.Background(), "dummy-token")
 			h := http.Header{}

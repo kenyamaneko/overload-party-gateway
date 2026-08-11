@@ -56,7 +56,7 @@ func dummyPlayerSummary(name string) PlayerSummaryRequest {
 }
 
 func TestParseBattleError(t *testing.T) {
-	t.Run("battle サービスからのエラー応答内容の決定", func(t *testing.T) {
+	t.Run("[対戦サービス連携]battle サービスからのエラー応答内容の決定", func(t *testing.T) {
 		t.Run("応答本文に構造化されたエラーメッセージが含まれるとき、そのメッセージがエラーの内容になる", func(t *testing.T) {
 			err := parseBattleError(http.StatusBadRequest, []byte(`{"error":"invalid npc_model: xyz"}`))
 
@@ -94,7 +94,7 @@ func TestParseBattleError(t *testing.T) {
 }
 
 func TestStartNPCBattle(t *testing.T) {
-	t.Run("NPC対戦のゲーム作成結果決定", func(t *testing.T) {
+	t.Run("[対戦サービス連携]NPC対戦のゲーム作成結果決定", func(t *testing.T) {
 		tests := []struct {
 			name       string
 			statusCode int
@@ -149,7 +149,7 @@ func TestStartNPCBattle(t *testing.T) {
 }
 
 func TestCreatePvPGame(t *testing.T) {
-	t.Run("PvP対戦のゲーム作成結果決定", func(t *testing.T) {
+	t.Run("[対戦サービス連携]PvP対戦のゲーム作成結果決定", func(t *testing.T) {
 		tests := []struct {
 			name       string
 			statusCode int
@@ -205,7 +205,7 @@ func TestCreatePvPGame(t *testing.T) {
 }
 
 func TestProcessAction(t *testing.T) {
-	t.Run("アクション実行時の入力データ変換", func(t *testing.T) {
+	t.Run("[対戦サービス連携]アクション実行時の入力データ変換", func(t *testing.T) {
 		t.Run("入力データが空のとき、変換後のデータも空になり、エラーにならない", func(t *testing.T) {
 			client, rec := newTestBattleClient(t, http.StatusOK, `{}`)
 
@@ -238,7 +238,7 @@ func TestProcessAction(t *testing.T) {
 }
 
 func TestAdvanceNpcTurn(t *testing.T) {
-	t.Run("NPCターンの進行結果決定", func(t *testing.T) {
+	t.Run("[対戦サービス連携]NPCターンの進行結果決定", func(t *testing.T) {
 		tests := []struct {
 			name       string
 			statusCode int
@@ -288,7 +288,7 @@ func TestAdvanceNpcTurn(t *testing.T) {
 }
 
 func TestListNpcModels(t *testing.T) {
-	t.Run("NPC モデル一覧取得", func(t *testing.T) {
+	t.Run("[対戦サービス連携]NPC モデル一覧取得", func(t *testing.T) {
 		tests := []struct {
 			name       string
 			statusCode int
@@ -357,7 +357,7 @@ func TestListNpcModels(t *testing.T) {
 }
 
 func TestGetGameStateForPlayer(t *testing.T) {
-	t.Run("プレイヤー視点の対戦状態取得", func(t *testing.T) {
+	t.Run("[対戦サービス連携]プレイヤー視点の対戦状態取得", func(t *testing.T) {
 		tests := []struct {
 			name       string
 			statusCode int
@@ -406,7 +406,7 @@ func TestGetGameStateForPlayer(t *testing.T) {
 }
 
 func TestGetTurnControlsForPlayer(t *testing.T) {
-	t.Run("プレイヤーの手番操作情報取得", func(t *testing.T) {
+	t.Run("[対戦サービス連携]プレイヤーの手番操作情報取得", func(t *testing.T) {
 		t.Run("操作情報の内容が含まれているとき、その内容がそのまま返る", func(t *testing.T) {
 			client, _ := newTestBattleClient(t, http.StatusOK, `{"canEndPhase":true,"discardRequired":0}`)
 

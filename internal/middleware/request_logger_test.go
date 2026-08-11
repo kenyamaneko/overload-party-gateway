@@ -63,7 +63,7 @@ func withRecordingLogHandler(t *testing.T) *recordingLogHandler {
 }
 
 func TestUseRequestLogger(t *testing.T) {
-	t.Run("リクエストログの重大度決定", func(t *testing.T) {
+	t.Run("[リクエストログ]リクエストログの重大度決定", func(t *testing.T) {
 		implicitCases := []struct {
 			name      string
 			status    int
@@ -137,26 +137,28 @@ func TestUseRequestLogger(t *testing.T) {
 		}
 	})
 
-	t.Run("いずれの場合も、リクエストの完了ごとに1回、実行したHTTPメソッド・パス・実際にクライアントへ返されたステータスコード・処理に要した時間を伴ってログが記録される", func(t *testing.T) {
-		h := withRecordingLogHandler(t)
-		r := gin.New()
-		r.GET("/ping", UseRequestLogger(), func(c *gin.Context) {
-			c.Status(http.StatusTeapot)
+	t.Run("[リクエストログ]アクセスログ出力", func(t *testing.T) {
+		t.Run("いずれの場合も、リクエストの完了ごとに1回、実行したHTTPメソッド・パス・実際にクライアントへ返されたステータスコード・処理に要した時間を伴ってログが記録される", func(t *testing.T) {
+			h := withRecordingLogHandler(t)
+			r := gin.New()
+			r.GET("/ping", UseRequestLogger(), func(c *gin.Context) {
+				c.Status(http.StatusTeapot)
+			})
+
+			req := httptest.NewRequest(http.MethodGet, "/ping", nil)
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			require.Equal(t, 1, h.entryCount())
+			entry := h.entry(0)
+			require.Contains(t, entry.attrs, "method")
+			require.Contains(t, entry.attrs, "path")
+			require.Contains(t, entry.attrs, "status")
+			require.Contains(t, entry.attrs, "latency")
+			assert.Equal(t, http.MethodGet, entry.attrs["method"].String())
+			assert.Equal(t, "/ping", entry.attrs["path"].String())
+			assert.Equal(t, int64(http.StatusTeapot), entry.attrs["status"].Int64())
+			assert.Greater(t, entry.attrs["latency"].Duration(), time.Duration(0))
 		})
-
-		req := httptest.NewRequest(http.MethodGet, "/ping", nil)
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-
-		require.Equal(t, 1, h.entryCount())
-		entry := h.entry(0)
-		require.Contains(t, entry.attrs, "method")
-		require.Contains(t, entry.attrs, "path")
-		require.Contains(t, entry.attrs, "status")
-		require.Contains(t, entry.attrs, "latency")
-		assert.Equal(t, http.MethodGet, entry.attrs["method"].String())
-		assert.Equal(t, "/ping", entry.attrs["path"].String())
-		assert.Equal(t, int64(http.StatusTeapot), entry.attrs["status"].Int64())
-		assert.Greater(t, entry.attrs["latency"].Duration(), time.Duration(0))
 	})
 }

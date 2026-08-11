@@ -69,7 +69,7 @@ func unsetEnv(t *testing.T, key string) {
 }
 
 func TestFromEnv(t *testing.T) {
-	t.Run("設定値の既定値解決", func(t *testing.T) {
+	t.Run("[設定]設定値の既定値解決", func(t *testing.T) {
 		t.Run("対応する環境変数が未設定のとき、既定値が使われて設定の構築は成功する", func(t *testing.T) {
 			setValidRequiredEnv(t)
 			unsetEnv(t, "PORT")
@@ -128,7 +128,7 @@ func TestFromEnv(t *testing.T) {
 		})
 	})
 
-	t.Run("起動時設定の必須項目検証", func(t *testing.T) {
+	t.Run("[設定]起動時設定の必須項目検証", func(t *testing.T) {
 		t.Run("転送先となる各下流サービスの接続先URL(対戦・カード・マッチメイキング・アカウント・ショップ・シナリオ・ニュース・サポートの8種)のいずれか1つでも設定されていないとき、設定の構築はエラーになる", func(t *testing.T) {
 			setValidRequiredEnvExcept(t, "BATTLE_SERVER_URL")
 
@@ -174,7 +174,7 @@ func TestFromEnv(t *testing.T) {
 }
 
 func TestParseBool(t *testing.T) {
-	t.Run("真偽値文字列の解釈", func(t *testing.T) {
+	t.Run("[設定]真偽値文字列の解釈", func(t *testing.T) {
 		t.Run(`値が "true" のとき、真になる`, func(t *testing.T) {
 			result, err := ParseBool("APP_FORCE_UPDATE", "true")
 
@@ -211,7 +211,7 @@ func TestParseBool(t *testing.T) {
 }
 
 func TestSplitCSV(t *testing.T) {
-	t.Run("カンマ区切り環境変数のリスト化", func(t *testing.T) {
+	t.Run("[設定]カンマ区切り環境変数のリスト化", func(t *testing.T) {
 		t.Run("値が空文字列のとき、要素数0件のリストになる", func(t *testing.T) {
 			result := splitCSV("")
 
