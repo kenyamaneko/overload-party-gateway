@@ -794,6 +794,32 @@ func TestDeckCardsToBattleDeckCards(t *testing.T) {
 			assert.Empty(t, cards)
 		})
 	})
+
+	t.Run("[ゲーム参加]デッキ解決時の施策IDの転記", func(t *testing.T) {
+		t.Run("デッキ内容にルーチン施策IDが設定されているとき、解決された対戦転送用のルーチン施策IDはデッキ内容の値と一致する", func(t *testing.T) {
+			card := &stubCardClient{getDeckCardsFunc: func(ctx context.Context, deckID int64) ([]apicard.DeckCard, port.DeckInitiatives, error) {
+				return []apicard.DeckCard{}, port.DeckInitiatives{RoutineID: "routine-1", SpecialID: "special-1"}, nil
+			}}
+			manager := newTestManager(t, managerDeps{card: card})
+
+			_, initiatives, err := manager.resolveDeckCards(context.Background(), "player-1", 1)
+
+			require.NoError(t, err)
+			assert.Equal(t, "routine-1", initiatives.RoutineID)
+		})
+
+		t.Run("デッキ内容にスペシャル施策IDが設定されているとき、解決された対戦転送用のスペシャル施策IDはデッキ内容の値と一致する", func(t *testing.T) {
+			card := &stubCardClient{getDeckCardsFunc: func(ctx context.Context, deckID int64) ([]apicard.DeckCard, port.DeckInitiatives, error) {
+				return []apicard.DeckCard{}, port.DeckInitiatives{RoutineID: "routine-1", SpecialID: "special-1"}, nil
+			}}
+			manager := newTestManager(t, managerDeps{card: card})
+
+			_, initiatives, err := manager.resolveDeckCards(context.Background(), "player-1", 1)
+
+			require.NoError(t, err)
+			assert.Equal(t, "special-1", initiatives.SpecialID)
+		})
+	})
 }
 
 func TestResolveNpcDisplayName(t *testing.T) {
@@ -930,8 +956,86 @@ func deckResolvableCardStub() *stubCardClient {
 	}}
 }
 
+func perPlayerDeckCardStub() *stubCardClient {
+	return &stubCardClient{getDeckCardsFunc: func(ctx context.Context, deckID int64) ([]apicard.DeckCard, port.DeckInitiatives, error) {
+		if deckID == 1 {
+			return []apicard.DeckCard{{CardID: "card-p1", ArtNo: 11, Count: 1}}, port.DeckInitiatives{}, nil
+		}
+		return []apicard.DeckCard{{CardID: "card-p2", ArtNo: 22, Count: 1}}, port.DeckInitiatives{}, nil
+	}}
+}
+
+func TestHandleMatchMadeBattleCreationRequest(t *testing.T) {
+	t.Run("[マッチメイキング]対戦作成要求の組み立て", func(t *testing.T) {
+		t.Run("プレイヤー1側に渡るデッキ内容は、マッチング成立イベントのプレイヤー1のデッキIDから解決された内容と一致する", func(t *testing.T) {
+			processedMatch := &stubProcessedMatchRepo{
+				claimFunc:             func(ctx context.Context, matchID string) (bool, error) { return true, nil },
+				recordGameCreatedFunc: func(ctx context.Context, matchID, gameID string) error { return nil },
+				markNotifiedFunc:      func(ctx context.Context, matchID string) (bool, error) { return true, nil },
+			}
+			card := perPlayerDeckCardStub()
+			battle := &stubBattleClient{createPvPGameFunc: func(ctx context.Context, deck1Cards, deck2Cards []service.BattleDeckCard, deck1Initiatives, deck2Initiatives service.DeckInitiatives, player1Summary, player2Summary service.PlayerSummaryRequest) (*service.GameCreatedResult, error) {
+				return &service.GameCreatedResult{GameID: "game-1"}, nil
+			}}
+			gamePlayers := &stubGamePlayerRepo{insertGamePlayerFunc: func(ctx context.Context, gameID string, playerNum int, playerID string) error { return nil }}
+			manager := newTestManager(t, managerDeps{processedMatch: processedMatch, card: card, battle: battle, gamePlayers: gamePlayers})
+
+			err := manager.HandleMatchMade(context.Background(), twoPlayerMatchMadeEvent("match-1"))
+
+			require.NoError(t, err)
+			require.Len(t, battle.createPvPGameCallsSnapshot(), 1)
+			assert.Equal(t, []service.BattleDeckCard{{CardID: "card-p1", ArtNo: 11}}, battle.createPvPGameCallsSnapshot()[0].deck1Cards)
+		})
+
+		t.Run("プレイヤー2側に渡るデッキ内容は、マッチング成立イベントのプレイヤー2のデッキIDから解決された内容と一致する", func(t *testing.T) {
+			processedMatch := &stubProcessedMatchRepo{
+				claimFunc:             func(ctx context.Context, matchID string) (bool, error) { return true, nil },
+				recordGameCreatedFunc: func(ctx context.Context, matchID, gameID string) error { return nil },
+				markNotifiedFunc:      func(ctx context.Context, matchID string) (bool, error) { return true, nil },
+			}
+			card := perPlayerDeckCardStub()
+			battle := &stubBattleClient{createPvPGameFunc: func(ctx context.Context, deck1Cards, deck2Cards []service.BattleDeckCard, deck1Initiatives, deck2Initiatives service.DeckInitiatives, player1Summary, player2Summary service.PlayerSummaryRequest) (*service.GameCreatedResult, error) {
+				return &service.GameCreatedResult{GameID: "game-1"}, nil
+			}}
+			gamePlayers := &stubGamePlayerRepo{insertGamePlayerFunc: func(ctx context.Context, gameID string, playerNum int, playerID string) error { return nil }}
+			manager := newTestManager(t, managerDeps{processedMatch: processedMatch, card: card, battle: battle, gamePlayers: gamePlayers})
+
+			err := manager.HandleMatchMade(context.Background(), twoPlayerMatchMadeEvent("match-1"))
+
+			require.NoError(t, err)
+			require.Len(t, battle.createPvPGameCallsSnapshot(), 1)
+			assert.Equal(t, []service.BattleDeckCard{{CardID: "card-p2", ArtNo: 22}}, battle.createPvPGameCallsSnapshot()[0].deck2Cards)
+		})
+	})
+}
+
 func TestHandleMatchMadeDeduplication(t *testing.T) {
 	t.Run("[マッチメイキング]マッチ成立イベントの重複・競合処理", func(t *testing.T) {
+		t.Run("マッチング成立イベントの処理開始の記録が失敗したとき、エラーが返る", func(t *testing.T) {
+			processedMatch := &stubProcessedMatchRepo{
+				claimFunc: func(ctx context.Context, matchID string) (bool, error) { return false, errors.New("claim failed") },
+			}
+			manager := newTestManager(t, managerDeps{processedMatch: processedMatch})
+
+			err := manager.HandleMatchMade(context.Background(), twoPlayerMatchMadeEvent("match-1"))
+
+			assert.ErrorContains(t, err, "claim failed")
+		})
+
+		t.Run("同一のマッチング成立イベントについて処理開始の記録が既に済んでいるが、対応する対戦IDの記録参照が失敗したとき、エラーが返る", func(t *testing.T) {
+			processedMatch := &stubProcessedMatchRepo{
+				claimFunc: func(ctx context.Context, matchID string) (bool, error) { return false, nil },
+				gameIDForFunc: func(ctx context.Context, matchID string) (string, bool, error) {
+					return "", false, errors.New("game id lookup failed")
+				},
+			}
+			manager := newTestManager(t, managerDeps{processedMatch: processedMatch})
+
+			err := manager.HandleMatchMade(context.Background(), twoPlayerMatchMadeEvent("match-1"))
+
+			assert.ErrorContains(t, err, "game id lookup failed")
+		})
+
 		t.Run("同一の成立イベントが、既に通知済みの状態で再度届いたとき、通知は再送されず、イベントは処理済みとして扱われる", func(t *testing.T) {
 			processedMatch := &stubProcessedMatchRepo{
 				claimFunc:        func(ctx context.Context, matchID string) (bool, error) { return false, nil },
@@ -1033,11 +1137,53 @@ func TestHandleMatchMadeDeduplication(t *testing.T) {
 			client1.expectNoMessage(t)
 			client2.expectNoMessage(t)
 		})
+
+		t.Run("マッチング成立に伴う対戦への参加者記録で、プレイヤー2の記録が失敗したとき、返るエラーの内容はプレイヤー2の記録に関するものだと分かる", func(t *testing.T) {
+			processedMatch := &stubProcessedMatchRepo{
+				claimFunc:             func(ctx context.Context, matchID string) (bool, error) { return true, nil },
+				recordGameCreatedFunc: func(ctx context.Context, matchID, gameID string) error { return nil },
+			}
+			card := deckResolvableCardStub()
+			battle := &stubBattleClient{createPvPGameFunc: func(ctx context.Context, deck1Cards, deck2Cards []service.BattleDeckCard, deck1Initiatives, deck2Initiatives service.DeckInitiatives, player1Summary, player2Summary service.PlayerSummaryRequest) (*service.GameCreatedResult, error) {
+				return &service.GameCreatedResult{GameID: "game-1"}, nil
+			}}
+			gamePlayers := &stubGamePlayerRepo{insertGamePlayerFunc: func(ctx context.Context, gameID string, playerNum int, playerID string) error {
+				if playerNum == 2 {
+					return errors.New("insert failed")
+				}
+				return nil
+			}}
+			manager := newTestManager(t, managerDeps{processedMatch: processedMatch, card: card, battle: battle, gamePlayers: gamePlayers})
+
+			err := manager.HandleMatchMade(context.Background(), twoPlayerMatchMadeEvent("match-1"))
+
+			assert.EqualError(t, err, "match_made: insert game_player p2: insert failed")
+		})
 	})
 }
 
 func TestHandleMatchMadeNotificationFollowUp(t *testing.T) {
 	t.Run("[マッチメイキング]マッチ成立通知の配信結果に応じた後続処理", func(t *testing.T) {
+		t.Run("対戦の作成と記録が完了した後、通知済みであることの記録が失敗したとき、エラーが返る", func(t *testing.T) {
+			processedMatch := &stubProcessedMatchRepo{
+				claimFunc:             func(ctx context.Context, matchID string) (bool, error) { return true, nil },
+				recordGameCreatedFunc: func(ctx context.Context, matchID, gameID string) error { return nil },
+				markNotifiedFunc: func(ctx context.Context, matchID string) (bool, error) {
+					return false, errors.New("mark notified failed")
+				},
+			}
+			card := deckResolvableCardStub()
+			battle := &stubBattleClient{createPvPGameFunc: func(ctx context.Context, deck1Cards, deck2Cards []service.BattleDeckCard, deck1Initiatives, deck2Initiatives service.DeckInitiatives, player1Summary, player2Summary service.PlayerSummaryRequest) (*service.GameCreatedResult, error) {
+				return &service.GameCreatedResult{GameID: "game-1"}, nil
+			}}
+			gamePlayers := &stubGamePlayerRepo{insertGamePlayerFunc: func(ctx context.Context, gameID string, playerNum int, playerID string) error { return nil }}
+			manager := newTestManager(t, managerDeps{processedMatch: processedMatch, card: card, battle: battle, gamePlayers: gamePlayers})
+
+			err := manager.HandleMatchMade(context.Background(), twoPlayerMatchMadeEvent("match-1"))
+
+			assert.ErrorContains(t, err, "mark notified failed")
+		})
+
 		t.Run("両プレイヤーへの成立通知が届くとき、それ以上の追加処理は行われない。成立したゲームIDで、1人目・2人目それぞれのプレイヤーが正しい対応で対戦相手として記録される", func(t *testing.T) {
 			processedMatch := &stubProcessedMatchRepo{
 				claimFunc:             func(ctx context.Context, matchID string) (bool, error) { return true, nil },
