@@ -1,7 +1,29 @@
 # overload-party-gateway
 
-クライアントが唯一通信する薄い WS/REST ゲートウェイ。認証・ルーティング・WebSocket リレーを担い、ドメインロジックはすべて下流サービスに委譲する。
+カードゲーム Overload Party の認証・ルーティング・WebSocket リレーを担うマイクロサービス。
 
-REST エンドポイント契約は [data/openapi.yaml](data/openapi.yaml)、設計判断 (Why) は [common の ADR](https://github.com/kenyamaneko/overload-party-common/tree/main/docs/adr) を参照。サービス構成全体の図は [common のシステム構成図](https://github.com/kenyamaneko/overload-party-common#システム構成図) を参照。環境変数・ローカル実行は [docs/SETUP.md](docs/SETUP.md) を参照。
+## 技術スタック
 
-[テスト観点カタログ](https://kenyamaneko.github.io/overload-party-gateway/): テスト名から生成した、テスト済みの観点の一覧。
+| レイヤー | 技術 |
+|---|---|
+| 言語 | Go |
+| フレームワーク | Gin, gorilla/websocket |
+| データベース | Cloud SQL PostgreSQL |
+| NoSQL | Cloud Firestore |
+| セッションストア | Upstash Redis |
+| 同期通信 | REST |
+| 非同期通信 | WebSocket, Cloud Pub/Sub |
+
+## ドキュメント
+
+| ドキュメント | 内容 |
+|---|---|
+| [セットアップ](docs/SETUP.md) | 環境変数とローカル実行手順 |
+| [API仕様書](data/openapi.yaml) | REST API のエンドポイント定義 |
+| [WS仕様書](data/asyncapi.yaml) | WebSocket メッセージの定義 |
+| [WS API リファレンス](docs/WS_REFERENCE.md) | WebSocket API の解説 |
+| [データ設計書](docs/DATA_DESIGN.md) | テーブル定義 |
+| [ブランチ・CI/CD](docs/BRANCHING.md) | ブランチ運用と CI/CD の構成 |
+| [ADR](https://github.com/kenyamaneko/overload-party-common/tree/main/docs/adr)（commonリポジトリ） | 設計判断の背景・理由・結果 |
+| [システム構成図](https://github.com/kenyamaneko/overload-party-common#システム構成図)（commonリポジトリ） | Overload Party 全体の構成図 |
+| [テスト観点カタログ](https://kenyamaneko.github.io/overload-party-gateway/) | テスト名から自動生成した、テスト済みの観点一覧 |
