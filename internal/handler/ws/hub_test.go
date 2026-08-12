@@ -2,6 +2,7 @@ package ws
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -219,6 +220,20 @@ func TestConnectionHubRegister(t *testing.T) {
 
 			assert.Contains(t, timerStore.clearDisconnectDeadlineCallsSnapshot(), "player-1")
 		})
+
+		t.Run("再接続してきたプレイヤーの切断猶予期限の写しの削除が失敗したとき、そのプレイヤー宛のメッセージは引き続きそのプレイヤーに届く", func(t *testing.T) {
+			timerStore := &stubTimerStore{clearDisconnectDeadlineFunc: func(ctx context.Context, playerID string) error {
+				return errors.New("clear failed")
+			}}
+			hub := newTestHub(t, hubDeps{timerStore: timerStore})
+			factory := newTestSocketFactory(t, hub)
+			client, _ := factory.connect(t, "player-1")
+
+			hub.SendToPlayer("player-1", &WSMessage{Type: "ping_test"})
+
+			msg := client.readMessage(t)
+			assert.Equal(t, "ping_test", msg.Type)
+		})
 	})
 }
 
@@ -244,6 +259,24 @@ func TestConnectionHubUnregister(t *testing.T) {
 			recorder := newHubCallbackRecorder()
 			recorder.setInGame("player-1", "game-1")
 			hub := newTestHub(t, hubDeps{callbacks: recorder.callbacks()})
+			factory := newTestSocketFactory(t, hub)
+			_, conn := factory.connect(t, "player-1")
+
+			hub.Unregister(conn)
+
+			events := recorder.eventsOfKind("game_disconnect")
+			require.Len(t, events, 1)
+			assert.Equal(t, "player-1", events[0].playerID)
+			assert.Equal(t, "game-1", events[0].gameID)
+		})
+
+		t.Run("切断したプレイヤーが対戦中であり、再接続の猶予タイマーの開始(切断猶予期限の書き込み)が失敗したときも、対戦相手へ切断が通知される", func(t *testing.T) {
+			recorder := newHubCallbackRecorder()
+			recorder.setInGame("player-1", "game-1")
+			timerStore := &stubTimerStore{setDisconnectDeadlineFunc: func(ctx context.Context, playerID, gameID string, deadline time.Time) error {
+				return errors.New("write failed")
+			}}
+			hub := newTestHub(t, hubDeps{callbacks: recorder.callbacks(), timerStore: timerStore})
 			factory := newTestSocketFactory(t, hub)
 			_, conn := factory.connect(t, "player-1")
 

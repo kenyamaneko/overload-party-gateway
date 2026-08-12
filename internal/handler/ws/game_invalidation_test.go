@@ -423,6 +423,30 @@ func TestRevertInvalidatedGameBattleCounts(t *testing.T) {
 	})
 }
 
+func TestRecoverInvalidatedGames(t *testing.T) {
+	t.Run("[起動時復旧]起動時復旧処理での決着要求と払い戻し要求の連動", func(t *testing.T) {
+		t.Run("対戦が無効化されたまま未決着のとき、起動時の復旧処理を行うと、対戦サービスへ強制決着を要求し、アカウントサービスへ消費バトル回数の返却も要求する", func(t *testing.T) {
+			battle := &stubBattleClient{processActionFunc: func(ctx context.Context, gameID string, playerNum int, actionType string, data json.RawMessage) (*service.ActionResult, error) {
+				return &service.ActionResult{GameOver: true, WinReason: game_logic.WinReasonSystemDown}, nil
+			}}
+			account := &stubAccountClient{}
+			invalidated := &stubInvalidatedGameRepo{
+				listUnfinishedFunc:    func(ctx context.Context) ([]string, error) { return []string{"game-1"}, nil },
+				listRevertPendingFunc: func(ctx context.Context) ([]string, error) { return []string{"game-1"}, nil },
+			}
+			gamePlayers := &stubGamePlayerRepo{lookupGamePlayersFunc: func(ctx context.Context, gameID string) ([]port.GamePlayerEntry, error) {
+				return []port.GamePlayerEntry{{PlayerNum: 1, PlayerID: "player-1"}, {PlayerNum: 2, PlayerID: "player-2"}}, nil
+			}}
+			relay := newTestGameRelay(t, relayDeps{invalidatedGameRepo: invalidated, battleClient: battle, accountClient: account, gamePlayerRepo: gamePlayers})
+
+			relay.RecoverInvalidatedGames(context.Background())
+
+			assert.Len(t, battle.processActionCallsSnapshot(), 1)
+			assert.Len(t, account.revertBattleCountCallsSnapshot(), 1)
+		})
+	})
+}
+
 func TestEarliestCreatedAt(t *testing.T) {
 	t.Run("[起動時復旧]対戦参加記録の中で最も早い作成時刻の算出", func(t *testing.T) {
 		t.Run("参加記録が複数件あり作成時刻が異なるとき、算出結果はその中で最も早い時刻になる", func(t *testing.T) {

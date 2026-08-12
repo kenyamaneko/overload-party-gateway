@@ -1057,6 +1057,54 @@ func TestSendActionPerformed(t *testing.T) {
 			assert.JSONEq(t, string(stateMarkerFor(2)), string(otherPayload.State))
 		})
 
+		t.Run("配信対象プレイヤーの対戦状態取得が対戦相手切断などによる処理中断で失敗したとき、そのプレイヤーの接続にはエラーメッセージが届かない", func(t *testing.T) {
+			hub := newTestHub(t, hubDeps{})
+			battle := &stubBattleClient{getGameStateForPlayerFunc: func(ctx context.Context, gameID string, playerNum int) (json.RawMessage, error) {
+				if playerNum == 2 {
+					return nil, context.Canceled
+				}
+				return stateMarkerFor(playerNum), nil
+			}}
+			relay := newTestGameRelay(t, relayDeps{hub: hub, battleClient: battle})
+			factory := newTestSocketFactory(t, hub)
+			actorClient, _ := factory.connect(t, "player-1")
+			otherClient, _ := factory.connect(t, "player-2")
+			relay.JoinGame("player-1", "game-1", 1)
+			relay.JoinGame("player-2", "game-1", 2)
+			result := &service.ActionResult{Events: []service.ActionEvent{{Sequence: 1, EventType: "turn_start", PlayerNum: nil}}}
+
+			relay.sendActionPerformed(context.Background(), "game-1", "player-1", result)
+
+			assert.Equal(t, wsconst.WSServerMsgActionPerformed, actorClient.readMessage(t).Type)
+			otherClient.expectNoMessage(t)
+		})
+
+		t.Run("配信対象プレイヤーの対戦状態取得が処理中断以外の理由で失敗したとき、そのプレイヤーの接続に種別game_state_errorのエラーメッセージが届く", func(t *testing.T) {
+			hub := newTestHub(t, hubDeps{})
+			battle := &stubBattleClient{getGameStateForPlayerFunc: func(ctx context.Context, gameID string, playerNum int) (json.RawMessage, error) {
+				if playerNum == 2 {
+					return nil, errors.New("get game state failed")
+				}
+				return stateMarkerFor(playerNum), nil
+			}}
+			relay := newTestGameRelay(t, relayDeps{hub: hub, battleClient: battle})
+			factory := newTestSocketFactory(t, hub)
+			actorClient, _ := factory.connect(t, "player-1")
+			otherClient, _ := factory.connect(t, "player-2")
+			relay.JoinGame("player-1", "game-1", 1)
+			relay.JoinGame("player-2", "game-1", 2)
+			result := &service.ActionResult{Events: []service.ActionEvent{{Sequence: 1, EventType: "turn_start", PlayerNum: nil}}}
+
+			relay.sendActionPerformed(context.Background(), "game-1", "player-1", result)
+
+			assert.Equal(t, wsconst.WSServerMsgActionPerformed, actorClient.readMessage(t).Type)
+			msg := otherClient.readMessage(t)
+			assert.Equal(t, wsconst.WSServerMsgError, msg.Type)
+			var payload ErrorMessage
+			require.NoError(t, json.Unmarshal(msg.Data, &payload))
+			assert.Equal(t, "game_state_error", payload.ErrorCode)
+		})
+
 		t.Run("イベントが行動したプレイヤー自身の行動によるものとき、行動したプレイヤー以外の現在の参加登録者に、各自の視点の対戦状態とともに届く(行動したプレイヤー自身には届かない)", func(t *testing.T) {
 			hub := newTestHub(t, hubDeps{})
 			battle := &stubBattleClient{getGameStateForPlayerFunc: func(ctx context.Context, gameID string, playerNum int) (json.RawMessage, error) {
@@ -1407,6 +1455,25 @@ func TestResolveStaleDisconnect(t *testing.T) {
 			assert.Empty(t, battle.processActionCallsSnapshot())
 			_, ok := relay.GameIDForPlayer("player-1")
 			assert.True(t, ok)
+		})
+
+		t.Run("対戦相手の切断猶予が既に切れている状態から両者とも猶予切れで復帰し、対戦を強制決着させる対戦サービスへの要求が失敗したとき、復帰したプレイヤー自身の接続には対戦終了のメッセージが届かない", func(t *testing.T) {
+			battle := &stubBattleClient{processActionFunc: func(ctx context.Context, gameID string, playerNum int, actionType string, data json.RawMessage) (*service.ActionResult, error) {
+				return nil, errors.New("forfeit request failed")
+			}}
+			invalidated := &stubInvalidatedGameRepo{isInvalidatedFunc: func(ctx context.Context, gameID string) (bool, error) { return false, nil }}
+			gamePlayers := &stubGamePlayerRepo{lookupGamePlayersFunc: func(ctx context.Context, gameID string) ([]port.GamePlayerEntry, error) {
+				return []port.GamePlayerEntry{{PlayerNum: 1, PlayerID: "player-1"}, {PlayerNum: 2, PlayerID: "player-2"}}, nil
+			}}
+			hub := newTestHub(t, hubDeps{timerStore: expiredDeadlineTimerStore()})
+			relay := newTestGameRelay(t, relayDeps{hub: hub, battleClient: battle, invalidatedGameRepo: invalidated, gamePlayerRepo: gamePlayers})
+			factory := newTestSocketFactory(t, hub)
+			returningClient, _ := factory.connect(t, "player-1")
+			relay.JoinGame("player-1", "game-1", 1)
+
+			relay.resolveStaleDisconnect("game-1", "player-1", true)
+
+			returningClient.expectNoMessage(t)
 		})
 
 		t.Run("対戦相手の猶予・復帰した本人の猶予の両方が切れているとき、どちらか一方を一方的な敗者とせず対戦を終了させる。終了理由は対戦を管理する側が判定したものになる(切断固定にはならない)", func(t *testing.T) {
