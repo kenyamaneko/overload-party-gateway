@@ -1,6 +1,6 @@
 module github.com/kenyamaneko/overload-party-gateway
 
-go 1.25.12
+go 1.25.13
 
 require (
 	cloud.google.com/go/cloudsqlconn v1.23.0
